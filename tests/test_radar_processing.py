@@ -19,4 +19,4 @@ def test_tracker_reuses_nearby_track():
                             [{"row_centroid": 7, "column_centroid": 6,
                               "pixel_count": 35, "max_reflectivity_dbz": 42,
                               "mean_reflectivity_dbz": 31, "core_pixel_count": 12}])
-    assert first[0]["track_id"] == second[0]["track_id"]
+    assert first[0]["object_id"] == second[0]["object_id"]
