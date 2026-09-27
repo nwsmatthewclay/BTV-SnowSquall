@@ -65,10 +65,12 @@ jobs:
             --output "data/derived/${{ inputs.case_id }}_${{ inputs.radar_site }}_objects.geojson"
 
       - name: Upload reconstruction artifacts
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: "${{ inputs.case_id }}-${{ inputs.radar_site }}-reconstruction"
           path: |
             data/derived/*.csv
-            data/raw/level2/${{ inputs.radar_site }}/*
-          if-no-files-found: error
+            data/derived/*.png
+            data/derived/*.geojson
+          if-no-files-found: warn
