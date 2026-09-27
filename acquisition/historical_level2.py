@@ -41,7 +41,9 @@ def list_volume_keys(client, radar: str, day: datetime) -> list[str]:
     for page in paginator.paginate(Bucket=BUCKET, Prefix=prefix):
         for obj in page.get("Contents", []):
             key = obj["Key"]
-            if key.endswith(".gz") or key.endswith(".bz2") or key.endswith(".ar2v"):
+            # Historical Level-II objects can be stored without a filename extension.
+            # The timestamp parser below is the authoritative filter.
+            if Path(key).name:
                 keys.append(key)
     return keys
 
