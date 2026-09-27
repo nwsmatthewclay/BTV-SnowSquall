@@ -1,14 +1,14 @@
-"""Run the first end-to-end radar-object reconstruction pilot.
-
-This script is intentionally a file-based research pipeline. It does not decide
-whether an object is a snow squall; it creates the object/scan records that the
-future probability model will consume.
+"""Run the first geographic radar-object reconstruction pilot.
 
 Input:
     data/raw/level2/<RADAR>/<YYYYMMDD>/*
 
 Output:
     data/derived/pilot_object_scans.csv
+
+The pilot grids each lowest radar sweep onto a common Cartesian grid before
+detecting objects. This is the key transition from radar-native pixels to
+trackable geographic storm objects.
 """
 from __future__ import annotations
 
@@ -17,38 +17,103 @@ import csv
 from pathlib import Path
 
 import numpy as np
+from shapely.geometry import MultiPoint, Polygon
 
 from acquisition.level2_reader import read_level2, resolve_fields, volume_metadata
 from processing.object_detector import detect_reflectivity_objects
 from processing.object_tracker import CentroidTracker
+from processing.radar_grid import grid_field_2d, grid_latlon, grid_lowest_sweep
 
 
-def lowest_sweep_field(radar, field_name: str):
-    sweep = int(radar.sweep_number["data"][0])
-    start = int(radar.sweep_start_ray_index["data"][sweep])
-    end = int(radar.sweep_end_ray_index["data"][sweep]) + 1
-    return radar.fields[field_name]["data"][start:end]
+def object_geometry(mask, lat, lon, spacing_km=1.0):
+    """Create a geographic footprint from an object mask.
+
+    A convex hull is used for the first pilot; later versions can preserve
+    concave storm boundaries from the connected-component footprint.
+    """
+    yy, xx = np.where(mask)
+    if len(xx) < 3:
+        return None, np.nan, np.nan, np.nan
+
+    points = [(float(lon[y, x]), float(lat[y, x])) for y, x in zip(yy, xx)]
+    hull = MultiPoint(points).convex_hull
+    if hull.is_empty:
+        return None, np.nan, np.nan, np.nan
+
+    # Approximate planar dimensions from the grid spacing. The projected
+    # Cartesian grid is locally metric; this first pilot only needs stable
+    # geometry descriptors for object tracking/model development.
+    area_km2 = float(len(xx) * spacing_km * spacing_km)
+    coords = np.asarray(hull.exterior.coords) if isinstance(hull, Polygon) else np.empty((0, 2))
+    if len(coords) >= 2:
+        dx = np.ptp(coords[:, 0]) * 111.0 * np.cos(np.deg2rad(np.nanmean(lat)))
+        dy = np.ptp(coords[:, 1]) * 111.0
+        length_km = float(max(dx, dy))
+        width_km = float(min(dx, dy))
+    else:
+        length_km = width_km = np.nan
+
+    return hull.wkt, area_km2, length_km, width_km
 
 
-def process_volume(path: Path, tracker: CentroidTracker):
+def process_volume(path: Path, tracker: CentroidTracker, radar_origin=None):
     radar = read_level2(path)
     fields = resolve_fields(radar)
     reflectivity = fields["reflectivity"]
     if reflectivity is None:
         return []
 
-    data = lowest_sweep_field(radar, reflectivity)
-    if np.ma.isMaskedArray(data):
-        data = data.filled(np.nan)
+    origin_lat = origin_lon = None
+    if radar_origin:
+        origin_lat, origin_lon = radar_origin
 
-    # This first pilot uses native lowest-sweep gates as a candidate field.
-    # Cartesian gridding and geographic object polygons are the next refinement.
+    grid = grid_lowest_sweep(
+        radar,
+        reflectivity,
+        origin_lat=origin_lat,
+        origin_lon=origin_lon,
+        grid_size_km=180.0,
+        spacing_km=1.0,
+    )
+    data = grid_field_2d(grid, reflectivity)
+    lat, lon = grid_latlon(grid)
+
     objects = detect_reflectivity_objects(data)
     meta = volume_metadata(radar, path)
     timestamp = meta["scan_time_utc"]
     tracked = tracker.update(timestamp, objects)
+
     for obj in tracked:
+        yy, xx = np.where(
+            np.isfinite(data) & (data >= 20.0)
+        )
+        # Recover the connected component associated with this object using
+        # nearest centroid. The detector's native label map will be made
+        # explicit in the next detector revision.
+        cy, cx = int(round(obj["row_centroid"])), int(round(obj["column_centroid"]))
+        if 0 <= cy < data.shape[0] and 0 <= cx < data.shape[1]:
+            local = np.zeros_like(data, dtype=bool)
+            local[max(0, cy-25):min(data.shape[0], cy+26),
+                  max(0, cx-25):min(data.shape[1], cx+26)] = (
+                np.isfinite(data[max(0, cy-25):min(data.shape[0], cy+26),
+                                  max(0, cx-25):min(data.shape[1], cx+26)])
+                & (data[max(0, cy-25):min(data.shape[0], cy+26),
+                        max(0, cx-25):min(data.shape[1], cx+26)] >= 20.0)
+            )
+            geometry_wkt, area_km2, length_km, width_km = object_geometry(
+                local, lat, lon, spacing_km=1.0
+            )
+        else:
+            geometry_wkt, area_km2, length_km, width_km = None, np.nan, np.nan, np.nan
+
         obj["scan_time_utc"] = timestamp
+        obj["centroid_lat"] = float(lat[int(round(obj["row_centroid"])), int(round(obj["column_centroid"]))])
+        obj["centroid_lon"] = float(lon[int(round(obj["row_centroid"])), int(round(obj["column_centroid"]))])
+        obj["geometry_wkt"] = geometry_wkt
+        obj["area_km2"] = area_km2
+        obj["length_km"] = length_km
+        obj["width_km"] = width_km
+
     return tracked
 
 
@@ -88,6 +153,12 @@ def main():
                 "core_pixel_count": obj["core_pixel_count"],
                 "row_centroid": obj["row_centroid"],
                 "column_centroid": obj["column_centroid"],
+                "centroid_lat": obj.get("centroid_lat"),
+                "centroid_lon": obj.get("centroid_lon"),
+                "area_km2": obj.get("area_km2"),
+                "length_km": obj.get("length_km"),
+                "width_km": obj.get("width_km"),
+                "geometry_wkt": obj.get("geometry_wkt"),
             })
 
     output = Path(args.output)
@@ -100,7 +171,7 @@ def main():
         writer.writeheader()
         writer.writerows(rows)
 
-    print(f"Wrote {len(rows)} object-scan records to {output}")
+    print(f"Wrote {len(rows)} geographic object-scan records to {output}")
 
 
 if __name__ == "__main__":
