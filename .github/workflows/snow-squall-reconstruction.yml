@@ -1,6 +1,9 @@
 name: Snow Squall Radar Reconstruction
 
 on:
+  push:
+    paths:
+      - ".github/workflows/snow-squall-reconstruction.yml"
   workflow_dispatch:
     inputs:
       code_ref:
