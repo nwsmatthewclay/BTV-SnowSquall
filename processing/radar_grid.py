@@ -53,6 +53,5 @@ def grid_field_2d(grid, field_name: str) -> np.ndarray:
 
 def grid_latlon(grid):
     """Return 2-D latitude/longitude arrays for the lowest grid level."""
-    lat, lon = grid.get_point_longitude_latitude()
-    # Py-ART returns (longitude, latitude) despite the historical method name.
-    return np.asarray(lon), np.asarray(lat)
+    lon, lat = grid.get_point_longitude_latitude()
+    return np.asarray(lat), np.asarray(lon)
