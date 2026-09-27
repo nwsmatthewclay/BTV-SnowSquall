@@ -2,56 +2,65 @@
 
 Experimental BTV CWA snow-squall detection and probability project.
 
-## Current architecture
+## What we are building
 
-The project is being built as a **living event/object dataset**, not as an SNSQ calculator.
+This is a **living event/object database and prediction system**, not an SNSQ calculator.
 
 The core training unit is:
 
 > **tracked radar object × scan time**
 
-Each row will combine environmental conditions, 3-D radar structure, storm evolution, dual-pol signatures, MRMS information, and independent event/surface truth.
+Each row combines the conditional environment with observed storm structure and evolution.
 
-### Data flow
+## Data flow
 
-acquisition → normalization → object detection → tracking → feature extraction → labeling → training table → model → verification
+acquisition → normalization → candidate detection → tracking → 3-D/dual-pol features → environmental/MRMS attachment → evidence-based labeling → training table → model → verification
 
-### Data layers
+## Data layers
 
 - NEXRAD Level II from KCXX and KTYX
-- RAP environmental analyses and derived SNSQ
-- MRMS precipitation/echo-top products
+- RAP environmental analyses and derived SNSQ/thermodynamic/kinematic fields
+- MRMS precipitation, rate, type, echo-top and related fields
 - ASOS/METAR/NCEI surface observations
 - Official SQW/event documentation
-- Published snow-squall case datasets/studies
+- Published snow-squall case datasets and studies
 
-### Initial prediction target
+## Initial prediction target
 
 Probability that a tracked radar object will meet the positive snow-squall definition within the **next 30 minutes**.
 
-Future lead-time targets can be added after the first baseline is validated.
+The first model ladder is intentionally interpretable: logistic regression, random forest, histogram gradient boosting, then calibrated/ensemble models after the feature set is stable.
+
+## Radar philosophy
+
+The detector is deliberately permissive. It generates candidate precipitation objects; it does **not** decide whether they are snow squalls.
+
+Native Level-II volumes are retained so we can extract reflectivity intensity and gradients, object geometry and organization, velocity/kinematic signatures, echo-top and vertical depth, ZDR/RHOHV/KDP, and scan-to-scan growth, weakening, motion and structural change.
+
+## Truth philosophy
+
+No single product is treated as perfect truth. A warning polygon, surface visibility observation, radar structure/evolution, and published case documentation can each contribute evidence. Labels retain the evidence sources and confidence.
+
+Uncertain cases remain in the archive but are excluded from the initial supervised training set.
 
 ## Repository structure
 
-- `acquisition/` — near-real-time Level II acquisition
+- `acquisition/` — archive/near-real-time data acquisition and readers
 - `config/` — dataset and archive configuration
 - `schema/` — feature schema and labeling policy
-- `docs/` — architecture and implementation plan
+- `processing/` — radar detection, tracking and feature calculations
+- `labeling/` — evidence and truth construction
+- `training/` — model-training utilities
+- `docs/` — architecture, source registry, ML strategy and implementation plan
 - `scripts/` — reproducible dataset/manifest utilities
 - `tests/` — automated smoke tests
-- `data/` — local scientific data and manifests; large files are excluded from Git
+- `data/` — manifests and local scientific data; large files are excluded from Git
 
 ## Development
 
-```bash
-python -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-pytest -q
-python scripts/initialize_training_table.py
-```
+Use `requirements.txt` for lightweight development and `requirements-science.txt` for Level-II/radar reconstruction.
 
-GitHub Actions runs the smoke tests on pushes and pull requests.
+GitHub Actions intentionally keeps the default test job lightweight. Scientific archive processing will use separate integration tests so large radar dependencies do not block normal code changes.
 
 ## Modeling principles
 
@@ -62,7 +71,8 @@ Training/evaluation will:
 1. Preserve complete case histories.
 2. Use radar-object and temporal information.
 3. Keep future information out of predictors.
-4. Hold out complete events rather than random rows.
-5. Evaluate calibration and lead time in addition to discrimination.
+4. Hold out complete events rather than random adjacent rows.
+5. Evaluate calibration, discrimination, false alarms, misses and lead time.
+6. Preserve missing-data/provenance flags instead of silently filling gaps with future information.
 
-See `docs/architecture.md`, `docs/implementation_plan.md`, and `schema/label_policy.md`.
+See `docs/architecture.md`, `docs/implementation_plan.md`, `docs/ml_strategy.md`, `schema/label_policy.md`, and `docs/git_workflow.md`.
