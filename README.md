@@ -1,90 +1,68 @@
 # BTV Snow Squall
 
-Experimental BTV CWA snow-squall detection/probability project.
+Experimental BTV CWA snow-squall detection and probability project.
 
-## Phase 1: real-time Level II acquisition
+## Current architecture
 
-The first test does **not** calculate snow-squall probability. It answers one question:
+The project is being built as a **living event/object dataset**, not as an SNSQ calculator.
 
-> How quickly can we obtain a newly completed KCXX or KTYX Level II volume from the public NOAA/Unidata AWS archive?
+The core training unit is:
 
-The watcher:
+> **tracked radar object × scan time**
 
-1. Looks for the newest completed volume for one radar.
-2. Polls every 10 seconds.
-3. Downloads each new volume once.
-4. Records the radar volume time and local acquisition time.
-5. Logs the resulting data age/latency.
+Each row will combine environmental conditions, 3-D radar structure, storm evolution, dual-pol signatures, MRMS information, and independent event/surface truth.
 
-NOAA/Unidata currently provides NEXRAD Level II in the public S3 bucket
-`unidata-nexrad-level2` in `us-east-1`. The archive is updated as new data become
-available.
+### Data flow
 
-### Install
+acquisition → normalization → object detection → tracking → feature extraction → labeling → training table → model → verification
+
+### Data layers
+
+- NEXRAD Level II from KCXX and KTYX
+- RAP environmental analyses and derived SNSQ
+- MRMS precipitation/echo-top products
+- ASOS/METAR/NCEI surface observations
+- Official SQW/event documentation
+- Published snow-squall case datasets/studies
+
+### Initial prediction target
+
+Probability that a tracked radar object will meet the positive snow-squall definition within the **next 30 minutes**.
+
+Future lead-time targets can be added after the first baseline is validated.
+
+## Repository structure
+
+- `acquisition/` — near-real-time Level II acquisition
+- `config/` — dataset and archive configuration
+- `schema/` — feature schema and labeling policy
+- `docs/` — architecture and implementation plan
+- `scripts/` — reproducible dataset/manifest utilities
+- `tests/` — automated smoke tests
+- `data/` — local scientific data and manifests; large files are excluded from Git
+
+## Development
 
 ```bash
 python -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
+pytest -q
+python scripts/initialize_training_table.py
 ```
 
-### Test KCXX
+GitHub Actions runs the smoke tests on pushes and pull requests.
 
-From the `acquisition` directory:
+## Modeling principles
 
-```bash
-cd acquisition
-python kcxx_watcher.py
-```
+The environmental Snow Squall Parameter is a predictor, not the answer.
 
-### Test KTYX
+Training/evaluation will:
 
-In a second terminal:
+1. Preserve complete case histories.
+2. Use radar-object and temporal information.
+3. Keep future information out of predictors.
+4. Hold out complete events rather than random rows.
+5. Evaluate calibration and lead time in addition to discrimination.
 
-```bash
-cd acquisition
-python ktyx_watcher.py
-```
-
-### Or use the generic watcher
-
-```bash
-python radar_watcher.py --radar KCXX --poll-seconds 10
-python radar_watcher.py --radar KTYX --poll-seconds 10
-```
-
-## Output
-
-Raw Level II files are stored under:
-
-```text
-data/raw/KCXX/
-data/raw/KTYX/
-```
-
-Logs are stored under:
-
-```text
-logs/kcxx_watcher.log
-logs/ktyx_watcher.log
-```
-
-## Important architecture note
-
-This first version uses S3 polling because it is easy to test and does not require
-an AWS account.
-
-For the low-latency production architecture, the acquisition layer can later be
-changed to the NOAA/Unidata real-time Level II notification path (SNS/SQS) or the
-real-time Level II chunks feed. The downstream processing interface should remain
-the same.
-
-## Planned next steps
-
-- Verify actual acquisition latency.
-- Read downloaded volumes with Py-ART.
-- Extract BTV CWA-relevant radar fields.
-- Add MRMS JSON precipitation-type information.
-- Add existing RAP/MetPy SNSQ information.
-- Build object detection and tracking.
-- Develop and validate an experimental snow-squall probability model.
+See `docs/architecture.md`, `docs/implementation_plan.md`, and `schema/label_policy.md`.
