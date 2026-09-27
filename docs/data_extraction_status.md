@@ -16,9 +16,17 @@
 - Methodology confirms METAR, NEXRAD Level II, radar cell tracking, WPC analyses, and hourly ERA5.
 - Exact 100 case dates are deliberately not populated yet; they must be extracted from the authors' underlying event catalog or machine-readable supplementary data rather than inferred from figures.
 
+## Native radar reconstruction now staged
+
+- 36 Banacos events have reproducible T-90 to T+120 minute radar windows for both KCXX and KTYX.
+- `data/manifests/banacos_radar_windows.csv` contains 72 acquisition rows.
+- `acquisition/historical_level2.py` targets the public `unidata-nexrad-level2` archive without requiring an AWS account.
+- `data/manifests/banacos_pilot_cases.csv` defines five representative cases for the first end-to-end radar/object reconstruction.
+- KCXX and KTYX Level-II archives cover the full Banacos period.
+
 ## Next extraction
 
-1. Acquire native Level II volumes for the 36 BTV cases.
+1. Download and inspect the five pilot cases before scaling to all 36.
 2. Acquire ASOS/METAR observations around each case.
 3. Reconstruct radar object tracks.
 4. Match NARR/ERA5/RAP environmental fields.
