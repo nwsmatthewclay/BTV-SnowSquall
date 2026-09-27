@@ -26,12 +26,19 @@ class CentroidTracker:
         self.tracks = {}
         self.next_id = 1
 
+    def _as_datetime(self, value):
+        if isinstance(value, str):
+            return datetime.fromisoformat(value.replace("Z", "+00:00"))
+        if value.tzinfo is None:
+            return value.replace(tzinfo=timezone.utc)
+        return value
+
     def _minutes_since(self, timestamp, previous):
         try:
-            t = timestamp if timestamp.tzinfo else timestamp.replace(tzinfo=timezone.utc)
-            p = previous if previous.tzinfo else previous.replace(tzinfo=timezone.utc)
+            t = self._as_datetime(timestamp)
+            p = self._as_datetime(previous)
             return abs((t - p).total_seconds()) / 60.0
-        except (AttributeError, TypeError):
+        except (AttributeError, TypeError, ValueError):
             return float("inf")
 
     def update(self, timestamp, objects):
