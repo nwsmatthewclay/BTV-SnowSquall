@@ -46,8 +46,10 @@ def process_volume(path: Path, tracker: CentroidTracker):
     objects = detect_reflectivity_objects(data)
     meta = volume_metadata(radar, path)
     timestamp = meta["scan_time_utc"]
-
-    return tracker.update(timestamp, objects)
+    tracked = tracker.update(timestamp, objects)
+    for obj in tracked:
+        obj["scan_time_utc"] = timestamp
+    return tracked
 
 
 def main():
