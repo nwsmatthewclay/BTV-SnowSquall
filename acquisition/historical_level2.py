@@ -18,7 +18,7 @@ import boto3
 from botocore import UNSIGNED
 from botocore.client import Config
 
-BUCKET = "noaa-nexrad-level2"
+BUCKET = "unidata-nexrad-level2"
 FILENAME_RE = re.compile(r"^(?P<radar>K[A-Z0-9]{3})(?P<stamp>\d{8}_\d{6})_.*$")
 
 
