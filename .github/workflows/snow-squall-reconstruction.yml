@@ -28,7 +28,7 @@ jobs:
       - name: Check out reconstruction code
         uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.code_ref }}
+          ref: ${{ inputs.code_ref || 'snow-squall-model-foundation' }}
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -43,11 +43,11 @@ jobs:
 
       - name: Download historical Level-II
         run: |
-          python acquisition/historical_level2.py             --manifest data/manifests/banacos_radar_windows.csv             --output data/raw/level2             --case-id "${{ inputs.case_id }}"
+          python acquisition/historical_level2.py             --manifest data/manifests/banacos_radar_windows.csv             --output data/raw/level2             --case-id "${{ inputs.case_id || 'BTV20060224' }}"
 
       - name: Verify requested radar data
         run: |
-          test -d "data/raw/level2/${{ inputs.radar_site }}"
+          test -d "data/raw/level2/${{ inputs.radar_site || 'KCXX' }}"
           find "data/raw/level2/${{ inputs.radar_site }}" -type f | wc -l
 
       - name: Restrict to requested radar
