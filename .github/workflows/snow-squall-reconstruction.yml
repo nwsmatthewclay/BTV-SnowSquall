@@ -47,10 +47,14 @@ jobs:
           test -d "data/raw/level2/${{ inputs.radar_site }}"
           find "data/raw/level2/${{ inputs.radar_site }}" -type f | wc -l
 
+      - name: Restrict to requested radar
+        run: |
+          mkdir -p data/raw/level2_filtered
+          cp -R "data/raw/level2/${{ inputs.radar_site }}" data/raw/level2_filtered/
+
       - name: Reconstruct geographic objects
         run: |
-          python scripts/reconstruct_pilot.py             --input data/raw/level2             --output "data/derived/${{ inputs.case_id }}_${{ inputs.radar_site }}_object_scans.csv"
-
+          python scripts/reconstruct_pilot.py --input data/raw/level2_filtered --output "data/derived/${{ inputs.case_id }}_${{ inputs.radar_site }}_object_scans.csv"
       - name: Create track visualization
         run: |
           python scripts/plot_pilot_track.py             "data/derived/${{ inputs.case_id }}_${{ inputs.radar_site }}_object_scans.csv"             --output "data/derived/${{ inputs.case_id }}_${{ inputs.radar_site }}_track.png"
