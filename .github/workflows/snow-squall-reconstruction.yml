@@ -56,6 +56,8 @@ jobs:
           cp -R "data/raw/level2/${{ inputs.radar_site }}" data/raw/level2_filtered/
 
       - name: Reconstruct geographic objects
+        env:
+          PYTHONPATH: ${{ github.workspace }}
         run: |
           python scripts/reconstruct_pilot.py --input data/raw/level2_filtered --output "data/derived/${{ inputs.case_id }}_${{ inputs.radar_site }}_object_scans.csv"
       - name: Create track visualization
