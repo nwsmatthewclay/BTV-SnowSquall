@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 import boto3
 from botocore import UNSIGNED
-from botocore.config import Config, Config
+from botocore.config import Config
 
 BUCKET="unidata-nexrad-level2"; REGION="us-east-1"
 PROJECT_ROOT=Path(__file__).resolve().parents[1]; RAW_ROOT=PROJECT_ROOT/"data"/"raw"; LOG_ROOT=PROJECT_ROOT/"logs"
