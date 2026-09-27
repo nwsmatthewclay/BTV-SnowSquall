@@ -18,3 +18,5 @@ jobs:
       - run: pytest -q
       - name: Initialize training-table smoke test
         run: python scripts/initialize_training_table.py
+      - name: Validate repository foundation
+        run: python scripts/validate_repository.py
