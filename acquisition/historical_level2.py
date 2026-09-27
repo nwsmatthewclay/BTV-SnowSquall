@@ -19,7 +19,7 @@ from botocore import UNSIGNED
 from botocore.client import Config
 
 BUCKET = "unidata-nexrad-level2"
-FILENAME_RE = re.compile(r"^(?P<radar>K[A-Z0-9]{3})(?P<stamp>\d{8}_\d{6})_.*$")
+FILENAME_RE = re.compile(r"^(?P<radar>K[A-Z0-9]{3})(?P<stamp>\d{8}_\d{6})(?:_.*|\.gz)$")
 
 
 def parse_utc(value: str) -> datetime:
