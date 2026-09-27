@@ -84,31 +84,24 @@ def process_volume(path: Path, tracker: CentroidTracker, radar_origin=None):
     tracked = tracker.update(timestamp, objects)
 
     for obj in tracked:
-        yy, xx = np.where(
-            np.isfinite(data) & (data >= 20.0)
-        )
-        # Recover the connected component associated with this object using
-        # nearest centroid. The detector's native label map will be made
-        # explicit in the next detector revision.
-        cy, cx = int(round(obj["row_centroid"])), int(round(obj["column_centroid"]))
+        cy = int(round(obj["row_centroid"]))
+        cx = int(round(obj["column_centroid"]))
         if 0 <= cy < data.shape[0] and 0 <= cx < data.shape[1]:
-            local = np.zeros_like(data, dtype=bool)
-            local[max(0, cy-25):min(data.shape[0], cy+26),
-                  max(0, cx-25):min(data.shape[1], cx+26)] = (
-                np.isfinite(data[max(0, cy-25):min(data.shape[0], cy+26),
-                                  max(0, cx-25):min(data.shape[1], cx+26)])
-                & (data[max(0, cy-25):min(data.shape[0], cy+26),
-                        max(0, cx-25):min(data.shape[1], cx+26)] >= 20.0)
-            )
+            footprint = np.zeros_like(data, dtype=bool)
+            rows = np.asarray(obj.get("row_indices", []), dtype=int)
+            cols = np.asarray(obj.get("column_indices", []), dtype=int)
+            footprint[rows, cols] = True
             geometry_wkt, area_km2, length_km, width_km = object_geometry(
-                local, lat, lon, spacing_km=1.0
+                footprint, lat, lon, spacing_km=1.0
             )
+            obj["centroid_lat"] = float(lat[cy, cx])
+            obj["centroid_lon"] = float(lon[cy, cx])
         else:
             geometry_wkt, area_km2, length_km, width_km = None, np.nan, np.nan, np.nan
+            obj["centroid_lat"] = np.nan
+            obj["centroid_lon"] = np.nan
 
         obj["scan_time_utc"] = timestamp
-        obj["centroid_lat"] = float(lat[int(round(obj["row_centroid"])), int(round(obj["column_centroid"]))])
-        obj["centroid_lon"] = float(lon[int(round(obj["row_centroid"])), int(round(obj["column_centroid"]))])
         obj["geometry_wkt"] = geometry_wkt
         obj["area_km2"] = area_km2
         obj["length_km"] = length_km
