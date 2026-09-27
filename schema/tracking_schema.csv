@@ -1,0 +1,32 @@
+field,category,dtype,description
+track_id,identity,string,Stable object track identifier
+scan_time,identity,datetime,Observation time of the object state
+radar_site,identity,string,Primary radar source
+centroid_lat,geometry,float,Object centroid latitude
+centroid_lon,geometry,float,Object centroid longitude
+object_area_km2,geometry,float,Object area
+object_length_km,geometry,float,Object major-axis length
+object_width_km,geometry,float,Object minor-axis width
+motion_direction_deg,evolution,float,Object motion direction
+motion_speed_kt,evolution,float,Object motion speed
+track_age_min,evolution,float,Minutes since object first appeared
+reflectivity_max_dbz,radar,float,Maximum object reflectivity
+reflectivity_mean_dbz,radar,float,Mean object reflectivity
+echo_top_m,vertical,float,Estimated echo top
+vertical_depth_m,vertical,float,Vertical echo depth
+zdr_mean_db,dualpol,float,Mean differential reflectivity
+rhohv_min,dualpol,float,Minimum cross-correlation ratio
+kdp_p90_deg_km,dualpol,float,90th percentile KDP
+snsqu,environment,float,Snow Squall Parameter
+dcape_jkg,environment,float,DCAPE
+pwat_mm,environment,float,Precipitable water
+shear_0_6km_kt,environment,float,0-6 km bulk shear
+lr_0_3_c_km,environment,float,0-3 km lapse rate
+surface_visibility_sm,surface,float,Nearest/associated visibility
+surface_wind_gust_kt,surface,float,Nearest/associated wind gust
+snow_squall_15min,target,float,Positive event within next 15 minutes
+snow_squall_30min,target,float,Positive event within next 30 minutes
+snow_squall_45min,target,float,Positive event within next 45 minutes
+snow_squall_60min,target,float,Positive event within next 60 minutes
+label_confidence,truth,string,Truth confidence
+label_source,truth,string,Truth evidence provenance
