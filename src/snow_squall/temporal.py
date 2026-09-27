@@ -3,7 +3,7 @@ from __future__ import annotations
 import pandas as pd
 
 EVOLUTION_COLUMNS = {
-    "reflectivity_max_dbz": "reflectivity",
+    "max_reflectivity_dbz": "reflectivity",
     "echo_top_km": "echo_top",
     "area_km2": "area",
     "length_km": "length",
