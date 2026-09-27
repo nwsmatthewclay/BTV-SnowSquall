@@ -17,12 +17,14 @@ import csv
 from pathlib import Path
 
 import numpy as np
+import pandas as pd
 from shapely.geometry import MultiPoint, Polygon
 
 from acquisition.level2_reader import read_level2, resolve_fields, volume_metadata
 from processing.object_detector import detect_reflectivity_objects
 from processing.object_tracker import CentroidTracker
 from processing.radar_grid import grid_field_2d, grid_latlon, grid_lowest_sweep
+from processing.motion import add_motion_features
 
 
 def object_geometry(mask, lat, lon, spacing_km=1.0):
@@ -159,10 +161,9 @@ def main():
     if not rows:
         raise SystemExit("No candidate objects were produced.")
 
-    with output.open("w", newline="", encoding="utf-8") as fh:
-        writer = csv.DictWriter(fh, fieldnames=rows[0].keys())
-        writer.writeheader()
-        writer.writerows(rows)
+    frame = pd.DataFrame(rows)
+    frame = add_motion_features(frame)
+    frame.to_csv(output, index=False)
 
     print(f"Wrote {len(rows)} geographic object-scan records to {output}")
 
