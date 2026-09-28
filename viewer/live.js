@@ -19,7 +19,7 @@ function addRadarMarkers(){
     L.marker(loc,{icon:markerIcon(site),interactive:false,title:site}).addTo(map);
   });
 }
-function feedUrl(site,kind){return url(site+"_"+kind+".json");}
+function feedUrl(site,kind){return url(site+"_"+kind+(kind==="objects"?".geojson":".json"));}
 
 async function getFeed(site){
   const [geo,state]=await Promise.all([
@@ -61,12 +61,12 @@ function renderMap(summary){
   summary.forEach(x=>{
     (x.features||[]).forEach(f=>{
       const p=f.properties||{};
-      const selected=selected?.track_id===p.track_id && selected?.radar_site===p.radar_site;
+      const isSelected=selected&&selected.track_id===p.track_id&&selected.radar_site===p.radar_site;
       const layer=L.geoJSON(f,{style:{
         color:selected?"#ffffff":objectColor(p),
         fillColor:objectColor(p),
-        fillOpacity:selected?.48:.24,
-        weight:selected?3:2
+        fillOpacity:isSelected?.48:.24,
+        weight:isSelected?3:2
       }}).addTo(layers[x.site]);
       if(f.geometry?.coordinates) layer.eachLayer(g=>{const b=g.getBounds?.();if(b&&b.isValid())bounds.push(b)});
       layer.bindTooltip(
