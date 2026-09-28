@@ -49,7 +49,7 @@ def audit(input_csv: Path, schema_csv: Path) -> dict:
                 "present": False,
                 "actual_field": None,
                 "availability_policy": availability_policy,
-                "coverage_interpretation": "expected_gap" if availability_policy in {"modern_2014_plus", "dualpol_era_dependent", "environment_provider_dependent", "observation_dependent", "target_or_review"} else "unexpected_gap",
+                "coverage_interpretation": "expected_gap" if availability_policy in {"modern_2014_plus", "target_or_review"} else "unexpected_gap",
             })
             continue
 
