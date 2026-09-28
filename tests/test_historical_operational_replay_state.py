@@ -7,8 +7,7 @@ import scripts.historical_operational_replay as replay
 def test_replay_resets_existing_state_by_default(tmp_path, monkeypatch):
     source_dir = tmp_path / "input"
     source_dir.mkdir()
-    src = source_dir / "KCXX20060224_140500_V06"
-    src.write_text("x")
+    (source_dir / "KCXX20060224_140500_V06").write_text("x")
     output_dir = tmp_path / "out"
     state = tmp_path / "state.json"
     state.write_text(json.dumps({"stale": True}), encoding="utf-8")
