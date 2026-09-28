@@ -33,78 +33,63 @@ jobs:
         with:
           ref: ${{ github.sha }}
 
-      - name: Locate latest dataset run
+      - name: Resolve latest dataset workflow run
         id: source
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         shell: bash
         run: |
           set -euo pipefail
-          BEST_ID=""
-          BEST_NAME=""
-          BEST_STATUS=""
-          BEST_CONCLUSION=""
-          BEST_SHA=""
+          JSON=$(gh api             --header 'Accept: application/vnd.github+json'             --header 'X-GitHub-Api-Version: 2022-11-28'             "/repos/${GITHUB_REPOSITORY}/actions/runs?branch=snow-squall-model-foundation&per_page=100")
 
-          for NAME in "Object Dataset Pilot" "Object Dataset Full Expansion"; do
-            RUN=$(gh run list               --workflow "${NAME}"               --branch snow-squall-model-foundation               --limit 1               --json databaseId,status,conclusion,headSha               --jq '.[0] // empty')
-            if [ -z "${RUN}" ]; then
-              continue
-            fi
+          CANDIDATE=$(printf '%s' "${JSON}" | jq -c '
+            [.workflow_runs[]
+             | select(.name == "Object Dataset Pilot" or .name == "Object Dataset Full Expansion")]
+            | sort_by(.id)
+            | reverse
+            | .[0] // empty')
 
-            ID=$(printf '%s' "${RUN}" | jq -r '.databaseId')
-            if [ -z "${BEST_ID}" ] || [ "${ID}" -gt "${BEST_ID}" ]; then
-              BEST_ID="${ID}"
-              BEST_NAME="${NAME}"
-              BEST_STATUS=$(printf '%s' "${RUN}" | jq -r '.status')
-              BEST_CONCLUSION=$(printf '%s' "${RUN}" | jq -r '.conclusion')
-              BEST_SHA=$(printf '%s' "${RUN}" | jq -r '.headSha')
-            fi
-          done
-
-          if [ -z "${BEST_ID}" ]; then
+          if [ -z "${CANDIDATE}" ]; then
             echo "No dataset workflow runs found."
-            sleep 60
             exit 1
           fi
 
-          echo "Latest dataset run: ${BEST_ID} (${BEST_NAME}) status=${BEST_STATUS} conclusion=${BEST_CONCLUSION} sha=${BEST_SHA}"
+          ID=$(printf '%s' "${CANDIDATE}" | jq -r '.id')
+          NAME=$(printf '%s' "${CANDIDATE}" | jq -r '.name')
+          STATUS=$(printf '%s' "${CANDIDATE}" | jq -r '.status')
+          CONCLUSION=$(printf '%s' "${CANDIDATE}" | jq -r '.conclusion')
+          SHA=$(printf '%s' "${CANDIDATE}" | jq -r '.head_sha')
 
-          if [ "${BEST_STATUS}" != "completed" ]; then
-            echo "run_id=${BEST_ID}" >> "${GITHUB_OUTPUT}"
-            echo "workflow_name=${BEST_NAME}" >> "${GITHUB_OUTPUT}"
-            echo "waiting=true" >> "${GITHUB_OUTPUT}"
-            exit 0
-          fi
+          echo "Selected dataset run ${ID}: ${NAME}, status=${STATUS}, conclusion=${CONCLUSION}, sha=${SHA}"
+          echo "run_id=${ID}" >> "${GITHUB_OUTPUT}"
+          echo "workflow_name=${NAME}" >> "${GITHUB_OUTPUT}"
+          echo "status=${STATUS}" >> "${GITHUB_OUTPUT}"
 
-          if [ "${BEST_CONCLUSION}" != "success" ]; then
-            echo "Latest dataset workflow did not succeed."
+          if [ "${STATUS}" != "completed" ]; then
+            echo "wait=true" >> "${GITHUB_OUTPUT}"
+          elif [ "${CONCLUSION}" = "success" ]; then
+            echo "wait=false" >> "${GITHUB_OUTPUT}"
+          else
+            echo "Latest dataset run failed: ${CONCLUSION}"
             exit 1
           fi
-
-          echo "run_id=${BEST_ID}" >> "${GITHUB_OUTPUT}"
-          echo "workflow_name=${BEST_NAME}" >> "${GITHUB_OUTPUT}"
-          echo "waiting=false" >> "${GITHUB_OUTPUT}"
 
       - name: Wait for active dataset run
-        if: steps.source.outputs.waiting == 'true'
+        if: steps.source.outputs.wait == 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           SOURCE_RUN_ID: ${{ steps.source.outputs.run_id }}
-          SOURCE_WORKFLOW: ${{ steps.source.outputs.workflow_name }}
+          SOURCE_NAME: ${{ steps.source.outputs.workflow_name }}
         shell: bash
         run: |
           set -euo pipefail
-          for attempt in $(seq 1 90); do
-            RUN=$(gh run view "${SOURCE_RUN_ID}" --json status,conclusion,headSha)
+          for attempt in $(seq 1 180); do
+            RUN=$(gh api               --header 'Accept: application/vnd.github+json'               --header 'X-GitHub-Api-Version: 2022-11-28'               "/repos/${GITHUB_REPOSITORY}/actions/runs/${SOURCE_RUN_ID}")
             STATUS=$(printf '%s' "${RUN}" | jq -r '.status')
             CONCLUSION=$(printf '%s' "${RUN}" | jq -r '.conclusion')
-            echo "${SOURCE_WORKFLOW} run ${SOURCE_RUN_ID}: status=${STATUS} conclusion=${CONCLUSION}"
+            echo "${SOURCE_NAME} run ${SOURCE_RUN_ID}: status=${STATUS} conclusion=${CONCLUSION}"
             if [ "${STATUS}" = "completed" ]; then
-              if [ "${CONCLUSION}" != "success" ]; then
-                echo "Dataset run failed."
-                exit 1
-              fi
+              [ "${CONCLUSION}" = "success" ] || exit 1
               exit 0
             fi
             sleep 60
