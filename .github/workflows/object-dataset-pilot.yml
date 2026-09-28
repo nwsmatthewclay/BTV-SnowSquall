@@ -276,6 +276,11 @@ jobs:
             --null data/derived/null_object_environment.csv \
             --positive-tracks data/derived/positive_object_tracks.csv \
             --null-tracks data/derived/null_object_tracks.csv \
+            --surface-audit data/derived/surface_truth_audit.csv \
+            --surface-summary data/derived/surface_truth_audit.json \
+            --positive-radar-audit data/derived/positive_radar_reconstruction_audit.json \
+            --null-radar-audit data/derived/null_radar_reconstruction_audit.json \
+            --baseline-root data/derived \
             --output data/derived/pilot_report.html
 
       - name: Run tests
