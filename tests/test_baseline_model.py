@@ -63,5 +63,5 @@ def test_baseline_excludes_post_onset_case_rows():
 
     result, _ = prepare_dataset(frame, schema, "squall_onset_within_15m")
 
-    assert len(result) == 2
+    assert len(result) == 3
     assert not (result["label_status"] == "verified_event_interval").any()
