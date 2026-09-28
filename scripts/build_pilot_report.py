@@ -75,7 +75,7 @@ main{{max-width:1200px;margin:24px auto;padding:0 20px}}
 </style></head>
 <body>
 <header><h1>BTV Snow Squall — Historical Object Pilot</h1>
-<div>Real NEXRAD Level-II object reconstruction • research/pilot dataset • not an operational probability model</div></header>
+<div>Real NEXRAD Level-II object reconstruction • multi-era environment enrichment • research/pilot dataset • not an operational probability model</div></header>
 <main>
 <div class="grid">
 <div class="card">Positive-context scans<b>{len(pos):,}</b></div>
@@ -112,7 +112,7 @@ The five-window null pilot contains one archive gap: NULL0002 (8 February 2006) 
 <ul>
 <li>Future-information policy: past and current information only.</li>
 <li>Null candidates are not treated as verified negative examples.</li>
-<li>Environmental provider is date-aware: RUC for the pre-RAP historical period and RAP after the transition.</li>
+<li>Environmental provider is date-aware: NARR before 1 April 2007, RUC from 1 April 2007 through 30 April 2012, and RAP from 1 May 2012 onward.</li>
 <li>Object association labels are pilot labels and require tighter track/event QC before model training.</li>
 </ul>
 <p class="small">Generated automatically from the workflow artifacts. Use this report to review the data pipeline with the SOO; do not interpret the current population as a trained forecast model.</p>
