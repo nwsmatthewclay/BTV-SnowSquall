@@ -12,7 +12,7 @@ Build a living object-level dataset for a ProbSevere-like snow-squall nowcast. T
 4. Track objects between scans.
 5. Calculate structure and evolution features.
 6. Match environmental data to the object.
-7. Match ASOS/METAR truth and published event timing.
+7. Match ASOS/METAR surface observations to published event timing for independent truth/QC.
 8. Generate 15/30/45/60-minute future-event targets.
 9. Sample matched null objects from the same cool-season windows.
 10. Write provenance for every row.
@@ -26,3 +26,16 @@ Build a living object-level dataset for a ProbSevere-like snow-squall nowcast. T
 - data/training/provenance.csv
 
 Do not randomly split individual scans. Split by complete case/event to prevent adjacent scans from leaking across train and test.
+
+## Surface-observation QC
+
+The pilot retrieves routine and special ASOS/METAR reports for each verified
+case using the IEM archive. Surface observations are retained separately from
+the model predictor table and are currently used as an independent event-truth
+check. Visibility thresholds at 0.4 km and 0.8 km are derived from the reported
+visibility field; wind/gust observations are preserved for comparison with the
+published case metadata.
+
+The surface audit does not overwrite the published event start. It records the
+first available threshold crossings and their time offset from the published
+start so disagreements can be reviewed rather than silently reconciled.
