@@ -9,7 +9,7 @@ def add_lead_time_target(df, onset_col="truth_onset_time", scan_col="scan_time",
     delta = (out[onset_col] - out[scan_col]).dt.total_seconds() / 60.0
     out["lead_time_min"] = delta
     out[f"snow_squall_{horizon_minutes}min"] = (
-        delta.ge(0) & delta.le(horizon_minutes)
+        delta.gt(0) & delta.le(horizon_minutes)
     ).astype("int8")
     return out
 
@@ -21,7 +21,7 @@ def add_multi_horizon_targets(df, onset_col="truth_onset_time", scan_col="scan_t
     delta = (out[onset_col] - out[scan_col]).dt.total_seconds() / 60.0
     for horizon in horizons:
         out[f"snow_squall_{horizon}min"] = (
-            delta.ge(0) & delta.le(horizon)
+            delta.gt(0) & delta.le(horizon)
         ).astype("int8")
     return out
 
