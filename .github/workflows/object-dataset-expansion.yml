@@ -217,6 +217,10 @@ jobs:
             --output data/derived/object_model_features_expansion.csv \
             --schema-output data/derived/object_model_features_expansion.schema.json
 
+      - name: Audit realized feature coverage
+        run: |
+          python scripts/audit_feature_coverage.py             data/derived/object_model_features_expansion.csv             --schema schema/feature_schema.csv             --output data/derived/object_model_features_expansion.coverage.json
+
       - name: Train case-held-out baselines
         run: |
           for horizon in 15 30 45 60; do
@@ -268,6 +272,7 @@ jobs:
             data/derived/object_population_expansion.csv
             data/derived/object_model_features_expansion.csv
             data/derived/object_model_features_expansion.schema.json
+            data/derived/object_model_features_expansion.coverage.json
             data/derived/baseline_expansion_*m
             data/derived/surface_truth_audit.csv
             data/derived/surface_truth_audit.json
