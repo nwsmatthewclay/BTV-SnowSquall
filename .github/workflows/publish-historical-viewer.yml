@@ -115,7 +115,7 @@ jobs:
           mkdir -p _site
 
           # Always use the version-controlled viewer shell, and add prebuilt data when available.
-          cp viewer/index.html viewer/app.js viewer/style.css _site/
+          cp viewer/*.html viewer/*.js viewer/*.css _site/
           if [ -f dataset_artifact/data/derived/viewer/data/catalog.json ]; then
             mkdir -p _site/data
             cp -R dataset_artifact/data/derived/viewer/data/. _site/data/
