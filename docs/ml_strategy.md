@@ -49,3 +49,24 @@ The model should learn:
 **environment × storm structure × storm evolution**
 
 rather than simply relearning the Snow Squall Parameter.
+
+
+## Implemented baseline validation
+
+The first implemented baseline uses a histogram gradient-boosted classifier with a
+case/window-held-out evaluation. Leave-One-Group-Out validation groups every
+historical positive observation by complete case and every null observation by
+complete null window; adjacent object scans are never split across folds.
+
+For the initial onset target, only observations before verified onset are eligible
+for historical case training. Verified post-onset intervals are excluded rather
+than treated as negative examples. Candidate null windows remain provisional
+negative context until their radar objects receive additional QC.
+
+The baseline writes out-of-fold probabilities, ROC-AUC, PR-AUC (average
+precision), and Brier score. These metrics are exploratory and are not an
+operational verification of forecast skill.
+
+The predictor schema is generated separately and explicitly blocks identifiers,
+future outcome labels, event-association metadata, and other non-predictor fields.
+Feature construction follows a current-and-past-only policy.
