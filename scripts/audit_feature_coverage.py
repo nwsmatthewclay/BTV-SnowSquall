@@ -14,6 +14,15 @@ from pathlib import Path
 import pandas as pd
 
 
+FIELD_ALIASES = {
+    "scan_time": ("scan_time", "scan_time_utc"),
+    "lat": ("lat", "centroid_lat"),
+    "lon": ("lon", "centroid_lon"),
+    "reflectivity_max_dbz": ("reflectivity_max_dbz", "max_reflectivity_dbz"),
+    "reflectivity_mean_dbz": ("reflectivity_mean_dbz", "mean_reflectivity_dbz"),
+    "motion_dir_deg": ("motion_dir_deg", "motion_direction_deg"),
+}
+
 def audit(input_csv: Path, schema_csv: Path) -> dict:
     frame = pd.read_csv(input_csv)
     schema = pd.read_csv(schema_csv)
@@ -25,18 +34,22 @@ def audit(input_csv: Path, schema_csv: Path) -> dict:
 
     rows = []
     for field in schema["field"].astype(str):
-        if field not in frame.columns:
+        aliases = FIELD_ALIASES.get(field, (field,))
+        actual = next((candidate for candidate in aliases if candidate in frame.columns), None)
+        group_value = schema.loc[schema["field"].astype(str).eq(field), "group"].iloc[0]
+        if actual is None:
             rows.append({
                 "field": field,
-                "group": schema.loc[schema["field"].astype(str).eq(field), "group"].iloc[0],
+                "group": group_value,
                 "records": len(frame),
                 "non_null": 0,
                 "coverage_pct": 0.0,
                 "present": False,
+                "actual_field": None,
             })
             continue
 
-        series = frame[field]
+        series = frame[actual]
         non_null = int(series.notna().sum())
         rows.append({
             "field": field,
@@ -45,6 +58,7 @@ def audit(input_csv: Path, schema_csv: Path) -> dict:
             "non_null": non_null,
             "coverage_pct": round(100.0 * non_null / len(frame), 2) if len(frame) else 0.0,
             "present": True,
+            "actual_field": actual,
         })
 
     detail = pd.DataFrame(rows)
