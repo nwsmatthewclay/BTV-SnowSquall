@@ -51,3 +51,15 @@ def test_environment_fields_are_canonicalized():
     assert result["visibility_sm"] == 1.0
     assert result["temperature_2m_k"] == 270.0
 
+
+
+def test_environment_boundary_rejects_future_analysis():
+    from datetime import timedelta
+    import pytest
+    from processing.environment import extract_features
+
+    radar_time = datetime(2026, 1, 1, 12, 0, tzinfo=timezone.utc)
+    future = radar_time + timedelta(hours=1)
+
+    with pytest.raises(ValueError, match="future RUC environment analysis"):
+        extract_features("RUC", None, 44.0, -73.0, radar_time, future)
