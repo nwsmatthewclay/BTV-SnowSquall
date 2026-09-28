@@ -231,6 +231,10 @@ jobs:
               --output-dir data/derived/baseline_expansion_\${horizon}m
           done
 
+      - name: Audit training dataset
+        run: |
+          python scripts/audit_training_dataset.py             data/derived/object_model_features_expansion.csv
+
       - name: Build SOO report
         run: |
           python scripts/build_pilot_report.py \
