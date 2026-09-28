@@ -118,11 +118,11 @@ jobs:
 
       - name: Build SOO-ready pilot report
         run: |
-          python scripts/build_pilot_report.py \\
-            --positive data/derived/positive_object_labeled.csv \\
-            --null data/derived/null_object_environment.csv \\
-            --positive-tracks data/derived/positive_object_tracks.csv \\
-            --null-tracks data/derived/null_object_tracks.csv \\
+          python scripts/build_pilot_report.py \
+            --positive data/derived/positive_object_labeled.csv \
+            --null data/derived/null_object_environment.csv \
+            --positive-tracks data/derived/positive_object_tracks.csv \
+            --null-tracks data/derived/null_object_tracks.csv \
             --output data/derived/pilot_report.html
 
       - name: Run tests
