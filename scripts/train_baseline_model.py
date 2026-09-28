@@ -179,6 +179,11 @@ def main():
     final_model.fit(data[predictors], data[args.target].astype(int))
     joblib.dump(final_model, output_dir / "baseline_model.joblib")
 
+    fold_status_counts = {}
+    for fold in folds:
+        status = fold.get("status", "unknown")
+        fold_status_counts[status] = fold_status_counts.get(status, 0) + 1
+
     report = {
         "model_version": "baseline_hist_gradient_boosting_v1",
         "target": args.target,
@@ -186,6 +191,11 @@ def main():
         "predictor_columns": predictors,
         "training_rows": int(len(data)),
         "training_groups": int(data["split_group"].nunique()),
+        "training_class_counts": {
+            "positive": int(data[target].sum()),
+            "negative": int((1 - data[target]).sum()),
+        },
+        "fold_status_counts": fold_status_counts,
         "metrics": metrics,
         "folds": folds,
         "negative_label_policy": (
