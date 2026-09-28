@@ -9,12 +9,14 @@ must be recorded before case data are treated as truth.
 | Southern New England 100-case climatology | Independent case population | Expand event diversity |
 | Penn State SNSQ/null dataset | Environmental reference | Compare environmental discrimination |
 | NEXRAD Level II KCXX/KTYX | Storm structure | 3-D radar features and evolution |
-| MRMS | Precipitation context | Rate/type/echo-top fields |
+| MRMS | Precipitation context | Modern-era lowest reflectivity and precipitation accumulation; additional fields only when defensibly archived |
 | RAP | Environment | SNSQ and thermodynamic/kinematic fields |
 | ASOS/METAR/NCEI | Surface truth | Visibility, snow, wind/gust |
 | NWS/IEM SQW archives | Event truth | Warning polygons/timing and provenance |
 
 ## Evidence rule
+
+MRMS availability is date-dependent: the IEM MTArchive contains selected MRMS fields back to October 2014, while older Banacos cases must retain MRMS missingness. citeturn675482search0turn540908view0
 
 No source is automatically considered perfect truth. Labels should combine
 independent evidence and retain provenance/confidence.
