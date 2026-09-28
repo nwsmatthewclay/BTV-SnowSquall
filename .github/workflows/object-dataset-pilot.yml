@@ -268,7 +268,7 @@ jobs:
       - name: Train case-held-out baseline models
         run: |
           for horizon in 15 30 45 60; do
-            python scripts/train_baseline_model.py               data/derived/object_model_features_pilot.csv               --schema data/derived/object_model_features_pilot.schema.json               --target squall_onset_with_${horizon}m               --output-dir data/derived/baseline_model_${horizon}m
+            python scripts/train_baseline_model.py               data/derived/object_model_features_pilot.csv               --schema data/derived/object_model_features_pilot.schema.json               --target squall_onset_within_${horizon}m               --output-dir data/derived/baseline_model_${horizon}m
           done
 
       - name: Build SOO-ready pilot report
