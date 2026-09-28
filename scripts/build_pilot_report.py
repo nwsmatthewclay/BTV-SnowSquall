@@ -161,14 +161,29 @@ def main():
                 "horizon": horizon,
                 "training_rows": data.get("training_rows"),
                 "groups": data.get("training_groups"),
+                "positive_case_groups": data.get("positive_case_group_count"),
+                "evaluation_status": data.get("evaluation_status"),
                 "ROC_AUC": metrics.get("auc_roc"),
                 "Average_Precision": metrics.get("average_precision"),
                 "Brier": metrics.get("brier_score"),
             })
-        baseline_section = table_html(pd.DataFrame(baseline_rows), [
-            "horizon", "training_rows", "groups", "ROC_AUC",
-            "Average_Precision", "Brier",
+        baseline_df = pd.DataFrame(baseline_rows)
+        baseline_section = table_html(baseline_df, [
+            "horizon", "training_rows", "groups", "positive_case_groups",
+            "evaluation_status", "ROC_AUC", "Average_Precision", "Brier",
         ])
+        not_ready = baseline_df[
+            baseline_df.get("evaluation_status", pd.Series(dtype=str)).eq(
+                "case_held_out_not_interpretable"
+            )
+        ] if not baseline_df.empty else pd.DataFrame()
+        if not not_ready.empty:
+            baseline_section += (
+                '<div class="note"><strong>Baseline readiness warning:</strong> '
+                'fewer than three independent historical case groups contain positive '
+                'forecast labels. The displayed holdout metrics are not scientifically '
+                'interpretable as model skill yet.</div>'
+            )
 
     html = f"""<!doctype html>
 <html lang="en"><head><meta charset="utf-8">
