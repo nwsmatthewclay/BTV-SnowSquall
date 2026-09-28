@@ -7,8 +7,8 @@ def test_surface_impact_summary_extracts_visibility_and_gust():
     frame = pd.DataFrame([
         {"valid": "2023-12-31T23:50:00Z", "visibility_mi": 10.0, "wind_gust_kt": 20, "wxcodes": ""},
         {"valid": "2024-01-01T00:00:00Z", "visibility_mi": 2.5, "wind_gust_kt": 20, "wxcodes": "SN"},
-        {"valid": "2024-01-01 00:10:00+00:00", "visibility_mi": 0.5, "wind_gust_kt": 35, "wxcodes": "SN,BLSN"},
-        {"valid": "2024-01-01 00:20:00+00:00", "visibility_mi": 0.125, "wind_gust_kt": 30, "wxcodes": "SN"},
+        {"valid": "2024-01-01T00:10:00Z", "visibility_mi": 0.5, "wind_gust_kt": 35, "wxcodes": "SN,BLSN"},
+        {"valid": "2024-01-01T00:20:00Z", "visibility_mi": 0.125, "wind_gust_kt": 30, "wxcodes": "SN"},
     ])
     result = summarize_station(frame)
     assert result["surface_rows"] == 4
