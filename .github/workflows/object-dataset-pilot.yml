@@ -77,6 +77,14 @@ jobs:
           print("Null IDs:", sorted(n["null_id"].unique()))
           PY
 
+      - name: Acquire ASOS/METAR surface observations
+        run: |
+          python acquisition/asos_iem.py             --cases data/manifests/banacos_positive_pilot.csv             --output data/raw/ASOS_IEM             --buffer-before 120             --buffer-after 150
+
+      - name: Audit surface truth
+        run: |
+          python scripts/audit_surface_truth.py             --cases data/manifests/banacos_positive_pilot.csv             --surface-root data/raw/ASOS_IEM             --output data/derived/surface_truth_audit.csv             --summary data/derived/surface_truth_audit.json
+
       - name: Download positive radar windows
         run: |
           python acquisition/historical_level2.py --manifest data/manifests/banacos_positive_pilot.csv --output data/raw/positive_level2
@@ -274,6 +282,8 @@ jobs:
             data/derived/positive_object_scans.csv
             data/derived/positive_object_scans_errors.csv
             data/derived/positive_radar_reconstruction_audit.json
+            data/derived/surface_truth_audit.csv
+            data/derived/surface_truth_audit.json
             data/derived/positive_object_scans_annotated.csv
             data/derived/positive_object_environment.csv
             data/derived/positive_object_labeled.csv
@@ -289,6 +299,7 @@ jobs:
             data/derived/object_model_features_pilot.schema.json
             data/derived/baseline_model_*m
             data/derived/pilot_report.html
+            data/raw/ASOS_IEM
             data/raw/NARR
             data/raw/RUC
             data/raw/RAP
