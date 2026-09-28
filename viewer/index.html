@@ -1,13 +1,24 @@
 <!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Snow Squall Object Viewer</title>
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
-<link rel="stylesheet" href="style.css"></head>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>BTV Snow Squall Historical Explorer</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"><link rel="stylesheet" href="style.css">
+</head>
 <body>
-<header><div><h1>Snow Squall Object Viewer</h1><div id="subtitle">Loading reconstruction…</div></div><button id="popout">Open Probability Viewer</button></header>
+<header><div><div class="eyebrow">BTV SNOW SQUALL PROJECT</div><h1>Historical Storm Explorer</h1><div id="subtitle">Loading historical pilot data…</div></div>
+<div class="header-actions"><span class="badge research">RESEARCH PILOT</span><button id="detailsBtn">Data Status</button></div></header>
 <main><section id="map"></section><aside id="panel">
-<h2>Object Diagnostics</h2><div id="objectTitle">Hover an object</div><div class="prob"><span>30-min probability</span><strong id="prob">—</strong></div>
-<div class="grid" id="metrics"></div><h3>Model inputs</h3><div id="drivers">Probability model not yet trained. Radar/object history is live in this viewer.</div>
+<div class="control-block"><label for="caseSelect">Historical case</label><select id="caseSelect"></select></div>
+<div class="case-card"><div class="case-title" id="caseTitle">Loading…</div><div class="case-meta" id="caseMeta">—</div><div class="case-grid" id="caseGrid"></div></div>
+<div class="section-head"><h2>Object Diagnostics</h2><span id="selectionState">No object selected</span></div>
+<div class="selected-card"><div class="selected-title" id="objectTitle">Select a storm object</div><div class="selected-sub" id="objectTime">—</div></div>
+<div class="metric-grid" id="metrics"></div>
+<div class="section-head compact"><h3>Environment</h3><span id="envSource">—</span></div><div class="env-grid" id="environment"></div>
+<div class="section-head compact"><h3>Historical outcome context</h3></div><div class="outcome" id="outcome">Select an object to inspect its historical context.</div>
+<div class="legend"><span><i class="swatch object"></i>Detected object</span><span><i class="swatch track"></i>Object track</span><span><i class="swatch onset"></i>Published onset context</span></div>
 </aside></main>
-<footer><input id="slider" type="range" min="0" max="0" value="0"><div><span id="time">—</span><button id="play">▶ Play</button></div></footer>
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script><script src="app.js"></script></body></html>
+<footer><div class="timeline-head"><span id="timelineTime">—</span><div><button id="prevBtn">◀</button><button id="playBtn">▶ Play</button><button id="nextBtn">▶</button></div></div><input id="slider" type="range" min="0" max="0" value="0"></footer>
+<div id="modal" class="modal hidden"><div class="modal-card"><button id="closeModal" class="modal-close">×</button><h2>Viewer Data Status</h2><p id="statusText">—</p><div class="status-list" id="statusList"></div></div></div>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script><script src="app.js"></script>
+</body></html>
