@@ -10,6 +10,7 @@ from __future__ import annotations
 import argparse
 from io import StringIO
 from pathlib import Path
+import time
 
 import pandas as pd
 import requests
@@ -47,8 +48,35 @@ def request_observations(
         ("report_type", 3),  # routine/hourly
         ("report_type", 4),  # specials
     ]
-    response = requests.get(BASE, params=params, timeout=timeout)
-    response.raise_for_status()
+    headers = {
+        "User-Agent": "BTV-SnowSquall research dataset builder/1.0",
+        "Accept": "text/csv,*/*;q=0.8",
+    }
+    last_error = None
+    for attempt, delay in enumerate((0, 2, 5, 10, 20), start=1):
+        if delay:
+            time.sleep(delay)
+        try:
+            response = requests.get(
+                BASE,
+                params=params,
+                headers=headers,
+                timeout=timeout,
+            )
+            response.raise_for_status()
+            break
+        except requests.RequestException as exc:
+            last_error = exc
+            status = getattr(getattr(exc, "response", None), "status_code", None)
+            retryable = status is None or status == 429 or 500 <= status < 600
+            if not retryable or attempt == 5:
+                raise
+            print(
+                f"IEM request retry {attempt}/5 for {station} after "
+                f"{type(exc).__name__}: {exc}"
+            )
+    else:
+        raise RuntimeError(f"IEM request failed: {last_error}")
 
     frame = pd.read_csv(StringIO(response.text), na_values=["M", "T", ""])
     if "valid" not in frame.columns:
@@ -112,6 +140,7 @@ def download_cases(
 
     output_root.mkdir(parents=True, exist_ok=True)
     manifest_rows = []
+    error_rows = []
 
     for row in cases.drop_duplicates("case_id").itertuples(index=False):
         event_start = pd.to_datetime(row.event_start_utc, utc=True)
@@ -124,7 +153,23 @@ def download_cases(
         )
 
         station = str(row.observing_station)
-        data = request_observations(station, start, end)
+        try:
+            data = request_observations(station, start, end)
+        except Exception as exc:
+            error_rows.append(
+                {
+                    "case_id": row.case_id,
+                    "station": station,
+                    "error_type": type(exc).__name__,
+                    "error_message": str(exc),
+                }
+            )
+            print(
+                f"FAILED {row.case_id} {station}: "
+                f"{type(exc).__name__}: {exc}"
+            )
+            continue
+
         path = output_root / station / f"{row.case_id}.csv"
         path.parent.mkdir(parents=True, exist_ok=True)
         data.to_csv(path, index=False)
@@ -143,7 +188,12 @@ def download_cases(
 
     manifest = pd.DataFrame(manifest_rows)
     manifest.to_csv(output_root / "surface_download_manifest.csv", index=False)
+    pd.DataFrame(
+        error_rows,
+        columns=["case_id", "station", "error_type", "error_message"],
+    ).to_csv(output_root / "surface_download_errors.csv", index=False)
     print(f"Wrote {len(manifest)} surface observation case files")
+    print(f"Surface download failures: {len(error_rows)}")
 
 
 def main():
