@@ -9,7 +9,6 @@ import pandas as pd
 from shapely import wkt
 from shapely.geometry import mapping
 
-
 ENVIRONMENT_FIELDS = [
     ("SBCAPE", "sbcape_jkg", "J/kg"),
     ("SBCIN", "sbcin_jkg", "J/kg"),
@@ -63,93 +62,96 @@ def object_properties(row):
         "track_event_associated": clean(row.get("track_event_associated")),
         "case_time_relation": clean(row.get("case_time_relation")),
     }
-
-    env = {}
-    for label, column, units in ENVIRONMENT_FIELDS:
-        value = clean(row.get(column))
-        env[column] = {"label": label, "value": value, "units": units}
-    props["environment"] = env
+    props["environment"] = {
+        key: {"label": label, "value": clean(row.get(key)), "units": units}
+        for label, key, units in ENVIRONMENT_FIELDS
+    }
     return props
 
+def read_frames(frames_root: Path, case_id: str, radar_site: str):
+    path=frames_root/"data"/"cases"/f"{case_id}_{radar_site}"/"frames.json"
+    if not path.exists():
+        return [], None
+    payload=json.loads(path.read_text(encoding="utf-8"))
+    return payload.get("frames", []), payload.get("bounds")
+
 def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--objects", required=True)
-    parser.add_argument("--cases", required=True)
-    parser.add_argument("--output-dir", required=True)
-    args = parser.parse_args()
+    parser=argparse.ArgumentParser()
+    parser.add_argument("--objects",required=True)
+    parser.add_argument("--cases",required=True)
+    parser.add_argument("--output-dir",required=True)
+    parser.add_argument("--frames-root",default=None)
+    args=parser.parse_args()
 
-    objects = pd.read_csv(args.objects)
-    cases = pd.read_csv(args.cases)
-    objects["scan_time_utc"] = pd.to_datetime(objects["scan_time_utc"], utc=True, errors="coerce")
-    objects = objects.dropna(subset=["scan_time_utc", "case_id", "radar_site"]).copy()
+    objects=pd.read_csv(args.objects)
+    cases=pd.read_csv(args.cases)
+    objects["scan_time_utc"]=pd.to_datetime(objects["scan_time_utc"],utc=True,errors="coerce")
+    objects=objects.dropna(subset=["scan_time_utc","case_id","radar_site"]).copy()
 
-    root = Path(args.output_dir)
-    data_dir = root / "data"
-    cases_dir = data_dir / "cases"
-    cases_dir.mkdir(parents=True, exist_ok=True)
+    root=Path(args.output_dir)
+    data_dir=root/"data"
+    cases_dir=data_dir/"cases"
+    cases_dir.mkdir(parents=True,exist_ok=True)
+    frames_root=Path(args.frames_root) if args.frames_root else root
 
-    catalog = []
-    for (case_id, radar_site), group in objects.groupby(["case_id", "radar_site"], sort=True):
-        group = group.sort_values(["scan_time_utc", "object_id"])
-        features = []
-        for _, row in group.iterrows():
-            geom_text = row.get("geometry_wkt")
-            if not isinstance(geom_text, str) or not geom_text:
+    catalog=[]
+    for (case_id,radar_site),group in objects.groupby(["case_id","radar_site"],sort=True):
+        group=group.sort_values(["scan_time_utc","object_id"])
+        features=[]
+        for _,row in group.iterrows():
+            geom_text=row.get("geometry_wkt")
+            if not isinstance(geom_text,str) or not geom_text:
                 continue
             try:
-                geom = mapping(wkt.loads(geom_text))
+                geom=mapping(wkt.loads(geom_text))
             except Exception:
                 continue
-            features.append({
-                "type": "Feature",
-                "geometry": geom,
-                "properties": object_properties(row),
-            })
+            features.append({"type":"Feature","geometry":geom,"properties":object_properties(row)})
         if not features:
             continue
 
-        case_rows = cases[cases["case_id"].astype(str) == str(case_id)]
-        case = case_rows.iloc[0].to_dict() if not case_rows.empty else {}
-        times = sorted({f["properties"]["timestamp"] for f in features})
-        tracks = sorted({f["properties"]["track_key"] for f in features})
-        filename = f"{safe_name(case_id, radar_site)}.geojson"
-        (cases_dir / filename).write_text(
-            json.dumps({"type": "FeatureCollection", "features": features}, indent=2),
+        case_rows=cases[cases["case_id"].astype(str)==str(case_id)]
+        case=case_rows.iloc[0].to_dict() if not case_rows.empty else {}
+        times=sorted({f["properties"]["timestamp"] for f in features})
+        tracks=sorted({f["properties"]["track_key"] for f in features})
+        filename=f"{safe_name(case_id,radar_site)}.geojson"
+        (cases_dir/filename).write_text(
+            json.dumps({"type":"FeatureCollection","features":features},indent=2),
             encoding="utf-8",
         )
+        radar_frames,radar_bounds=read_frames(frames_root,str(case_id),str(radar_site))
 
         catalog.append({
-            "case_id": str(case_id),
-            "radar_site": str(radar_site),
-            "file": f"cases/{filename}",
-            "event_start_utc": clean(case.get("event_start_utc")),
-            "observing_station": clean(case.get("observing_station")),
-            "peak_wind_kt": clean(case.get("peak_wind_kt")),
-            "min_visibility_km": clean(case.get("min_visibility_km")),
-            "hybrid_case": clean(case.get("hybrid_case")),
-            "source_study": clean(case.get("source_study")),
-            "scan_count": len(times),
-            "track_count": len(tracks),
-            "first_scan_utc": times[0],
-            "last_scan_utc": times[-1],
-            "status": "historical_pilot",
+            "case_id":str(case_id),
+            "radar_site":str(radar_site),
+            "file":f"cases/{filename}",
+            "event_start_utc":clean(case.get("event_start_utc")),
+            "observing_station":clean(case.get("observing_station")),
+            "peak_wind_kt":clean(case.get("peak_wind_kt")),
+            "min_visibility_km":clean(case.get("min_visibility_km")),
+            "hybrid_case":clean(case.get("hybrid_case")),
+            "source_study":clean(case.get("source_study")),
+            "scan_count":len(times),
+            "track_count":len(tracks),
+            "first_scan_utc":times[0],
+            "last_scan_utc":times[-1],
+            "radar_frames":radar_frames,
+            "radar_bounds":radar_bounds,
+            "status":"historical_pilot",
         })
 
-    catalog.sort(key=lambda x: (x["event_start_utc"] or "", x["case_id"], x["radar_site"]))
-    (data_dir / "catalog.json").write_text(
-        json.dumps({
-            "product": "BTV Snow Squall Historical Object Viewer",
-            "version": "0.2-pilot",
-            "data_status": "research_pilot",
-            "probability_status": "not_scored",
-            "truth_note": "Historical case context is not final object-level event truth.",
-            "future_information_policy": "Viewer may display historical outcome context, but model predictors remain separate from future labels.",
-            "cases": catalog,
-        }, indent=2),
-        encoding="utf-8",
-    )
-    print(f"Built viewer package: {len(catalog)} case/radar datasets")
-    print(f"Object records included: {len(objects)}")
+    catalog.sort(key=lambda x:(x["event_start_utc"] or "",x["case_id"],x["radar_site"]))
+    (data_dir/"catalog.json").write_text(json.dumps({
+        "product":"BTV Snow Squall Historical Object Viewer",
+        "version":"0.3-pilot",
+        "data_status":"research_pilot",
+        "probability_status":"not_scored",
+        "truth_note":"Historical case context is not final object-level event truth.",
+        "future_information_policy":"Viewer may display historical outcome context, but model predictors remain separate from future labels.",
+        "radar_note":"Radar imagery is reconstructed from archived Level-II reflectivity and is shown as a historical diagnostic background.",
+        "cases":catalog,
+    },indent=2),encoding="utf-8")
+    print(f"Built viewer package: {len(catalog)} case/radar datasets; {len(objects)} source object rows")
 
-if __name__ == "__main__":
+if __name__=="__main__":
     main()
