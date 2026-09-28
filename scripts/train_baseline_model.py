@@ -106,6 +106,35 @@ def prepare_dataset(frame: pd.DataFrame, schema: dict, target: str):
     return d, predictor_cols
 
 
+def grouped_bootstrap_intervals(y, probability, groups, n_boot=500, seed=42):
+    rng = np.random.default_rng(seed)
+    unique_groups = np.asarray(sorted(set(groups)))
+    if unique_groups.size < 3:
+        return {}
+    group_arrays = {g: np.flatnonzero(np.asarray(groups) == g) for g in unique_groups}
+    aucs, aps, briers = [], [], []
+    for _ in range(n_boot):
+        sample_groups = rng.choice(unique_groups, size=unique_groups.size, replace=True)
+        idx = np.concatenate([group_arrays[g] for g in sample_groups])
+        yb = np.asarray(y)[idx]
+        pb = np.asarray(probability)[idx]
+        if len(np.unique(yb)) < 2:
+            continue
+        aucs.append(roc_auc_score(yb, pb))
+        aps.append(average_precision_score(yb, pb))
+        briers.append(brier_score_loss(yb, pb))
+    def interval(values):
+        if not values:
+            return {'lower': None, 'median': None, 'upper': None, 'samples': 0}
+        q = np.percentile(values, [2.5, 50, 97.5])
+        return {'lower': float(q[0]), 'median': float(q[1]), 'upper': float(q[2]), 'samples': len(values)}
+    return {
+        'method': 'grouped_case_or_null_bootstrap',
+        'group_count': int(unique_groups.size),
+        'auc_roc': interval(aucs),
+        'average_precision': interval(aps),
+        'brier_score': interval(briers),
+    }
 def evaluate(frame: pd.DataFrame, predictor_cols: list[str], target: str):
     logo = LeaveOneGroupOut()
     X = frame[predictor_cols]
@@ -146,6 +175,7 @@ def evaluate(frame: pd.DataFrame, predictor_cols: list[str], target: str):
 
     valid = np.isfinite(oof)
     climatology_valid = np.isfinite(climatology_oof)
+    bootstrap = grouped_bootstrap_intervals(y[valid], oof[valid], groups[valid])
     metrics = {
         "evaluated_rows": int(valid.sum()),
         "positive_rows": int(y[valid].sum()),
@@ -163,6 +193,7 @@ def evaluate(frame: pd.DataFrame, predictor_cols: list[str], target: str):
             float(brier_score_loss(y[valid], oof[valid]))
             if valid.any() else None
         ),
+        "grouped_bootstrap_95pct": bootstrap,
         "climatology": {
             "brier_score": (
                 float(brier_score_loss(y[climatology_valid], climatology_oof[climatology_valid]))
