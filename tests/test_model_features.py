@@ -103,6 +103,9 @@ def test_schema_blocks_future_derived_truth_fields(tmp_path):
             "max_reflectivity_dbz": [20.0],
             "lead_time_min": [10.0],
             "sqw_intersection": [1],
+            "visibility_sm": [0.3],
+            "snow_observed": [True],
+            "wind_gust_kt": [31.0],
             "squall_onset_within_15m": [0],
         }
     )
@@ -112,3 +115,6 @@ def test_schema_blocks_future_derived_truth_fields(tmp_path):
     assert "max_reflectivity_dbz" in schema["predictor_columns"]
     assert "lead_time_min" not in schema["predictor_columns"]
     assert "sqw_intersection" not in schema["predictor_columns"]
+    assert "visibility_sm" not in schema["predictor_columns"]
+    assert "snow_observed" not in schema["predictor_columns"]
+    assert "wind_gust_kt" not in schema["predictor_columns"]
