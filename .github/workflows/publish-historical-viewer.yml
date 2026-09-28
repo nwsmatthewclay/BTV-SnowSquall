@@ -1,0 +1,89 @@
+name: Publish Snow Squall Historical Viewer
+
+on:
+  workflow_run:
+    workflows:
+      - Object Dataset Pilot
+    types:
+      - completed
+      - Object Dataset Full Expansion
+    branches:
+      - snow-squall-model-foundation
+  workflow_dispatch:
+    inputs:
+      source_run_id:
+        description: "Completed Object Dataset Pilot/Expansion run ID"
+        required: true
+
+permissions:
+  contents: read
+  actions: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: snow-squall-viewer-pages
+  cancel-in-progress: true
+
+jobs:
+  publish:
+    if: >
+      (github.event_name == 'workflow_dispatch') ||
+      (github.event.workflow_run.conclusion == 'success')
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - name: Checkout viewer source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && github.ref || github.event.workflow_run.head_sha }}
+
+      - name: Resolve source run
+        id: source
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "run_id=${{ inputs.source_run_id }}" >> "${GITHUB_OUTPUT}"
+          else
+            echo "run_id=${{ github.event.workflow_run.id }}" >> "${GITHUB_OUTPUT}"
+          fi
+
+      - name: Download source dataset artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: object-population-pilot
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          repository: ${{ github.repository }}
+          run-id: ${{ steps.source.outputs.run_id }}
+          path: pilot_artifact
+
+      - name: Assemble viewer site
+        shell: bash
+        run: |
+          rm -rf _site
+          mkdir -p _site
+          cp viewer/index.html viewer/app.js viewer/style.css _site/
+          python -m py_compile scripts/build_static_viewer.py
+          python scripts/build_static_viewer.py             --objects pilot_artifact/data/derived/positive_object_labeled.csv             --cases pilot_artifact/data/manifests/banacos_positive_pilot.csv             --output-dir _site
+
+          # Keep the viewer clearly labeled as research/pilot data.
+          cat > _site/README.txt <<'EOF'
+          BTV Snow Squall Historical Object Viewer
+          Research/pilot historical reconstruction only.
+          The viewer does not expose a production probability forecast.
+          EOF
+
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
