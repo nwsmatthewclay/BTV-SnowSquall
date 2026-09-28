@@ -133,3 +133,29 @@ def test_case_summary_keeps_mrms_statistics_case_specific(tmp_path, monkeypatch)
     assert got["B"]["mrms_max_age_minutes"]==2.0
     assert got["A"]["mrms_neighborhood_pearson_r"] < 1.0
     assert got["B"]["mrms_neighborhood_pearson_r"] == 1.0
+
+
+def test_case_summary_preserves_all_station_surface_metrics(tmp_path, monkeypatch):
+    from scripts.build_modern_validation_case_summary import build
+    import json
+    monkeypatch.chdir(tmp_path)
+    (tmp_path/"data/raw/modern_surface/KBTV").mkdir(parents=True)
+    (tmp_path/"data/raw/modern_surface/KMPV").mkdir(parents=True)
+    (tmp_path/"data/derived").mkdir(parents=True)
+    cases=tmp_path/"cases.csv"
+    inventory=tmp_path/"inventory.json"
+    pd.DataFrame([{
+        "case_id":"CASE1","event_date_utc":"2019-12-18","radar_site":"KCXX",
+        "observing_station":"KMPV","observing_stations":"KBTV;KMPV",
+        "evidence_type":"documented","evidence_source":"NWS","source_url":"https://example.org",
+        "reconstruction_eligible":True,
+        "analysis_window_start_utc":"2019-12-18T22:25:00Z","analysis_window_end_utc":"2019-12-18T23:40:00Z"
+    }]).to_csv(cases,index=False)
+    inventory.write_text(json.dumps({"cases":[{"case_id":"CASE1","replay_scans":1,"replay_failed_scans":0,"replay_failure_rate":0,"replay_object_scan_count":1,"mrms_lcref_files":1}]}),encoding="utf-8")
+    pd.DataFrame([{"valid":"2019-12-18T22:30:00Z","visibility_mi":1.0,"wind_gust_kt":20}]).to_csv(tmp_path/"data/raw/modern_surface/KBTV/CASE1.csv",index=False)
+    pd.DataFrame([{"valid":"2019-12-18T22:40:00Z","visibility_mi":0.25,"wind_gust_kt":30}]).to_csv(tmp_path/"data/raw/modern_surface/KMPV/CASE1.csv",index=False)
+    (tmp_path/"data/derived/modern_surface_radar_diagnostic_CASE1.json").write_text(json.dumps({"minimum_visibility_mi":1.0,"minimum_visibility_time_utc":"2019-12-18T22:30:00Z"}),encoding="utf-8")
+    payload=build(cases,inventory,tmp_path/"data/derived/out.json",tmp_path/"data/derived/out.csv")
+    got=payload["cases"][0]
+    assert got["minimum_visibility_mi"]==0.25
+    assert got["primary_minimum_visibility_mi"]==1.0
