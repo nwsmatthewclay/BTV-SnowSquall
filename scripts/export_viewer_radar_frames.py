@@ -55,7 +55,15 @@ def main():
             if field is None:
                 continue
 
-            grid=grid_lowest_sweep(radar,field,grid_size_km=args.grid_size_km,spacing_km=args.spacing_km)
+            radar_origin = radar_origin_for_site(radar_name)
+            grid=grid_lowest_sweep(
+                radar,
+                field,
+                origin_lat=radar_origin[0] if radar_origin else None,
+                origin_lon=radar_origin[1] if radar_origin else None,
+                grid_size_km=args.grid_size_km,
+                spacing_km=args.spacing_km,
+            )
             data=grid_field_2d(grid,field)
             lat,lon=grid_latlon(grid)
             west,east=float(np.nanmin(lon)),float(np.nanmax(lon))
