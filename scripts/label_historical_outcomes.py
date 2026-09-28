@@ -91,7 +91,10 @@ def build_labels(df: pd.DataFrame, cases_csv: Path):
         for key_values, track in candidate.groupby(group_cols, dropna=False):
             if not isinstance(key_values, tuple):
                 key_values = (key_values,)
-            radar_site, object_id = key_values
+            if "radar_site" in group_cols:
+                radar_site, object_id = key_values
+            else:
+                radar_site, object_id = None, key_values[0]
             distances = track.apply(
                 lambda r: distance_km(
                     float(r["centroid_lat"]), float(r["centroid_lon"]),
