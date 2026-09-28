@@ -2,7 +2,7 @@ const map=L.map("map",{zoomControl:true,preferCanvas:true}).setView([44.2,-73.1]
 L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{maxZoom:12,attribution:"© OpenStreetMap contributors"}).addTo(map);
 const radarLayer=L.layerGroup().addTo(map),objectsLayer=L.layerGroup().addTo(map),tracksLayer=L.layerGroup().addTo(map);
 let catalog=null,current=null,features=[],times=[],currentIndex=0,playing=false,timer=null,selectedKey=null;
-const radarLocations={KCXX:[44.511,-73.166],KTYX:[43.755,-75.676],KBTV:[44.472,-73.154]};
+const radarLocations={KCXX:[44.511,-73.166],KTYX:[43.756,-75.680],KBTV:[44.472,-73.154]};
 const num=(v,d=1)=>v==null||Number.isNaN(Number(v))?"—":Number(v).toFixed(d);
 const fmtTime=t=>t?new Date(t).toLocaleString(undefined,{month:"short",day:"numeric",hour:"numeric",minute:"2-digit"}):"—";
 const fmtUtc=t=>t?new Date(t).toISOString().replace("T"," ").replace(".000Z","Z"):"—";
