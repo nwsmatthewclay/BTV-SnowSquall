@@ -25,6 +25,8 @@ jobs:
           pip install -r requirements.txt -r requirements-science.txt
 
       - name: Run live object worker
+        env:
+          PYTHONPATH: ${{ github.workspace }}
         run: |
           python scripts/live_object_worker.py             --radar KCXX             --poll-seconds 10             --max-polls 3
 
