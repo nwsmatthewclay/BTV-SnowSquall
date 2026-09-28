@@ -1,9 +1,8 @@
 """Create leakage-safe future-outcome labels for reconstructed object scans.
 
-Labels are attached only when an object is temporally and spatially relevant to
-a verified Banacos event. Event metadata provide onset plus the documented
-minimum duration below the 0.8-km visibility threshold; records outside that
-verified interval remain negative/unknown rather than being assumed positive.
+Event association is track-aware: an object track must enter the station
+association corridor during the verified event window before its observations
+can receive a positive event label.
 """
 from __future__ import annotations
 
@@ -22,12 +21,16 @@ STATIONS = {
 
 HORIZONS = (15, 30, 45, 60)
 ASSOCIATION_RADIUS_KM = 75.0
+PRE_EVENT_ASSOCIATION_MIN = 90
+POST_EVENT_ASSOCIATION_MIN = 30
 
 
 def parse_time(value):
     if not value or pd.isna(value):
         return None
-    return datetime.fromisoformat(str(value).replace("Z", "+00:00")).astimezone(timezone.utc)
+    return datetime.fromisoformat(
+        str(value).replace("Z", "+00:00")
+    ).astimezone(timezone.utc)
 
 
 def distance_km(lat1, lon1, lat2, lon2):
@@ -40,7 +43,6 @@ def distance_km(lat1, lon1, lat2, lon2):
 
 
 def event_end(case):
-    # Cases are namedtuples from itertuples(), not dictionaries.
     start = parse_time(getattr(case, "event_start_utc", None))
     duration = getattr(case, "vis_below_0p8_min", None)
     if start is None or duration is None or pd.isna(duration):
@@ -62,9 +64,49 @@ def build_labels(df: pd.DataFrame, cases_csv: Path):
 
     out["label_status"] = "unknown"
     out["label_reason"] = "no_verified_event_association"
+    out["track_event_distance_km"] = pd.NA
+    out["track_event_associated"] = False
+    out["association_method"] = "track_station_event_corridor"
+
+    # Pre-compute the minimum station distance reached by each reconstructed
+    # object track during its event corridor. This prevents unrelated objects
+    # elsewhere in the same three-hour case window from becoming positives.
+    association = {}
+    for case_id, case in case_rows.items():
+        station = getattr(case, "observing_station", None)
+        if station not in STATIONS:
+            continue
+        start = parse_time(case.event_start_utc)
+        if start is None:
+            continue
+        end = event_end(case) or (start + timedelta(minutes=60))
+        corridor_start = start - timedelta(minutes=PRE_EVENT_ASSOCIATION_MIN)
+        corridor_end = end + timedelta(minutes=POST_EVENT_ASSOCIATION_MIN)
+
+        case_mask = (
+            (out["case_id"] == case_id)
+            & (out["scan_dt"] >= corridor_start)
+            & (out["scan_dt"] <= corridor_end)
+            & out["centroid_lat"].notna()
+            & out["centroid_lon"].notna()
+        )
+        candidate = out.loc[case_mask]
+        for object_id, track in candidate.groupby("object_id"):
+            distances = track.apply(
+                lambda r: distance_km(
+                    float(r["centroid_lat"]),
+                    float(r["centroid_lon"]),
+                    STATIONS[station][0],
+                    STATIONS[station][1],
+                ),
+                axis=1,
+            )
+            if not distances.empty:
+                association[(case_id, object_id)] = float(distances.min())
 
     for idx, row in out.iterrows():
         case_id = row.get("case_id")
+        object_id = row.get("object_id")
         if pd.isna(case_id) or case_id not in case_rows:
             continue
 
@@ -82,39 +124,45 @@ def build_labels(df: pd.DataFrame, cases_csv: Path):
         )
         out.at[idx, "case_station_distance_km"] = distance
 
-        if distance > ASSOCIATION_RADIUS_KM:
+        track_distance = association.get((case_id, object_id))
+        if track_distance is None:
             out.at[idx, "label_status"] = "unassociated_object"
-            out.at[idx, "label_reason"] = "outside_station_association_radius"
+            out.at[idx, "label_reason"] = "track_never_entered_event_association_corridor"
+            continue
+
+        out.at[idx, "track_event_distance_km"] = track_distance
+        out.at[idx, "track_event_associated"] = track_distance <= ASSOCIATION_RADIUS_KM
+
+        if track_distance > ASSOCIATION_RADIUS_KM:
+            out.at[idx, "label_status"] = "unassociated_object"
+            out.at[idx, "label_reason"] = "track_outside_event_association_radius"
             continue
 
         scan = row["scan_dt"].to_pydatetime().astimezone(timezone.utc)
         start = parse_time(case.event_start_utc)
         end = event_end(case)
 
-        # Onset labels are prospective: only the future is allowed.
         for horizon in HORIZONS:
             future_end = scan + timedelta(minutes=horizon)
             if start is not None and scan < start <= future_end:
                 out.at[idx, f"squall_onset_within_{horizon}m"] = 1
                 out.at[idx, f"label_confidence_{horizon}m"] = "verified_onset"
 
-            # Ongoing-event label requires a documented visibility interval.
-            if end is not None and scan < end and end > scan:
-                if start <= scan:
-                    out.at[idx, f"squall_ongoing_within_{horizon}m"] = 1
-                    out.at[idx, f"label_confidence_{horizon}m"] = "verified_visibility_interval"
+            if end is not None and scan < end and end > scan and start <= scan:
+                out.at[idx, f"squall_ongoing_within_{horizon}m"] = 1
+                out.at[idx, f"label_confidence_{horizon}m"] = "verified_visibility_interval"
 
         if start is not None and scan >= start and (end is None or scan < end):
             out.at[idx, "label_status"] = "verified_event_interval"
-            out.at[idx, "label_reason"] = "object_near_observing_station_during_verified_event_interval"
+            out.at[idx, "label_reason"] = "track_associated_with_verified_event_interval"
         elif start is not None and scan < start and any(
             out.at[idx, f"squall_onset_within_{h}m"] for h in HORIZONS
         ):
             out.at[idx, "label_status"] = "prospective_positive"
-            out.at[idx, "label_reason"] = "object_near_observing_station_before_verified_onset"
+            out.at[idx, "label_reason"] = "associated_track_before_verified_onset"
         else:
             out.at[idx, "label_status"] = "case_associated_nonimpact"
-            out.at[idx, "label_reason"] = "outside_verified_onset_or_visibility_interval"
+            out.at[idx, "label_reason"] = "associated_track_outside_verified_onset_or_visibility_interval"
 
     out.drop(columns=["scan_dt"], inplace=True)
     return out
@@ -137,6 +185,7 @@ def main():
             f"{horizon}m prospective positives:",
             int(result[f"squall_onset_within_{horizon}m"].sum()),
         )
+    print("Track-associated object records:", int(result["track_event_associated"].sum()))
 
 
 if __name__ == "__main__":
