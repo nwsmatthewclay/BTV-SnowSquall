@@ -32,6 +32,8 @@ def test_baseline_split_group_is_case_or_null():
     assert set(result["split_group"]) == {
         "case:BTV20040315", "null:NULL0001", "null:NULL0002"
     }
+    assert len(result.loc[result["population"] == "winter_null_candidate"]) == 2
+    assert result.loc[result["population"] == "winter_null_candidate", "squall_onset_within_15m"].eq(0).all()
 
 
 def test_baseline_excludes_post_onset_case_rows():
