@@ -51,6 +51,13 @@ def build(positive_csv: Path, null_csv: Path, output_csv: Path):
     combined = pd.concat([positive, nulls], ignore_index=True)
     combined["dataset_version"] = "object_population_pilot_v1"
     combined["future_information_policy"] = "past_and_current_only"
+    combined["population_track_key"] = (
+        combined["population"].astype(str)
+        + ":"
+        + combined.get("radar_site", "").astype(str)
+        + ":"
+        + combined.get("object_id", "").astype(str)
+    )
     combined = combined.sort_values(
         [c for c in ["scan_time_utc", "radar_site", "object_id"] if c in combined.columns]
     )
