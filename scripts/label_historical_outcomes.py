@@ -18,6 +18,8 @@ HORIZONS = (15, 30, 45, 60)
 ASSOCIATION_RADIUS_KM = 75.0
 PRE_EVENT_ASSOCIATION_MIN = 90
 POST_EVENT_ASSOCIATION_MIN = 30
+ASSOCIATION_ONSET_WINDOW_MIN = 18
+ASSOCIATION_FALLBACK_WINDOW_MIN = 45
 
 
 def parse_time(value):
@@ -100,25 +102,63 @@ def build_labels(df: pd.DataFrame, cases_csv: Path):
                 radar_site, object_id = key_values
             else:
                 radar_site, object_id = None, key_values[0]
-            distances = track.apply(
+
+            track = track.copy()
+            track["_abs_minutes_from_onset"] = (
+                (track["scan_dt"] - start).abs().dt.total_seconds().div(60.0)
+            )
+            track["_distance_km"] = track.apply(
                 lambda r: distance_km(
                     float(r["centroid_lat"]), float(r["centroid_lon"]),
                     STATIONS[station][0], STATIONS[station][1],
                 ),
                 axis=1,
             )
-            if not distances.empty:
-                track_candidates.append(
-                    (float(distances.min()), radar_site, object_id)
+
+            # Prefer tracks that are actually observed near the documented
+            # onset time. A closest approach 30–90 minutes away can belong to
+            # an unrelated cell that merely crosses the same station corridor.
+            onset_window = track[
+                track["_abs_minutes_from_onset"] <= ASSOCIATION_ONSET_WINDOW_MIN
+            ]
+            fallback_window = track[
+                track["_abs_minutes_from_onset"] <= ASSOCIATION_FALLBACK_WINDOW_MIN
+            ]
+            if not onset_window.empty:
+                scored = onset_window
+                window_rank = 0
+            elif not fallback_window.empty:
+                scored = fallback_window
+                window_rank = 1
+            else:
+                scored = track
+                window_rank = 2
+
+            best = scored.sort_values(
+                ["_distance_km", "_abs_minutes_from_onset"]
+            ).iloc[0]
+            track_candidates.append(
+                (
+                    window_rank,
+                    float(best["_distance_km"]),
+                    float(best["_abs_minutes_from_onset"]),
+                    radar_site,
+                    object_id,
                 )
+            )
 
         by_radar = {}
-        for min_distance, radar_site, object_id in track_candidates:
+        for window_rank, min_distance, onset_offset, radar_site, object_id in track_candidates:
             current = by_radar.get(radar_site)
-            if current is None or min_distance < current[0]:
-                by_radar[radar_site] = (min_distance, object_id)
+            candidate_key = (window_rank, min_distance, onset_offset)
+            if current is None or candidate_key < current[0]:
+                by_radar[radar_site] = (
+                    candidate_key,
+                    min_distance,
+                    object_id,
+                )
 
-        for radar_site, (min_distance, object_id) in by_radar.items():
+        for radar_site, (_, min_distance, object_id) in by_radar.items():
             if min_distance <= ASSOCIATION_RADIUS_KM:
                 association[_track_key(case_id, radar_site, object_id)] = min_distance
 
