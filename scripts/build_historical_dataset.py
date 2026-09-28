@@ -37,7 +37,7 @@ def choose_case(scan_time, cases):
     return min(candidates, key=lambda item: item[0])
 
 
-def enrich(input_csv: Path, output_csv: Path, cases_csv: Path, rap_dir: Path, ruc_dir: Path):
+def enrich(input_csv: Path, output_csv: Path, cases_csv: Path, rap_dir: Path, ruc_dir: Path, allow_temporal_case_inference: bool = False):
     objects = pd.read_csv(input_csv)
     objects["scan_dt"] = pd.to_datetime(objects["scan_time_utc"], utc=True, errors="coerce")
     objects = objects.dropna(subset=["scan_dt"]).copy()
@@ -51,8 +51,13 @@ def enrich(input_csv: Path, output_csv: Path, cases_csv: Path, rap_dir: Path, ru
         explicit_case_id = obj.get("case_id")
         if pd.notna(explicit_case_id) and explicit_case_id in cases.index:
             case_match = (0.0, explicit_case_id, cases.loc[explicit_case_id])
-        else:
+            assignment_method = "explicit_case_id"
+        elif allow_temporal_case_inference:
             case_match = choose_case(scan_time, cases)
+            assignment_method = "temporal_inference" if case_match else "unmatched"
+        else:
+            case_match = None
+            assignment_method = "unmatched_without_explicit_case_id"
 
         row = obj.to_dict()
         row.update({
@@ -64,6 +69,7 @@ def enrich(input_csv: Path, output_csv: Path, cases_csv: Path, rap_dir: Path, ru
             "case_min_visibility_km": None,
             "case_hybrid": None,
             "case_time_relation": "unmatched",
+            "case_assignment_method": assignment_method,
         })
 
         if case_match:
@@ -146,6 +152,7 @@ def main():
     parser.add_argument("--cases", default="data/manifests/banacos_2014_cases.csv")
     parser.add_argument("--rap-dir", default="data/raw/RAP")
     parser.add_argument("--ruc-dir", default="data/raw/RUC")
+    parser.add_argument("--allow-temporal-case-inference", action="store_true", help="Opt in to time-based case assignment when case_id is absent.")
     args = parser.parse_args()
     enrich(
         Path(args.input_csv),
@@ -153,6 +160,7 @@ def main():
         Path(args.cases),
         Path(args.rap_dir),
         Path(args.ruc_dir),
+        allow_temporal_case_inference=args.allow_temporal_case_inference,
     )
 
 
