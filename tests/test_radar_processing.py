@@ -2,6 +2,21 @@ import numpy as np
 
 from processing.object_detector import detect_reflectivity_objects
 from processing.object_tracker import CentroidTracker
+from processing.radar_features import object_field_summary, velocity_object_summary
+
+
+def test_object_field_summary_and_velocity_texture():
+    values = np.array([1.0, 2.0, 3.0, np.nan])
+    summary = object_field_summary(values, "zdr")
+    assert summary["zdr_mean"] == 2.0
+    assert summary["zdr_max"] == 3.0
+    assert summary["zdr_p90"] > 2.5
+
+    velocity = velocity_object_summary(values, gradient=np.ones(4))
+    assert velocity["velocity_mean"] == 2.0
+    assert velocity["velocity_std_kt"] > 0
+    assert velocity["velocity_p90_abs_kt"] > 2.0
+    assert velocity["velocity_gradient"] == 1.0
 
 
 def test_detector_finds_candidate():
