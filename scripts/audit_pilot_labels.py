@@ -26,15 +26,16 @@ def distance_km(lat1, lon1, lat2, lon2):
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("labeled_csv")
+    parser.add_argument("--cases", required=True)
     parser.add_argument("--output", required=True)
     args = parser.parse_args()
 
     d = pd.read_csv(args.labeled_csv)
+    cases = pd.read_csv(args.cases).set_index("case_id")
     horizons = (15, 30, 45, 60)
     rows = []
     nearest_rows = []
 
-    cases_path = Path(args.labeled_csv).parent / "unused"
     for case_id, g in d.groupby("case_id", dropna=False, sort=True):
         row = {
             "case_id": None if pd.isna(case_id) else str(case_id),
@@ -46,8 +47,9 @@ def main() -> None:
             row[f"positive_{h}m"] = int(g[target].fillna(0).eq(1).sum())
         rows.append(row)
 
-        station = g["observing_station"].dropna().astype(str).iloc[0] if "observing_station" in g.columns and g["observing_station"].notna().any() else None
-        onset_text = g["case_event_start_utc"].dropna().astype(str).iloc[0] if "case_event_start_utc" in g.columns and g["case_event_start_utc"].notna().any() else None
+        case = cases.loc[case_id] if case_id in cases.index else None
+        station = str(case["observing_station"]) if case is not None and pd.notna(case["observing_station"]) else None
+        onset_text = str(case["event_start_utc"]) if case is not None and pd.notna(case["event_start_utc"]) else None
         if station in STATIONS and onset_text:
             onset = pd.to_datetime(onset_text, utc=True, errors="coerce")
             work = g.copy()
