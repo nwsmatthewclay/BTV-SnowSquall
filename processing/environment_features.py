@@ -3,11 +3,11 @@ from __future__ import annotations
 import pandas as pd
 
 ENVIRONMENT_COLUMNS = [
-    "snsqu", "sbcape_jkg", "mucape_jkg", "mlcape_jkg", "sbcin_jkg",
+    "snsq", "sbcape_jkg", "mucape_jkg", "mlcape_jkg", "sbcin_jkg",
     "mlcin_jkg", "dcape_jkg", "pwat_mm", "lcl_m", "rh_0_2km_pct",
     "wind_0_1km_kt", "wind_0_3km_kt", "shear_0_1km_kt",
-    "shear_0_3km_kt", "shear_0_6km_kt", "lr_0_3_c_km",
-    "lr_0_7p5_c_km", "wetbulb_0_3_c", "frontogenesis", "dcva",
+    "shear_0_3km_kt", "shear_0_6km_kt", "lapse_rate_0_3km_c_km",
+    "lapse_rate_0_7_5km_c_km", "wet_bulb_0_3km_c", "frontogenesis", "dcva",
     "omega", "epv",
 ]
 
