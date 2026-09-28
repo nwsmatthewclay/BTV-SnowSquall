@@ -104,11 +104,17 @@ def main():
     if args.baseline_root:
         rows = []
         root = Path(args.baseline_root)
-        for path in sorted(root.glob("baseline_model_*m/metrics.json")):
+        baseline_paths = sorted(
+            list(root.glob("baseline_model_*m/metrics.json"))
+            + list(root.glob("baseline_expansion_*m/metrics.json"))
+        )
+        for path in baseline_paths:
             data = load_json(path)
             metrics = data.get("metrics", {})
+            folder = path.parent.name
+            horizon = folder.replace("baseline_model_", "").replace("baseline_expansion_", "")
             rows.append({
-                "horizon": path.parent.name.replace("baseline_model_", ""),
+                "horizon": horizon,
                 "training_rows": data.get("training_rows"),
                 "groups": data.get("training_groups"),
                 "ROC_AUC": metrics.get("auc_roc"),
