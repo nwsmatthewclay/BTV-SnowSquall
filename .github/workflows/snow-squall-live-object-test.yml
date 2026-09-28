@@ -61,6 +61,8 @@ jobs:
                   assert field in props
           print("Diagnostic schema validation: PASS")
           assert geo["metadata"]["environment_source"] == "RAP"
+          assert geo["metadata"]["environment_status"] == "attached"
+          assert any(feature["properties"].get("environment", {}).get("source_valid_time_utc") for feature in geo.get("features", []))
           PY
 
       - name: Upload live object products
@@ -71,5 +73,6 @@ jobs:
           path: |
             logs/
             data/raw/KCXX/
+            data/raw/RAP/
             data/derived/live_tracker_state.json
             data/derived/live_objects.geojson
