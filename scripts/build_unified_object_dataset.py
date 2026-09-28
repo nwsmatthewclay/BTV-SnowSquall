@@ -61,12 +61,11 @@ def build(positive_csv: Path, null_csv: Path, output_csv: Path):
         if "object_id" in combined.columns
         else pd.Series("", index=combined.index, dtype="object")
     )
+    case_identity = combined["case_id"].fillna("").astype(str)
+    null_identity = combined["null_id"].fillna("").astype(str)
+    source_identity = case_identity.where(case_identity.ne(""), null_identity)
     combined["population_track_key"] = (
-        combined["population"].astype(str)
-        + ":"
-        + radar_series
-        + ":"
-        + object_series
+        combined["population"].astype(str) + ":" + source_identity + ":" + radar_series + ":" + object_series
     )
     combined["row_identity_key"] = (
         combined["population_track_key"]
