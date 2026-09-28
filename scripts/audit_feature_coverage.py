@@ -88,6 +88,8 @@ def audit(input_csv: Path, schema_csv: Path) -> dict:
         "zero_coverage_fields": detail.loc[
             detail["coverage_pct"].eq(0), "field"
         ].tolist(),
+        "zero_coverage_expected": detail.loc[(detail["coverage_pct"].eq(0)) & detail["coverage_interpretation"].eq("expected_gap"), "field"].tolist(),
+        "zero_coverage_unexpected": detail.loc[(detail["coverage_pct"].eq(0)) & detail["coverage_interpretation"].eq("unexpected_gap"), "field"].tolist(),
     }
 
 
