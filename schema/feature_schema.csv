@@ -1,85 +1,85 @@
-field,group,type,description,required
-case_id,identity,string,Unique case identifier,true
-scan_time,identity,datetime,UTC radar scan time,true
-radar_site,identity,string,NEXRAD site,true
-object_id,identity,string,Tracked object identifier,true
-lead_time_min,identity,float,Minutes before verified onset,target
-lat,geometry,float,Object centroid latitude,true
-lon,geometry,float,Object centroid longitude,true
-area_km2,geometry,float,Object area,true
-length_km,geometry,float,Object major-axis length,true
-width_km,geometry,float,Object minor-axis width,true
-orientation_deg,geometry,float,Object orientation,true
-motion_dir_deg,evolution,float,Object motion direction,true
-motion_speed_kt,evolution,float,Object motion speed,true
-reflectivity_max_dbz,reflectivity,float,Maximum object reflectivity,true
-reflectivity_mean_dbz,reflectivity,float,Mean object reflectivity,true
-reflectivity_p90_dbz,reflectivity,float,90th percentile reflectivity,true
-echo_top_km,vertical,float,Maximum echo-top height,true
-top_minus_base_km,vertical,float,Vertical echo depth,true
-vertical_reflectivity_gradient,vertical,float,Vertical reflectivity structure,true
-velocity_delta_0_6km_kt,kinematics,float,Velocity-derived 0-6 km shear proxy,true
-rotation_signature,kinematics,float,Rotation texture metric,true
-divergence_signature,kinematics,float,Divergence texture metric,true
-zdr_mean_db,dualpol,float,Mean ZDR,true
-zdr_p90_db,dualpol,float,90th percentile ZDR over candidate object,true
-rhohv_max,dualpol,float,Maximum correlation coefficient,true
-rhohv_p90,dualpol,float,90th percentile correlation coefficient,true
-kdp_mean_degkm,dualpol,float,Mean KDP over candidate object,true
-velocity_mean_kt,kinematics,float,Mean lowest-sweep radial velocity over candidate object,true
-velocity_std_kt,kinematics,float,Radial-velocity texture standard deviation,true
-velocity_p90_abs_kt,kinematics,float,90th percentile absolute radial velocity,true
-velocity_gradient_ktkm,kinematics,float,Mean radial-velocity spatial gradient magnitude,true
-vertical_valid_points,vertical,int,Number of native radar profile points above reflectivity threshold,true
-zdr_gradient_dbkm,dualpol,float,ZDR gradient,true
-rhohv_mean,dualpol,float,Mean correlation coefficient,true
-rhohv_min,dualpol,float,Minimum correlation coefficient,true
-kdp_p90_degkm,dualpol,float,90th percentile KDP,true
-zdr_rhohv_agreement,dualpol,float,ZDR/RhoHV agreement metric,true
-dualpol_0_5km,dualpol,float,Low-level dual-pol signature,true
-dualpol_1_0km,dualpol,float,1 km dual-pol signature,true
-dualpol_2_0km,dualpol,float,2 km dual-pol signature,true
-dualpol_3_0km,dualpol,float,3 km dual-pol signature,true
-dualpol_4_0km,dualpol,float,4 km dual-pol signature,true
-mrms_reflectivity_dbz,mrms,float,MRMS reflectivity,true
-mrms_precip_type,mrms,string,MRMS precipitation type,true
-mrms_precip_rate,mrms,float,MRMS precipitation rate,true
-mrms_precip_2min_accum_mm,mrms,float,MRMS two-minute precipitation accumulation when archived,true
-mrms_snow_rate,mrms,float,MRMS snowfall-rate proxy,true
-mrms_echo_top_km,mrms,float,MRMS echo-top estimate,true
-mrms_brightband,mrms,float,MRMS bright-band indicator,true
-snsq,sounding,float,Existing Snow Squall Parameter,true
-sbcape_jkg,sounding,float,Surface-based CAPE,true
-mucape_jkg,sounding,float,Most-unstable CAPE,true
-mlcape_jkg,sounding,float,Mixed-layer CAPE,true
-sbcin_jkg,sounding,float,Surface-based CIN,true
-mlcin_jkg,sounding,float,Mixed-layer CIN,true
-dcape_jkg,sounding,float,Downdraft CAPE,true
-pwat_mm,sounding,float,Precipitable water,true
-lcl_m,sounding,float,LCL height,true
-rh_0_2km_pct,sounding,float,Mean relative humidity 0-2 km,true
-wind_0_1km_kt,sounding,float,0-1 km wind,true
-wind_0_3km_kt,sounding,float,0-3 km wind,true
-shear_0_1km_kt,sounding,float,0-1 km shear,true
-shear_0_3km_kt,sounding,float,0-3 km shear,true
-shear_0_6km_kt,sounding,float,0-6 km bulk shear,true
-lapse_rate_0_3km_c_km,sounding,float,0-3 km lapse rate,true
-lapse_rate_0_7_5km_c_km,sounding,float,0-7.5 km lapse rate,true
-wet_bulb_0_3km_c,sounding,float,0-3 km wet-bulb metric,true
-frontogenesis,synoptic,float,Relevant frontogenesis,true
-dcva,synoptic,float,Differential cyclonic vorticity advection,true
-omega,synoptic,float,Vertical motion,true
-epv,synoptic,float,Equivalent potential vorticity,true
-object_growth_pct_10min,evolution,float,10-minute object growth,true
-reflectivity_change_db_10min,evolution,float,10-minute reflectivity change,true
-echo_top_change_km_10min,evolution,float,10-minute echo-top change,true
-sqw_intersection,surface_truth,boolean,Object intersects official SQW,true
-surface_observation,surface_truth,string,Nearest surface observation summary,true
-visibility_sm,surface_truth,float,Observed visibility,true
-snow_observed,surface_truth,boolean,Snow observed at surface,true
-wind_gust_kt,surface_truth,float,Observed gust,true
-truth_onset_time,surface_truth,datetime,Verified onset time,target
-truth_end_time,surface_truth,datetime,Verified end time,target
-manual_label,label,string,snow_squall/null/uncertain,true
-label_confidence,label,string,high/medium/low,true
-label_source,label,string,Source supporting label,true
+field,group,type,description,required,availability_policy
+case_id,identity,string,Unique case identifier,true,core_identity
+scan_time,identity,datetime,UTC radar scan time,true,core_identity
+radar_site,identity,string,NEXRAD site,true,core_identity
+object_id,identity,string,Tracked object identifier,true,core_identity
+lead_time_min,identity,float,Minutes before verified onset,target,core_identity
+lat,geometry,float,Object centroid latitude,true,radar_available
+lon,geometry,float,Object centroid longitude,true,radar_available
+area_km2,geometry,float,Object area,true,radar_available
+length_km,geometry,float,Object major-axis length,true,radar_available
+width_km,geometry,float,Object minor-axis width,true,radar_available
+orientation_deg,geometry,float,Object orientation,true,radar_available
+motion_dir_deg,evolution,float,Object motion direction,true,radar_available
+motion_speed_kt,evolution,float,Object motion speed,true,radar_available
+reflectivity_max_dbz,reflectivity,float,Maximum object reflectivity,true,radar_available
+reflectivity_mean_dbz,reflectivity,float,Mean object reflectivity,true,radar_available
+reflectivity_p90_dbz,reflectivity,float,90th percentile reflectivity,true,radar_available
+echo_top_km,vertical,float,Maximum echo-top height,true,radar_available
+top_minus_base_km,vertical,float,Vertical echo depth,true,radar_available
+vertical_reflectivity_gradient,vertical,float,Vertical reflectivity structure,true,radar_available
+velocity_delta_0_6km_kt,kinematics,float,Velocity-derived 0-6 km shear proxy,true,radar_available
+rotation_signature,kinematics,float,Rotation texture metric,true,radar_available
+divergence_signature,kinematics,float,Divergence texture metric,true,radar_available
+zdr_mean_db,dualpol,float,Mean ZDR,true,dualpol_era_dependent
+zdr_p90_db,dualpol,float,90th percentile ZDR over candidate object,true,dualpol_era_dependent
+rhohv_max,dualpol,float,Maximum correlation coefficient,true,dualpol_era_dependent
+rhohv_p90,dualpol,float,90th percentile correlation coefficient,true,dualpol_era_dependent
+kdp_mean_degkm,dualpol,float,Mean KDP over candidate object,true,dualpol_era_dependent
+velocity_mean_kt,kinematics,float,Mean lowest-sweep radial velocity over candidate object,true,radar_available
+velocity_std_kt,kinematics,float,Radial-velocity texture standard deviation,true,radar_available
+velocity_p90_abs_kt,kinematics,float,90th percentile absolute radial velocity,true,radar_available
+velocity_gradient_ktkm,kinematics,float,Mean radial-velocity spatial gradient magnitude,true,radar_available
+vertical_valid_points,vertical,int,Number of native radar profile points above reflectivity threshold,true,radar_available
+zdr_gradient_dbkm,dualpol,float,ZDR gradient,true,dualpol_era_dependent
+rhohv_mean,dualpol,float,Mean correlation coefficient,true,dualpol_era_dependent
+rhohv_min,dualpol,float,Minimum correlation coefficient,true,dualpol_era_dependent
+kdp_p90_degkm,dualpol,float,90th percentile KDP,true,dualpol_era_dependent
+zdr_rhohv_agreement,dualpol,float,ZDR/RhoHV agreement metric,true,dualpol_era_dependent
+dualpol_0_5km,dualpol,float,Low-level dual-pol signature,true,dualpol_era_dependent
+dualpol_1_0km,dualpol,float,1 km dual-pol signature,true,dualpol_era_dependent
+dualpol_2_0km,dualpol,float,2 km dual-pol signature,true,dualpol_era_dependent
+dualpol_3_0km,dualpol,float,3 km dual-pol signature,true,dualpol_era_dependent
+dualpol_4_0km,dualpol,float,4 km dual-pol signature,true,dualpol_era_dependent
+mrms_reflectivity_dbz,mrms,float,MRMS reflectivity,true,modern_2014_plus
+mrms_precip_type,mrms,string,MRMS precipitation type,true,modern_2014_plus
+mrms_precip_rate,mrms,float,MRMS precipitation rate,true,modern_2014_plus
+mrms_precip_2min_accum_mm,mrms,float,MRMS two-minute precipitation accumulation when archived,true,modern_2014_plus
+mrms_snow_rate,mrms,float,MRMS snowfall-rate proxy,true,modern_2014_plus
+mrms_echo_top_km,mrms,float,MRMS echo-top estimate,true,modern_2014_plus
+mrms_brightband,mrms,float,MRMS bright-band indicator,true,modern_2014_plus
+snsq,sounding,float,Existing Snow Squall Parameter,true,environment_provider_dependent
+sbcape_jkg,sounding,float,Surface-based CAPE,true,environment_provider_dependent
+mucape_jkg,sounding,float,Most-unstable CAPE,true,environment_provider_dependent
+mlcape_jkg,sounding,float,Mixed-layer CAPE,true,environment_provider_dependent
+sbcin_jkg,sounding,float,Surface-based CIN,true,environment_provider_dependent
+mlcin_jkg,sounding,float,Mixed-layer CIN,true,environment_provider_dependent
+dcape_jkg,sounding,float,Downdraft CAPE,true,environment_provider_dependent
+pwat_mm,sounding,float,Precipitable water,true,environment_provider_dependent
+lcl_m,sounding,float,LCL height,true,environment_provider_dependent
+rh_0_2km_pct,sounding,float,Mean relative humidity 0-2 km,true,environment_provider_dependent
+wind_0_1km_kt,sounding,float,0-1 km wind,true,environment_provider_dependent
+wind_0_3km_kt,sounding,float,0-3 km wind,true,environment_provider_dependent
+shear_0_1km_kt,sounding,float,0-1 km shear,true,environment_provider_dependent
+shear_0_3km_kt,sounding,float,0-3 km shear,true,environment_provider_dependent
+shear_0_6km_kt,sounding,float,0-6 km bulk shear,true,environment_provider_dependent
+lapse_rate_0_3km_c_km,sounding,float,0-3 km lapse rate,true,environment_provider_dependent
+lapse_rate_0_7_5km_c_km,sounding,float,0-7.5 km lapse rate,true,environment_provider_dependent
+wet_bulb_0_3km_c,sounding,float,0-3 km wet-bulb metric,true,environment_provider_dependent
+frontogenesis,synoptic,float,Relevant frontogenesis,true,environment_provider_dependent
+dcva,synoptic,float,Differential cyclonic vorticity advection,true,environment_provider_dependent
+omega,synoptic,float,Vertical motion,true,environment_provider_dependent
+epv,synoptic,float,Equivalent potential vorticity,true,environment_provider_dependent
+object_growth_pct_10min,evolution,float,10-minute object growth,true,radar_available
+reflectivity_change_db_10min,evolution,float,10-minute reflectivity change,true,radar_available
+echo_top_change_km_10min,evolution,float,10-minute echo-top change,true,radar_available
+sqw_intersection,surface_truth,boolean,Object intersects official SQW,true,observation_dependent
+surface_observation,surface_truth,string,Nearest surface observation summary,true,observation_dependent
+visibility_sm,surface_truth,float,Observed visibility,true,observation_dependent
+snow_observed,surface_truth,boolean,Snow observed at surface,true,observation_dependent
+wind_gust_kt,surface_truth,float,Observed gust,true,observation_dependent
+truth_onset_time,surface_truth,datetime,Verified onset time,target,observation_dependent
+truth_end_time,surface_truth,datetime,Verified end time,target,observation_dependent
+manual_label,label,string,snow_squall/null/uncertain,true,target_or_review
+label_confidence,label,string,high/medium/low,true,target_or_review
+label_source,label,string,Source supporting label,true,target_or_review
