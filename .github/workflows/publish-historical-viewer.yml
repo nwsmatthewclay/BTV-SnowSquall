@@ -5,7 +5,9 @@ on:
     branches:
       - snow-squall-model-foundation
     paths:
-      - viewer/**
+      - viewer/*.html
+      - viewer/*.js
+      - viewer/*.css
       - scripts/build_static_viewer.py
       - .github/workflows/publish-historical-viewer.yml
       - .github/pilot-trigger
