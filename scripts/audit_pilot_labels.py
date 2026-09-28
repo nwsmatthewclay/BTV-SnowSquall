@@ -28,6 +28,7 @@ def main() -> None:
     parser.add_argument("labeled_csv")
     parser.add_argument("--cases", required=True)
     parser.add_argument("--output", required=True)
+    parser.add_argument("--max-plausible-station-distance-km", type=float, default=300.0)
     args = parser.parse_args()
 
     d = pd.read_csv(args.labeled_csv)
@@ -40,6 +41,7 @@ def main() -> None:
     horizons = (15, 30, 45, 60)
     rows = []
     nearest_rows = []
+    coordinate_guard_failures = []
 
     for case_id, g in d.groupby("case_id", dropna=False, sort=True):
         row = {
@@ -62,6 +64,20 @@ def main() -> None:
             work = g.copy()
             work["scan_dt"] = pd.to_datetime(work["scan_time_utc"], utc=True, errors="coerce")
             work["onset_offset_min"] = (work["scan_dt"] - onset).abs().dt.total_seconds().div(60.0)
+            # Guard against the exact class of geolocation corruption that can
+            # produce thousands-of-kilometers station distances while still
+            # allowing rows to flow into label diagnostics.
+            bad_coord = (
+                work["centroid_lat"].notna() & work["centroid_lon"].notna()
+                & ((work["centroid_lat"] < 40) | (work["centroid_lat"] > 47)
+                   | (work["centroid_lon"] < -79) | (work["centroid_lon"] > -68))
+            )
+            if bad_coord.any():
+                coordinate_guard_failures.append({
+                    "case_id": None if pd.isna(case_id) else str(case_id),
+                    "records": int(bad_coord.sum()),
+                    "reason": "centroid_outside_BTV_domain_guard",
+                })
             work["station_distance_km"] = work.apply(
                 lambda r: distance_km(
                     float(r["centroid_lat"]), float(r["centroid_lon"]),
@@ -74,11 +90,19 @@ def main() -> None:
                 if rg.empty:
                     continue
                 best = rg.sort_values(["onset_offset_min", "station_distance_km"]).iloc[0]
+                nearest_distance = float(rg["station_distance_km"].min())
+                if nearest_distance > args.max_plausible_station_distance_km:
+                    coordinate_guard_failures.append({
+                        "case_id": None if pd.isna(case_id) else str(case_id),
+                        "radar_site": None if pd.isna(radar_site) else str(radar_site),
+                        "records": int(len(rg)),
+                        "reason": f"nearest_station_distance_{nearest_distance:.1f}km_exceeds_{args.max_plausible_station_distance_km:.1f}km",
+                    })
                 nearest_rows.append({
                     "case_id": None if pd.isna(case_id) else str(case_id),
                     "radar_site": None if pd.isna(radar_site) else str(radar_site),
                     "station": station,
-                    "nearest_distance_km": round(float(rg["station_distance_km"].min()), 2),
+                    "nearest_distance_km": round(nearest_distance, 2),
                     "closest_onset_window_distance_km": round(float(
                         rg.loc[rg["onset_offset_min"] <= 18, "station_distance_km"].min()
                     ), 2) if (rg["onset_offset_min"] <= 18).any() else None,
@@ -91,6 +115,7 @@ def main() -> None:
         "unique_case_ids": int(d["case_id"].nunique(dropna=True)),
         "cases": rows,
         "nearest_case_radar_diagnostics": nearest_rows,
+        "coordinate_guard_failures": coordinate_guard_failures,
         "overall": {
             f"positive_{h}m": int(d[f"squall_onset_within_{h}m"].fillna(0).eq(1).sum())
             for h in horizons
@@ -100,6 +125,11 @@ def main() -> None:
     out = Path(args.output)
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(summary, indent=2) + "\n", encoding="utf-8")
+
+    if coordinate_guard_failures:
+        raise ValueError(
+            "Coordinate sanity guard failed: " + json.dumps(coordinate_guard_failures, sort_keys=True)
+        )
 
     print("Positive-label distribution by case")
     print(pd.DataFrame(rows).to_string(index=False))
