@@ -197,6 +197,11 @@ def main():
     final_model.fit(data[predictors], data[args.target].astype(int))
     joblib.dump(final_model, output_dir / "baseline_model.joblib")
 
+    positive_case_groups = sorted(
+        data.loc[data[args.target].eq(1), "split_group"].dropna().astype(str).unique()
+    )
+    positive_case_group_count = len(positive_case_groups)
+
     fold_status_counts = {}
     for fold in folds:
         status = fold.get("status", "unknown")
@@ -213,6 +218,19 @@ def main():
             "positive": int(data[args.target].sum()),
             "negative": int((1 - data[args.target]).sum()),
         },
+        "positive_case_groups": positive_case_groups,
+        "positive_case_group_count": positive_case_group_count,
+        "evaluation_status": (
+            "case_held_out_not_interpretable"
+            if positive_case_group_count < 3
+            else "case_held_out_exploratory"
+        ),
+        "evaluation_note": (
+            "Fewer than three independent historical case groups contain positive "
+            "forecast labels; holdout metrics must not be interpreted as model skill."
+            if positive_case_group_count < 3
+            else "Exploratory case-held-out evaluation; not operational verification."
+        ),
         "fold_status_counts": fold_status_counts,
         "metrics": metrics,
         "folds": folds,
@@ -231,6 +249,8 @@ def main():
     print(f"Baseline rows: {len(data)}")
     print(f"Independent groups: {data['split_group'].nunique()}")
     print(f"Predictors: {len(predictors)}")
+    print("Positive case groups:", positive_case_groups)
+    print("Evaluation status:", "case_held_out_not_interpretable" if positive_case_group_count < 3 else "case_held_out_exploratory")
     print("Metrics:", json.dumps(metrics, indent=2))
 
 
