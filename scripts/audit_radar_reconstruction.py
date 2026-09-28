@@ -57,8 +57,7 @@ def main():
     summary = audit(Path(args.objects_csv), Path(args.errors))
     report = Path(args.report)
     report.parent.mkdir(parents=True, exist_ok=True)
-    report.write_text(json.dumps(summary, indent=2) + "
-", encoding="utf-8")
+    report.write_text(json.dumps(summary, indent=2) + "\\n", encoding="utf-8")
 
     print(json.dumps(summary, indent=2))
 
