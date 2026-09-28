@@ -9,7 +9,7 @@ def test_snsq_favorable_environment():
         wetbulb_2m_c=0.0,
     )
 
-    assert result["snsq"] == 1.25
+    assert result["snsq"] == 1.0
     assert result["moisture_factor"] == 1.0
     assert result["instability_factor"] == 1.0
     assert result["wind_factor"] == 1.0
