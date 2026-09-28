@@ -32,3 +32,20 @@
 4. Match NARR/ERA5/RAP environmental fields.
 5. Build null-object population from control periods.
 6. Extract the 100 Southern New England event dates and radar windows.
+
+
+## Current pilot hardening
+
+The end-to-end pilot now audits manifest identity, object-to-population annotation,
+radar reconstruction failures, outcome-label integrity, predictor leakage, and
+case/window-held-out model validation.
+
+Historical Level-II reconstruction uses the existing Py-ART reader first and
+falls back to the xradar NEXRAD Level-II reader when the legacy reader fails.
+Each successfully decoded volume is tagged with its reader backend, while files
+that fail both paths remain in an explicit error log. This makes recovery gains
+measurable rather than silently changing the historical sample.
+
+The five-case pilot is still a research dataset, not a final truth set. Candidate
+null windows require additional event/radar QC before they become definitive
+negative training examples.
