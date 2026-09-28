@@ -32,3 +32,34 @@ def test_baseline_split_group_is_case_or_null():
     assert set(result["split_group"]) == {
         "case:BTV20040315", "null:NULL0001", "null:NULL0002"
     }
+
+
+def test_baseline_excludes_post_onset_case_rows():
+    frame = pd.DataFrame(
+        {
+            "population": [
+                "verified_case_context",
+                "verified_case_context",
+                "winter_null_candidate",
+            ],
+            "case_id": ["CASE1", "CASE1", None],
+            "null_id": [None, None, "NULL0001"],
+            "track_event_associated": [True, True, False],
+            "label_status": [
+                "prospective_positive",
+                "verified_event_interval",
+                "unknown",
+            ],
+            "squall_onset_within_15m": [1, 0, 0],
+            "max_reflectivity_dbz": [30.0, 45.0, 10.0],
+        }
+    )
+    schema = {
+        "future_information_policy": "current_and_past_only",
+        "predictor_columns": ["max_reflectivity_dbz"],
+    }
+
+    result, _ = prepare_dataset(frame, schema, "squall_onset_within_15m")
+
+    assert len(result) == 2
+    assert not (result["label_status"] == "verified_event_interval").any()
