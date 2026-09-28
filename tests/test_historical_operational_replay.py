@@ -34,3 +34,8 @@ def test_replay_can_record_bad_scan_and_continue(tmp_path, monkeypatch):
     assert result["failed_scan_count"]==1
     assert result["object_scan_count"]==2
     assert result["errors"][0]["error_type"]=="OSError"
+
+
+def test_modern_surface_radar_distance_is_reasonable():
+    from scripts.build_modern_surface_radar_diagnostic import distance_km
+    assert 10 < distance_km(44.47, -73.15, 44.56, -73.15) < 11
