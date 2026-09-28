@@ -3,6 +3,8 @@ from __future__ import annotations
 import math
 import pandas as pd
 
+EPSILON = 1e-6
+
 TARGET_COLUMN = "snow_squall_30min"
 
 BASE_FEATURES = [
@@ -29,7 +31,7 @@ def add_derived_features(df: pd.DataFrame) -> pd.DataFrame:
     if {"reflectivity_max_dbz","reflectivity_mean_dbz"}.issubset(out):
         out["reflectivity_core_excess"]=out["reflectivity_max_dbz"]-out["reflectivity_mean_dbz"]
     if {"shear_0_6km_kt","motion_speed_kt"}.issubset(out):
-        out["shear_motion_ratio"]=out["shear_0_6km_kt"]/(out["motion_speed_kt"].abs()+eps)
+        out["shear_motion_ratio"]=out["shear_0_6km_kt"]/(out["motion_speed_kt"].abs()+EPSILON)
     if {"object_growth_pct_10min","reflectivity_change_db_10min"}.issubset(out):
         out["intensification_index"]=(
             out["object_growth_pct_10min"].fillna(0)/100.0
