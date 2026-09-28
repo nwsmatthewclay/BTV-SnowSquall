@@ -1,3 +1,4 @@
+import pytest
 import pandas as pd
 
 from scripts.build_model_features import build_features, write_schema
@@ -137,7 +138,7 @@ def test_model_features_include_radar_evolution_terms():
     result = build_features(source)
 
     assert result.loc[1, "echo_top_km_delta"] == 2.0
-    assert result.loc[1, "zdr_mean_db_delta"] == 0.4
-    assert result.loc[1, "rhohv_mean_delta"] == -0.02
-    assert result.loc[1, "kdp_mean_degkm_delta"] == 0.3
-    assert result.loc[1, "velocity_mean_kt_delta"] == 4.0
+    assert result.loc[1, "zdr_mean_db_delta"] == pytest.approx(0.4)
+    assert result.loc[1, "rhohv_mean_delta"] == pytest.approx(-0.02)
+    assert result.loc[1, "kdp_mean_degkm_delta"] == pytest.approx(0.3)
+    assert result.loc[1, "velocity_mean_kt_delta"] == pytest.approx(4.0)
