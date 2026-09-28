@@ -20,5 +20,5 @@ def test_modern_manifest_rejects_non_validation_role(tmp_path):
       'evidence_source':'NWS_BTV'
     }]).to_csv(p,index=False)
     import pytest
-    with pytest.raises(ValueError,match='training') as exc:
+    with pytest.raises(ValueError,match='non_validation_truth_role') as exc:
         audit(p)
