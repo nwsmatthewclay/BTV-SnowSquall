@@ -112,16 +112,24 @@ jobs:
           set -euo pipefail
           rm -rf _site
           mkdir -p _site
-          cp viewer/index.html viewer/app.js viewer/style.css _site/
-          python -m py_compile scripts/build_static_viewer.py
 
-          if [ "${{ steps.source.outputs.workflow_name }}" = "Object Dataset Full Expansion" ]; then
-            CASES="dataset_artifact/data/manifests/banacos_2014_cases.csv"
+          # Prefer a prebuilt viewer package from the successful dataset run.
+          if [ -f dataset_artifact/data/derived/viewer/data/catalog.json ]; then
+            cp -R dataset_artifact/data/derived/viewer/. _site/
+            echo "Using prebuilt viewer package from dataset workflow."
           else
-            CASES="dataset_artifact/data/manifests/banacos_positive_pilot.csv"
-          fi
+            cp viewer/index.html viewer/app.js viewer/style.css _site/
+            python -m py_compile scripts/build_static_viewer.py
 
-          python scripts/build_static_viewer.py             --objects dataset_artifact/data/derived/positive_object_labeled.csv             --cases "${CASES}"             --output-dir _site
+            if [ "${{ steps.source.outputs.workflow_name }}" = "Object Dataset Full Expansion" ]; then
+              CASES="dataset_artifact/data/manifests/banacos_2014_cases.csv"
+            else
+              CASES="dataset_artifact/data/manifests/banacos_positive_pilot.csv"
+            fi
+
+            python scripts/build_static_viewer.py               --objects dataset_artifact/data/derived/positive_object_labeled.csv               --cases "${CASES}"               --output-dir _site
+            echo "Built fallback object-only viewer package."
+          fi
 
           printf 'BTV Snow Squall Historical Object Viewer\nResearch/pilot historical reconstruction only.\nNo production probability forecast is exposed.\n' > _site/README.txt
 
