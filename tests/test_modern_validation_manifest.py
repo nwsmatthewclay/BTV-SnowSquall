@@ -68,3 +68,34 @@ def test_modern_validation_workflow_is_non_scoring_and_manual():
     assert 'Modern Independent Validation' in workflow
     assert 'modern_validation_level2_manifest.csv' in workflow
     assert 'acquire_modern_validation_mrms.py' in workflow
+
+
+def test_case_summary_is_non_scoring(tmp_path, monkeypatch):
+    from scripts.build_modern_validation_case_summary import build
+    import json
+    import pandas as pd
+    monkeypatch.chdir(tmp_path)
+    (tmp_path/"data/raw/modern_surface/KMPV").mkdir(parents=True)
+    (tmp_path/"data/derived").mkdir(parents=True)
+    cases=tmp_path/"cases.csv"
+    inventory=tmp_path/"inventory.json"
+    pd.DataFrame([{
+        "case_id":"CASE1","event_date_utc":"2019-12-18","radar_site":"KCXX",
+        "observing_station":"KMPV","evidence_type":"warning_product_case_specific",
+        "evidence_source":"NWS","source_url":"https://www.weather.gov/btv",
+        "reconstruction_eligible":True,
+        "analysis_window_start_utc":"2019-12-18T22:25:00Z",
+        "analysis_window_end_utc":"2019-12-18T23:40:00Z",
+    }]).to_csv(cases,index=False)
+    inventory.write_text(json.dumps({"cases":[{
+        "case_id":"CASE1","replay_scans":3,"replay_failed_scans":0,
+        "replay_failure_rate":0.0,"replay_object_scan_count":12,
+        "surface_rows":4,"min_visibility_mi":0.5,"max_gust_kt":31.0,
+        "mrms_lcref_files":3,
+    }]}),encoding="utf-8")
+    out_json=tmp_path/"data/derived/summary.json"
+    out_csv=tmp_path/"data/derived/summary.csv"
+    payload=build(cases,inventory,out_json,out_csv)
+    assert payload["training_eligible"] is False
+    assert payload["scoring_status"]=="not_scored"
+    assert payload["cases"][0]["probability_scored"] is False
