@@ -48,6 +48,7 @@ def object_geometry(mask, lat, lon, spacing_km=1.0):
 
 def process_volume(path: Path, tracker: CentroidTracker, radar_origin=None):
     radar = read_level2(path)
+    apply_radar_origin(radar, radar_origin)
     fields = resolve_fields(radar)
     reflectivity = fields["reflectivity"]
     if reflectivity is None:
