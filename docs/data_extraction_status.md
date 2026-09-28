@@ -24,6 +24,16 @@
 - `data/manifests/banacos_pilot_cases.csv` defines five representative cases for the first end-to-end radar/object reconstruction.
 - KCXX and KTYX Level-II archives cover the full Banacos period.
 
+## MRMS availability and extraction policy
+
+IEM documents selected MRMS archived raster fields back to October 2014, with
+programmatic raster-to-netCDF access. The initial adapter therefore uses an
+explicit 2014-10-01 availability boundary and only selects a product timestamp
+at or before the radar observation time. The first implemented products are
+lowest-elevation composite reflectivity and two-minute precipitation
+accumulation. MRMS-derived snow rate, precipitation type, and echo-top fields
+remain unpopulated until a defensible archived source is implemented.
+
 ## Next extraction
 
 1. Download and inspect the five pilot cases before scaling to all 36.
