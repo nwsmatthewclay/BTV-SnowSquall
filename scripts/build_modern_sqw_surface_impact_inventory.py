@@ -38,7 +38,7 @@ def summarize_station(
         return out
 
     working = data.copy()
-    working["valid"] = pd.to_datetime(working["valid"], utc=True, errors="coerce")
+    working["valid"] = pd.to_datetime(working["valid"], utc=True, errors="coerce", format="mixed")
 
     if "visibility_mi" in working.columns:
         vis = pd.to_numeric(working["visibility_mi"], errors="coerce")
