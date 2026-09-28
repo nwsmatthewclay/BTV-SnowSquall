@@ -36,6 +36,9 @@ jobs:
       - name: Compile viewer build scripts
         run: python -m py_compile scripts/build_static_viewer.py scripts/export_viewer_radar_frames.py
 
+      - name: Validate live viewer JavaScript
+        run: node --check viewer/live.js
+
       - name: Run tests
         run: pytest -q
       - name: Initialize training-table smoke test
