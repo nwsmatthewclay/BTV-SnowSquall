@@ -3,7 +3,8 @@ L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{maxZoom:12,att
 const layers={KCXX:L.layerGroup().addTo(map),KTYX:L.layerGroup().addTo(map)};
 const radarLocations={KCXX:[44.511,-73.166],KTYX:[43.756,-75.680]};
 const LIVE_BASE="https://raw.githubusercontent.com/nwsmatthewclay/BTV-SnowSquall/snow-squall-model-foundation/viewer/data/live/";
-let datasets={},selected=null,refreshTimer=null;
+let datasets={},selected=null,refreshTimer=null,hasInitialExtent=false;
+// Operational feed assets: KCXX_objects.geojson / KTYX_objects.geojson and matching state JSON files.
 
 const num=(v,d=1)=>v==null||Number.isNaN(Number(v))?"—":Number(v).toFixed(d);
 const fmt=t=>t?new Date(t).toLocaleString(undefined,{month:"short",day:"numeric",hour:"numeric",minute:"2-digit",second:"2-digit"}):"—";
@@ -63,7 +64,7 @@ function renderMap(summary){
       const p=f.properties||{};
       const isSelected=selected&&selected.track_id===p.track_id&&selected.radar_site===p.radar_site;
       const layer=L.geoJSON(f,{style:{
-        color:selected?"#ffffff":objectColor(p),
+        color:isSelected?"#ffffff":objectColor(p),
         fillColor:objectColor(p),
         fillOpacity:isSelected?.48:.24,
         weight:isSelected?3:2
@@ -76,10 +77,11 @@ function renderMap(summary){
       layer.on("click",()=>selectObject({...p,radar_site:x.site}));
     });
   });
-  if(bounds.length){
+  if(bounds.length && !hasInitialExtent){
     let b=bounds[0];
     for(let i=1;i<bounds.length;i++)b=b.extend(bounds[i]);
     map.fitBounds(b,{padding:[30,30],maxZoom:9});
+    hasInitialExtent=true;
   }
 }
 
