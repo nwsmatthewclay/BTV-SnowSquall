@@ -1,7 +1,8 @@
 """Build a conservative null-object sampling manifest.
 
-The output uses the same case_id/radar_site/window schema as the historical
-Level-II downloader, while retaining null-specific metadata.
+Null windows use a dedicated \`window_id\`. \`case_id\` is intentionally blank
+for null samples so downstream case counts cannot confuse candidate-null windows
+with historical verified cases.
 """
 from __future__ import annotations
 
@@ -51,11 +52,13 @@ def build_null_windows(
 
     rows = []
     for i, timestamp in enumerate(selected, start=1):
+        null_id = f"NULL{i:04d}"
         for radar in radars:
             rows.append({
-                "case_id": f"NULL{i:04d}_{radar}",
+                "case_id": "",
+                "window_id": f"{null_id}_{radar}",
                 "radar_site": radar,
-                "null_id": f"NULL{i:04d}",
+                "null_id": null_id,
                 "window_center_utc": timestamp.isoformat().replace("+00:00", "Z"),
                 "window_start_utc": (
                     timestamp - pd.Timedelta(minutes=90)
