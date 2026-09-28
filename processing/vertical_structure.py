@@ -85,8 +85,11 @@ def summarize_vertical_structure(
             "vertical_valid_points": 0,
         }
 
-    radar_lat = float(np.asarray(radar.latitude["data"]).reshape(-1)[0])
-    radar_lon = float(np.asarray(radar.longitude["data"]).reshape(-1)[0])
+    if radar_origin is not None:
+        radar_lat, radar_lon = map(float, radar_origin)
+    else:
+        radar_lat = float(np.asarray(radar.latitude["data"]).reshape(-1)[0])
+        radar_lon = float(np.asarray(radar.longitude["data"]).reshape(-1)[0])
     range_km, bearing_deg = _object_range_bearing(
         radar_lat, radar_lon, float(object_lat), float(object_lon)
     )
