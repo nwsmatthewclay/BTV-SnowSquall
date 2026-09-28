@@ -114,23 +114,23 @@ jobs:
           rm -rf _site
           mkdir -p _site
 
-          # Always use the version-controlled viewer shell, and add prebuilt data when available.
+          # Always use the version-controlled viewer shell and locate the prebuilt data bundle dynamically.
           cp viewer/*.html viewer/*.js viewer/*.css _site/
-          if [ -f dataset_artifact/data/derived/viewer/data/catalog.json ]; then
+
+          CATALOG=$(find dataset_artifact -type f -path '*/viewer/data/catalog.json' -print -quit)
+          if [ -z "${CATALOG}" ]; then
+            CATALOG=$(find dataset_artifact -type f -name catalog.json -print -quit)
+          fi
+
+          if [ -n "${CATALOG}" ]; then
+            DATA_ROOT="$(dirname "${CATALOG}")"
             mkdir -p _site/data
-            cp -R dataset_artifact/data/derived/viewer/data/. _site/data/
-            echo "Using prebuilt viewer data from dataset workflow."
+            cp -R "${DATA_ROOT}/." _site/data/
+            echo "Using prebuilt viewer data from: ${DATA_ROOT}"
           else
-            python -m py_compile scripts/build_static_viewer.py
-
-            if [ "${{ steps.source.outputs.workflow_name }}" = "Object Dataset Full Expansion" ]; then
-              CASES="dataset_artifact/data/manifests/banacos_2014_cases.csv"
-            else
-              CASES="dataset_artifact/data/manifests/banacos_positive_pilot.csv"
-            fi
-
-            python scripts/build_static_viewer.py               --objects dataset_artifact/data/derived/positive_object_labeled.csv               --cases "${CASES}"               --output-dir _site
-            echo "Built fallback object-only viewer package."
+            echo "ERROR: viewer catalog.json was not present in the dataset artifact."
+            find dataset_artifact -maxdepth 6 -type f | sort | sed -n '1,200p'
+            exit 1
           fi
 
           printf 'BTV Snow Squall Historical Object Viewer\nResearch/pilot historical reconstruction only.\nNo production probability forecast is exposed.\n' > _site/README.txt
