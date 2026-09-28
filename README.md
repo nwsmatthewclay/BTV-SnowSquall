@@ -80,3 +80,5 @@ Training/evaluation will:
 6. Preserve missing-data/provenance flags instead of silently filling gaps with future information.
 
 See `docs/architecture.md`, `docs/implementation_plan.md`, `docs/ml_strategy.md`, `schema/label_policy.md`, and `docs/git_workflow.md`.
+
+For an external technical-review overview, see `docs/SHAREABLE_PROJECT_SUMMARY.md` and `docs/OPERATIONAL_READINESS.md`.
