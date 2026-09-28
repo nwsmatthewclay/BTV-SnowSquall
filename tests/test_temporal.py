@@ -1,10 +1,11 @@
 import pandas as pd
+import pytest
 from snow_squall.temporal import add_track_history_features
 from snow_squall.inference import ObjectProbabilityState
 
 def test_track_history_is_past_only():
     frame = pd.DataFrame({
-        "track_id": [1, 1, 1],
+        "object_id": [1, 1, 1],
         "scan_time": ["2026-01-01T00:00Z", "2026-01-01T00:05Z", "2026-01-01T00:10Z"],
         "max_reflectivity_dbz": [25, 35, 45],
     })
@@ -17,4 +18,4 @@ def test_probability_state_tracks_trend():
     state = ObjectProbabilityState.create(7)
     state.update("2026-01-01T00:00Z", 0.10)
     state.update("2026-01-01T00:05Z", 0.30)
-    assert state.trend() == 0.20
+    assert state.trend() == pytest.approx(0.20)
