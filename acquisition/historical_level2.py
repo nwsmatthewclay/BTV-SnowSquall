@@ -70,6 +70,13 @@ def download_window(client, radar: str, start: datetime, end: datetime, output: 
     return downloaded
 
 
+def filter_manifest_rows(rows, case_id=None, radar_site=None):
+    if case_id:
+        rows = [r for r in rows if case_id in {r.get('case_id'), r.get('window_id'), r.get('null_id')}]
+    if radar_site:
+        rows = [r for r in rows if r.get('radar_site') == radar_site]
+    return rows
+
 def row_identifier(row: dict) -> str:
     return (
         row.get("case_id")
@@ -90,13 +97,7 @@ def main() -> None:
     with open(args.manifest, newline="", encoding="utf-8") as fh:
         rows = list(csv.DictReader(fh))
 
-    if args.case_id:
-        rows = [
-            r for r in rows
-            if args.case_id in {r.get("case_id"), r.get("window_id"), r.get("null_id")}
-        ]
-    if args.radar_site:
-        rows = [r for r in rows if r.get("radar_site") == args.radar_site]
+    rows = filter_manifest_rows(rows, case_id=args.case_id, radar_site=args.radar_site)
 
     client = s3_client()
     total = 0
