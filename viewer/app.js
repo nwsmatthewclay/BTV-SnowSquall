@@ -11,11 +11,14 @@ const metricRows=p=>[
  ["Age",String(p.age_scans??"—")+" scans"],["Core",fmt(p.core_fraction*100)+"%"]
 ];
 function popupHtml(p){
+ const e=(p.environment||{}).fields||{};
+ const envRows=[["SBCAPE",e.cape_jkg==null?"—":fmt(e.cape_jkg)+" J/kg"],["SBCIN",e.cin_jkg==null?"—":fmt(e.cin_jkg)+" J/kg"],["MLCAPE",e.mlcape_jkg==null?"—":fmt(e.mlcape_jkg)+" J/kg"],["MLCIN",e.mlcin_jkg==null?"—":fmt(e.mlcin_jkg)+" J/kg"],["MUCAPE",e.mucape_jkg==null?"—":fmt(e.mucape_jkg)+" J/kg"],["PWAT",e.pwat_mm==null?"—":fmt(e.pwat_mm)+" mm"],["0–1 km SRH",e.srh01_m2s2==null?"—":fmt(e.srh01_m2s2)+" m²/s²"],["0–3 km SRH",e.srh03_m2s2==null?"—":fmt(e.srh03_m2s2)+" m²/s²"],["0–6 km shear",e.shear_0_6km_ms==null?"—":fmt(e.shear_0_6km_ms)+" m/s"],["2 m RH",e.rh_2m_pct==null?"—":fmt(e.rh_2m_pct)+"%"],["Visibility",e.visibility_m==null?"—":fmt(e.visibility_m)+" m"],["10 m gust",e.gust_ms==null?"—":fmt(e.gust_ms)+" m/s"]];
  return '<div class="object-popup"><strong>Object '+p.track_id+'</strong>'+
  '<div class="popup-sub">'+new Date(p.timestamp).toLocaleString()+'</div>'+
  '<div class="popup-prob"><span>30-min probability</span><b>'+pct(p.probability_30min)+'</b></div>'+
  metricRows(p).map(x=>'<div class="popup-row"><span>'+x[0]+'</span><b>'+x[1]+'</b></div>').join('')+
- '<div class="popup-status">Environment: '+(p.environment_status||"not attached")+'<br>Model: '+(p.model_version||"—")+'</div></div>';
+ '<div class="popup-section-title">RAP ENVIRONMENT</div>'+envRows.map(x=>'<div class="popup-row"><span>'+x[0]+'</span><b>'+x[1]+'</b></div>').join('')+
+ '<div class="popup-status">Environment: '+(p.environment_status||"not attached")+'<br>RAP valid: '+((p.environment||{}).source_valid_time_utc||"—")+'<br>RAP age: '+fmt((p.environment||{}).age_minutes)+' min<br>Model: '+(p.model_version||"—")+'</div></div>';
 }
 Promise.all([fetch("data/manifest.json").then(r=>r.json()),fetch("data/objects.geojson").then(r=>r.json()),fetch("data/frames.json").then(r=>r.json())]).then(([m,g,fd])=>{
  manifest=m;frames=fd.frames||[];frameBounds=fd.bounds;document.getElementById("subtitle").textContent=m.case_id+" • "+m.radar_site+" • "+m.scan_times_utc.length+" scans • "+m.track_ids.length+" tracks";
@@ -46,7 +49,8 @@ function showObject(f){
  document.getElementById("objectTitle").textContent="Track "+p.track_id+" • "+new Date(p.timestamp).toLocaleTimeString();
  document.getElementById("prob").textContent=pct(p.probability_30min);
  document.getElementById("metrics").innerHTML=metricRows(p).map(x=>'<div class="metric"><span>'+x[0]+'</span><b>'+x[1]+'</b></div>').join("");
- document.getElementById("drivers").innerHTML='<div class="status-line">Radar diagnostics: <b>active</b></div><div class="status-line">Environment: <b>'+(p.environment_status||"not attached")+'</b></div><div class="status-line">Probability: <b>'+pct(p.probability_30min)+'</b></div><div class="status-line">Track age: <b>'+String(p.age_scans??"—")+' scans</b></div>';
+ const e=(p.environment||{}).fields||{};
+ document.getElementById("drivers").innerHTML='<div class="status-line">Radar diagnostics: <b>active</b></div><div class="status-line">Environment: <b>'+(p.environment_status||"not attached")+'</b></div><div class="status-line">RAP: <b>'+((p.environment||{}).source_valid_time_utc||"—")+'</b></div><div class="status-line">SBCAPE: <b>'+(e.cape_jkg==null?"—":fmt(e.cape_jkg)+" J/kg")+'</b></div><div class="status-line">MLCAPE: <b>'+(e.mlcape_jkg==null?"—":fmt(e.mlcape_jkg)+" J/kg")+'</b></div><div class="status-line">PWAT: <b>'+(e.pwat_mm==null?"—":fmt(e.pwat_mm)+" mm")+'</b></div><div class="status-line">0–6 km shear: <b>'+(e.shear_0_6km_ms==null?"—":fmt(e.shear_0_6km_ms)+" m/s")+'</b></div><div class="status-line">Probability: <b>'+pct(p.probability_30min)+'</b></div>';
 }
 function toggle(){playing=!playing;document.getElementById("play").textContent=playing?"❚❚ Pause":"▶ Play";if(playing)tick();else clearTimeout(timer)}
 function tick(){if(!playing)return;const s=document.getElementById("slider");s.value=(+s.value+1)%times.length;render(+s.value);timer=setTimeout(tick,600)}
