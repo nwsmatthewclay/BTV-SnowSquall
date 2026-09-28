@@ -133,6 +133,23 @@ jobs:
         run: |
           python scripts/label_historical_outcomes.py data/derived/positive_object_environment.csv --output data/derived/positive_object_labeled.csv
 
+      - name: Audit outcome label integrity
+        run: |
+          python - <<'PY'
+          import pandas as pd
+          d = pd.read_csv("data/derived/positive_object_labeled.csv")
+          horizons = [15, 30, 45, 60]
+          for h in horizons:
+              target = f"squall_onset_within_{h}m"
+              bad = d[target].eq(1) & ~d["track_event_associated"].fillna(False)
+              assert not bad.any(), f"{target} contains unassociated positives"
+          for left, right in zip(horizons, horizons[1:]):
+              a = d[f"squall_onset_within_{left}m"]
+              b = d[f"squall_onset_within_{right}m"]
+              assert not (a.eq(1) & b.eq(0)).any(), f"{left}m onset is not cumulative into {right}m"
+          print("Outcome label integrity checks passed.")
+          PY
+
       - name: Enrich null population with multi-era environment
         run: |
           python scripts/enrich_object_environment.py data/derived/null_object_scans_annotated.csv --output data/derived/null_object_environment.csv --rap-dir data/raw/RAP --ruc-dir data/raw/RUC
