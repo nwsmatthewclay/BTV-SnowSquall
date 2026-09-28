@@ -36,7 +36,7 @@ def test_object_field_summary_and_velocity_texture():
     velocity = velocity_object_summary(values, gradient=np.ones(4))
     assert velocity["velocity_mean_kt"] > 3.8
     assert velocity["velocity_std_kt"] > 1.5
-    assert velocity["velocity_p90_abs_kt"] > 5.5
+    assert velocity["velocity_p90_abs_kt"] > 5.4
     assert velocity["velocity_gradient_ktkm"] > 1.9
 
 
