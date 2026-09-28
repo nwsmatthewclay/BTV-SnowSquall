@@ -63,7 +63,7 @@ def test_iem_request_retries_transient_503(monkeypatch):
 
     class FakeResponse:
         def raise_for_status(self):
-            if calls["n"] < 2:
+            if calls["n"] <= 2:
                 raise requests.HTTPError(
                     "503 Server Error",
                     response=type("R", (), {"status_code": 503})(),
