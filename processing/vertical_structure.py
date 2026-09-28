@@ -65,6 +65,7 @@ def summarize_vertical_structure(
     object_lon: float,
     reflectivity_field: str,
     threshold_dbz: float = 20.0,
+    radar_origin: tuple[float, float] | None = None,
     ray_half_width: int = 1,
     gate_half_width: int = 2,
     max_sweeps: int | None = None,
