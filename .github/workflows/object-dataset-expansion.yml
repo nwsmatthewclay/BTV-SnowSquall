@@ -235,6 +235,10 @@ jobs:
         run: |
           python scripts/audit_training_dataset.py             data/derived/object_model_features_expansion.csv
 
+      - name: Build historical viewer data package
+        run: |
+          python scripts/build_static_viewer.py             --objects data/derived/positive_object_labeled.csv             --cases data/manifests/banacos_2014_cases.csv             --output-dir data/derived/viewer
+
       - name: Build SOO report
         run: |
           python scripts/build_pilot_report.py \
@@ -282,3 +286,4 @@ jobs:
             data/derived/surface_truth_audit.json
             data/raw/ASOS_IEM
             data/derived/expansion_report.html
+            data/derived/viewer
