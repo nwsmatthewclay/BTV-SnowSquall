@@ -12,6 +12,10 @@ from acquisition.asos_iem import request_observations
 SNOW_TOKENS = {"SN", "-SN", "+SN", "BLSN", "-BLSN", "+BLSN"}
 
 
+def iso_utc(value) -> str:
+    return pd.to_datetime(value, utc=True).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
 def summarize_station(
     data: pd.DataFrame,
     episode_start=None,
@@ -42,7 +46,7 @@ def summarize_station(
         if not valid.empty:
             min_row = valid.loc[valid["_vis"].idxmin()]
             out["min_visibility_mi"] = float(min_row["_vis"])
-            out["visibility_min_time_utc"] = str(min_row["valid"])
+            out["visibility_min_time_utc"] = iso_utc(min_row["valid"])
             wx = str(min_row.get("wxcodes", "") or "")
             out["present_weather_at_visibility_min"] = wx
             tokens = set(wx.upper().replace(",", " ").split())
@@ -54,7 +58,7 @@ def summarize_station(
             ):
                 hit = valid[valid["_vis"] <= threshold]
                 if not hit.empty:
-                    out[key] = str(hit.iloc[0]["valid"])
+                    out[key] = iso_utc(hit.iloc[0]["valid"])
 
             if episode_start is not None:
                 start = pd.to_datetime(episode_start, utc=True)
@@ -113,13 +117,13 @@ def build(episodes_path: Path, stations_path: Path, output_root: Path) -> pd.Dat
                 )
                 rows.append({
                     "episode_id": str(episode.episode_id),
-                    "episode_start_utc": pd.to_datetime(episode.episode_start, utc=True).isoformat(),
-                    "episode_end_utc": pd.to_datetime(episode.episode_end, utc=True).isoformat(),
+                    "episode_start_utc": iso_utc(episode.episode_start),
+                    "episode_end_utc": iso_utc(episode.episode_end),
                     "station": station,
                     "station_lat": float(station_row.lat),
                     "station_lon": float(station_row.lon),
-                    "query_start_utc": start.isoformat(),
-                    "query_end_utc": end.isoformat(),
+                    "query_start_utc": iso_utc(start),
+                    "query_end_utc": iso_utc(end),
                     "query_status": "success",
                     **summary,
                 })
