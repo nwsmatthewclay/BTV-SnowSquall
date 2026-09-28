@@ -1,14 +1,7 @@
-"""Build an ML-ready historical object dataset from reconstructed radar scans.
-
-This stage enriches object scans with verified case metadata and time-matched
-RAP environment. It deliberately does not invent event end times or future
-labels when the source case metadata does not provide them.
-"""
+"""Build an ML-ready historical object dataset from reconstructed radar scans."""
 from __future__ import annotations
 
 import argparse
-import csv
-import json
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -55,7 +48,6 @@ def enrich(input_csv: Path, output_csv: Path, cases_csv: Path, rap_dir: Path, ru
 
     for _, obj in objects.iterrows():
         scan_time = obj["scan_dt"].to_pydatetime().astimezone(timezone.utc)
-        case_match = None
         explicit_case_id = obj.get("case_id")
         if pd.notna(explicit_case_id) and explicit_case_id in cases.index:
             case_match = (0.0, explicit_case_id, cases.loc[explicit_case_id])
@@ -63,14 +55,16 @@ def enrich(input_csv: Path, output_csv: Path, cases_csv: Path, rap_dir: Path, ru
             case_match = choose_case(scan_time, cases)
 
         row = obj.to_dict()
-        row["case_id"] = None
-        row["case_source_study"] = None
-        row["case_event_start_utc"] = None
-        row["case_observing_station"] = None
-        row["case_peak_wind_kt"] = None
-        row["case_min_visibility_km"] = None
-        row["case_hybrid"] = None
-        row["case_time_relation"] = "unmatched"
+        row.update({
+            "case_id": None,
+            "case_source_study": None,
+            "case_event_start_utc": None,
+            "case_observing_station": None,
+            "case_peak_wind_kt": None,
+            "case_min_visibility_km": None,
+            "case_hybrid": None,
+            "case_time_relation": "unmatched",
+        })
 
         if case_match:
             _, case_id, case = case_match
@@ -98,13 +92,12 @@ def enrich(input_csv: Path, output_csv: Path, cases_csv: Path, rap_dir: Path, ru
 
         hour_key = scan_time.replace(minute=0, second=0, microsecond=0).isoformat()
         if hour_key not in cache:
-            acquired = acquire_for_radar_time(
+            cache[hour_key] = acquire_for_radar_time(
                 scan_time,
                 rap_dir=rap_dir,
                 ruc_dir=ruc_dir,
                 max_age_minutes=180,
             )
-            cache[hour_key] = acquired
 
         acquired = cache[hour_key]
         if acquired is None:
@@ -129,8 +122,6 @@ def enrich(input_csv: Path, output_csv: Path, cases_csv: Path, rap_dir: Path, ru
         for key, value in (environment.get("fields") or {}).items():
             row[key] = value
 
-        # No future target is assigned here. The event metadata is descriptive,
-        # while outcome labels require a separate observation-based labeling pass.
         row["label_status"] = "historical_case_context_only"
         row["snow_squall_outcome"] = None
         rows.append(row)
@@ -142,8 +133,10 @@ def enrich(input_csv: Path, output_csv: Path, cases_csv: Path, rap_dir: Path, ru
     result.to_csv(output_csv, index=False)
 
     print(f"Wrote {len(result)} object-timestep records to {output_csv}")
-    print(f"RAP files used: {len(cache)}")
-    print(f"Complete RAP records: {(result['environment_status'] == 'complete').sum()}")
+    print("Environment sources:")
+    print(result["environment_source"].value_counts(dropna=False).to_string())
+    print("Environment status:")
+    print(result["environment_status"].value_counts(dropna=False).to_string())
 
 
 def main():
