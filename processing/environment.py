@@ -48,15 +48,45 @@ def acquire_for_radar_time(
     return provider, match, path
 
 
+def canonicalize_environment_fields(provider, fields):
+    """Map provider-specific names onto the repository's canonical schema."""
+    out = dict(fields or {})
+
+    aliases = {
+        "sbcape_jkg": "cape_jkg",
+        "sbcin_jkg": "cin_jkg",
+        "lapse_rate_0_3km_c_km": "lr_0_3_c_km",
+        "lapse_rate_0_7_5km_c_km": "lr_0_7p5_c_km",
+        "wet_bulb_0_3km_c": "wetbulb_0_3_c",
+    }
+    for canonical, source in aliases.items():
+        if canonical not in out and out.get(source) is not None:
+            out[canonical] = out[source]
+
+    if out.get("shear_0_6km_ms") is not None and out.get("shear_0_6km_kt") is None:
+        out["shear_0_6km_kt"] = float(out["shear_0_6km_ms"]) * 1.943844
+
+    if out.get("visibility_m") is not None and out.get("visibility_sm") is None:
+        out["visibility_sm"] = float(out["visibility_m"]) / 1609.344
+
+    return out
+
+
 def extract_features(
     provider, path, latitude, longitude, radar_time, expected_valid_time
 ):
     if provider == "NARR":
-        return extract_narr(
+        result = extract_narr(
             path, latitude, longitude, radar_time, expected_valid_time
         )
-    if provider == "RUC":
-        return extract_ruc(
+    elif provider == "RUC":
+        result = extract_ruc(
             path, latitude, longitude, radar_time, expected_valid_time
         )
-    return extract_rap(path, latitude, longitude, radar_time, expected_valid_time)
+    else:
+        result = extract_rap(path, latitude, longitude, radar_time, expected_valid_time)
+
+    result["fields"] = canonicalize_environment_fields(
+        provider, result.get("fields", {})
+    )
+    return result
