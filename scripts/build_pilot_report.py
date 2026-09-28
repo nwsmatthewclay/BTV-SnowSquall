@@ -2,7 +2,9 @@
 from __future__ import annotations
 
 import argparse
+import json
 from pathlib import Path
+
 import pandas as pd
 
 
@@ -13,12 +15,26 @@ def table_html(df: pd.DataFrame, columns):
     return view.to_html(index=False, border=0, classes="data")
 
 
+def load_json(path: Path):
+    if not path.exists():
+        return {}
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        return {}
+
+
 def main():
     p = argparse.ArgumentParser()
     p.add_argument("--positive", required=True)
     p.add_argument("--null", required=True)
     p.add_argument("--positive-tracks", required=True)
     p.add_argument("--null-tracks", required=True)
+    p.add_argument("--surface-audit")
+    p.add_argument("--surface-summary")
+    p.add_argument("--positive-radar-audit")
+    p.add_argument("--null-radar-audit")
+    p.add_argument("--baseline-root")
     p.add_argument("--output", required=True)
     args = p.parse_args()
 
@@ -31,18 +47,15 @@ def main():
         return int(frame[col].nunique(dropna=True)) if col in frame else 0
 
     label_counts = (
-        pos["label_status"].value_counts(dropna=False).rename_axis("status")
-        .reset_index(name="records")
+        pos["label_status"].value_counts(dropna=False).rename_axis("status").reset_index(name="records")
         if "label_status" in pos.columns else pd.DataFrame()
     )
     env_counts = (
-        pos["environment_status"].value_counts(dropna=False).rename_axis("status")
-        .reset_index(name="records")
+        pos["environment_status"].value_counts(dropna=False).rename_axis("status").reset_index(name="records")
         if "environment_status" in pos.columns else pd.DataFrame()
     )
     null_env = (
-        null["environment_status"].value_counts(dropna=False).rename_axis("status")
-        .reset_index(name="records")
+        null["environment_status"].value_counts(dropna=False).rename_axis("status").reset_index(name="records")
         if "environment_status" in null.columns else pd.DataFrame()
     )
 
@@ -53,6 +66,59 @@ def main():
             f"<td>{nuniq(frame, 'object_id'):,}</td>"
             f"<td>{nuniq(frame, 'radar_site'):,}</td></tr>"
         )
+
+    surface_section = "<p><em>Surface-observation audit not supplied.</em></p>"
+    if args.surface_audit and Path(args.surface_audit).exists():
+        surface = pd.read_csv(args.surface_audit)
+        cols = [
+            "case_id", "station", "status", "observation_count",
+            "minimum_visibility_m", "maximum_peak_wind_gust_kt",
+            "first_le_0p4km_utc", "first_le_0p8km_utc",
+            "offset_from_published_start_0p4km_min",
+            "offset_from_published_start_0p8km_min",
+            "surface_timing_consistent",
+        ]
+        surface_section = table_html(surface, cols)
+
+    radar_sections = []
+    for label, path in [
+        ("Positive reconstruction", args.positive_radar_audit),
+        ("Null reconstruction", args.null_radar_audit),
+    ]:
+        if path:
+            data = load_json(Path(path))
+            if data:
+                backend_rows = [
+                    {"reader_backend": k, "volumes": v}
+                    for k, v in data.get("reader_backend_volume_counts", {}).items()
+                ]
+                radar_sections.append(
+                    f"<h3>{label}</h3>"
+                    f"<p>Object records: <strong>{data.get('object_records', 0):,}</strong> · "
+                    f"failed volumes: <strong>{data.get('failed_volumes', 0):,}</strong></p>"
+                    f"{table_html(pd.DataFrame(backend_rows), ['reader_backend','volumes'])}"
+                )
+    radar_section = "".join(radar_sections) or "<p><em>No reconstruction audit supplied.</em></p>"
+
+    baseline_section = "<p><em>Baseline model metrics not supplied.</em></p>"
+    if args.baseline_root:
+        rows = []
+        root = Path(args.baseline_root)
+        for path in sorted(root.glob("baseline_model_*m/metrics.json")):
+            data = load_json(path)
+            metrics = data.get("metrics", {})
+            rows.append({
+                "horizon": path.parent.name.replace("baseline_model_", ""),
+                "training_rows": data.get("training_rows"),
+                "groups": data.get("training_groups"),
+                "ROC_AUC": metrics.get("auc_roc"),
+                "Average_Precision": metrics.get("average_precision"),
+                "Brier": metrics.get("brier_score"),
+            })
+        baseline_section = table_html(pd.DataFrame(rows), [
+            "horizon", "training_rows", "groups", "ROC_AUC",
+            "Average_Precision", "Brier",
+        ])
 
     html = f"""<!doctype html>
 <html lang="en"><head><meta charset="utf-8">
@@ -75,7 +141,7 @@ main{{max-width:1200px;margin:24px auto;padding:0 20px}}
 </style></head>
 <body>
 <header><h1>BTV Snow Squall — Historical Object Pilot</h1>
-<div>Real NEXRAD Level-II object reconstruction • multi-era environment enrichment • research/pilot dataset • not an operational probability model</div></header>
+<div>Real NEXRAD Level-II object reconstruction • multi-era environment enrichment • independent surface-observation audit • research/pilot dataset • not an operational probability model</div></header>
 <main>
 <div class="grid">
 <div class="card">Positive-context scans<b>{len(pos):,}</b></div>
@@ -94,28 +160,34 @@ main{{max-width:1200px;margin:24px auto;padding:0 20px}}
 <h2>Positive-context label status</h2>
 {table_html(label_counts, ["status","records"])}
 
+<h2>Independent ASOS/METAR surface audit</h2>
+{surface_section}
+
 <h2>Environmental data availability</h2>
 <h3>Positive-context objects</h3>
 {table_html(env_counts, ["status","records"])}
 <h3>Null candidates</h3>
 {table_html(null_env, ["status","records"])}
 
+<h2>Radar reconstruction audit</h2>
+{radar_section}
+
+<h2>Case-held-out baseline model</h2>
+{baseline_section}
+
 <h2>Radar/object characteristics</h2>
 {table_html(pos.describe(include="all").transpose().reset_index().rename(columns={"index":"field"}).head(20), ["field","count","mean","min","25%","50%","75%","max"])}
 
-<h2>Archive/data-quality note</h2>
-<div class="note">
-The five-window null pilot contains one archive gap: NULL0002 (8 February 2006) returned zero Level-II volumes from both KCXX and KTYX. This is <strong>not</strong> treated as a meteorological null. NOAA's NEXRAD inventory lists KCXX Level-II coverage beginning in 1997, so the missing window requires archive-source investigation before it is retained as a valid null sample.
-</div>
-
 <h2>Scientific guardrails</h2>
+<div class="note">
+This report deliberately separates verified event context from candidate nulls. Future-information policy is current-and-past only at prediction time. Post-onset observations are excluded from the first baseline training set. Model metrics are exploratory and case-held-out; they are not an operational verification of forecast skill.
+</div>
 <ul>
-<li>Future-information policy: past and current information only.</li>
-<li>Null candidates are not treated as verified negative examples.</li>
 <li>Environmental provider is date-aware: NARR before 1 April 2007, RUC from 1 April 2007 through 30 April 2012, and RAP from 1 May 2012 onward.</li>
-<li>Object association labels are pilot labels and require tighter track/event QC before model training.</li>
+<li>Object association labels are pilot labels and require tighter track/event QC before model training at scale.</li>
+<li>ASOS/METAR surface observations are currently an independent truth/QC layer, not a model predictor.</li>
 </ul>
-<p class="small">Generated automatically from the workflow artifacts. Use this report to review the data pipeline with the SOO; do not interpret the current population as a trained forecast model.</p>
+<p class="small">Generated automatically from the workflow artifacts. Use this report to review the data pipeline with the SOO; do not interpret the current population as a trained operational forecast model.</p>
 </main></body></html>"""
 
     out = Path(args.output)
