@@ -72,3 +72,8 @@ def test_replay_respects_explicit_case_window(tmp_path, monkeypatch):
     assert calls==["KCXX20191218_224000_V06"]
     assert result["attempted_scan_count"]==1
     assert result["successful_scan_count"]==1
+
+
+def test_surface_radar_diagnostic_distinguishes_nonlocal_object():
+    from scripts.build_modern_surface_radar_diagnostic import distance_km
+    assert distance_km(44.20, -72.56, 43.82, -72.99) > 40
