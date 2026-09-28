@@ -36,6 +36,8 @@ def main():
     p.add_argument("--null-radar-audit")
     p.add_argument("--baseline-root")
     p.add_argument("--coverage")
+    p.add_argument("--positive-level2-fields")
+    p.add_argument("--null-level2-fields")
     p.add_argument("--output", required=True)
     args = p.parse_args()
 
@@ -101,13 +103,40 @@ def main():
                 )
     radar_section = "".join(radar_sections) or "<p><em>No reconstruction audit supplied.</em></p>"
 
+    field_section = "<p><em>Native Level-II field audit not supplied.</em></p>"
+    field_rows = []
+    for label, path in [
+        ("Positive Level-II sample", args.positive_level2_fields),
+        ("Null Level-II sample", args.null_level2_fields),
+    ]:
+        if path:
+            data = load_json(Path(path))
+            resolved = data.get("resolved_field_counts", {})
+            if data:
+                field_rows.append({
+                    "sample": label,
+                    "files_sampled": data.get("sampled_files", 0),
+                    "successful_reads": data.get("successful_reads", 0),
+                    "failed_reads": data.get("failed_reads", 0),
+                    "reflectivity": resolved.get("reflectivity", 0),
+                    "velocity": resolved.get("velocity", 0),
+                    "zdr": resolved.get("zdr", 0),
+                    "rhohv": resolved.get("rhohv", 0),
+                    "kdp": resolved.get("kdp", 0),
+                })
+    if field_rows:
+        field_section = table_html(
+            pd.DataFrame(field_rows),
+            ["sample", "files_sampled", "successful_reads", "failed_reads",
+             "reflectivity", "velocity", "zdr", "rhohv", "kdp"],
+        )
     coverage_section = "<p><em>Feature coverage audit not supplied.</em></p>"
     if args.coverage and Path(args.coverage).exists():
         coverage = load_json(Path(args.coverage))
         group_rows = coverage.get("group_coverage", [])
         coverage_section = table_html(
             pd.DataFrame(group_rows),
-            ["group", "fields_present", "fields", "mean_field_coverage_pct"],
+            ["group", "fields_with_values", "fields_present", "fields", "mean_field_coverage_pct"],
         )
         zero = coverage.get("zero_coverage_fields", [])
         coverage_section += (
@@ -195,6 +224,9 @@ main{{max-width:1200px;margin:24px auto;padding:0 20px}}
 
 <h2>Realized feature coverage</h2>
 {coverage_section}
+
+<h2>Native Level-II field availability</h2>
+{field_section}
 
 <h2>Case-held-out baseline model</h2>
 {baseline_section}
