@@ -139,6 +139,7 @@ def write_schema(frame: pd.DataFrame, schema_path: Path):
     schema = {
         "schema_version": "model_features_v1",
         "future_information_policy": "current_and_past_only",
+        "location_predictor_policy": "excluded_from_baseline",
         "predictor_columns": predictor_columns(frame),
         "blocked_non_predictors": sorted(NON_PREDICTOR_COLUMNS),
         "blocked_prefixes": list(BLOCKED_PREFIXES),
