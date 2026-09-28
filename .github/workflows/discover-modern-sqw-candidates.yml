@@ -1,0 +1,46 @@
+name: Discover Modern Snow Squall Candidates
+
+on:
+  workflow_dispatch:
+    inputs:
+      start_year:
+        description: "First year to search"
+        required: false
+        default: "2019"
+      end_year:
+        description: "Last year to search"
+        required: false
+        default: "2026"
+
+permissions:
+  contents: read
+
+jobs:
+  discover:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pandas requests
+
+      - name: Discover KBTV Snow Squall Warnings
+        run: |
+          python scripts/discover_modern_sqw_candidates.py             --start-year ${{ inputs.start_year }}             --end-year ${{ inputs.end_year }}             --output data/derived/modern_sqw_candidate_review.csv
+
+      - name: Upload candidate review table
+        uses: actions/upload-artifact@v4
+        with:
+          name: modern-sqw-candidate-review
+          path: data/derived/modern_sqw_candidate_review.csv
+          if-no-files-found: error
