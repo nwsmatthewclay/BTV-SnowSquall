@@ -320,6 +320,14 @@ jobs:
         run: |
           python scripts/build_static_viewer.py             --objects data/derived/positive_object_labeled.csv             --cases data/manifests/banacos_positive_pilot.csv             --output-dir data/derived/viewer             --frames-root data/derived/viewer
 
+      - name: Build operational replay readiness note
+        run: |
+          cat > data/derived/operational_replay_readiness.txt <<'EOF'
+          Historical scans can be replayed through the same live processor one
+          scan at a time. Probability scoring remains disabled until independent
+          historical verification is complete.
+          EOF
+
       - name: Build SOO-ready pilot report
         run: |
           python scripts/build_pilot_report.py \
@@ -339,6 +347,10 @@ jobs:
 
       - name: Run tests
         run: pytest -q
+
+      - name: Validate unscored live-product contract
+        if: hashFiles('data/derived/live_tracker_state.json', 'data/derived/live_objects.geojson') != ''
+        run: python scripts/audit_operational_readiness.py
 
       - name: Upload object dataset pilot
         uses: actions/upload-artifact@v4
