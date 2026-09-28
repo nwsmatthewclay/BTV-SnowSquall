@@ -57,6 +57,8 @@ def build_track_catalog(path: Path):
             flags.append("rapid_area_jump")
         if aspect.dropna().empty:
             flags.append("missing_aspect_ratio")
+        if "touches_grid_edge" in g.columns and g["touches_grid_edge"].fillna(False).any():
+            flags.append("touches_grid_edge")
         if duplicate_scan_times:
             flags.append("duplicate_scan_time")
         if np.isfinite(max_motion) and max_motion > 100:
