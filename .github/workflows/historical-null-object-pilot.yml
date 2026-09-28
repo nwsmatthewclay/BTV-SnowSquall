@@ -9,6 +9,7 @@ jobs:
     timeout-minutes: 90
     env:
       PYTHONPATH: ${{ github.workspace }}
+      PYTHONUNBUFFERED: '1'
     steps:
       - uses: actions/checkout@v4
         with:
