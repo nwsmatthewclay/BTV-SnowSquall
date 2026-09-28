@@ -103,6 +103,46 @@ def process_volume(path: Path, tracker: CentroidTracker, radar_origin=None):
         obj["length_km"] = length_km
         obj["width_km"] = width_km
 
+        if 0 <= cy < data.shape[0] and 0 <= cx < data.shape[1]:
+            for canonical in ("zdr", "rhohv", "kdp", "velocity"):
+                field = gridded.get(canonical)
+                if field is None:
+                    continue
+                values = field[footprint]
+                finite = values[np.isfinite(values)]
+                if canonical == "zdr":
+                    gradient = np.hypot(
+                        *np.gradient(field, 1.0, edge_order=1)
+                    )
+                    stats = object_field_summary(
+                        finite, "zdr", gradient[footprint], "_dbkm"
+                    )
+                    obj["zdr_mean_db"] = stats["zdr_mean"]
+                    obj["zdr_p90_db"] = stats["zdr_p90"]
+                    obj["zdr_gradient_dbkm"] = stats["zdr_gradient_dbkm"]
+                elif canonical == "rhohv":
+                    stats = object_field_summary(finite, "rhohv")
+                    obj["rhohv_mean"] = stats["rhohv_mean"]
+                    obj["rhohv_max"] = stats["rhohv_max"]
+                    obj["rhohv_p90"] = stats["rhohv_p90"]
+                    obj["rhohv_min"] = float(np.nanmin(finite)) if finite.size else np.nan
+                elif canonical == "kdp":
+                    stats = object_field_summary(finite, "kdp")
+                    obj["kdp_mean_degkm"] = stats["kdp_mean"]
+                    obj["kdp_p90_degkm"] = stats["kdp_p90"]
+                elif canonical == "velocity":
+                    gradient = np.hypot(
+                        *np.gradient(field, 1.0, edge_order=1)
+                    )
+                    obj.update(
+                        velocity_object_summary(
+                            finite, gradient[footprint]
+                        )
+                    )
+                    obj["velocity_gradient_ktkm"] = obj.pop(
+                        "velocity_gradient"
+                    )
+
     return tracked
 
 
