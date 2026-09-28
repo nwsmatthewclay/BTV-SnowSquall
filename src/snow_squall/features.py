@@ -20,9 +20,12 @@ BASE_FEATURES = [
 
 def add_derived_features(df: pd.DataFrame) -> pd.DataFrame:
     out=df.copy()
-    eps=1e-6
     if {"area_km2","length_km"}.issubset(out):
-        out["area_per_length"]=out["area_km2"]/(out["length_km"]+eps)
+        # Preserve exact ratios for ordinary positive lengths while avoiding
+        # division by zero for malformed/degenerate objects.
+        length = pd.to_numeric(out["length_km"], errors="coerce")
+        area = pd.to_numeric(out["area_km2"], errors="coerce")
+        out["area_per_length"] = area.div(length.where(length != 0))
     if {"reflectivity_max_dbz","reflectivity_mean_dbz"}.issubset(out):
         out["reflectivity_core_excess"]=out["reflectivity_max_dbz"]-out["reflectivity_mean_dbz"]
     if {"shear_0_6km_kt","motion_speed_kt"}.issubset(out):
