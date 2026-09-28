@@ -13,6 +13,9 @@ import numpy as np
 import xarray as xr
 from pyproj import CRS, Transformer
 
+_FIELD_CACHE_MAX = 32
+_FIELD_CACHE = OrderedDict()
+
 FIELD_SPECS = {
     "visibility_m": ("surface", "vis", None),
     "gust_ms": ("surface", "gust", None),
@@ -34,14 +37,28 @@ LL_CRS = CRS.from_epsg(4326)
 
 
 def _open_field(path: Path, type_of_level: str, short_name: str, level=None):
+    key = (str(path.resolve()), type_of_level, short_name, level)
+    cached = _FIELD_CACHE.get(key)
+    if cached is not None:
+        _FIELD_CACHE.move_to_end(key)
+        return cached
+
     filters = {"typeOfLevel": type_of_level, "shortName": short_name}
     if level is not None:
         filters["level"] = level
-    return xr.open_dataset(
+    ds = xr.open_dataset(
         path,
         engine="cfgrib",
         backend_kwargs={"filter_by_keys": filters, "indexpath": ""},
     )
+    _FIELD_CACHE[key] = ds
+    if len(_FIELD_CACHE) > _FIELD_CACHE_MAX:
+        _, stale = _FIELD_CACHE.popitem(last=False)
+        try:
+            stale.close()
+        except Exception:
+            pass
+    return ds
 
 
 def _nearest(ds, latitude, longitude):
@@ -74,8 +91,8 @@ def extract_features(path: Path, latitude: float, longitude: float, radar_time: 
 
     for name, (level_type, short_name, level) in FIELD_SPECS.items():
         try:
-            with _open_field(path, level_type, short_name, level) as ds:
-                values[name] = _nearest(ds, latitude, longitude)
+            ds = _open_field(path, level_type, short_name, level)
+            values[name] = _nearest(ds, latitude, longitude)
         except Exception as exc:
             failures[name] = type(exc).__name__
 
