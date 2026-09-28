@@ -9,6 +9,8 @@ from __future__ import annotations
 import numpy as np
 import pyart
 
+from processing.radar_sites import radar_origin_for_site
+
 
 def grid_lowest_sweep(
     radar,
@@ -57,3 +59,8 @@ def grid_latlon(grid):
     """Return 2-D latitude/longitude arrays for the lowest grid level."""
     lon, lat = grid.get_point_longitude_latitude()
     return np.asarray(lat), np.asarray(lon)
+
+
+def grid_site_origin(radar_site: str | None):
+    """Return the canonical latitude/longitude origin used for a radar site."""
+    return radar_origin_for_site(radar_site)
