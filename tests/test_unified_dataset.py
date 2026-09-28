@@ -26,3 +26,4 @@ def test_unified_dataset_preserves_candidate_null_status(tmp_path):
 
     assert set(result["population"]) == {"verified_case_context", "winter_null_candidate"}
     assert result.loc[result["object_id"] == 2, "truth_status"].iloc[0] == "unverified_null_candidate"
+    assert result["population_track_key"].notna().all()
