@@ -46,7 +46,7 @@ def main():
             if pd.isna(ts):
                 continue
             ts=ts.to_pydatetime()
-            radar_name=meta.get("radar_site") or path.name[:4]
+            radar_name=meta.get("radar_site") or (path.parts[-3] if len(path.parts) >= 3 else path.name[:4])
             candidates=[r for r in rows if r["radar_site"]==radar_name and r["window_start"]<=ts<=r["window_end"]]
             if not candidates:
                 continue
