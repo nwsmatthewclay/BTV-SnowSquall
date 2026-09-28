@@ -53,7 +53,7 @@ def test_track_association_rejects_unrelated_object(tmp_path):
         {
             "case_id": "TEST", "object_id": "B",
             "scan_time_utc": "2020-01-01T12:00:00Z",
-            "centroid_lat": 46.0, "centroid_lon": -75.0,
+            "centroid_lat": 44.60, "centroid_lon": -73.15,
         },
     ]
 
@@ -63,3 +63,35 @@ def test_track_association_rejects_unrelated_object(tmp_path):
 
     assert bool(a["track_event_associated"])
     assert b["label_status"] == "unassociated_object"
+
+
+def test_only_nearest_track_per_radar_is_event_associated(tmp_path):
+    cases = pd.DataFrame([{
+        "case_id": "TEST",
+        "observing_station": "KBTV",
+        "event_start_utc": "2020-01-01T12:00:00Z",
+        "vis_below_0p8_min": 30,
+    }])
+    path = tmp_path / "cases.csv"
+    cases.to_csv(path, index=False)
+
+    rows = [
+        {
+            "case_id": "TEST", "radar_site": "KCXX", "object_id": "NEAR",
+            "scan_time_utc": "2020-01-01T11:55:00Z",
+            "centroid_lat": 44.48, "centroid_lon": -73.16,
+        },
+        {
+            "case_id": "TEST", "radar_site": "KCXX", "object_id": "FAR",
+            "scan_time_utc": "2020-01-01T11:55:00Z",
+            "centroid_lat": 44.60, "centroid_lon": -73.15,
+        },
+    ]
+
+    result = build_labels(pd.DataFrame(rows), Path(path))
+    near = result[result["object_id"] == "NEAR"].iloc[0]
+    far = result[result["object_id"] == "FAR"].iloc[0]
+
+    assert bool(near["track_event_associated"])
+    assert not bool(far["track_event_associated"])
+    assert far["label_status"] == "unassociated_object"
