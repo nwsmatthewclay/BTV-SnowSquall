@@ -40,19 +40,18 @@ def cluster(df: pd.DataFrame, gap_minutes: int = 30) -> pd.DataFrame:
             current_end = expire
         else:
             current_end = max(current_end, expire)
-
-        episodes.append((idx, episode_num, current_start, current_end))
+        episodes.append((idx, episode_num, current_start))
 
     mapping = pd.DataFrame(
         episodes,
-        columns=["_idx", "episode_num", "episode_start", "episode_end"],
+        columns=["_idx", "episode_num", "episode_start"],
     ).set_index("_idx")
-
     data = data.join(mapping)
     data["episode_id"] = data["episode_start"].dt.strftime("SQE%Y%m%dT%H%MZ")
+
     summary = (
         data.groupby(
-            ["episode_id", "episode_start", "episode_end"],
+            ["episode_id", "episode_start"],
             as_index=False,
         )
         .agg(
