@@ -90,22 +90,26 @@ def build(surface_file: Path, replay_case: Path, output_csv: Path) -> dict:
         "scoring_status": "not_scored",
     }
     if not valid_vis.empty:
+        ordered = valid_vis.sort_values("observation_time_utc")
+        for threshold, label in [(0.5, "0p5"), (0.25, "0p25"), (0.125, "0p125")]:
+            hit = ordered[ordered["visibility_mi"] <= threshold]
+            if not hit.empty:
+                row = hit.iloc[0]
+                summary[f"first_visibility_le_{label}_utc"] = str(row["observation_time_utc"])
+                summary[f"radar_distance_km_at_first_visibility_le_{label}"] = (
+                    float(row["radar_distance_km"]) if pd.notna(row.get("radar_distance_km")) else None
+                )
+                summary[f"radar_max_reflectivity_at_first_visibility_le_{label}_dbz"] = (
+                    float(row["radar_max_reflectivity_dbz"])
+                    if pd.notna(row.get("radar_max_reflectivity_dbz")) else None
+                )
         min_row = valid_vis.sort_values("visibility_mi").iloc[0]
         summary.update({
             "minimum_visibility_mi": float(min_row["visibility_mi"]),
             "minimum_visibility_time_utc": str(min_row["observation_time_utc"]),
-            "radar_distance_km_at_min_visibility": (
-                float(min_row["radar_distance_km"])
-                if pd.notna(min_row.get("radar_distance_km"))
-                else None
-            ),
-            "radar_max_reflectivity_at_min_visibility_dbz": (
-                float(min_row["radar_max_reflectivity_dbz"])
-                if pd.notna(min_row.get("radar_max_reflectivity_dbz"))
-                else None
-            ),
+            "radar_distance_km_at_min_visibility": float(min_row["radar_distance_km"]) if pd.notna(min_row.get("radar_distance_km")) else None,
+            "radar_max_reflectivity_at_min_visibility_dbz": float(min_row["radar_max_reflectivity_dbz"]) if pd.notna(min_row.get("radar_max_reflectivity_dbz")) else None,
         })
-
     output_csv.with_suffix(".json").write_text(
         json.dumps(summary, indent=2) + "\n", encoding="utf-8"
     )
