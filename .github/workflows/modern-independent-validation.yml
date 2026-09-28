@@ -106,6 +106,8 @@ jobs:
                   "--output-dir", str(output_dir),
                   "--state-path", str(state),
                   "--continue-on-error",
+                  "--window-start-utc", str(row.window_start_utc),
+                  "--window-end-utc", str(row.window_end_utc),
               ]
               print("RUN:", " ".join(cmd))
               subprocess.run(cmd, check=True)
