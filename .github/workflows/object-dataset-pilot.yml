@@ -275,6 +275,10 @@ jobs:
             python scripts/train_baseline_model.py               data/derived/object_model_features_pilot.csv               --schema data/derived/object_model_features_pilot.schema.json               --target squall_onset_within_${horizon}m               --output-dir data/derived/baseline_model_${horizon}m
           done
 
+      - name: Audit training dataset
+        run: |
+          python scripts/audit_training_dataset.py             data/derived/object_model_features_pilot.csv
+
       - name: Build SOO-ready pilot report
         run: |
           python scripts/build_pilot_report.py \
