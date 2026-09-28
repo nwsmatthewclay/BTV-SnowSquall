@@ -4,7 +4,7 @@ from processing.radar_sites import radar_origin_for_site
 
 def test_known_radar_origins():
     assert radar_origin_for_site("KCXX") == (44.511, -73.166)
-    assert radar_origin_for_site("KTYX") == (43.755, -75.676)
+    assert radar_origin_for_site("KTYX") == (43.756, -75.680)
     assert radar_origin_for_site("KBTV") == (44.472, -73.154)
 
 
