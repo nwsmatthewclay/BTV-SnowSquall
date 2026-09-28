@@ -12,12 +12,13 @@ def test_baseline_split_group_is_case_or_null():
                 "verified_case_context",
                 "verified_case_context",
                 "winter_null_candidate",
+                "winter_null_candidate",
             ],
-            "case_id": ["BTV20040315", "BTV20040315", None],
-            "null_id": [None, None, "NULL0001"],
-            "track_event_associated": [True, True, False],
-            "squall_onset_within_15m": [1, 0, 0],
-            "max_reflectivity_dbz": [20.0, 25.0, 10.0],
+            "case_id": ["BTV20040315", "BTV20040315", None, None],
+            "null_id": [None, None, "NULL0001", "NULL0002"],
+            "track_event_associated": [True, True, False, False],
+            "squall_onset_within_15m": [1, 0, 0, 0],
+            "max_reflectivity_dbz": [20.0, 25.0, 10.0, 12.0],
         }
     )
     schema = {
@@ -28,4 +29,6 @@ def test_baseline_split_group_is_case_or_null():
     result, predictors = prepare_dataset(frame, schema, "squall_onset_within_15m")
 
     assert predictors == ["max_reflectivity_dbz"]
-    assert set(result["split_group"]) == {"case:BTV20040315", "null:NULL0001"}
+    assert set(result["split_group"]) == {
+        "case:BTV20040315", "null:NULL0001", "null:NULL0002"
+    }
