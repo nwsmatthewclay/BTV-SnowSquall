@@ -211,6 +211,7 @@ def main():
                 "max_reflectivity_dbz": obj["max_reflectivity_dbz"],
                 "mean_reflectivity_dbz": obj["mean_reflectivity_dbz"],
                 "core_pixel_count": obj["core_pixel_count"],
+                "touches_grid_edge": obj.get("touches_grid_edge", False),
                 "row_centroid": obj["row_centroid"],
                 "column_centroid": obj["column_centroid"],
                 "centroid_lat": obj.get("centroid_lat"),
