@@ -134,6 +134,10 @@ jobs:
         run: |
           python scripts/acquire_modern_validation_mrms.py             --replay-root data/derived/modern_validation_replay             --output data/derived/modern_validation_mrms
 
+      - name: Compare Level-II objects with MRMS
+        run: |
+          python scripts/compare_replay_to_mrms.py             --replay-root data/derived/modern_validation_replay             --mrms-root data/derived/modern_validation_mrms             --output data/derived/modern_validation_mrms_object_comparison.csv
+
       - name: Build non-scoring validation inventory
         run: |
           python scripts/build_modern_validation_inventory.py             --cases data/manifests/modern_independent_validation_cases.csv             --replay-root data/derived/modern_validation_replay             --surface-root data/raw/modern_surface             --mrms-root data/derived/modern_validation_mrms
@@ -167,6 +171,8 @@ jobs:
             data/derived/modern_validation_inventory.csv
             data/derived/modern_validation_replay
             data/derived/modern_validation_mrms
+            data/derived/modern_validation_mrms_object_comparison.csv
+            data/derived/modern_validation_mrms_object_comparison.json
             data/raw/modern_surface
             data/raw/modern_level2
           if-no-files-found: warn
