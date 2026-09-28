@@ -92,8 +92,7 @@ jobs:
               case_id = str(row.case_id)
               radar = str(row.radar_site)
               start = pd.to_datetime(row.window_start_utc, utc=True)
-              day = start.strftime("%Y%m%d")
-              input_dir = Path("data/raw/modern_level2") / radar / day
+              input_dir = Path("data/raw/modern_level2") / radar
               output_dir = Path("data/derived/modern_validation_replay") / case_id
               state = output_dir / "replay_state.json"
               cmd = [
