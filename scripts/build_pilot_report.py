@@ -187,6 +187,30 @@ def main():
                 'interpretable as model skill yet.</div>'
             )
 
+    event_level_section = "<p><em>Event/window diagnostics not supplied.</em></p>"
+    if args.baseline_root:
+        event_rows = []
+        root = Path(args.baseline_root)
+        for event_path in sorted(root.glob("event_level_pilot_*m.json")) + sorted(root.glob("event_level_expansion_*m.json")):
+            event = load_json(event_path)
+            suffix = event_path.stem.split("_")[-1]
+            for row in event.get("threshold_diagnostics", []):
+                event_rows.append({
+                    "horizon": suffix,
+                    "threshold": row.get("threshold"),
+                    "cases_detected": row.get("positive_cases_detected"),
+                    "case_count": row.get("positive_case_count"),
+                    "null_windows_triggered": row.get("null_windows_triggered"),
+                    "null_window_count": row.get("null_window_count"),
+                    "case_detection_fraction": row.get("case_detection_fraction"),
+                    "null_alert_fraction": row.get("null_window_alert_fraction"),
+                })
+        if event_rows:
+            event_level_section = table_html(pd.DataFrame(event_rows), [
+                "horizon", "threshold", "cases_detected", "case_count",
+                "null_windows_triggered", "null_window_count",
+                "case_detection_fraction", "null_alert_fraction",
+            ])
     html = f"""<!doctype html>
 <html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
@@ -247,6 +271,9 @@ main{{max-width:1200px;margin:24px auto;padding:0 20px}}
 
 <h2>Case-held-out baseline model</h2>
 {baseline_section}
+
+<h2>Event/window-level probability diagnostics</h2>
+{event_level_section}
 
 <h2>Radar/object characteristics</h2>
 {table_html(pos.describe(include="all").transpose().reset_index().rename(columns={"index":"field"}).head(20), ["field","count","mean","min","25%","50%","75%","max"])}
