@@ -26,6 +26,16 @@ TARGET_COLUMNS = {
     "case_station_distance_km", "association_method",
 }
 
+BLOCKED_PREFIXES = (
+    "case_",
+    "label_",
+    "squall_",
+    "track_event_",
+    "association_",
+    "surface_",
+    "truth_",
+)
+
 NON_PREDICTOR_COLUMNS = TARGET_COLUMNS | {
     "scan_time_utc", "source_file", "radar_site", "object_id",
     "population", "population_id", "population_source", "truth_status",
@@ -101,7 +111,7 @@ def build_features(frame: pd.DataFrame) -> pd.DataFrame:
 def predictor_columns(frame: pd.DataFrame) -> list[str]:
     columns = []
     for col in frame.columns:
-        if col in NON_PREDICTOR_COLUMNS:
+        if col in NON_PREDICTOR_COLUMNS or col.startswith(BLOCKED_PREFIXES):
             continue
         if pd.api.types.is_numeric_dtype(frame[col]):
             columns.append(col)
