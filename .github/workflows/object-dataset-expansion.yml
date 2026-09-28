@@ -228,6 +228,10 @@ jobs:
         run: |
           python scripts/audit_environment_attachment.py data/derived/null_object_environment.csv --report data/derived/null_environment_audit.json
 
+      - name: Classify null-window activity
+        run: |
+          python scripts/classify_null_windows.py data/derived/null_object_scans_annotated.csv --output data/derived/null_window_activity.csv
+
       - name: Build track catalogs
         run: |
           python scripts/build_object_track_catalog.py \
@@ -330,6 +334,7 @@ jobs:
             data/derived/null_object_scans_annotated.csv
             data/derived/null_object_environment.csv
             data/derived/null_object_tracks.csv
+            data/derived/null_window_activity.csv
             data/derived/object_population_expansion.csv
             data/derived/object_model_features_expansion.csv
             data/derived/object_model_features_expansion.schema.json
