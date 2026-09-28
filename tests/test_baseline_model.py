@@ -119,3 +119,16 @@ def test_baseline_excludes_case_rows_at_or_after_onset_even_if_nonimpact(tmp_pat
     assert set(result["case_id"].dropna()) == {"CASE1"}
     assert len(result.loc[result["population"] == "verified_case_context"]) == 1
     assert result.loc[result["population"] == "verified_case_context", "scan_time_utc"].iloc[0] == "2020-01-01T11:45:00Z"
+
+
+def test_baseline_metrics_include_train_fold_climatology():
+    import numpy as np
+    from scripts.train_baseline_model import evaluate
+    rows=[]
+    for i in range(6):
+        rows.append({'case_id':f'C{i}','split_group':f'case:C{i}','x':float(i),'y':int(i%2)})
+    frame=pd.DataFrame(rows)
+    oof, metrics, folds = evaluate(frame,['x'],'y')
+    assert np.isfinite(oof).all()
+    assert 'climatology' in metrics
+    assert metrics['climatology']['brier_score'] >= 0.0
