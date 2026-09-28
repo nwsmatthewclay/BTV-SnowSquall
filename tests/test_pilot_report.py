@@ -61,7 +61,9 @@ def test_pilot_report_renders_population_and_baseline_tables(tmp_path, monkeypat
             {
                 "training_rows": 10,
                 "training_groups": 5,
-                "metrics": {"auc_roc": 0.5, "average_precision": 0.2, "brier_score": 0.1},
+                "positive_case_group_count": 1,
+                "evaluation_status": "case_held_out_not_interpretable",
+                "metrics": {"auc_roc": None, "average_precision": None, "brier_score": 0.1},
             }
         ),
         encoding="utf-8",
@@ -97,3 +99,5 @@ def test_pilot_report_renders_population_and_baseline_tables(tmp_path, monkeypat
     assert "Winter null candidates" in html
     assert "30m" in html
     assert "98.4" in html
+    assert "Baseline readiness warning" in html
+    assert "case_held_out_not_interpretable" in html
