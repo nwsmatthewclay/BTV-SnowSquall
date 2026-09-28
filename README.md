@@ -35,7 +35,7 @@ The first model ladder is intentionally interpretable: logistic regression, rand
 
 The detector is deliberately permissive. It generates candidate precipitation objects; it does **not** decide whether they are snow squalls.
 
-Native Level-II volumes are retained so we can extract reflectivity intensity and gradients, object geometry and organization, velocity/kinematic signatures, echo-top and vertical depth, ZDR/RHOHV/KDP, and scan-to-scan growth, weakening, motion and structural change.
+Native Level-II volumes are retained so we can extract reflectivity intensity and gradients, object geometry and organization, lowest-sweep radial-velocity and dual-pol signatures, native multi-elevation vertical structure, and scan-to-scan growth, weakening, motion and structural change.
 
 ## Truth philosophy
 
