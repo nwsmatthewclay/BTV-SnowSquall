@@ -57,6 +57,7 @@ def cluster(df: pd.DataFrame, gap_minutes: int = 30) -> pd.DataFrame:
         .agg(
             warning_count=("event_id", "count"),
             first_warning_issue=("issue_dt", "min"),
+            episode_end=("expire_dt", "max"),
             last_warning_expire=("expire_dt", "max"),
             years=("year", lambda s: ",".join(sorted({str(int(x)) for x in s}))),
         )
