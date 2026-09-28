@@ -1,9 +1,4 @@
-"""Create leakage-safe future-outcome labels for reconstructed object scans.
-
-Event association is track-aware: an object track must enter the station
-association corridor during the verified event window before its observations
-can receive a positive event label.
-"""
+"""Create leakage-safe future-outcome labels for reconstructed object scans."""
 from __future__ import annotations
 
 import argparse
@@ -28,9 +23,7 @@ POST_EVENT_ASSOCIATION_MIN = 30
 def parse_time(value):
     if not value or pd.isna(value):
         return None
-    return datetime.fromisoformat(
-        str(value).replace("Z", "+00:00")
-    ).astimezone(timezone.utc)
+    return datetime.fromisoformat(str(value).replace("Z", "+00:00")).astimezone(timezone.utc)
 
 
 def distance_km(lat1, lon1, lat2, lon2):
@@ -48,6 +41,10 @@ def event_end(case):
     if start is None or duration is None or pd.isna(duration):
         return None
     return start + timedelta(minutes=float(duration))
+
+
+def _track_key(case_id, radar_site, object_id):
+    return (case_id, radar_site, object_id)
 
 
 def build_labels(df: pd.DataFrame, cases_csv: Path):
@@ -68,9 +65,6 @@ def build_labels(df: pd.DataFrame, cases_csv: Path):
     out["track_event_associated"] = False
     out["association_method"] = "track_station_event_corridor"
 
-    # Pre-compute the minimum station distance reached by each reconstructed
-    # object track during its event corridor. This prevents unrelated objects
-    # elsewhere in the same three-hour case window from becoming positives.
     association = {}
     for case_id, case in case_rows.items():
         station = getattr(case, "observing_station", None)
@@ -91,40 +85,46 @@ def build_labels(df: pd.DataFrame, cases_csv: Path):
             & out["centroid_lon"].notna()
         )
         candidate = out.loc[case_mask]
-        for object_id, track in candidate.groupby("object_id"):
+        group_cols = [c for c in ("radar_site", "object_id") if c in candidate.columns]
+        if not group_cols:
+            continue
+        for key_values, track in candidate.groupby(group_cols, dropna=False):
+            if not isinstance(key_values, tuple):
+                key_values = (key_values,)
+            radar_site, object_id = key_values
             distances = track.apply(
                 lambda r: distance_km(
-                    float(r["centroid_lat"]),
-                    float(r["centroid_lon"]),
-                    STATIONS[station][0],
-                    STATIONS[station][1],
+                    float(r["centroid_lat"]), float(r["centroid_lon"]),
+                    STATIONS[station][0], STATIONS[station][1],
                 ),
                 axis=1,
             )
             if not distances.empty:
-                association[(case_id, object_id)] = float(distances.min())
+                association[_track_key(case_id, radar_site, object_id)] = float(distances.min())
 
     for idx, row in out.iterrows():
         case_id = row.get("case_id")
+        radar_site = row.get("radar_site")
         object_id = row.get("object_id")
         if pd.isna(case_id) or case_id not in case_rows:
             continue
 
         case = case_rows[case_id]
         station = getattr(case, "observing_station", None)
-        if station not in STATIONS or pd.isna(row.get("centroid_lat")) or pd.isna(row.get("centroid_lon")):
+        if (
+            station not in STATIONS
+            or pd.isna(row.get("centroid_lat"))
+            or pd.isna(row.get("centroid_lon"))
+        ):
             continue
 
-        station_lat, station_lon = STATIONS[station]
         distance = distance_km(
-            float(row["centroid_lat"]),
-            float(row["centroid_lon"]),
-            station_lat,
-            station_lon,
+            float(row["centroid_lat"]), float(row["centroid_lon"]),
+            STATIONS[station][0], STATIONS[station][1],
         )
         out.at[idx, "case_station_distance_km"] = distance
 
-        track_distance = association.get((case_id, object_id))
+        track_distance = association.get(_track_key(case_id, radar_site, object_id))
         if track_distance is None:
             out.at[idx, "label_status"] = "unassociated_object"
             out.at[idx, "label_reason"] = "track_never_entered_event_association_corridor"
@@ -148,7 +148,7 @@ def build_labels(df: pd.DataFrame, cases_csv: Path):
                 out.at[idx, f"squall_onset_within_{horizon}m"] = 1
                 out.at[idx, f"label_confidence_{horizon}m"] = "verified_onset"
 
-            if end is not None and scan < end and end > scan and start <= scan:
+            if end is not None and scan < end and start <= scan:
                 out.at[idx, f"squall_ongoing_within_{horizon}m"] = 1
                 out.at[idx, f"label_confidence_{horizon}m"] = "verified_visibility_interval"
 
@@ -174,17 +174,12 @@ def main():
     parser.add_argument("--output", required=True)
     parser.add_argument("--cases", default="data/manifests/banacos_2014_cases.csv")
     args = parser.parse_args()
-
     df = pd.read_csv(args.input_csv)
     result = build_labels(df, Path(args.cases))
     result.to_csv(args.output, index=False)
-
     print(f"Wrote {len(result)} labeled object-timestep records to {args.output}")
     for horizon in HORIZONS:
-        print(
-            f"{horizon}m prospective positives:",
-            int(result[f"squall_onset_within_{horizon}m"].sum()),
-        )
+        print(f"{horizon}m prospective positives:", int(result[f"squall_onset_within_{horizon}m"].sum()))
     print("Track-associated object records:", int(result["track_event_associated"].sum()))
 
 
