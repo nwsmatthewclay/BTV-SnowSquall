@@ -135,6 +135,13 @@ jobs:
 
           printf 'BTV Snow Squall Historical Object Viewer\nResearch/pilot historical reconstruction only.\nNo production probability forecast is exposed.\n' > _site/README.txt
 
+      - name: Upload static viewer bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: snow-squall-historical-viewer-site
+          path: _site
+          if-no-files-found: error
+
       - name: Configure GitHub Pages
         uses: actions/configure-pages@v5
 
