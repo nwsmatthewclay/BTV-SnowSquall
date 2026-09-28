@@ -12,6 +12,7 @@ import matplotlib.pyplot as plt
 
 from acquisition.level2_reader import read_level2, resolve_fields, volume_metadata
 from processing.radar_grid import grid_field_2d, grid_lowest_sweep, grid_latlon
+from processing.radar_sites import radar_origin_for_site
 
 def parse_utc(value):
     return pd.to_datetime(value, utc=True, errors="coerce").to_pydatetime()
