@@ -19,24 +19,45 @@ FIELD_SPECS = {
     "v10_ms": ("heightAboveGround", "v", 10),
 }
 
+# NARR analyses are large GRIB files and many radar objects share the same
+# 3-hourly analysis. Keep the decoded field datasets alive and reuse them.
+# This changes performance only; it does not change the selected analysis.
+_DATASET_CACHE: dict[tuple[str, str, str, int | None], xr.Dataset] = {}
+
 
 def _open_field(path: Path, type_of_level: str, short_name: str, level=None):
+    key = (str(path.resolve()), type_of_level, short_name, level)
+    cached = _DATASET_CACHE.get(key)
+    if cached is not None:
+        return cached
+
     filters = {"typeOfLevel": type_of_level, "shortName": short_name}
     if level is not None:
         filters["level"] = level
-    return xr.open_dataset(
+
+    ds = xr.open_dataset(
         path,
         engine="cfgrib",
         backend_kwargs={"filter_by_keys": filters, "indexpath": ""},
     )
+    _DATASET_CACHE[key] = ds
+    return ds
+
+
+def clear_dataset_cache():
+    """Release cached NARR datasets; primarily useful for tests/workers."""
+    for ds in _DATASET_CACHE.values():
+        try:
+            ds.close()
+        except Exception:
+            pass
+    _DATASET_CACHE.clear()
 
 
 def _nearest(ds, latitude, longitude):
     if not ds.data_vars:
         return None
 
-    # cfgrib normally exposes 2-D latitude/longitude coordinates for the
-    # NARR Lambert grid. Prefer those so no hand-coded grid origin is needed.
     if "latitude" in ds.coords and "longitude" in ds.coords:
         lat = np.asarray(ds["latitude"].values, dtype=float)
         lon = np.asarray(ds["longitude"].values, dtype=float)
@@ -45,9 +66,9 @@ def _nearest(ds, latitude, longitude):
         ) ** 2
         idx = np.unravel_index(np.nanargmin(distance), distance.shape)
     elif "x" in ds.coords and "y" in ds.coords:
-        # Last-resort fallback for unusual cfgrib output. The normal NARR
-        # path should use latitude/longitude coordinates above.
         raise ValueError("NARR dataset lacks latitude/longitude coordinates")
+    else:
+        raise ValueError("NARR dataset lacks geographic coordinates")
 
     variable = next(iter(ds.data_vars))
     value = np.asarray(ds[variable].values)
@@ -74,13 +95,11 @@ def extract_features(
 
     for name, (level_type, short_name, level) in FIELD_SPECS.items():
         try:
-            with _open_field(path, level_type, short_name, level) as ds:
-                values[name] = _nearest(ds, latitude, longitude)
+            ds = _open_field(path, level_type, short_name, level)
+            values[name] = _nearest(ds, latitude, longitude)
         except Exception as exc:
             failures[name] = type(exc).__name__
 
-    # NARR supplies 2-m RH and temperature; derive dewpoint for the common
-    # schema rather than pretending a missing dewpoint field is observed.
     temp = values.get("temperature_2m_k")
     rh = values.get("rh_2m_pct")
     if temp is not None and rh is not None and rh > 0:
