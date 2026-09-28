@@ -4,6 +4,10 @@ concurrency:
 
 name: Object Dataset Pilot
 
+permissions:
+  actions: write
+  contents: read
+
 on:
   workflow_dispatch:
   push:
@@ -388,6 +392,7 @@ jobs:
         run: python scripts/audit_operational_readiness.py
 
       - name: Upload object dataset pilot
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: object-population-pilot
@@ -425,3 +430,10 @@ jobs:
             data/raw/NARR
             data/raw/RUC
             data/raw/RAP
+
+      - name: Dispatch historical viewer publication
+        if: success()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh workflow run "Publish Snow Squall Historical Viewer" --ref snow-squall-model-foundation
