@@ -1,0 +1,54 @@
+name: Snow Squall Pilot Label Diagnostic
+
+on:
+  push:
+    branches:
+      - snow-squall-model-foundation
+    paths:
+      - .github/diagnostic-trigger
+      - scripts/audit_pilot_labels.py
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Locate latest successful pilot
+        id: source
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          RUN=$(gh api "/repos/${GITHUB_REPOSITORY}/actions/runs?branch=snow-squall-model-foundation&per_page=100" |
+            jq -c '[.workflow_runs[] | select(.name=="Object Dataset Pilot" and .conclusion=="success")] | sort_by(.id) | reverse | .[0]')
+          test "${RUN}" != "null"
+          echo "run_id=$(printf '%s' "${RUN}" | jq -r '.id')" >> "${GITHUB_OUTPUT}"
+          echo "Using pilot run $(printf '%s' "${RUN}" | jq -r '.id')"
+
+      - name: Download completed pilot artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: object-population-pilot
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          repository: ${{ github.repository }}
+          run-id: ${{ steps.source.outputs.run_id }}
+          path: pilot_artifact
+
+      - name: Audit positive labels by case
+        run: |
+          python -m pip install pandas
+          python scripts/audit_pilot_labels.py             pilot_artifact/derived/positive_object_labeled.csv             --output pilot_label_distribution.json
+
+      - name: Upload compact diagnostic
+        uses: actions/upload-artifact@v4
+        with:
+          name: snow-squall-pilot-label-diagnostic
+          path: pilot_label_distribution.json
