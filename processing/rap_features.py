@@ -146,9 +146,9 @@ def extract_features(
         try:
             ds = _open_field(path, level_type, short_name, level)
             valid = _dataset_valid_time(ds) or expected_valid_time
-                if valid is not None:
-                    if valid > radar_time:
-                        raise ValueError(
+            if valid is not None:
+                if valid > radar_time:
+                    raise ValueError(
                         f"future RAP analysis {valid.isoformat()} > "
                         f"radar {radar_time.isoformat()}"
                     )
