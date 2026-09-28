@@ -333,6 +333,12 @@ jobs:
             --path data/derived/object_model_features_pilot.schema.json \
             --path data/derived/object_model_features_pilot.coverage.json
 
+      - name: Build event-level verification diagnostics
+        run: |
+          for horizon in 15 30 45 60; do
+            python scripts/build_event_level_verification.py data/derived/baseline_model_${horizon}m/oof_predictions.csv --target squall_onset_within_${horizon}m --output data/derived/event_level_pilot_${horizon}m.json
+          done
+
       - name: Audit training dataset
         run: |
           python scripts/audit_training_dataset.py             data/derived/object_model_features_pilot.csv
