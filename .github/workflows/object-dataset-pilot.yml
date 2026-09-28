@@ -93,6 +93,23 @@ jobs:
         run: |
           python scripts/reconstruct_pilot.py --input data/raw/null_level2 --output data/derived/null_object_scans.csv
 
+      - name: Audit radar reconstruction
+        run: |
+          python - <<'PY'
+          import pandas as pd
+          for name in ("positive", "null"):
+              path = f"data/derived/{name}_object_scans.csv"
+              errors = f"data/derived/{name}_object_scans_errors.csv"
+              d = pd.read_csv(path)
+              e = pd.read_csv(errors)
+              print(f"{name} object records:", len(d))
+              print(f"{name} reader backends:")
+              print(d["reader_backend"].value_counts(dropna=False).to_string())
+              print(f"{name} failed volumes:", len(e))
+              if not e.empty:
+                  print(e["error_type"].value_counts().to_string())
+          PY
+
       - name: Annotate positive case IDs
         run: |
           python scripts/annotate_object_population.py data/derived/positive_object_scans.csv --manifest data/manifests/banacos_positive_pilot.csv --output data/derived/positive_object_scans_annotated.csv
