@@ -75,6 +75,15 @@ def canonicalize_environment_fields(provider, fields):
 def extract_features(
     provider, path, latitude, longitude, radar_time, expected_valid_time
 ):
+    if expected_valid_time is not None:
+        radar_utc = radar_time.astimezone(timezone.utc)
+        valid_utc = expected_valid_time.astimezone(timezone.utc)
+        if valid_utc > radar_utc:
+            raise ValueError(
+                f"future {provider} environment analysis {valid_utc.isoformat()} > "
+                f"radar {radar_utc.isoformat()}"
+            )
+
     if provider == "NARR":
         result = extract_narr(
             path, latitude, longitude, radar_time, expected_valid_time
