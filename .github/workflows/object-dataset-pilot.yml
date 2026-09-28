@@ -163,8 +163,8 @@ jobs:
 
       - name: Build radar reconstruction audits
         run: |
-          python scripts/audit_radar_reconstruction.py             data/derived/positive_object_scans.csv             --errors data/derived/positive_object_scans_errors.csv             --report data/derived/positive_radar_reconstruction_audit.json
-          python scripts/audit_radar_reconstruction.py             data/derived/null_object_scans.csv             --errors data/derived/null_object_scans_errors.csv             --report data/derived/null_radar_reconstruction_audit.json
+          python scripts/audit_radar_reconstruction.py             data/derived/positive_object_scans.csv             --errors data/derived/positive_object_scans_errors.csv             --input-root data/raw/positive_level2             --max-failure-rate 0.20             --report data/derived/positive_radar_reconstruction_audit.json
+          python scripts/audit_radar_reconstruction.py             data/derived/null_object_scans.csv             --errors data/derived/null_object_scans_errors.csv             --input-root data/raw/null_level2             --max-failure-rate 0.20             --report data/derived/null_radar_reconstruction_audit.json
 
       - name: Annotate positive case IDs
         run: |
