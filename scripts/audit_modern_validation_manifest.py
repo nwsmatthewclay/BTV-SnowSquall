@@ -20,6 +20,7 @@ REQUIRED = {
     "truth_role",
     "independence_status",
     "evidence_source",
+    "source_url",
 }
 
 ALLOWED_RADARS = {"KCXX", "KTYX"}
@@ -42,8 +43,16 @@ def audit(path: Path) -> dict:
         issues.append("candidate_not_marked_independent")
     if df["event_date_utc"].isna().any():
         issues.append("missing_event_date")
+    else:
+        parsed_dates = pd.to_datetime(df["event_date_utc"], errors="coerce", utc=True)
+        if parsed_dates.isna().any():
+            issues.append("invalid_event_date")
     if df["evidence_source"].isna().any() or df["evidence_source"].eq("").any():
         issues.append("missing_evidence_source")
+    if df["source_url"].isna().any() or df["source_url"].astype(str).str.strip().eq("").any():
+        issues.append("missing_source_url")
+    elif (~df["source_url"].astype(str).str.startswith(("http://", "https://"))).any():
+        issues.append("invalid_source_url")
 
     summary = {
         "records": int(len(df)),
