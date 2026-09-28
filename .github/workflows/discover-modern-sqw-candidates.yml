@@ -47,6 +47,10 @@ jobs:
         run: |
           python scripts/cluster_modern_sqw_candidates.py             --input data/derived/modern_sqw_candidate_review.csv             --output data/derived/modern_sqw_candidate_episodes.csv
 
+      - name: Build independent validation sampling frame
+        run: |
+          python scripts/build_modern_validation_sampling_frame.py             --input data/derived/modern_sqw_candidate_episodes.csv             --output data/derived/modern_validation_sampling_frame.csv
+
       - name: Upload candidate review table
         uses: actions/upload-artifact@v4
         with:
@@ -54,4 +58,5 @@ jobs:
           path: |
             data/derived/modern_sqw_candidate_review.csv
             data/derived/modern_sqw_candidate_episodes.csv
+            data/derived/modern_validation_sampling_frame.csv
           if-no-files-found: error
