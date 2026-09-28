@@ -320,6 +320,19 @@ jobs:
             python scripts/train_baseline_model.py               data/derived/object_model_features_pilot.csv               --schema data/derived/object_model_features_pilot.schema.json               --target squall_onset_within_${horizon}m               --output-dir data/derived/baseline_model_${horizon}m
           done
 
+      - name: Summarize baseline horizon verification
+        run: |
+          python scripts/summarize_baseline_horizons.py --root data/derived --output data/derived/baseline_horizon_summary.json
+
+      - name: Build release reproducibility manifest
+        run: |
+          python scripts/build_release_manifest.py \
+            --output data/derived/release_manifest.json \
+            --path data/manifests \
+            --path data/derived/baseline_horizon_summary.json \
+            --path data/derived/object_model_features_pilot.schema.json \
+            --path data/derived/object_model_features_pilot.coverage.json
+
       - name: Audit training dataset
         run: |
           python scripts/audit_training_dataset.py             data/derived/object_model_features_pilot.csv
