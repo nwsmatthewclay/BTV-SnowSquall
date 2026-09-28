@@ -47,7 +47,8 @@ jobs:
           CANDIDATE=""
           while IFS= read -r RUN; do
             SHA=$(printf '%s' "${RUN}" | jq -r '.head_sha')
-            if git merge-base --is-ancestor "${MIN_DATASET_SHA}" "${SHA}"; then
+            STATUS=$(gh api "/repos/${GITHUB_REPOSITORY}/compare/${MIN_DATASET_SHA}...${SHA}" -q '.status')
+            if [ "${STATUS}" = "ahead" ] || [ "${SHA}" = "${MIN_DATASET_SHA}" ]; then
               CANDIDATE="${RUN}"
               break
             fi
