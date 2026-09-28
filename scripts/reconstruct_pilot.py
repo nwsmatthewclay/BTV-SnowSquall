@@ -111,6 +111,7 @@ def process_volume(path: Path, tracker: CentroidTracker, radar_origin=None):
                 float(obj["centroid_lat"]),
                 float(obj["centroid_lon"]),
                 reflectivity,
+                radar_origin=radar_origin,
             )
             obj.update(vertical)
 
