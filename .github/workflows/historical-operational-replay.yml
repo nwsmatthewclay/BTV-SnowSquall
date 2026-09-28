@@ -1,0 +1,97 @@
+name: Historical Operational Replay Validation
+
+on:
+  workflow_dispatch:
+    inputs:
+      case_id:
+        description: "Historical case ID to replay"
+        required: true
+      radar_site:
+        description: "Radar site"
+        required: false
+        default: "KCXX"
+        type: choice
+        options: [KCXX, KTYX]
+      max_scans:
+        description: "Maximum scans for smoke test (blank = all available)"
+        required: false
+        default: ""
+      match_radius_km:
+        description: "Research/replay centroid match radius in km"
+        required: false
+        default: "15"
+
+jobs:
+  replay:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      PYTHONPATH: ${{ github.workspace }}
+      PYTHONUNBUFFERED: "1"
+
+    steps:
+      - name: Check out branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt -r requirements-science.txt
+
+      - name: Resolve historical case window
+        env:
+          CASE_ID: ${{ inputs.case_id }}
+          RADAR: ${{ inputs.radar_site }}
+        run: |
+          python - <<'PY'
+          import pandas as pd
+          import os
+          cases = pd.read_csv("data/manifests/banacos_2014_cases.csv")
+          windows = pd.read_csv("data/manifests/banacos_radar_windows.csv")
+          case = cases[cases["case_id"].astype(str) == os.environ["CASE_ID"]]
+          assert len(case) == 1, "Unknown case_id"
+          window = windows[
+              (windows["case_id"].astype(str) == os.environ["CASE_ID"])
+              & (windows["radar_site"].astype(str) == os.environ["RADAR"])
+          ]
+          assert len(window) >= 1, "No radar window for requested case/radar"
+          print(window[["case_id","radar_site","window_start_utc","window_end_utc"]].to_string(index=False))
+          PY
+
+      - name: Download archived Level-II window
+        run: |
+          python acquisition/historical_level2.py             --manifest data/manifests/banacos_radar_windows.csv             --case-id "${{ inputs.case_id }}"             --radar-site "${{ inputs.radar_site }}"             --output data/raw/replay_level2
+
+      - name: Build research reconstruction
+        run: |
+          python scripts/reconstruct_pilot.py             --input data/raw/replay_level2             --output data/derived/research_replay_objects.csv             --error-log data/derived/research_replay_errors.csv
+
+      - name: Run operational replay
+        run: |
+          ARGS=""
+          if [ -n "${{ inputs.max_scans }}" ]; then
+            ARGS="--max-scans ${{ inputs.max_scans }}"
+          fi
+          python scripts/historical_operational_replay.py             --case-id "${{ inputs.case_id }}"             --input-dir data/raw/replay_level2             --output-dir data/derived/operational_replay             --state-path data/derived/operational_replay/state.json             $ARGS
+
+      - name: Compare research and operational paths
+        run: |
+          python scripts/compare_research_operational_replay.py             --research data/derived/research_replay_objects.csv             --replay-dir data/derived/operational_replay             --match-radius-km ${{ inputs.match_radius_km }}             --output data/derived/research_vs_operational_replay.json
+
+      - name: Upload replay validation package
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: historical-operational-replay-${{ inputs.case_id }}-${{ inputs.radar_site }}
+          path: |
+            data/derived/research_replay_objects.csv
+            data/derived/research_replay_errors.csv
+            data/derived/operational_replay/
+            data/derived/research_vs_operational_replay.json
