@@ -265,6 +265,10 @@ jobs:
           )
           PY
 
+      - name: Audit realized feature coverage
+        run: |
+          python scripts/audit_feature_coverage.py             data/derived/object_model_features_pilot.csv             --schema schema/feature_schema.csv             --output data/derived/object_model_features_pilot.coverage.json
+
       - name: Train case-held-out baseline models
         run: |
           for horizon in 15 30 45 60; do
@@ -315,6 +319,7 @@ jobs:
             data/derived/object_population_pilot.csv
             data/derived/object_model_features_pilot.csv
             data/derived/object_model_features_pilot.schema.json
+            data/derived/object_model_features_pilot.coverage.json
             data/derived/baseline_model_*m
             data/derived/pilot_report.html
             data/raw/ASOS_IEM
