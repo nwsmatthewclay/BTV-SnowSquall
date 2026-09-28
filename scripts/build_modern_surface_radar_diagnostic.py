@@ -51,7 +51,39 @@ def build(surface_file: Path, replay_case: Path, output_csv: Path) -> dict:
             (radar["radar_time"] - obs.valid).abs() <= pd.Timedelta(minutes=10)
         ].copy()
         if candidates.empty:
-            rows.append({
+            nearby = radar[
+                (radar["radar_time"] - obs.valid).abs() <= pd.Timedelta(minutes=60)
+            ].copy()
+            if nearby.empty:
+                rows.append({
+                    "observation_time_utc": obs.valid.isoformat(),
+                    "visibility_mi": getattr(obs, "visibility_mi", None),
+                    "wind_gust_kt": getattr(obs, "wind_gust_kt", None),
+                    "wxcodes": getattr(obs, "wxcodes", None),
+                    "radar_match_status": "no_radar_object_within_60min",
+                })
+            else:
+                nearby["distance_km"] = nearby.apply(
+                    lambda r: distance_km(obs.lat, obs.lon, r.lat, r.lon), axis=1
+                )
+                fallback = nearby.sort_values(["distance_km", "radar_time"]).iloc[0]
+                rows.append({
+                    "observation_time_utc": obs.valid.isoformat(),
+                    "visibility_mi": getattr(obs, "visibility_mi", None),
+                    "wind_gust_kt": getattr(obs, "wind_gust_kt", None),
+                    "wxcodes": getattr(obs, "wxcodes", None),
+                    "radar_match_status": "nearby_but_not_local_within_60min",
+                    "radar_time_utc": fallback.radar_time.isoformat(),
+                    "radar_time_offset_minutes": (fallback.radar_time - obs.valid).total_seconds() / 60.0,
+                    "radar_track_id": fallback.track_id,
+                    "radar_distance_km": float(fallback.distance_km),
+                    "radar_max_reflectivity_dbz": fallback.max_reflectivity_dbz,
+                    "radar_area_km2": fallback.area_km2,
+                    "radar_motion_speed_kt": fallback.motion_speed_kt,
+                })
+            continue
+
+        rows.append({
                 "observation_time_utc": obs.valid.isoformat(),
                 "visibility_mi": getattr(obs, "visibility_mi", None),
                 "wind_gust_kt": getattr(obs, "wind_gust_kt", None),
