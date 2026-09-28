@@ -12,7 +12,7 @@ import pyart
 
 def grid_lowest_sweep(
     radar,
-    field_name: str,
+    field_name: str | list[str],
     *,
     origin_lat: float | None = None,
     origin_lon: float | None = None,
@@ -29,10 +29,12 @@ def grid_lowest_sweep(
     half_m = grid_size_km * 1000.0
     spacing_m = spacing_km * 1000.0
 
+    fields = [field_name] if isinstance(field_name, str) else list(field_name)
+    fields = list(dict.fromkeys(fields))
     kwargs = {
         "grid_shape": (1, n, n),
         "grid_limits": ((0.0, 0.0), (-half_m, half_m), (-half_m, half_m)),
-        "fields": [field_name],
+        "fields": fields,
         "gridding_algo": "map_gates_to_grid",
         "roi_func": "dist_beam",
         "min_radius": max(750.0, spacing_m * 1.5),
