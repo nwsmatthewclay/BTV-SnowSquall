@@ -30,3 +30,24 @@ def test_choose_case_rejects_distant_scan():
     ]).set_index("case_id")
 
     assert choose_case(datetime(2026, 1, 1, 5, 0, tzinfo=timezone.utc), cases) is None
+
+def test_environment_fields_are_canonicalized():
+    from processing.environment import canonicalize_environment_fields
+
+    result = canonicalize_environment_fields(
+        "RAP",
+        {
+            "cape_jkg": 120.0,
+            "cin_jkg": -40.0,
+            "shear_0_6km_ms": 10.0,
+            "visibility_m": 1609.344,
+            "temperature_2m_k": 270.0,
+        },
+    )
+
+    assert result["sbcape_jkg"] == 120.0
+    assert result["sbcin_jkg"] == -40.0
+    assert result["shear_0_6km_kt"] > 19.4
+    assert result["visibility_sm"] == 1.0
+    assert result["temperature_2m_k"] == 270.0
+
