@@ -32,14 +32,23 @@ def build_null_windows(
 ):
     cases = pd.read_csv(cases_csv)
     cases["event_start_utc"] = _utc(cases["event_start_utc"])
-    positive_times = cases["event_start_utc"].dropna().sort_values()
+    cases["event_end_utc"] = cases["event_start_utc"]
+
+    # Exclude the full documented visibility-impact interval, not only the
+    # published onset. This reduces contamination from the same radar event
+    # before/after its minimum-visibility time.
+    if "vis_below_0p8_min" in cases.columns:
+        duration = pd.to_numeric(cases["vis_below_0p8_min"], errors="coerce").fillna(0)
+        cases["event_end_utc"] = cases["event_start_utc"] + pd.to_timedelta(duration, unit="min")
+
+    positive_intervals = cases[["event_start_utc", "event_end_utc"]].dropna()
 
     excluded = [
         (
-            t - pd.Timedelta(minutes=exclusion_before_minutes),
-            t + pd.Timedelta(minutes=exclusion_after_minutes),
+            row.event_start_utc - pd.Timedelta(minutes=exclusion_before_minutes),
+            row.event_end_utc + pd.Timedelta(minutes=exclusion_after_minutes),
         )
-        for t in positive_times
+        for row in positive_intervals.itertuples(index=False)
     ]
 
     all_times = pd.date_range(
