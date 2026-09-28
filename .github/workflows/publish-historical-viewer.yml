@@ -4,16 +4,11 @@ on:
   workflow_run:
     workflows:
       - Object Dataset Pilot
+      - Object Dataset Full Expansion
     types:
       - completed
-      - Object Dataset Full Expansion
     branches:
       - snow-squall-model-foundation
-  workflow_dispatch:
-    inputs:
-      source_run_id:
-        description: "Completed Object Dataset Pilot/Expansion run ID"
-        required: true
 
 permissions:
   contents: read
@@ -27,9 +22,7 @@ concurrency:
 
 jobs:
   publish:
-    if: >
-      (github.event_name == 'workflow_dispatch') ||
-      (github.event.workflow_run.conclusion == 'success')
+    if: github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     environment:
       name: github-pages
@@ -39,25 +32,15 @@ jobs:
       - name: Checkout viewer source
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event_name == 'workflow_dispatch' && github.ref || github.event.workflow_run.head_sha }}
-
-      - name: Resolve source run
-        id: source
-        shell: bash
-        run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            echo "run_id=${{ inputs.source_run_id }}" >> "${GITHUB_OUTPUT}"
-          else
-            echo "run_id=${{ github.event.workflow_run.id }}" >> "${GITHUB_OUTPUT}"
-          fi
+          ref: ${{ github.event.workflow_run.head_sha }}
 
       - name: Download source dataset artifact
         uses: actions/download-artifact@v4
         with:
-          name: object-population-pilot
+          name: ${{ github.event.workflow_run.name == 'Object Dataset Full Expansion' && 'object-population-expansion' || 'object-population-pilot' }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
           repository: ${{ github.repository }}
-          run-id: ${{ steps.source.outputs.run_id }}
+          run-id: ${{ github.event.workflow_run.id }}
           path: pilot_artifact
 
       - name: Assemble viewer site
@@ -67,9 +50,15 @@ jobs:
           mkdir -p _site
           cp viewer/index.html viewer/app.js viewer/style.css _site/
           python -m py_compile scripts/build_static_viewer.py
-          python scripts/build_static_viewer.py             --objects pilot_artifact/data/derived/positive_object_labeled.csv             --cases pilot_artifact/data/manifests/banacos_positive_pilot.csv             --output-dir _site
 
-          # Keep the viewer clearly labeled as research/pilot data.
+          if [ "${{ github.event.workflow_run.name }}" = "Object Dataset Full Expansion" ]; then
+            CASES="pilot_artifact/data/manifests/banacos_2014_cases.csv"
+          else
+            CASES="pilot_artifact/data/manifests/banacos_positive_pilot.csv"
+          fi
+
+          python scripts/build_static_viewer.py             --objects pilot_artifact/data/derived/positive_object_labeled.csv             --cases "${CASES}"             --output-dir _site
+
           cat > _site/README.txt <<'EOF'
           BTV Snow Squall Historical Object Viewer
           Research/pilot historical reconstruction only.
