@@ -56,6 +56,7 @@ def main():
                 continue
 
             radar_origin = radar_origin_for_site(radar_name)
+            apply_radar_origin(radar, radar_origin)
             grid=grid_lowest_sweep(
                 radar,
                 field,
