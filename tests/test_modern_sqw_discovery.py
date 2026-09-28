@@ -37,3 +37,4 @@ def test_sqw_warning_products_cluster_into_episodes():
     assert len(result) == 2
     assert result.iloc[0]["warning_count"] == 2
     assert result.iloc[1]["warning_count"] == 1
+    assert result.iloc[0]["episode_end"] == pd.Timestamp("2024-01-01T13:25:00Z")
