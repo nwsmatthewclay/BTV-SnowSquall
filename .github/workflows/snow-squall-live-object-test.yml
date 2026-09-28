@@ -51,6 +51,11 @@ jobs:
           assert "last_scan_time_utc" in state
           assert geo["type"] == "FeatureCollection"
           assert geo["metadata"]["probability_status"] == "not_scored"
+          for feature in geo.get("features", []):
+              props = feature["properties"]
+              for field in ("length_km", "width_km", "aspect_ratio", "motion_direction_deg", "reflectivity_trend_dbz_per_hr", "area_growth_fraction", "environment_status"):
+                  assert field in props
+          print("Diagnostic schema validation: PASS")
           PY
 
       - name: Upload live object products
