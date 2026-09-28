@@ -9,8 +9,10 @@ import pandas as pd
 
 from processing.environment import provider_for_time
 
+DEFAULT_MAX_AGE_MINUTES = {"NARR": 360.0, "RUC": 180.0, "RAP": 180.0}
 
-def audit(path: Path, max_age_minutes: float = 180.0) -> dict:
+
+def audit(path: Path, max_age_minutes: float | None = None) -> dict:
     df = pd.read_csv(path)
     required = {"scan_time_utc", "environment_valid_time_utc", "environment_source"}
     missing = sorted(required - set(df.columns))
@@ -22,13 +24,17 @@ def audit(path: Path, max_age_minutes: float = 180.0) -> dict:
     attached = valid.notna() & df["environment_source"].notna()
 
     future_rows = attached & (valid > scan)
-    stale_rows = attached & (((scan - valid).dt.total_seconds() / 60.0) > max_age_minutes)
+    ages = (scan - valid).dt.total_seconds() / 60.0
+    stale_rows = pd.Series(False, index=df.index)
     bad_provider = []
     for idx in df.index[attached]:
         expected = provider_for_time(scan.loc[idx].to_pydatetime())
         actual = str(df.loc[idx, "environment_source"])
         if actual != expected:
             bad_provider.append(int(idx))
+        limit = float(max_age_minutes) if max_age_minutes is not None else DEFAULT_MAX_AGE_MINUTES[expected]
+        if float(ages.loc[idx]) > limit:
+            stale_rows.loc[idx] = True
 
     summary = {
         "records": int(len(df)),
@@ -54,7 +60,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("input_csv")
     parser.add_argument("--report", required=True)
-    parser.add_argument("--max-age-minutes", type=float, default=180.0)
+    parser.add_argument("--max-age-minutes", type=float, default=None)
     args = parser.parse_args()
 
     summary = audit(Path(args.input_csv), max_age_minutes=args.max_age_minutes)
