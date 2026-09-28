@@ -13,7 +13,7 @@ on:
         default: "42"
 
 concurrency:
-  group: object-dataset-expansion-\${{ github.ref }}
+  group: object-dataset-expansion-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -194,6 +194,10 @@ jobs:
             --rap-dir data/raw/RAP \
             --ruc-dir data/raw/RUC
 
+      - name: Audit positive environment attachment
+        run: |
+          python scripts/audit_environment_attachment.py data/derived/positive_object_environment.csv --report data/derived/positive_environment_audit.json
+
       - name: Label positive outcomes
         run: |
           python scripts/label_historical_outcomes.py \
@@ -219,6 +223,10 @@ jobs:
             --output data/derived/null_object_environment.csv \
             --rap-dir data/raw/RAP \
             --ruc-dir data/raw/RUC
+
+      - name: Audit null environment attachment
+        run: |
+          python scripts/audit_environment_attachment.py data/derived/null_object_environment.csv --report data/derived/null_environment_audit.json
 
       - name: Build track catalogs
         run: |
@@ -256,6 +264,14 @@ jobs:
               --target squall_onset_within_\${horizon}m \
               --output-dir data/derived/baseline_expansion_\${horizon}m
           done
+
+      - name: Summarize baseline horizon verification
+        run: |
+          python scripts/summarize_baseline_horizons.py --root data/derived --output data/derived/baseline_horizon_summary.json
+
+      - name: Build release reproducibility manifest
+        run: |
+          python scripts/build_release_manifest.py --output data/derived/release_manifest.json --path data/manifests --path data/derived/baseline_horizon_summary.json --path data/derived/object_model_features_expansion.schema.json --path data/derived/object_model_features_expansion.coverage.json
 
       - name: Audit training dataset
         run: |
@@ -303,6 +319,8 @@ jobs:
             data/derived/null_object_scans.csv
             data/derived/null_object_scans_errors.csv
             data/derived/null_radar_reconstruction_audit.json
+            data/derived/positive_environment_audit.json
+            data/derived/null_environment_audit.json
             data/derived/null_object_scans_annotated.csv
             data/derived/null_object_environment.csv
             data/derived/null_object_tracks.csv
@@ -311,6 +329,8 @@ jobs:
             data/derived/object_model_features_expansion.schema.json
             data/derived/object_model_features_expansion.coverage.json
             data/derived/baseline_expansion_*m
+            data/derived/baseline_horizon_summary.json
+            data/derived/release_manifest.json
             data/derived/surface_truth_audit.csv
             data/derived/surface_truth_audit.json
             data/raw/ASOS_IEM
