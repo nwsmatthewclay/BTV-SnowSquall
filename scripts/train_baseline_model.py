@@ -210,8 +210,8 @@ def main():
         "training_rows": int(len(data)),
         "training_groups": int(data["split_group"].nunique()),
         "training_class_counts": {
-            "positive": int(data[target].sum()),
-            "negative": int((1 - data[target]).sum()),
+            "positive": int(data[args.target].sum()),
+            "negative": int((1 - data[args.target]).sum()),
         },
         "fold_status_counts": fold_status_counts,
         "metrics": metrics,
