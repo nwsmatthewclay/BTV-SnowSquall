@@ -41,17 +41,19 @@ def test_baseline_excludes_post_onset_case_rows():
                 "verified_case_context",
                 "verified_case_context",
                 "winter_null_candidate",
+                "winter_null_candidate",
             ],
-            "case_id": ["CASE1", "CASE1", None],
-            "null_id": [None, None, "NULL0001"],
-            "track_event_associated": [True, True, False],
+            "case_id": ["CASE1", "CASE1", None, None],
+            "null_id": [None, None, "NULL0001", "NULL0002"],
+            "track_event_associated": [True, True, False, False],
             "label_status": [
                 "prospective_positive",
                 "verified_event_interval",
                 "unknown",
+                "unknown",
             ],
-            "squall_onset_within_15m": [1, 0, 0],
-            "max_reflectivity_dbz": [30.0, 45.0, 10.0],
+            "squall_onset_within_15m": [1, 0, 0, 0],
+            "max_reflectivity_dbz": [30.0, 45.0, 10.0, 12.0],
         }
     )
     schema = {
