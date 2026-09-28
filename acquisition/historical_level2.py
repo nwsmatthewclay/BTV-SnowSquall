@@ -44,6 +44,8 @@ def list_volume_keys(client, radar: str, day: datetime) -> list[str]:
 
 
 def key_time(key: str) -> datetime | None:
+    if Path(key).name.endswith("_MDM"):
+        return None
     match = FILENAME_RE.match(Path(key).name)
     if not match:
         return None
