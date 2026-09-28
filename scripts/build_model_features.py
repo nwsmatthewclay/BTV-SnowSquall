@@ -41,6 +41,12 @@ NON_PREDICTOR_COLUMNS = TARGET_COLUMNS | {
     "lead_time_min",
     # Official SQW intersection is truth/evidence metadata, not a model input.
     "sqw_intersection",
+    # Surface observations are independent truth/QC inputs in v1, not
+    # forecast-time predictors. They describe what happened at/after the event.
+    "surface_observation",
+    "visibility_sm",
+    "snow_observed",
+    "wind_gust_kt",
     "scan_time_utc", "source_file", "radar_site", "object_id",
     "population", "population_id", "population_source", "truth_status",
     "case_id", "null_id", "window_id", "source_study", "dataset_version",
