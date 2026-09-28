@@ -111,6 +111,11 @@ jobs:
             --manifest data/manifests/banacos_null_full.csv \
             --output data/raw/null_level2
 
+      - name: Audit native Level-II fields
+        run: |
+          python scripts/audit_level2_fields.py --input data/raw/positive_level2 --output data/derived/positive_level2_field_audit.json --limit 80
+          python scripts/audit_level2_fields.py --input data/raw/null_level2 --output data/derived/null_level2_field_audit.json --limit 80
+
       - name: Reconstruct positive objects
         run: |
           python scripts/reconstruct_pilot.py \
@@ -251,6 +256,7 @@ jobs:
             --positive-radar-audit data/derived/positive_radar_reconstruction_audit.json \
             --null-radar-audit data/derived/null_radar_reconstruction_audit.json \
             --baseline-root data/derived \
+            --coverage data/derived/object_model_features_expansion.coverage.json \
             --output data/derived/expansion_report.html
 
       - name: Run tests
@@ -286,4 +292,6 @@ jobs:
             data/derived/surface_truth_audit.json
             data/raw/ASOS_IEM
             data/derived/expansion_report.html
+            data/derived/positive_level2_field_audit.json
+            data/derived/null_level2_field_audit.json
             data/derived/viewer
