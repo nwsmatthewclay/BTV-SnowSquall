@@ -52,3 +52,39 @@ def test_surface_audit_finds_timing(tmp_path):
     assert len(result) == 1
     assert result.loc[0, "surface_timing_consistent"]
     assert result.loc[0, "maximum_peak_wind_gust_kt"] == 31
+
+
+def test_iem_request_retries_transient_503(monkeypatch):
+    import requests
+    import pandas as pd
+    from acquisition import asos_iem
+
+    calls = {"n": 0}
+
+    class FakeResponse:
+        def raise_for_status(self):
+            if calls["n"] < 2:
+                raise requests.HTTPError(
+                    "503 Server Error",
+                    response=type("R", (), {"status_code": 503})(),
+                )
+
+        text = (
+            "station,valid,vsby,sknt,gust\n"
+            "KBTV,2010-11-27 17:00,1.0,15,25\n"
+        )
+
+    def fake_get(*args, **kwargs):
+        calls["n"] += 1
+        return FakeResponse()
+
+    monkeypatch.setattr(asos_iem.requests, "get", fake_get)
+    monkeypatch.setattr(asos_iem.time, "sleep", lambda _: None)
+
+    result = asos_iem.request_observations(
+        "KBTV",
+        pd.Timestamp("2010-11-27T16:00:00Z"),
+        pd.Timestamp("2010-11-27T18:00:00Z"),
+    )
+    assert calls["n"] == 3
+    assert len(result) == 1
