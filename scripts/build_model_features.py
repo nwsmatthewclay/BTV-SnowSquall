@@ -97,10 +97,10 @@ def build_features(frame: pd.DataFrame) -> pd.DataFrame:
         if col in df.columns:
             numeric = pd.to_numeric(df[col], errors="coerce")
             prev = pd.to_numeric(g[col].shift(1), errors="coerce")
-            df[f"{col}_delta"] = numeric - prev
+            df[f"{col}_delta"] = (numeric - prev).where(continuity_ok)
             df[f"{col}_rate_per_min"] = (
                 (numeric - prev) / dt_min.replace(0, np.nan)
-            )
+            ).where(continuity_ok)
 
     if {"centroid_lat", "centroid_lon"}.issubset(df.columns):
         prev_lat = g["centroid_lat"].shift(1)
@@ -111,8 +111,10 @@ def build_features(frame: pd.DataFrame) -> pd.DataFrame:
             pd.to_numeric(df["centroid_lat"], errors="coerce"),
             pd.to_numeric(df["centroid_lon"], errors="coerce"),
         )
-        df["centroid_displacement_km"] = displacement
-        df["motion_speed_kmh"] = displacement / dt_min.replace(0, np.nan) * 60.0
+        df["centroid_displacement_km"] = displacement.where(continuity_ok)
+        df["motion_speed_kmh"] = (
+            displacement / dt_min.replace(0, np.nan) * 60.0
+        ).where(continuity_ok)
 
     for col in [
         "max_reflectivity_dbz", "mean_reflectivity_dbz", "area_km2",
