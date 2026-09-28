@@ -18,6 +18,8 @@ from acquisition.level2_reader import read_level2, resolve_fields, volume_metada
 from processing.object_detector import detect_reflectivity_objects
 from processing.object_tracker import CentroidTracker
 from processing.radar_grid import grid_field_2d, grid_latlon, grid_lowest_sweep
+from acquisition.rap_environment import acquire_for_radar_time
+from processing.rap_features import extract_features
 
 
 def object_geometry(mask, lat, lon, spacing_km=1.0):
@@ -135,6 +137,13 @@ def process_volume(path: Path, state_path: Path, output_path: Path):
     if not timestamp:
         raise RuntimeError("Unable to determine radar scan time")
 
+    radar_dt = datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
+    rap_result = None
+    try:
+        rap_result = acquire_for_radar_time(radar_dt)
+    except Exception as exc:
+        print(f"RAP acquisition warning: {type(exc).__name__}: {exc}")
+
     tracked = tracker.update(timestamp, detections)
 
     features = []
@@ -212,6 +221,21 @@ def process_volume(path: Path, state_path: Path, output_path: Path):
             "area_km2": area_km2,
         }
 
+        environment = {"status": "unavailable", "source": "RAP", "fields": {}}
+        if rap_result is not None and centroid_lat is not None and centroid_lon is not None:
+            rap_match, rap_path = rap_result
+            try:
+                environment = extract_features(
+                    rap_path, centroid_lat, centroid_lon, radar_dt
+                )
+            except Exception as exc:
+                environment = {
+                    "source": "RAP",
+                    "status": "error",
+                    "error": f"{type(exc).__name__}: {exc}",
+                    "fields": {},
+                }
+
         features.append({
             "track_id": track_key,
             "timestamp": timestamp,
@@ -241,7 +265,8 @@ def process_volume(path: Path, state_path: Path, output_path: Path):
             "probability_60min": None,
             "probability_trend": "unknown",
             "drivers": [],
-            "environment_status": "not_attached",
+            "environment_status": environment.get("status", "unavailable"),
+            "environment": environment,
             "data_quality": "good",
             "model_version": "live-object-foundation-v2",
         })
@@ -262,7 +287,10 @@ def process_volume(path: Path, state_path: Path, output_path: Path):
             "fields": fields,
             "object_count": len(features),
             "probability_status": "not_scored",
-            "environment_status": "not_attached",
+            "environment_status": (
+                "attached" if rap_result is not None else "unavailable"
+            ),
+            "environment_source": "RAP",
         },
     }
 
