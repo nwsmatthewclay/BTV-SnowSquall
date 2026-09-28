@@ -20,6 +20,7 @@ from processing.object_tracker import CentroidTracker
 from processing.radar_grid import grid_field_2d, grid_latlon, grid_lowest_sweep
 from acquisition.rap_environment import acquire_for_radar_time
 from processing.rap_features import extract_features
+from processing.radar_sites import apply_radar_origin, radar_origin_for_site
 
 
 def object_geometry(mask, lat, lon, spacing_km=1.0):
@@ -33,6 +34,13 @@ def object_geometry(mask, lat, lon, spacing_km=1.0):
     hull = MultiPoint(points).convex_hull
     if hull.is_empty:
         return None, float(len(xx) * spacing_km**2)
+
+    # The live-product contract is GeoJSON Polygon. Thin/degenerate footprints
+    # can otherwise yield a Point or LineString.
+    if hull.geom_type != "Polygon":
+        center = hull.centroid
+        radius_deg = max(0.0025, float(spacing_km) / 111.0 / 2.0)
+        hull = center.buffer(radius_deg, resolution=8)
 
     return hull.__geo_interface__, float(len(xx) * spacing_km**2)
 
@@ -116,6 +124,18 @@ def process_volume(path: Path, state_path: Path, output_path: Path):
         return False
 
     radar = read_level2(path)
+    preliminary_meta = volume_metadata(radar, path)
+    radar_site = preliminary_meta.get("radar_id")
+    if not radar_site:
+        for candidate in path.parts:
+            if len(candidate) == 4 and candidate.upper().isalnum():
+                radar_site = candidate.upper()
+                break
+
+    radar_origin = radar_origin_for_site(radar_site)
+    if radar_origin is not None:
+        apply_radar_origin(radar, radar_origin)
+
     fields = resolve_fields(radar)
     reflectivity = fields.get("reflectivity")
     if reflectivity is None:
@@ -132,6 +152,7 @@ def process_volume(path: Path, state_path: Path, output_path: Path):
 
     detections = detect_reflectivity_objects(data)
     metadata = volume_metadata(radar, path)
+    metadata["radar_origin"] = list(radar_origin) if radar_origin is not None else None
     timestamp = metadata["scan_time_utc"]
 
     if not timestamp:
@@ -295,6 +316,7 @@ def process_volume(path: Path, state_path: Path, output_path: Path):
                 "attached" if rap_result is not None else "unavailable"
             ),
             "environment_source": "RAP",
+            "radar_origin": list(radar_origin) if radar_origin is not None else None,
         },
     }
 
