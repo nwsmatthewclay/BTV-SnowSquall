@@ -67,6 +67,7 @@ def audit(input_csv: Path, schema_csv: Path) -> dict:
         .agg(
             fields=("field", "count"),
             fields_present=("present", "sum"),
+            fields_with_values=("coverage_pct", lambda s: int((s > 0).sum())),
             mean_field_coverage_pct=("coverage_pct", "mean"),
         )
         .reset_index()
@@ -99,8 +100,8 @@ def main():
     print(f"Feature coverage audit: {summary['records']:,} records")
     for row in summary["group_coverage"]:
         print(
-            f"{row['group']}: {row['fields_present']}/{row['fields']} fields present; "
-            f"mean field coverage={row['mean_field_coverage_pct']:.1f}%"
+            f"{row['group']}: {row['fields_with_values']}/{row['fields']} fields populated "
+            f"({row['fields_present']} defined); mean field coverage={row['mean_field_coverage_pct']:.1f}%"
         )
     print(f"Zero-coverage fields: {len(summary['zero_coverage_fields'])}")
 
