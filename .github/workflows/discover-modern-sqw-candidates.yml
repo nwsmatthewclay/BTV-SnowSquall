@@ -43,9 +43,15 @@ jobs:
         run: |
           python scripts/discover_modern_sqw_candidates.py             --start-year ${{ inputs.start_year || '2019' }}             --end-year ${{ inputs.end_year || '2026' }}             --output data/derived/modern_sqw_candidate_review.csv
 
+      - name: Cluster warnings into storm episodes
+        run: |
+          python scripts/cluster_modern_sqw_candidates.py             --input data/derived/modern_sqw_candidate_review.csv             --output data/derived/modern_sqw_candidate_episodes.csv
+
       - name: Upload candidate review table
         uses: actions/upload-artifact@v4
         with:
           name: modern-sqw-candidate-review
-          path: data/derived/modern_sqw_candidate_review.csv
+          path: |
+            data/derived/modern_sqw_candidate_review.csv
+            data/derived/modern_sqw_candidate_episodes.csv
           if-no-files-found: error
