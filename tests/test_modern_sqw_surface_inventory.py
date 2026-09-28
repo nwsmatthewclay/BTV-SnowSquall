@@ -27,6 +27,6 @@ def test_surface_impact_summary_identifies_snow_at_minimum_visibility():
     ])
     result = summarize_station(frame, episode_start="2024-01-01T00:05:00Z")
     assert result["snow_code_at_visibility_min"] is True
-    assert result["visibility_min_time_utc"] == "2024-01-01 00:10:00+00:00"
+    assert result["visibility_min_time_utc"] == "2024-01-01T00:10:00Z"
     assert result["baseline_visibility_median_mi"] == 2.5
     assert result["visibility_drop_from_baseline_mi"] == 2.375
