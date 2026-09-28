@@ -50,52 +50,52 @@ jobs:
 
       - name: Build five-window null pilot manifest
         run: |
-          python scripts/build_null_window_manifest.py             --sample-count 5             --seed 42             --radars KCXX KTYX             --output data/manifests/banacos_null_windows_pilot.csv
+          python scripts/build_null_window_manifest.py --sample-count 5 --seed 42 --radars KCXX KTYX --output data/manifests/banacos_null_windows_pilot.csv
 
       - name: Download positive radar windows
         run: |
-          python acquisition/historical_level2.py             --manifest data/manifests/banacos_positive_pilot.csv             --output data/raw/positive_level2
+          python acquisition/historical_level2.py --manifest data/manifests/banacos_positive_pilot.csv --output data/raw/positive_level2
 
       - name: Download null radar windows
         run: |
-          python acquisition/historical_level2.py             --manifest data/manifests/banacos_null_windows_pilot.csv             --output data/raw/null_level2
+          python acquisition/historical_level2.py --manifest data/manifests/banacos_null_windows_pilot.csv --output data/raw/null_level2
 
       - name: Reconstruct positive objects
         run: |
-          python scripts/reconstruct_pilot.py             --input data/raw/positive_level2             --output data/derived/positive_object_scans.csv
+          python scripts/reconstruct_pilot.py --input data/raw/positive_level2 --output data/derived/positive_object_scans.csv
 
       - name: Reconstruct null objects
         run: |
-          python scripts/reconstruct_pilot.py             --input data/raw/null_level2             --output data/derived/null_object_scans.csv
+          python scripts/reconstruct_pilot.py --input data/raw/null_level2 --output data/derived/null_object_scans.csv
 
       - name: Annotate positive case IDs
         run: |
-          python scripts/annotate_object_population.py             data/derived/positive_object_scans.csv             --manifest data/manifests/banacos_positive_pilot.csv             --output data/derived/positive_object_scans_annotated.csv
+          python scripts/annotate_object_population.py data/derived/positive_object_scans.csv --manifest data/manifests/banacos_positive_pilot.csv --output data/derived/positive_object_scans_annotated.csv
 
       - name: Annotate null IDs
         run: |
-          python scripts/annotate_object_population.py             data/derived/null_object_scans.csv             --manifest data/manifests/banacos_null_windows_pilot.csv             --output data/derived/null_object_scans_annotated.csv
+          python scripts/annotate_object_population.py data/derived/null_object_scans.csv --manifest data/manifests/banacos_null_windows_pilot.csv --output data/derived/null_object_scans_annotated.csv
 
-      - name: Build positive historical dataset with RUC
+      - name: Build positive historical dataset with multi-era environment
         run: |
-          python scripts/build_historical_dataset.py             data/derived/positive_object_scans_annotated.csv             --output data/derived/positive_object_environment.csv             --rap-dir data/raw/RAP             --ruc-dir data/raw/RUC
+          python scripts/build_historical_dataset.py data/derived/positive_object_scans_annotated.csv --output data/derived/positive_object_environment.csv --rap-dir data/raw/RAP --ruc-dir data/raw/RUC
 
       - name: Apply leakage-safe positive outcome labels
         run: |
-          python scripts/label_historical_outcomes.py             data/derived/positive_object_environment.csv             --output data/derived/positive_object_labeled.csv
+          python scripts/label_historical_outcomes.py data/derived/positive_object_environment.csv --output data/derived/positive_object_labeled.csv
 
-      - name: Enrich null population with RUC
+      - name: Enrich null population with multi-era environment
         run: |
-          python scripts/enrich_object_environment.py             data/derived/null_object_scans_annotated.csv             --output data/derived/null_object_environment.csv             --rap-dir data/raw/RAP             --ruc-dir data/raw/RUC
+          python scripts/enrich_object_environment.py data/derived/null_object_scans_annotated.csv --output data/derived/null_object_environment.csv --rap-dir data/raw/RAP --ruc-dir data/raw/RUC
 
       - name: Build track catalogs
         run: |
-          python scripts/build_object_track_catalog.py             data/derived/positive_object_scans_annotated.csv             --output data/derived/positive_object_tracks.csv
-          python scripts/build_object_track_catalog.py             data/derived/null_object_scans_annotated.csv             --output data/derived/null_object_tracks.csv
+          python scripts/build_object_track_catalog.py data/derived/positive_object_scans_annotated.csv --output data/derived/positive_object_tracks.csv
+          python scripts/build_object_track_catalog.py data/derived/null_object_scans_annotated.csv --output data/derived/null_object_tracks.csv
 
       - name: Build unified object dataset
         run: |
-          python scripts/build_unified_object_dataset.py             data/derived/positive_object_labeled.csv             data/derived/null_object_environment.csv             --output data/derived/object_population_pilot.csv
+          python scripts/build_unified_object_dataset.py data/derived/positive_object_labeled.csv data/derived/null_object_environment.csv --output data/derived/object_population_pilot.csv
 
       - name: Audit unified dataset
         run: |
@@ -146,4 +146,6 @@ jobs:
             data/derived/null_object_tracks.csv
             data/derived/object_population_pilot.csv
             data/derived/pilot_report.html
+            data/raw/NARR
             data/raw/RUC
+            data/raw/RAP
