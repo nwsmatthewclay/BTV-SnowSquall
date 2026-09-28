@@ -103,6 +103,10 @@ jobs:
         run: |
           python scripts/reconstruct_pilot.py --input data/raw/positive_level2 --output data/derived/positive_object_scans.csv
 
+      - name: Render positive radar frames for viewer
+        run: |
+          python scripts/export_viewer_radar_frames.py             --manifest data/manifests/banacos_positive_pilot.csv             --input data/raw/positive_level2             --output-dir data/derived/viewer
+
       - name: Reconstruct null objects
         run: |
           python scripts/reconstruct_pilot.py --input data/raw/null_level2 --output data/derived/null_object_scans.csv
@@ -279,6 +283,10 @@ jobs:
         run: |
           python scripts/audit_training_dataset.py             data/derived/object_model_features_pilot.csv
 
+      - name: Build historical viewer data package
+        run: |
+          python scripts/build_static_viewer.py             --objects data/derived/positive_object_labeled.csv             --cases data/manifests/banacos_positive_pilot.csv             --output-dir data/derived/viewer             --frames-root data/derived/viewer
+
       - name: Build SOO-ready pilot report
         run: |
           python scripts/build_pilot_report.py \
@@ -326,6 +334,7 @@ jobs:
             data/derived/object_model_features_pilot.coverage.json
             data/derived/baseline_model_*m
             data/derived/pilot_report.html
+            data/derived/viewer
             data/raw/ASOS_IEM
             data/raw/NARR
             data/raw/RUC
