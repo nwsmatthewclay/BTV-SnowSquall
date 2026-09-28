@@ -21,6 +21,9 @@ REQUIRED = {
     "independence_status",
     "evidence_source",
     "source_url",
+    "reconstruction_eligible",
+    "analysis_window_start_utc",
+    "analysis_window_end_utc",
 }
 
 ALLOWED_RADARS = {"KCXX", "KTYX"}
@@ -53,6 +56,20 @@ def audit(path: Path) -> dict:
         issues.append("missing_source_url")
     elif (~df["source_url"].astype(str).str.startswith(("http://", "https://"))).any():
         issues.append("invalid_source_url")
+
+    eligible = df["reconstruction_eligible"].astype(str).str.lower()
+    if not eligible.isin({"true", "false"}).all():
+        issues.append("invalid_reconstruction_eligibility")
+    eligible_rows = df.loc[eligible.eq("true")].copy()
+    if len(eligible_rows):
+        starts = pd.to_datetime(eligible_rows["analysis_window_start_utc"], errors="coerce", utc=True)
+        ends = pd.to_datetime(eligible_rows["analysis_window_end_utc"], errors="coerce", utc=True)
+        if starts.isna().any() or ends.isna().any():
+            issues.append("eligible_case_missing_analysis_window")
+        elif (ends < starts).any():
+            issues.append("analysis_window_reversed")
+        elif ((ends - starts).dt.total_seconds() <= 0).any():
+            issues.append("analysis_window_empty")
 
     summary = {
         "records": int(len(df)),
