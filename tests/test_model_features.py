@@ -118,3 +118,26 @@ def test_schema_blocks_future_derived_truth_fields(tmp_path):
     assert "visibility_sm" not in schema["predictor_columns"]
     assert "snow_observed" not in schema["predictor_columns"]
     assert "wind_gust_kt" not in schema["predictor_columns"]
+
+def test_model_features_include_radar_evolution_terms():
+    source = pd.DataFrame(
+        {
+            "population": ["winter_null_candidate"] * 2,
+            "radar_site": ["KCXX"] * 2,
+            "object_id": [9] * 2,
+            "scan_time_utc": ["2006-02-07T12:00:00Z", "2006-02-07T12:05:00Z"],
+            "max_reflectivity_dbz": [35.0, 45.0],
+            "echo_top_km": [3.0, 5.0],
+            "zdr_mean_db": [0.8, 1.2],
+            "rhohv_mean": [0.96, 0.94],
+            "kdp_mean_degkm": [0.2, 0.5],
+            "velocity_mean_kt": [10.0, 14.0],
+        }
+    )
+    result = build_features(source)
+
+    assert result.loc[1, "echo_top_km_delta"] == 2.0
+    assert result.loc[1, "zdr_mean_db_delta"] == 0.4
+    assert result.loc[1, "rhohv_mean_delta"] == -0.02
+    assert result.loc[1, "kdp_mean_degkm_delta"] == 0.3
+    assert result.loc[1, "velocity_mean_kt_delta"] == 4.0
