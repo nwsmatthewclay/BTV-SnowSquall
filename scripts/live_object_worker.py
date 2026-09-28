@@ -7,6 +7,7 @@ objects. Acquisition and science processing remain separate modules.
 from __future__ import annotations
 
 import argparse
+import json
 import logging
 import time
 from pathlib import Path
@@ -42,7 +43,17 @@ def run(radar: str, poll_seconds: int, max_polls: int | None, state: Path, outpu
                 logging.warning("No recent %s volumes found.", radar)
             else:
                 key, volume_time = newest
-                if key != last_key:
+                persisted_processed = set()
+                if state.exists():
+                    try:
+                        persisted = json.loads(state.read_text(encoding="utf-8"))
+                        persisted_processed = set(persisted.get("processed_sources", []))
+                    except Exception:
+                        logging.warning("Could not read persisted worker state; continuing.")
+                if key in persisted_processed:
+                    logging.info("Newest %s volume already processed: %s", radar, key)
+                    last_key = key
+                elif key != last_key:
                     logging.info(
                         "New %s volume: %s | radar time=%s",
                         radar, key, volume_time.isoformat()
