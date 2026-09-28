@@ -303,6 +303,16 @@ def process_volume(path: Path, state_path: Path, output_path: Path):
     tmp.write_text(json.dumps(result, indent=2), encoding="utf-8")
     tmp.replace(output_path)
 
+    # Persist this scan as an object-timestep training record. The history
+    # writer is append-only and de-duplicates by (timestamp, track_id).
+    from scripts.append_live_object_history import append_history
+
+    append_history(
+        output_path,
+        Path("data/derived/live_object_history.jsonl"),
+        Path("data/derived/live_object_history.csv"),
+    )
+
     processed.add(source_name)
     state["processed_sources"] = sorted(processed)[-500:]
     state["last_scan_time_utc"] = timestamp
