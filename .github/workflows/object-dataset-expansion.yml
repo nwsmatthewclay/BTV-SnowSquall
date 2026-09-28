@@ -273,6 +273,12 @@ jobs:
         run: |
           python scripts/build_release_manifest.py --output data/derived/release_manifest.json --path data/manifests --path data/derived/baseline_horizon_summary.json --path data/derived/object_model_features_expansion.schema.json --path data/derived/object_model_features_expansion.coverage.json
 
+      - name: Build event-level verification diagnostics
+        run: |
+          for horizon in 15 30 45 60; do
+            python scripts/build_event_level_verification.py data/derived/baseline_expansion_${horizon}m/oof_predictions.csv --target squall_onset_within_${horizon}m --output data/derived/event_level_expansion_${horizon}m.json
+          done
+
       - name: Audit training dataset
         run: |
           python scripts/audit_training_dataset.py             data/derived/object_model_features_expansion.csv
@@ -330,6 +336,7 @@ jobs:
             data/derived/object_model_features_expansion.coverage.json
             data/derived/baseline_expansion_*m
             data/derived/baseline_horizon_summary.json
+            data/derived/event_level_expansion_*m.json
             data/derived/release_manifest.json
             data/derived/surface_truth_audit.csv
             data/derived/surface_truth_audit.json
