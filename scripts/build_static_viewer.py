@@ -3,6 +3,8 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
+from datetime import datetime, timezone
 from pathlib import Path
 
 import pandas as pd
@@ -153,6 +155,10 @@ def main():
     catalog.sort(key=lambda x:(x["event_start_utc"] or "",x["case_id"],x["radar_site"]))
     (data_dir/"catalog.json").write_text(json.dumps({
         "product":"BTV Snow Squall Historical Object Viewer",
+        "build_time_utc": datetime.now(timezone.utc).isoformat(),
+        "build_commit": os.environ.get("GITHUB_SHA"),
+        "source_dataset_status": "QC-gated research pilot",
+        "source_object_rows": int(len(objects)),
         "version":"0.3-pilot",
         "data_status":"research_pilot",
         "probability_status":"not_scored",
