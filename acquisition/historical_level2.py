@@ -84,6 +84,7 @@ def main() -> None:
     parser.add_argument("--manifest", required=True)
     parser.add_argument("--output", default="data/raw/level2")
     parser.add_argument("--case-id")
+    parser.add_argument("--radar-site", choices=("KCXX", "KTYX"))
     args = parser.parse_args()
 
     with open(args.manifest, newline="", encoding="utf-8") as fh:
@@ -94,6 +95,8 @@ def main() -> None:
             r for r in rows
             if args.case_id in {r.get("case_id"), r.get("window_id"), r.get("null_id")}
         ]
+    if args.radar_site:
+        rows = [r for r in rows if r.get("radar_site") == args.radar_site]
 
     client = s3_client()
     total = 0
