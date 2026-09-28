@@ -21,7 +21,13 @@ def train_baselines(frame: pd.DataFrame):
     if "snow_squall_30min" not in frame:
         raise ValueError("snow_squall_30min target is required")
     features = select_features(frame)
-    train, test = chronological_case_split(frame)
+    train_mask, test_mask = chronological_case_split(frame)
+    train = frame.loc[train_mask].copy()
+    test = frame.loc[test_mask].copy()
+    if train.empty or test.empty:
+        raise ValueError("Chronological case split produced an empty train or test set.")
+    if train["snow_squall_30min"].nunique() < 2:
+        raise ValueError("Training split must contain both classes.")
     X_train, y_train = train[features], train["snow_squall_30min"]
     X_test, y_test = test[features], test["snow_squall_30min"]
     candidates = {
