@@ -186,7 +186,8 @@ def main():
         tracker = trackers.setdefault(radar, CentroidTracker())
 
         try:
-            objects = process_volume(path, tracker)
+            radar_origin = radar_origin_for_site(radar)
+            objects = process_volume(path, tracker, radar_origin=radar_origin)
         except Exception as exc:
             errors.append({
                 "radar_site": radar,
