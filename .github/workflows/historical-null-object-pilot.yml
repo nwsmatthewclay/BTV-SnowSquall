@@ -1,0 +1,80 @@
+name: Historical Null Object Pilot
+
+on:
+  workflow_dispatch:
+
+jobs:
+  null-pilot:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      PYTHONPATH: ${{ github.workspace }}
+      PYTHONUNBUFFERED: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: snow-squall-model-foundation
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install -r requirements-science.txt
+
+      - name: Configure repository imports
+        run: |
+          export PYTHONPATH="$GITHUB_WORKSPACE"
+          echo "PYTHONPATH=$PYTHONPATH"
+          python -c "import acquisition, processing, scripts; print('Repository imports OK')"
+
+      - name: Build null manifest
+        run: |
+          python scripts/build_null_window_manifest.py             --sample-count 5             --seed 42             --radars KCXX KTYX             --output data/manifests/banacos_null_windows_pilot.csv
+          cat data/manifests/banacos_null_windows_pilot.csv
+
+      - name: Download null radar windows
+        run: |
+          python acquisition/historical_level2.py             --manifest data/manifests/banacos_null_windows_pilot.csv             --output data/raw/null_level2
+
+      - name: Reconstruct null radar objects
+        run: |
+          python scripts/reconstruct_pilot.py             --input data/raw/null_level2             --output data/derived/null_object_scans.csv
+
+      - name: Build null track catalog
+        run: |
+          python scripts/build_object_track_catalog.py             data/derived/null_object_scans.csv             --output data/derived/null_object_tracks.csv
+
+      - name: Summarize null population
+        run: |
+          python - <<'PY'
+          import pandas as pd
+          scans = pd.read_csv('data/derived/null_object_scans.csv')
+          tracks = pd.read_csv('data/derived/null_object_tracks.csv')
+          print('NULL OBJECT SCANS:', len(scans))
+          print('NULL TRACKS:', len(tracks))
+          print('RADARS:')
+          print(scans['radar_site'].value_counts().to_string())
+          print('TRACK QUALITY:')
+          print(tracks['track_quality'].value_counts().to_string())
+          print('REFLECTIVITY:')
+          print(scans['max_reflectivity_dbz'].describe().to_string())
+          print('AREA KM2:')
+          print(scans['area_km2'].describe().to_string())
+          PY
+
+      - name: Run tests
+        run: pytest -q
+
+      - name: Upload null pilot
+        uses: actions/upload-artifact@v4
+        with:
+          name: historical-null-object-pilot
+          path: |
+            data/manifests/banacos_null_windows_pilot.csv
+            data/derived/null_object_scans.csv
+            data/derived/null_object_tracks.csv
+            data/raw/null_level2
