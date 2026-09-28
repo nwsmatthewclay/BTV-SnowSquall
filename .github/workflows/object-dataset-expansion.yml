@@ -255,6 +255,25 @@ jobs:
             --output data/derived/object_model_features_expansion.csv \
             --schema-output data/derived/object_model_features_expansion.schema.json
 
+      - name: Audit model feature policy
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          schema = json.loads(Path('data/derived/object_model_features_expansion.schema.json').read_text())
+          required = {'track_age_min', 'max_reflectivity_dbz_delta', 'area_km2_rate_per_min', 'motion_speed_kmh'}
+          predictors = set(schema['predictor_columns'])
+          blocked = set(schema['blocked_non_predictors'])
+          targets = set(schema['target_columns'])
+          prefixes = tuple(schema['blocked_prefixes'])
+          assert schema['future_information_policy'] == 'current_and_past_only'
+          assert required <= predictors
+          assert not predictors.intersection(blocked)
+          assert not any(any(column.startswith(prefix) for prefix in prefixes) for column in predictors)
+          assert not {'centroid_lat','centroid_lon','radar_lat','radar_lon','station_lat','station_lon','grid_x_km','grid_y_km','touches_grid_edge'}.intersection(predictors)
+          assert targets <= blocked
+          print('Expansion feature-policy audit passed.')
+          PY
       - name: Audit realized feature coverage
         run: |
           python scripts/audit_feature_coverage.py             data/derived/object_model_features_expansion.csv             --schema schema/feature_schema.csv             --output data/derived/object_model_features_expansion.coverage.json
