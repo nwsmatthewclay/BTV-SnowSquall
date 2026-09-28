@@ -149,9 +149,6 @@ def process_volume(path: Path, tracker: CentroidTracker, radar_origin=None):
                             finite, gradient[footprint]
                         )
                     )
-                    obj["velocity_gradient_ktkm"] = obj.pop(
-                        "velocity_gradient"
-                    )
 
     return tracked
 
@@ -200,7 +197,7 @@ def main():
             continue
 
         for obj in objects:
-            rows.append({
+            row = {
                 "radar_site": radar,
                 "source_file": str(path),
                 "scan_time_utc": obj.get("scan_time_utc"),
@@ -218,7 +215,19 @@ def main():
                 "length_km": obj.get("length_km"),
                 "width_km": obj.get("width_km"),
                 "geometry_wkt": obj.get("geometry_wkt"),
-            })
+            }
+            derived_keys = (
+                "motion_distance_km", "motion_speed_kt", "motion_direction_deg",
+                "echo_top_km", "top_minus_base_km", "vertical_reflectivity_gradient",
+                "vertical_valid_points", "zdr_mean_db", "zdr_p90_db",
+                "zdr_gradient_dbkm", "rhohv_mean", "rhohv_max", "rhohv_p90",
+                "rhohv_min", "kdp_mean_degkm", "kdp_p90_degkm",
+                "velocity_mean_kt", "velocity_std_kt", "velocity_p90_abs_kt",
+                "velocity_gradient_ktkm",
+            )
+            for key in derived_keys:
+                row[key] = obj.get(key)
+            rows.append(row)
 
     if not rows:
         raise SystemExit("No candidate objects were produced.")
