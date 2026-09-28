@@ -55,7 +55,12 @@ def enrich(input_csv: Path, output_csv: Path, cases_csv: Path, rap_dir: Path, ru
 
     for _, obj in objects.iterrows():
         scan_time = obj["scan_dt"].to_pydatetime().astimezone(timezone.utc)
-        case_match = choose_case(scan_time, cases)
+        case_match = None
+        explicit_case_id = obj.get("case_id")
+        if pd.notna(explicit_case_id) and explicit_case_id in cases.index:
+            case_match = (0.0, explicit_case_id, cases.loc[explicit_case_id])
+        else:
+            case_match = choose_case(scan_time, cases)
 
         row = obj.to_dict()
         row["case_id"] = None
