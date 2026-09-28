@@ -65,3 +65,28 @@ def test_schema_blocks_targets_and_identifiers(tmp_path):
     assert "case_id" not in schema["predictor_columns"]
     assert "squall_onset_within_15m" in schema["target_columns"]
     assert "squall_onset_within_15m" not in schema["predictor_columns"]
+
+
+def test_schema_blocks_case_context_numeric_fields(tmp_path):
+    frame = pd.DataFrame(
+        {
+            "population": ["verified_case_context"],
+            "case_id": ["BTV20040315"],
+            "radar_site": ["KCXX"],
+            "object_id": [1],
+            "scan_time_utc": ["2006-02-07T12:00:00Z"],
+            "max_reflectivity_dbz": [20.0],
+            "case_peak_wind_kt": [31.0],
+            "case_min_visibility_km": [0.4],
+            "surface_visibility_m": [500.0],
+            "squall_onset_within_15m": [0],
+        }
+    )
+    features = build_features(frame)
+    schema_path = tmp_path / "schema.json"
+    schema = write_schema(features, schema_path)
+
+    assert "max_reflectivity_dbz" in schema["predictor_columns"]
+    assert "case_peak_wind_kt" not in schema["predictor_columns"]
+    assert "case_min_visibility_km" not in schema["predictor_columns"]
+    assert "surface_visibility_m" not in schema["predictor_columns"]
