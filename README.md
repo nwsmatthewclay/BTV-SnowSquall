@@ -20,7 +20,7 @@ acquisition → normalization → candidate detection → tracking → 3-D/dual-
 
 - NEXRAD Level II from KCXX and KTYX
 - RAP environmental analyses and derived SNSQ/thermodynamic/kinematic fields
-- MRMS precipitation, rate, type, echo-top and related fields
+- MRMS archived precipitation/reflectivity fields, with additional products added only when their historical coverage and semantics are defensible
 - ASOS/METAR/NCEI surface observations
 - Official SQW/event documentation
 - Published snow-squall case datasets and studies
@@ -55,6 +55,10 @@ Uncertain cases remain in the archive but are excluded from the initial supervis
 - `scripts/` — reproducible dataset/manifest utilities
 - `tests/` — automated smoke tests
 - `data/` — manifests and local scientific data; large files are excluded from Git
+
+## Historical viewer
+
+The repository includes a static historical storm explorer under `viewer/`. Successful dataset runs can package reconstructed radar objects, tracks, available environmental fields, historical context, and georeferenced archived Level-II reflectivity frames for publication through GitHub Pages. The viewer is explicitly labeled as research/pilot output until the event population and model verification are mature.
 
 ## Development
 
