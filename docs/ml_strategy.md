@@ -7,7 +7,7 @@ Can environmental conditions plus observed radar structure and evolution identif
 ## Feature hierarchy
 
 ### Environment
-SNSQ, CAPE/CIN, DCAPE, PWAT, low-level RH/wind, lapse rates, shear, wet-bulb structure, frontogenesis, DCVA, omega and EPV.
+SNSQ, CAPE/CIN, DCAPE, PWAT, low-level RH/wind, lapse rates, shear, wet-bulb structure, frontogenesis, DCVA, omega and EPV. SNSQ is calculated from its explicit low-level moisture, potential-instability, wind and snow-temperature ingredients when the historical profile source supports them.
 
 ### Radar structure
 Reflectivity intensity, gradients, echo tops, vertical depth, object geometry, organization and motion.
