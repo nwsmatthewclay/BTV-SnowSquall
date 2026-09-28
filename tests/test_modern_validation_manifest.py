@@ -65,6 +65,6 @@ def test_modern_validation_workflow_is_non_scoring_and_manual():
     assert 'workflow_dispatch:' in workflow
     assert 'Train case-held-out baseline models' not in workflow
     assert 'probability' not in workflow.lower() or 'probability_scored' in workflow
-    assert 'Modern independent validation' in workflow
+    assert 'Modern Independent Validation' in workflow
     assert 'modern_validation_level2_manifest.csv' in workflow
     assert 'acquire_modern_validation_mrms.py' in workflow
