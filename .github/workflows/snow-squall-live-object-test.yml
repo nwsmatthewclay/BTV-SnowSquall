@@ -46,6 +46,10 @@ jobs:
           print("Object count:", state.get("last_object_count"))
           print("GeoJSON features:", len(geo.get("features", [])))
           print("Probability status:", geo.get("metadata", {}).get("probability_status"))
+          print("Environment status:", geo.get("metadata", {}).get("environment_status"))
+          for feature in geo.get("features", []):
+              env = feature["properties"].get("environment", {})
+              print("Object", feature["properties"]["track_id"], "RAP:", env.get("source_valid_time_utc"), env.get("status"))
 
           assert state.get("last_source")
           assert "last_scan_time_utc" in state
@@ -56,6 +60,7 @@ jobs:
               for field in ("length_km", "width_km", "aspect_ratio", "motion_direction_deg", "reflectivity_trend_dbz_per_hr", "area_growth_fraction", "environment_status"):
                   assert field in props
           print("Diagnostic schema validation: PASS")
+          assert geo["metadata"]["environment_source"] == "RAP"
           PY
 
       - name: Upload live object products
