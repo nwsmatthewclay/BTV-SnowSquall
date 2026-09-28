@@ -14,18 +14,25 @@ def _haversine_km(lat1, lon1, lat2, lon2):
     return 2.0 * r * np.arcsin(np.sqrt(a))
 
 
-def add_motion_features(frame, group_col="object_id", time_col="scan_time_utc"):
-    """Add past-to-current motion only; no future information is used."""
+def add_motion_features(frame, group_col="object_id"):
+    """Add past-to-current motion only; isolate simultaneous radar sites."""
     out = frame.copy()
-    out[time_col] = pd.to_datetime(out[time_col], utc=True, errors="coerce")
-    out = out.sort_values([group_col, time_col]).copy()
-    groups = out.groupby(group_col, sort=False)
+    out["scan_time_utc"] = pd.to_datetime(out["scan_time_utc"], utc=True, errors="coerce")
+
+    if "radar_site" in out.columns:
+        motion_group = out["radar_site"].astype(str) + ":" + out[group_col].astype(str)
+    else:
+        motion_group = out[group_col].astype(str)
+
+    out["_motion_group"] = motion_group
+    out = out.sort_values(["_motion_group", "scan_time_utc"]).copy()
+    groups = out.groupby("_motion_group", sort=False)
 
     out["prev_lat"] = groups["centroid_lat"].shift(1)
     out["prev_lon"] = groups["centroid_lon"].shift(1)
-    out["prev_time"] = groups[time_col].shift(1)
+    out["prev_time"] = groups["scan_time_utc"].shift(1)
 
-    dt_min = (out[time_col] - out["prev_time"]).dt.total_seconds() / 60.0
+    dt_min = (out["scan_time_utc"] - out["prev_time"]).dt.total_seconds() / 60.0
     distance_km = _haversine_km(
         out["prev_lat"], out["prev_lon"], out["centroid_lat"], out["centroid_lon"]
     )
@@ -38,4 +45,5 @@ def add_motion_features(frame, group_col="object_id", time_col="scan_time_utc"):
     y = np.sin(dlon) * np.cos(lat2)
     x = np.cos(lat1) * np.sin(lat2) - np.sin(lat1) * np.cos(lat2) * np.cos(dlon)
     out["motion_direction_deg"] = (np.degrees(np.arctan2(y, x)) + 360.0) % 360.0
-    return out.drop(columns=["prev_lat", "prev_lon", "prev_time"])
+
+    return out.drop(columns=["prev_lat", "prev_lon", "prev_time", "_motion_group"])
