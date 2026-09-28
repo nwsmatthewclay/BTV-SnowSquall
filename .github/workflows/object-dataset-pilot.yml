@@ -110,6 +110,11 @@ jobs:
                   print(e["error_type"].value_counts().to_string())
           PY
 
+      - name: Build radar reconstruction audits
+        run: |
+          python scripts/audit_radar_reconstruction.py             data/derived/positive_object_scans.csv             --errors data/derived/positive_object_scans_errors.csv             --report data/derived/positive_radar_reconstruction_audit.json
+          python scripts/audit_radar_reconstruction.py             data/derived/null_object_scans.csv             --errors data/derived/null_object_scans_errors.csv             --report data/derived/null_radar_reconstruction_audit.json
+
       - name: Annotate positive case IDs
         run: |
           python scripts/annotate_object_population.py data/derived/positive_object_scans.csv --manifest data/manifests/banacos_positive_pilot.csv --output data/derived/positive_object_scans_annotated.csv
@@ -268,12 +273,14 @@ jobs:
             data/manifests/banacos_null_windows_pilot.csv
             data/derived/positive_object_scans.csv
             data/derived/positive_object_scans_errors.csv
+            data/derived/positive_radar_reconstruction_audit.json
             data/derived/positive_object_scans_annotated.csv
             data/derived/positive_object_environment.csv
             data/derived/positive_object_labeled.csv
             data/derived/positive_object_tracks.csv
             data/derived/null_object_scans.csv
             data/derived/null_object_scans_errors.csv
+            data/derived/null_radar_reconstruction_audit.json
             data/derived/null_object_scans_annotated.csv
             data/derived/null_object_environment.csv
             data/derived/null_object_tracks.csv
