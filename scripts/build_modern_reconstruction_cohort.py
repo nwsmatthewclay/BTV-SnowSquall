@@ -32,8 +32,26 @@ def build(frame_path: Path, existing_cases_path: Path, output_path: Path) -> pd.
         raise ValueError(f"Sampling frame missing required columns: {sorted(missing)}")
 
     existing_ids = set()
+    existing_episode_ids = set()
+    existing_anchor_times = []
     if "case_id" in existing.columns:
         existing_ids = set(existing["case_id"].dropna().astype(str))
+    if "event_anchor_utc" in existing.columns:
+        existing_anchor_times = [
+            pd.to_datetime(value, utc=True)
+            for value in existing["event_anchor_utc"].dropna()
+            if str(value).strip()
+        ]
+
+    frame_times = frame.copy()
+    frame_times["episode_start"] = pd.to_datetime(frame_times["episode_start"], utc=True)
+    frame_times["episode_end"] = pd.to_datetime(frame_times["episode_end"], utc=True)
+    for anchor in existing_anchor_times:
+        hit = frame_times[
+            (frame_times["episode_start"] <= anchor)
+            & (frame_times["episode_end"] >= anchor)
+        ]
+        existing_episode_ids.update(hit["episode_id"].astype(str))
 
     rows = []
     for case_id in sorted(existing_ids):
@@ -48,12 +66,12 @@ def build(frame_path: Path, existing_cases_path: Path, output_path: Path) -> pd.
             "reconstruction_eligible": True,
         })
 
-    candidates = frame[~frame["episode_id"].isin(existing_ids)].copy()
+    candidates = frame[~frame["episode_id"].astype(str).isin(existing_episode_ids)].copy()
     for year, group in candidates.groupby("year", sort=True):
         chosen = choose_one(group)
         digest = hashlib.sha256(str(chosen["episode_id"]).encode("utf-8")).hexdigest()
         rows.append({
-            "case_id": f"SQW{chosen['episode_id']}",
+            "case_id": f"MODERN_{chosen['episode_id']}",
             "episode_id": str(chosen["episode_id"]),
             "year": int(year),
             "episode_start": str(chosen["episode_start"]),
