@@ -51,6 +51,8 @@ NON_PREDICTOR_COLUMNS = TARGET_COLUMNS | {
     "population", "population_id", "population_source", "truth_status",
     "case_id", "null_id", "window_id", "source_study", "dataset_version",
     "future_information_policy", "population_track_key", "geometry_wkt",
+    "centroid_lat", "centroid_lon", "radar_lat", "radar_lon",
+    "station_lat", "station_lon", "grid_x_km", "grid_y_km",
 }
 
 
