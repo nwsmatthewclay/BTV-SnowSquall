@@ -11,13 +11,13 @@ THRESHOLDS_KM = (0.4, 0.8)
 TOLERANCE_MINUTES = 15.0
 
 
-def first_at_or_below(frame: pd.DataFrame, column: str, threshold_m: float):
+def first_at_or_below(frame: pd.DataFrame, column: str):
     if column not in frame.columns:
         return None
     eligible = frame.loc[frame[column].fillna(False)]
     if eligible.empty:
         return None
-    return pd.Timestamp(eligible["valid"].min(), tz="UTC") if pd.Timestamp(eligible["valid"].min()).tz is None else pd.Timestamp(eligible["valid"].min()).tz_convert("UTC")
+    return pd.to_datetime(eligible["valid"].min(), utc=True)
 
 
 def audit(cases_csv: Path, surface_root: Path):
@@ -66,7 +66,7 @@ def audit(cases_csv: Path, surface_root: Path):
         starts = {}
         for threshold_km in THRESHOLDS_KM:
             col = f"visibility_le_{str(threshold_km).replace('.', 'p')}km"
-            first = first_at_or_below(obs, col, threshold_km * 1000.0)
+            first = first_at_or_below(obs, col)
             starts[threshold_km] = first
             suffix = str(threshold_km).replace(".", "p")
             row[f"first_le_{suffix}km_utc"] = first.isoformat() if first else None
