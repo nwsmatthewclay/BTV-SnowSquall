@@ -142,6 +142,10 @@ jobs:
         run: |
           python scripts/build_modern_validation_inventory.py             --cases data/manifests/modern_independent_validation_cases.csv             --replay-root data/derived/modern_validation_replay             --surface-root data/raw/modern_surface             --mrms-root data/derived/modern_validation_mrms
 
+      - name: Build surface radar timing diagnostic
+        run: |
+          python scripts/build_modern_surface_radar_diagnostic.py             --surface data/raw/modern_surface/KBTV/BTV20181121.csv             --replay-case data/derived/modern_validation_replay/BTV20181121             --output data/derived/modern_surface_radar_diagnostic.csv
+
       - name: Assert independent-validation boundary
         run: |
           python - <<'PY'
@@ -173,6 +177,8 @@ jobs:
             data/derived/modern_validation_mrms
             data/derived/modern_validation_mrms_object_comparison.csv
             data/derived/modern_validation_mrms_object_comparison.json
+            data/derived/modern_surface_radar_diagnostic.csv
+            data/derived/modern_surface_radar_diagnostic.json
             data/raw/modern_surface
             data/raw/modern_level2
           if-no-files-found: warn
