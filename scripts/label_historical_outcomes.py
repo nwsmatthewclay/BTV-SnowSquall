@@ -242,6 +242,31 @@ def main():
         print(f"{horizon}m prospective positives:", int(result[f"squall_onset_within_{horizon}m"].sum()))
     print("Track-associated object records:", int(result["track_event_associated"].sum()))
 
+    assoc = (
+        result.loc[result["track_event_associated"]]
+        .groupby(["case_id", "radar_site"], dropna=False)
+        .size()
+        .reset_index(name="associated_object_timesteps")
+    )
+    if assoc.empty:
+        print("Associated object timesteps by case/radar: none")
+    else:
+        print("Associated object timesteps by case/radar:")
+        print(assoc.to_string(index=False))
+        positive_by_case = (
+            result.groupby("case_id", dropna=False)[
+                [f"squall_onset_within_{h}m" for h in HORIZONS]
+            ].sum()
+        )
+        positive_by_case = positive_by_case.loc[
+            positive_by_case.sum(axis=1) > 0
+        ]
+        print("Positive onset labels by case:")
+        print(
+            positive_by_case.to_string()
+            if not positive_by_case.empty else "none"
+        )
+
 
 if __name__ == "__main__":
     main()
