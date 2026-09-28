@@ -26,6 +26,10 @@ def build(frame_path: Path, surface_path: Path, output_path: Path) -> pd.DataFra
     surface["min_visibility_mi"] = pd.to_numeric(
         surface["min_visibility_mi"], errors="coerce"
     )
+    if "snow_code_at_visibility_min" not in surface.columns:
+        surface["snow_code_at_visibility_min"] = False
+    if "visibility_drop_from_baseline_mi" not in surface.columns:
+        surface["visibility_drop_from_baseline_mi"] = pd.NA
     surface["max_wind_gust_kt"] = pd.to_numeric(
         surface["max_wind_gust_kt"], errors="coerce"
     )
