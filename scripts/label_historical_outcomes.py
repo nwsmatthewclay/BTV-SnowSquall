@@ -88,6 +88,11 @@ def build_labels(df: pd.DataFrame, cases_csv: Path):
         group_cols = [c for c in ("radar_site", "object_id") if c in candidate.columns]
         if not group_cols:
             continue
+        # Select only the single radar track that comes closest to the
+        # observing station during the onset-centered corridor for each radar.
+        # This prevents multiple unrelated cells from inheriting the same event
+        # label merely because they passed through a broad association radius.
+        track_candidates = []
         for key_values, track in candidate.groupby(group_cols, dropna=False):
             if not isinstance(key_values, tuple):
                 key_values = (key_values,)
@@ -103,7 +108,19 @@ def build_labels(df: pd.DataFrame, cases_csv: Path):
                 axis=1,
             )
             if not distances.empty:
-                association[_track_key(case_id, radar_site, object_id)] = float(distances.min())
+                track_candidates.append(
+                    (float(distances.min()), radar_site, object_id)
+                )
+
+        by_radar = {}
+        for min_distance, radar_site, object_id in track_candidates:
+            current = by_radar.get(radar_site)
+            if current is None or min_distance < current[0]:
+                by_radar[radar_site] = (min_distance, object_id)
+
+        for radar_site, (min_distance, object_id) in by_radar.items():
+            if min_distance <= ASSOCIATION_RADIUS_KM:
+                association[_track_key(case_id, radar_site, object_id)] = min_distance
 
     for idx, row in out.iterrows():
         case_id = row.get("case_id")
