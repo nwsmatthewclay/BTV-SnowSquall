@@ -31,6 +31,7 @@ def audit(path: Path):
     known = {
         "prospective_positive",
         "verified_event_interval",
+        "event_onset_no_verified_end",
         "case_associated_nonimpact",
         "unassociated_object",
         "unknown",
