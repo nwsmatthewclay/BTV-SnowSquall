@@ -22,11 +22,13 @@ def ordered_inputs(input_dir: Path) -> list[Path]:
     files=[p for p in input_dir.rglob("*") if p.is_file() and not p.name.endswith((".part",".tmp"))]
     return sorted(files, key=scan_time)
 
-def replay_case(input_dir: Path, output_dir: Path, state_path: Path, case_id: str, max_scans: int|None=None) -> dict:
+def replay_case(input_dir: Path, output_dir: Path, state_path: Path, case_id: str, max_scans: int|None=None, resume: bool=False) -> dict:
     scans=ordered_inputs(input_dir)
     if max_scans is not None: scans=scans[:max_scans]
     if not scans: raise RuntimeError(f"No replayable Level-II files found under {input_dir}")
     output_dir.mkdir(parents=True, exist_ok=True); state_path.parent.mkdir(parents=True, exist_ok=True)
+    if state_path.exists() and not resume:
+        state_path.unlink()
     records=[]
     for index,source in enumerate(scans,1):
         output=output_dir/f"{index:04d}_{source.stem}.geojson"
@@ -64,9 +66,10 @@ def main():
     parser.add_argument("--output-dir",type=Path,required=True)
     parser.add_argument("--state-path",type=Path,default=None)
     parser.add_argument("--max-scans",type=int,default=None)
+    parser.add_argument("--resume",action="store_true",help="Resume from an existing replay tracker state instead of resetting it.")
     args=parser.parse_args()
     state=args.state_path or (args.output_dir/"replay_state.json")
-    manifest=replay_case(args.input_dir,args.output_dir,state,args.case_id,args.max_scans)
+    manifest=replay_case(args.input_dir,args.output_dir,state,args.case_id,args.max_scans,args.resume)
     print(json.dumps({k:manifest[k] for k in ("case_id","scan_count","object_scan_count","first_scan_utc","last_scan_utc")},indent=2))
 
 if __name__=="__main__":
