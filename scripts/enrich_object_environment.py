@@ -18,6 +18,7 @@ def enrich(input_csv: Path, output_csv: Path, rap_dir: Path, ruc_dir: Path):
     rows = []
     for _, obj in objects.iterrows():
         row = obj.to_dict()
+        row["label_status"] = "candidate_null"
         scan_time = obj["scan_dt"].to_pydatetime().astimezone(timezone.utc)
         lat, lon = obj.get("centroid_lat"), obj.get("centroid_lon")
         if pd.isna(lat) or pd.isna(lon):
