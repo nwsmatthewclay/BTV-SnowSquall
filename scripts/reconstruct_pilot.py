@@ -17,6 +17,7 @@ from acquisition.level2_reader import read_level2, resolve_fields, volume_metada
 from processing.object_detector import detect_reflectivity_objects
 from processing.object_tracker import CentroidTracker
 from processing.radar_grid import grid_field_2d, grid_latlon, grid_lowest_sweep
+from processing.radar_sites import radar_origin_for_site
 from processing.motion import add_motion_features
 from processing.radar_features import object_field_summary, velocity_object_summary
 from processing.vertical_structure import summarize_vertical_structure
