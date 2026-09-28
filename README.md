@@ -1,90 +1,78 @@
 # BTV Snow Squall
 
-Experimental BTV CWA snow-squall detection/probability project.
+Experimental BTV CWA snow-squall detection and probability project.
 
-## Phase 1: real-time Level II acquisition
+## What we are building
 
-The first test does **not** calculate snow-squall probability. It answers one question:
+This is a **living event/object database and prediction system**, not an SNSQ calculator.
 
-> How quickly can we obtain a newly completed KCXX or KTYX Level II volume from the public NOAA/Unidata AWS archive?
+The core training unit is:
 
-The watcher:
+> **tracked radar object × scan time**
 
-1. Looks for the newest completed volume for one radar.
-2. Polls every 10 seconds.
-3. Downloads each new volume once.
-4. Records the radar volume time and local acquisition time.
-5. Logs the resulting data age/latency.
+Each row combines the conditional environment with observed storm structure and evolution.
 
-NOAA/Unidata currently provides NEXRAD Level II in the public S3 bucket
-`unidata-nexrad-level2` in `us-east-1`. The archive is updated as new data become
-available.
+## Data flow
 
-### Install
+acquisition → normalization → candidate detection → tracking → 3-D/dual-pol features → environmental/MRMS attachment → evidence-based labeling → training table → model → verification
 
-```bash
-python -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-```
+## Data layers
 
-### Test KCXX
+- NEXRAD Level II from KCXX and KTYX
+- RAP environmental analyses and derived SNSQ/thermodynamic/kinematic fields
+- MRMS precipitation, rate, type, echo-top and related fields
+- ASOS/METAR/NCEI surface observations
+- Official SQW/event documentation
+- Published snow-squall case datasets and studies
 
-From the `acquisition` directory:
+## Initial prediction target
 
-```bash
-cd acquisition
-python kcxx_watcher.py
-```
+Probability that a tracked radar object will meet the positive snow-squall definition within the **next 30 minutes**.
 
-### Test KTYX
+The first model ladder is intentionally interpretable: logistic regression, random forest, histogram gradient boosting, then calibrated/ensemble models after the feature set is stable.
 
-In a second terminal:
+## Radar philosophy
 
-```bash
-cd acquisition
-python ktyx_watcher.py
-```
+The detector is deliberately permissive. It generates candidate precipitation objects; it does **not** decide whether they are snow squalls.
 
-### Or use the generic watcher
+Native Level-II volumes are retained so we can extract reflectivity intensity and gradients, object geometry and organization, velocity/kinematic signatures, echo-top and vertical depth, ZDR/RHOHV/KDP, and scan-to-scan growth, weakening, motion and structural change.
 
-```bash
-python radar_watcher.py --radar KCXX --poll-seconds 10
-python radar_watcher.py --radar KTYX --poll-seconds 10
-```
+## Truth philosophy
 
-## Output
+No single product is treated as perfect truth. A warning polygon, surface visibility observation, radar structure/evolution, and published case documentation can each contribute evidence. Labels retain the evidence sources and confidence.
 
-Raw Level II files are stored under:
+Uncertain cases remain in the archive but are excluded from the initial supervised training set.
 
-```text
-data/raw/KCXX/
-data/raw/KTYX/
-```
+## Repository structure
 
-Logs are stored under:
+- `acquisition/` — archive/near-real-time data acquisition and readers
+- `config/` — dataset and archive configuration
+- `schema/` — feature schema and labeling policy
+- `processing/` — radar detection, tracking and feature calculations
+- `labeling/` — evidence and truth construction
+- `training/` — model-training utilities
+- `docs/` — architecture, source registry, ML strategy and implementation plan
+- `scripts/` — reproducible dataset/manifest utilities
+- `tests/` — automated smoke tests
+- `data/` — manifests and local scientific data; large files are excluded from Git
 
-```text
-logs/kcxx_watcher.log
-logs/ktyx_watcher.log
-```
+## Development
 
-## Important architecture note
+Use `requirements.txt` for lightweight development and `requirements-science.txt` for Level-II/radar reconstruction.
 
-This first version uses S3 polling because it is easy to test and does not require
-an AWS account.
+GitHub Actions intentionally keeps the default test job lightweight. Scientific archive processing will use separate integration tests so large radar dependencies do not block normal code changes.
 
-For the low-latency production architecture, the acquisition layer can later be
-changed to the NOAA/Unidata real-time Level II notification path (SNS/SQS) or the
-real-time Level II chunks feed. The downstream processing interface should remain
-the same.
+## Modeling principles
 
-## Planned next steps
+The environmental Snow Squall Parameter is a predictor, not the answer.
 
-- Verify actual acquisition latency.
-- Read downloaded volumes with Py-ART.
-- Extract BTV CWA-relevant radar fields.
-- Add MRMS JSON precipitation-type information.
-- Add existing RAP/MetPy SNSQ information.
-- Build object detection and tracking.
-- Develop and validate an experimental snow-squall probability model.
+Training/evaluation will:
+
+1. Preserve complete case histories.
+2. Use radar-object and temporal information.
+3. Keep future information out of predictors.
+4. Hold out complete events rather than random adjacent rows.
+5. Evaluate calibration, discrimination, false alarms, misses and lead time.
+6. Preserve missing-data/provenance flags instead of silently filling gaps with future information.
+
+See `docs/architecture.md`, `docs/implementation_plan.md`, `docs/ml_strategy.md`, `schema/label_policy.md`, and `docs/git_workflow.md`.

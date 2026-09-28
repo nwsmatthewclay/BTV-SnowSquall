@@ -1,0 +1,46 @@
+project:
+  name: BTV-SnowSquall
+  dataset_version: v1
+  core_unit: radar_object_scan
+  target_cwa: BTV
+  timezone: America/New_York
+
+archive:
+  process_window_minutes: 30
+  retention_hours: 3
+  backfill_order: oldest_first
+  preserve_native_resolution: true
+  preserve_masks_and_composites: true
+  rap_frequency: hourly
+  mrms_frequency: maximum_available
+  dual_pol: every_archive_run
+
+radar:
+  sites: [KCXX, KTYX]
+  level2: true
+
+sources:
+  published_cases:
+    banacos_btv_36:
+      cases: 36
+      role: seed_positive_cases
+    southern_new_england_100:
+      cases: 100
+      role: independent_case_population
+    penn_state_snsq_null:
+      role: external_environmental_reference
+      doi: "10.26208/9xj2-g003"
+  operational:
+    - NWS_SQW
+    - NCEI
+    - ASOS_METAR
+    - MRMS
+    - RAP
+    - NEXRAD_Level_II
+
+labels:
+  positive: snow_squall
+  negative: null
+  uncertainty: uncertain
+  confidence_levels: [high, medium, low]
+  initial_target: probability_within_30_minutes

@@ -1,0 +1,13 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Snow Squall Object Viewer</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<link rel="stylesheet" href="style.css"></head>
+<body>
+<header><div><h1>Snow Squall Object Viewer</h1><div id="subtitle">Loading reconstruction…</div></div><button id="popout">Open Probability Viewer</button></header>
+<main><section id="map"></section><aside id="panel">
+<h2>Object Diagnostics</h2><div id="objectTitle">Hover an object</div><div class="prob"><span>30-min probability</span><strong id="prob">—</strong></div>
+<div class="grid" id="metrics"></div><h3>Model inputs</h3><div id="drivers">Probability model not yet trained. Radar/object history is live in this viewer.</div>
+</aside></main>
+<footer><input id="slider" type="range" min="0" max="0" value="0"><div><span id="time">—</span><button id="play">▶ Play</button></div></footer>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script><script src="app.js"></script></body></html>

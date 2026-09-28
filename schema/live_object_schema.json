@@ -1,0 +1,35 @@
+{
+  "title": "Snow Squall Live Object",
+  "type": "object",
+  "required": [
+    "track_id",
+    "timestamp",
+    "geometry",
+    "probability_30min",
+    "probability_trend",
+    "data_quality"
+  ],
+  "properties": {
+    "track_id": {"type": "string"},
+    "timestamp": {"type": "string", "format": "date-time"},
+    "geometry": {
+      "type": "object",
+      "required": ["type", "coordinates"],
+      "properties": {
+        "type": {"const": "Polygon"},
+        "coordinates": {"type": "array"}
+      }
+    },
+    "probability_15min": {"type": ["number", "null"], "minimum": 0, "maximum": 1},
+    "probability_30min": {"type": ["number", "null"], "minimum": 0, "maximum": 1},
+    "probability_45min": {"type": ["number", "null"], "minimum": 0, "maximum": 1},
+    "probability_60min": {"type": ["number", "null"], "minimum": 0, "maximum": 1},
+    "probability_trend": {"type": "string", "enum": ["rising", "steady", "falling", "unknown"]},
+    "age_min": {"type": ["number", "null"]},
+    "motion_dir_deg": {"type": ["number", "null"]},
+    "motion_speed_kt": {"type": ["number", "null"]},
+    "drivers": {"type": "array", "items": {"type": "string"}},
+    "data_quality": {"type": "string", "enum": ["good", "degraded", "poor"]},
+    "model_version": {"type": "string"}
+  }
+}
