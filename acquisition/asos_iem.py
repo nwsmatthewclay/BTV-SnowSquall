@@ -24,8 +24,8 @@ def request_observations(
     end: pd.Timestamp,
     timeout: int = 60,
 ) -> pd.DataFrame:
-    start = pd.Timestamp(start, tz="UTC") if pd.Timestamp(start).tz is None else pd.Timestamp(start).tz_convert("UTC")
-    end = pd.Timestamp(end, tz="UTC") if pd.Timestamp(end).tz is None else pd.Timestamp(end).tz_convert("UTC")
+    start = pd.to_datetime(start, utc=True)
+    end = pd.to_datetime(end, utc=True)
     end_date = (end.normalize() + pd.Timedelta(days=1)).date()
 
     params = [
@@ -114,10 +114,10 @@ def download_cases(
     manifest_rows = []
 
     for row in cases.drop_duplicates("case_id").itertuples(index=False):
-        start = pd.Timestamp(row.event_start_utc, tz="UTC") - pd.Timedelta(minutes=buffer_before_minutes)
+        event_start = pd.to_datetime(row.event_start_utc, utc=True)
+        start = event_start - pd.Timedelta(minutes=buffer_before_minutes)
         end = start + pd.Timedelta(minutes=buffer_before_minutes + buffer_after_minutes)
         # Correct the interval to be relative to the published event start.
-        event_start = pd.Timestamp(row.event_start_utc, tz="UTC")
         start = event_start - pd.Timedelta(minutes=buffer_before_minutes)
         end = event_start + pd.Timedelta(
             minutes=float(getattr(row, "vis_below_0p8_min", 60) or 60) + buffer_after_minutes
