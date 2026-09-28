@@ -87,6 +87,10 @@ jobs:
         run: |
           python acquisition/asos_iem.py             --cases data/manifests/banacos_positive_pilot.csv             --output data/raw/ASOS_IEM             --buffer-before 120             --buffer-after 150
 
+      - name: Audit modern validation candidate manifest
+        run: |
+          python scripts/audit_modern_validation_manifest.py data/manifests/modern_independent_validation_cases.csv --report data/derived/modern_validation_manifest_audit.json
+
       - name: Audit surface truth
         run: |
           python scripts/audit_surface_truth.py             --cases data/manifests/banacos_positive_pilot.csv             --surface-root data/raw/ASOS_IEM             --output data/derived/surface_truth_audit.csv             --summary data/derived/surface_truth_audit.json
