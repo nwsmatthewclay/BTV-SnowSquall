@@ -1,0 +1,275 @@
+name: Object Dataset Full Expansion
+
+on:
+  workflow_dispatch:
+    inputs:
+      null_count:
+        description: "Number of stratified winter null windows"
+        required: false
+        default: "30"
+      seed:
+        description: "Deterministic null sampling seed"
+        required: false
+        default: "42"
+
+concurrency:
+  group: object-dataset-expansion-\${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  expansion:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    env:
+      PYTHONPATH: \${{ github.workspace }}
+      PYTHONUNBUFFERED: "1"
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: \${{ github.sha }}
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install -r requirements-science.txt
+
+      - name: Verify repository and source inventory
+        run: |
+          python -c "import acquisition, processing, scripts; print('Repository imports OK')"
+          python - <<'PY'
+          import pandas as pd
+          cases = pd.read_csv("data/manifests/banacos_2014_cases.csv")
+          windows = pd.read_csv("data/manifests/banacos_radar_windows.csv")
+          assert len(cases) == 36
+          assert len(windows) == 72
+          assert cases["case_id"].nunique() == 36
+          assert windows["case_id"].nunique() == 36
+          assert windows["radar_site"].nunique() == 2
+          print("Cases:", len(cases), "Radar windows:", len(windows))
+          PY
+
+      - name: Build full positive manifest
+        run: |
+          cp data/manifests/banacos_radar_windows.csv data/manifests/banacos_positive_full.csv
+
+      - name: Build stratified null manifest
+        run: |
+          python scripts/build_stratified_null_manifest.py \
+            --cases data/manifests/banacos_2014_cases.csv \
+            --sample-count \${{ inputs.null_count }} \
+            --seed \${{ inputs.seed }} \
+            --output data/manifests/banacos_null_full.csv
+
+      - name: Audit full manifests
+        run: |
+          python - <<'PY'
+          import pandas as pd
+          p = pd.read_csv("data/manifests/banacos_positive_full.csv")
+          n = pd.read_csv("data/manifests/banacos_null_full.csv")
+          assert p["case_id"].notna().all()
+          assert p["case_id"].nunique() == 36
+          assert n["case_id"].fillna("").eq("").all()
+          assert n["null_id"].notna().all()
+          assert n["window_id"].is_unique
+          print("Positive cases:", p["case_id"].nunique())
+          print("Null windows:", n["null_id"].nunique())
+          print("Null years:", sorted(pd.to_datetime(n["window_center_utc"], utc=True).dt.year.unique()))
+          PY
+
+      - name: Acquire ASOS/METAR surface observations
+        run: |
+          python acquisition/asos_iem.py \
+            --cases data/manifests/banacos_2014_cases.csv \
+            --output data/raw/ASOS_IEM \
+            --buffer-before 120 \
+            --buffer-after 150
+
+      - name: Audit surface truth
+        run: |
+          python scripts/audit_surface_truth.py \
+            --cases data/manifests/banacos_2014_cases.csv \
+            --surface-root data/raw/ASOS_IEM \
+            --output data/derived/surface_truth_audit.csv \
+            --summary data/derived/surface_truth_audit.json \
+            --download-errors data/raw/ASOS_IEM/surface_download_errors.csv
+
+      - name: Download positive Level-II
+        run: |
+          python acquisition/historical_level2.py \
+            --manifest data/manifests/banacos_positive_full.csv \
+            --output data/raw/positive_level2
+
+      - name: Download null Level-II
+        run: |
+          python acquisition/historical_level2.py \
+            --manifest data/manifests/banacos_null_full.csv \
+            --output data/raw/null_level2
+
+      - name: Reconstruct positive objects
+        run: |
+          python scripts/reconstruct_pilot.py \
+            --input data/raw/positive_level2 \
+            --output data/derived/positive_object_scans.csv
+
+      - name: Reconstruct null objects
+        run: |
+          python scripts/reconstruct_pilot.py \
+            --input data/raw/null_level2 \
+            --output data/derived/null_object_scans.csv
+
+      - name: Audit radar reconstruction
+        run: |
+          python scripts/audit_radar_reconstruction.py \
+            data/derived/positive_object_scans.csv \
+            --errors data/derived/positive_object_scans_errors.csv \
+            --report data/derived/positive_radar_reconstruction_audit.json
+          python scripts/audit_radar_reconstruction.py \
+            data/derived/null_object_scans.csv \
+            --errors data/derived/null_object_scans_errors.csv \
+            --report data/derived/null_radar_reconstruction_audit.json
+
+      - name: Annotate populations
+        run: |
+          python scripts/annotate_object_population.py \
+            data/derived/positive_object_scans.csv \
+            --manifest data/manifests/banacos_positive_full.csv \
+            --output data/derived/positive_object_scans_annotated.csv
+          python scripts/annotate_object_population.py \
+            data/derived/null_object_scans.csv \
+            --manifest data/manifests/banacos_null_full.csv \
+            --output data/derived/null_object_scans_annotated.csv
+
+      - name: Audit annotation identity
+        run: |
+          python - <<'PY'
+          import pandas as pd
+          expected = set(pd.read_csv("data/manifests/banacos_2014_cases.csv")["case_id"])
+          p = pd.read_csv("data/derived/positive_object_scans_annotated.csv")
+          n = pd.read_csv("data/derived/null_object_scans_annotated.csv")
+          observed = set(p["case_id"].dropna().astype(str))
+          assert observed == expected
+          assert int(n["case_id"].notna().sum()) == 0
+          assert n["null_id"].notna().all()
+          print("Positive IDs complete:", len(observed))
+          print("Null case IDs:", int(n["case_id"].notna().sum()))
+          PY
+
+      - name: Build multi-era positive environment
+        run: |
+          python scripts/build_historical_dataset.py \
+            data/derived/positive_object_scans_annotated.csv \
+            --output data/derived/positive_object_environment.csv \
+            --rap-dir data/raw/RAP \
+            --ruc-dir data/raw/RUC
+
+      - name: Label positive outcomes
+        run: |
+          python scripts/label_historical_outcomes.py \
+            data/derived/positive_object_environment.csv \
+            --output data/derived/positive_object_labeled.csv \
+            --cases data/manifests/banacos_2014_cases.csv
+
+      - name: Audit outcome labels
+        run: |
+          python - <<'PY'
+          import pandas as pd
+          d = pd.read_csv("data/derived/positive_object_labeled.csv")
+          for h in (15, 30, 45, 60):
+              target = f"squall_onset_within_{h}m"
+              assert not (d[target].eq(1) & ~d["track_event_associated"].fillna(False)).any()
+          print("Outcome label integrity passed.")
+          PY
+
+      - name: Build multi-era null environment
+        run: |
+          python scripts/enrich_object_environment.py \
+            data/derived/null_object_scans_annotated.csv \
+            --output data/derived/null_object_environment.csv \
+            --rap-dir data/raw/RAP \
+            --ruc-dir data/raw/RUC
+
+      - name: Build track catalogs
+        run: |
+          python scripts/build_object_track_catalog.py \
+            data/derived/positive_object_scans_annotated.csv \
+            --output data/derived/positive_object_tracks.csv
+          python scripts/build_object_track_catalog.py \
+            data/derived/null_object_scans_annotated.csv \
+            --output data/derived/null_object_tracks.csv
+
+      - name: Build unified dataset
+        run: |
+          python scripts/build_unified_object_dataset.py \
+            data/derived/positive_object_labeled.csv \
+            data/derived/null_object_environment.csv \
+            --output data/derived/object_population_expansion.csv
+
+      - name: Build causal model features
+        run: |
+          python scripts/build_model_features.py \
+            data/derived/object_population_expansion.csv \
+            --output data/derived/object_model_features_expansion.csv \
+            --schema-output data/derived/object_model_features_expansion.schema.json
+
+      - name: Train case-held-out baselines
+        run: |
+          for horizon in 15 30 45 60; do
+            python scripts/train_baseline_model.py \
+              data/derived/object_model_features_expansion.csv \
+              --schema data/derived/object_model_features_expansion.schema.json \
+              --target squall_onset_within_\${horizon}m \
+              --output-dir data/derived/baseline_expansion_\${horizon}m
+          done
+
+      - name: Build SOO report
+        run: |
+          python scripts/build_pilot_report.py \
+            --positive data/derived/positive_object_labeled.csv \
+            --null data/derived/null_object_environment.csv \
+            --positive-tracks data/derived/positive_object_tracks.csv \
+            --null-tracks data/derived/null_object_tracks.csv \
+            --surface-audit data/derived/surface_truth_audit.csv \
+            --surface-summary data/derived/surface_truth_audit.json \
+            --positive-radar-audit data/derived/positive_radar_reconstruction_audit.json \
+            --null-radar-audit data/derived/null_radar_reconstruction_audit.json \
+            --baseline-root data/derived \
+            --output data/derived/expansion_report.html
+
+      - name: Run tests
+        run: pytest -q
+
+      - name: Upload expansion dataset
+        uses: actions/upload-artifact@v4
+        with:
+          name: object-population-expansion
+          path: |
+            data/manifests/banacos_2014_cases.csv
+            data/manifests/banacos_positive_full.csv
+            data/manifests/banacos_null_full.csv
+            data/derived/positive_object_scans.csv
+            data/derived/positive_object_scans_errors.csv
+            data/derived/positive_radar_reconstruction_audit.json
+            data/derived/positive_object_scans_annotated.csv
+            data/derived/positive_object_environment.csv
+            data/derived/positive_object_labeled.csv
+            data/derived/positive_object_tracks.csv
+            data/derived/null_object_scans.csv
+            data/derived/null_object_scans_errors.csv
+            data/derived/null_radar_reconstruction_audit.json
+            data/derived/null_object_scans_annotated.csv
+            data/derived/null_object_environment.csv
+            data/derived/null_object_tracks.csv
+            data/derived/object_population_expansion.csv
+            data/derived/object_model_features_expansion.csv
+            data/derived/object_model_features_expansion.schema.json
+            data/derived/baseline_expansion_*m
+            data/derived/surface_truth_audit.csv
+            data/derived/surface_truth_audit.json
+            data/raw/ASOS_IEM
+            data/derived/expansion_report.html
