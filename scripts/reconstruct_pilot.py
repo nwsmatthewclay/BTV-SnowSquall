@@ -1,19 +1,12 @@
 """Run the first geographic radar-object reconstruction pilot.
 
-Input:
-    data/raw/level2/<RADAR>/<YYYYMMDD>/*
-
-Output:
-    data/derived/pilot_object_scans.csv
-
 The pilot grids each lowest radar sweep onto a common Cartesian grid before
-detecting objects. This is the key transition from radar-native pixels to
-trackable geographic storm objects.
+detecting objects. Failed volume reads are retained in a machine-readable
+error log so missing historical scans cannot disappear silently.
 """
 from __future__ import annotations
 
 import argparse
-import csv
 from pathlib import Path
 
 import numpy as np
@@ -28,11 +21,6 @@ from processing.motion import add_motion_features
 
 
 def object_geometry(mask, lat, lon, spacing_km=1.0):
-    """Create a geographic footprint from an object mask.
-
-    A convex hull is used for the first pilot; later versions can preserve
-    concave storm boundaries from the connected-component footprint.
-    """
     yy, xx = np.where(mask)
     if len(xx) < 3:
         return None, np.nan, np.nan, np.nan
@@ -42,9 +30,6 @@ def object_geometry(mask, lat, lon, spacing_km=1.0):
     if hull.is_empty:
         return None, np.nan, np.nan, np.nan
 
-    # Approximate planar dimensions from the grid spacing. The projected
-    # Cartesian grid is locally metric; this first pilot only needs stable
-    # geometry descriptors for object tracking/model development.
     area_km2 = float(len(xx) * spacing_km * spacing_km)
     coords = np.asarray(hull.exterior.coords) if isinstance(hull, Polygon) else np.empty((0, 2))
     if len(coords) >= 2:
@@ -116,15 +101,28 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--input", default="data/raw/level2")
     parser.add_argument("--output", default="data/derived/pilot_object_scans.csv")
+    parser.add_argument(
+        "--error-log",
+        default=None,
+        help="CSV path for failed radar volumes; defaults beside --output.",
+    )
     args = parser.parse_args()
 
     input_root = Path(args.input)
+    output = Path(args.output)
+    error_log = (
+        Path(args.error_log)
+        if args.error_log
+        else output.with_name(f"{output.stem}_errors.csv")
+    )
+
     files = sorted(p for p in input_root.rglob("*") if p.is_file())
     if not files:
         raise SystemExit(f"No Level-II files found below {input_root}")
 
     trackers = {}
     rows = []
+    errors = []
 
     for path in files:
         radar = path.parts[-3] if len(path.parts) >= 3 else "UNKNOWN"
@@ -133,6 +131,12 @@ def main():
         try:
             objects = process_volume(path, tracker)
         except Exception as exc:
+            errors.append({
+                "radar_site": radar,
+                "source_file": str(path),
+                "error_type": type(exc).__name__,
+                "error_message": str(exc),
+            })
             print(f"SKIP {path}: {type(exc).__name__}: {exc}")
             continue
 
@@ -156,16 +160,22 @@ def main():
                 "geometry_wkt": obj.get("geometry_wkt"),
             })
 
-    output = Path(args.output)
-    output.parent.mkdir(parents=True, exist_ok=True)
     if not rows:
         raise SystemExit("No candidate objects were produced.")
 
     frame = pd.DataFrame(rows)
     frame = add_motion_features(frame)
+    output.parent.mkdir(parents=True, exist_ok=True)
     frame.to_csv(output, index=False)
 
+    error_log.parent.mkdir(parents=True, exist_ok=True)
+    pd.DataFrame(
+        errors,
+        columns=["radar_site", "source_file", "error_type", "error_message"],
+    ).to_csv(error_log, index=False)
+
     print(f"Wrote {len(rows)} geographic object-scan records to {output}")
+    print(f"Failed radar volumes logged: {len(errors)} -> {error_log}")
 
 
 if __name__ == "__main__":
