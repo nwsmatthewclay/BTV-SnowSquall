@@ -41,7 +41,10 @@ def main():
         try:
             radar=read_level2(path)
             meta=volume_metadata(radar,path)
-            ts=meta["scan_time_utc"]
+            ts=pd.to_datetime(meta["scan_time_utc"], utc=True, errors="coerce")
+            if pd.isna(ts):
+                continue
+            ts=ts.to_pydatetime()
             radar_name=meta.get("radar_site") or path.name[:4]
             candidates=[r for r in rows if r["radar_site"]==radar_name and r["window_start"]<=ts<=r["window_end"]]
             if not candidates:
