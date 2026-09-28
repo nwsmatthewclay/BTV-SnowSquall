@@ -36,7 +36,9 @@ def audit(input_csv: Path, schema_csv: Path) -> dict:
     for field in schema["field"].astype(str):
         aliases = FIELD_ALIASES.get(field, (field,))
         actual = next((candidate for candidate in aliases if candidate in frame.columns), None)
-        group_value = schema.loc[schema["field"].astype(str).eq(field), "group"].iloc[0]
+        schema_row = schema.loc[schema["field"].astype(str).eq(field)].iloc[0]
+        group_value = schema_row["group"]
+        availability_policy = schema_row.get("availability_policy", "unspecified")
         if actual is None:
             rows.append({
                 "field": field,
@@ -46,6 +48,8 @@ def audit(input_csv: Path, schema_csv: Path) -> dict:
                 "coverage_pct": 0.0,
                 "present": False,
                 "actual_field": None,
+                "availability_policy": availability_policy,
+                "coverage_interpretation": "expected_gap" if availability_policy in {"modern_2014_plus", "dualpol_era_dependent", "environment_provider_dependent", "observation_dependent", "target_or_review"} else "unexpected_gap",
             })
             continue
 
@@ -59,6 +63,8 @@ def audit(input_csv: Path, schema_csv: Path) -> dict:
             "coverage_pct": round(100.0 * non_null / len(frame), 2) if len(frame) else 0.0,
             "present": True,
             "actual_field": actual,
+            "availability_policy": availability_policy,
+            "coverage_interpretation": "populated" if non_null > 0 else ("expected_gap" if availability_policy in {"modern_2014_plus", "dualpol_era_dependent", "environment_provider_dependent", "observation_dependent", "target_or_review"} else "unexpected_gap"),
         })
 
     detail = pd.DataFrame(rows)
