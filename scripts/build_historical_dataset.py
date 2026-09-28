@@ -124,6 +124,8 @@ def enrich(input_csv: Path, output_csv: Path, cases_csv: Path, rap_dir: Path, ru
         row["environment_status"] = environment.get("status", "partial")
         row["environment_source"] = provider
         row["environment_valid_time_utc"] = environment.get("source_valid_time_utc")
+        row["environment_match_method"] = "latest_valid_analysis_at_or_before_scan"
+        row["environment_time_delta_policy"] = "scan_time_minus_source_valid_time"
         row["environment_age_minutes"] = environment.get("age_minutes")
         for key, value in (environment.get("fields") or {}).items():
             row[key] = value
