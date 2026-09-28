@@ -68,6 +68,18 @@ def build(positive_csv: Path, null_csv: Path, output_csv: Path):
         + ":"
         + object_series
     )
+    combined["row_identity_key"] = (
+        combined["population_track_key"]
+        + ":"
+        + combined["scan_time_utc"].astype(str)
+    )
+    if combined["row_identity_key"].duplicated().any():
+        count = int(combined["row_identity_key"].duplicated().sum())
+        raise ValueError(f"Unified dataset contains {count} duplicate object-timestep identities")
+    if (combined["population"].eq("verified_case_context") & combined["null_id"].notna()).any():
+        raise ValueError("Verified case-context rows must not contain null_id")
+    if (combined["population"].eq("winter_null_candidate") & combined["case_id"].notna()).any():
+        raise ValueError("Null-candidate rows must not contain case_id")
     combined = combined.sort_values(
         [c for c in ["scan_time_utc", "radar_site", "object_id"] if c in combined.columns]
     )
