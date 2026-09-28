@@ -45,6 +45,16 @@ def prepare_dataset(frame: pd.DataFrame, schema: dict, target: str):
         if "label_status" in d.columns
         else positive_population
     )
+
+    # Enforce the forecast-time boundary independently of label_status. A
+    # post-event row must never enter training just because it was otherwise
+    # categorized as case-associated nonimpact.
+    if {"scan_time_utc", "case_event_start_utc"}.issubset(d.columns):
+        scan_dt = pd.to_datetime(d["scan_time_utc"], utc=True, errors="coerce")
+        onset_dt = pd.to_datetime(d["case_event_start_utc"], utc=True, errors="coerce")
+        pre_onset_case = pre_onset_case & (
+            ~positive_population | onset_dt.isna() | (scan_dt < onset_dt)
+        )
     positive_rows = positive_population & pre_onset_case & d[target].eq(1)
     associated_negative_rows = (
         positive_population
