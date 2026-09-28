@@ -1,6 +1,6 @@
 """Build a conservative null-object sampling manifest.
 
-Null windows use a dedicated \`window_id\`. \`case_id\` is intentionally blank
+Null windows use a dedicated `window_id`. \`case_id\` is intentionally blank
 for null samples so downstream case counts cannot confuse candidate-null windows
 with historical verified cases.
 """
