@@ -1,0 +1,53 @@
+name: Build Modern SQW Surface Impact Inventory
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - snow-squall-model-foundation
+    paths:
+      - .github/modern-surface-trigger
+
+permissions:
+  contents: read
+
+jobs:
+  surface-inventory:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      PYTHONUNBUFFERED: "1"
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pandas requests
+
+      - name: Generate candidate episode inventory
+        run: |
+          python scripts/discover_modern_sqw_candidates.py             --start-year 2019             --end-year 2026             --output /tmp/modern_sqw_candidate_review.csv
+          python scripts/cluster_modern_sqw_candidates.py             --input /tmp/modern_sqw_candidate_review.csv             --output /tmp/modern_sqw_candidate_episodes.csv
+
+      - name: Build surface impact inventory
+        run: |
+          python scripts/build_modern_sqw_surface_impact_inventory.py             --episodes /tmp/modern_sqw_candidate_episodes.csv             --stations data/manifests/observing_stations.csv             --output data/derived/modern_sqw_surface_impact
+
+      - name: Upload surface impact inventory
+        uses: actions/upload-artifact@v4
+        with:
+          name: modern-sqw-surface-impact
+          path: |
+            data/derived/modern_sqw_surface_impact
+            /tmp/modern_sqw_candidate_episodes.csv
+          if-no-files-found: error
