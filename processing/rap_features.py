@@ -24,9 +24,10 @@ FIELD_SPECS = {
     "mlcin_jkg": ("heightAboveGroundLayer", "cin", (180, 0)),
     "mucape_jkg": ("heightAboveGroundLayer", "cape", (255, 0)),
     "mucin_jkg": ("heightAboveGroundLayer", "cin", (255, 0)),
-    "dcape_jkg": ("heightAboveGroundLayer", "cape", (3000, 0)),
     "srh01_m2s2": ("heightAboveGroundLayer", "hlcy", (1000, 0)),
     "srh03_m2s2": ("heightAboveGroundLayer", "hlcy", (3000, 0)),
+    "shear_u_0_6km_ms": ("heightAboveGroundLayer", "vucsh", (6000, 0)),
+    "shear_v_0_6km_ms": ("heightAboveGroundLayer", "vvcsh", (6000, 0)),
     "u10_ms": ("heightAboveGround", "u", 10),
     "v10_ms": ("heightAboveGround", "v", 10),
     "temperature_2m_k": ("heightAboveGround", "tmp", 2),
@@ -116,6 +117,13 @@ def extract_features(
     if values["pwat_mm"] is not None:
         # RAP PWAT is kg m^-2, numerically equivalent to mm of liquid water.
         values["pwat_mm"] = float(values["pwat_mm"])
+
+    shear_u = values.get("shear_u_0_6km_ms")
+    shear_v = values.get("shear_v_0_6km_ms")
+    values["shear_0_6km_ms"] = (
+        float(np.hypot(shear_u, shear_v))
+        if shear_u is not None and shear_v is not None else None
+    )
 
     return {
         "source": "RAP",
