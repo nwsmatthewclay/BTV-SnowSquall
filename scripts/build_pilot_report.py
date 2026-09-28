@@ -166,11 +166,13 @@ def main():
                 "ROC_AUC": metrics.get("auc_roc"),
                 "Average_Precision": metrics.get("average_precision"),
                 "Brier": metrics.get("brier_score"),
+                "Climatology_Brier": (metrics.get("climatology") or {}).get("brier_score"),
             })
         baseline_df = pd.DataFrame(baseline_rows)
         baseline_section = table_html(baseline_df, [
             "horizon", "training_rows", "groups", "positive_case_groups",
             "evaluation_status", "ROC_AUC", "Average_Precision", "Brier",
+            "Climatology_Brier",
         ])
         not_ready = baseline_df[
             baseline_df.get("evaluation_status", pd.Series(dtype=str)).eq(
