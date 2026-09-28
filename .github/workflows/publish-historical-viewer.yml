@@ -113,12 +113,13 @@ jobs:
           rm -rf _site
           mkdir -p _site
 
-          # Prefer a prebuilt viewer package from the successful dataset run.
+          # Always use the version-controlled viewer shell, and add prebuilt data when available.
+          cp viewer/index.html viewer/app.js viewer/style.css _site/
           if [ -f dataset_artifact/data/derived/viewer/data/catalog.json ]; then
-            cp -R dataset_artifact/data/derived/viewer/. _site/
-            echo "Using prebuilt viewer package from dataset workflow."
+            mkdir -p _site/data
+            cp -R dataset_artifact/data/derived/viewer/data/. _site/data/
+            echo "Using prebuilt viewer data from dataset workflow."
           else
-            cp viewer/index.html viewer/app.js viewer/style.css _site/
             python -m py_compile scripts/build_static_viewer.py
 
             if [ "${{ steps.source.outputs.workflow_name }}" = "Object Dataset Full Expansion" ]; then
