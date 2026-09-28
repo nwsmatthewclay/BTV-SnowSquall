@@ -22,6 +22,15 @@ velocity_delta_0_6km_kt,kinematics,float,Velocity-derived 0-6 km shear proxy,tru
 rotation_signature,kinematics,float,Rotation texture metric,true
 divergence_signature,kinematics,float,Divergence texture metric,true
 zdr_mean_db,dualpol,float,Mean ZDR,true
+zdr_p90_db,dualpol,float,90th percentile ZDR over candidate object,true
+rhohv_max,dualpol,float,Maximum correlation coefficient,true
+rhohv_p90,dualpol,float,90th percentile correlation coefficient,true
+kdp_mean_degkm,dualpol,float,Mean KDP over candidate object,true
+velocity_mean_kt,kinematics,float,Mean lowest-sweep radial velocity over candidate object,true
+velocity_std_kt,kinematics,float,Radial-velocity texture standard deviation,true
+velocity_p90_abs_kt,kinematics,float,90th percentile absolute radial velocity,true
+velocity_gradient_ktkm,kinematics,float,Mean radial-velocity spatial gradient magnitude,true
+vertical_valid_points,vertical,int,Number of native radar profile points above reflectivity threshold,true
 zdr_gradient_dbkm,dualpol,float,ZDR gradient,true
 rhohv_mean,dualpol,float,Mean correlation coefficient,true
 rhohv_min,dualpol,float,Minimum correlation coefficient,true
