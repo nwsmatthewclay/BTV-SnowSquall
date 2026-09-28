@@ -40,6 +40,8 @@ def build(frame_path: Path, surface_path: Path, output_path: Path) -> pd.DataFra
             stations_visibility_le_0p5_sm=("min_visibility_mi", lambda s: int((s <= 0.5).sum())),
             stations_visibility_le_0p25_sm=("min_visibility_mi", lambda s: int((s <= 0.25).sum())),
             stations_with_present_weather=("present_weather_codes", lambda s: int(s.astype(str).str.strip().ne("").sum())),
+            stations_snow_coded_at_visibility_min=("snow_code_at_visibility_min", lambda s: int(pd.Series(s).fillna(False).astype(bool).sum())),
+            minimum_visibility_drop_from_baseline_mi=("visibility_drop_from_baseline_mi", "max"),
         )
     )
 
