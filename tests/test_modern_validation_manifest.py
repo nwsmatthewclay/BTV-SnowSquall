@@ -31,7 +31,7 @@ def test_repository_modern_manifest_is_csv_parseable():
     assert set(df['truth_role'])=={'validation_candidate'}
     assert set(df['independence_status'])=={'independent_candidate'}
     assert bool(df.loc[df['case_id']=='BTV20181121','reconstruction_eligible'].iloc[0]) is True
-    assert bool(df.loc[df['case_id']=='BTV20191218','reconstruction_eligible'].iloc[0]) is False
+    assert bool(df.loc[df['case_id']=='BTV20191218','reconstruction_eligible'].iloc[0]) is True
 
 
 def test_modern_manifest_rejects_missing_or_invalid_provenance_url(tmp_path):
@@ -52,7 +52,7 @@ def test_modern_manifest_accepts_provenance_only_candidate_without_window(tmp_pa
       'case_id':'BTV20191218','event_date_utc':'2019-12-18','radar_site':'KCXX',
       'truth_role':'validation_candidate','independence_status':'independent_candidate',
       'evidence_source':'NWSI_10-513','source_url':'https://www.weather.gov/media/directives/010_pdfs/pd01005013curr.pdf',
-      'reconstruction_eligible':False,'analysis_window_start_utc':'','analysis_window_end_utc':''
+      'reconstruction_eligible':True,'analysis_window_start_utc':'2019-12-18T22:25:00Z','analysis_window_end_utc':'2019-12-18T23:40:00Z'
     }]).to_csv(p,index=False)
     result=audit(p)
     assert result['training_eligible'] is False
