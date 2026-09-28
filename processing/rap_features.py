@@ -8,10 +8,14 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from pathlib import Path
+from collections import OrderedDict
 
 import numpy as np
 import xarray as xr
 
+
+_FIELD_CACHE_MAX = 32
+_FIELD_CACHE = OrderedDict()
 
 FIELD_SPECS = {
     "visibility_m": ("surface", "vis", None),
@@ -51,6 +55,12 @@ def _valid_time(value):
 
 
 def _open_field(path: Path, type_of_level: str, short_name: str, level=None):
+    key = (str(path.resolve()), type_of_level, short_name, level)
+    cached = _FIELD_CACHE.get(key)
+    if cached is not None:
+        _FIELD_CACHE.move_to_end(key)
+        return cached
+
     filters = {"typeOfLevel": type_of_level, "shortName": short_name}
     if level is not None:
         if type_of_level == "heightAboveGround":
@@ -60,11 +70,19 @@ def _open_field(path: Path, type_of_level: str, short_name: str, level=None):
             filters["topLevel"] = top
             filters["bottomLevel"] = bottom
 
-    return xr.open_dataset(
+    ds = xr.open_dataset(
         path,
         engine="cfgrib",
         backend_kwargs={"filter_by_keys": filters, "indexpath": ""},
     )
+    _FIELD_CACHE[key] = ds
+    if len(_FIELD_CACHE) > _FIELD_CACHE_MAX:
+        _, stale = _FIELD_CACHE.popitem(last=False)
+        try:
+            stale.close()
+        except Exception:
+            pass
+    return ds
 
 
 def _nearest(ds, latitude: float, longitude: float):
@@ -126,16 +144,16 @@ def extract_features(
 
     for name, (level_type, short_name, level) in FIELD_SPECS.items():
         try:
-            with _open_field(path, level_type, short_name, level) as ds:
-                valid = _dataset_valid_time(ds) or expected_valid_time
+            ds = _open_field(path, level_type, short_name, level)
+            valid = _dataset_valid_time(ds) or expected_valid_time
                 if valid is not None:
                     if valid > radar_time:
                         raise ValueError(
-                            f"future RAP analysis {valid.isoformat()} > "
-                            f"radar {radar_time.isoformat()}"
-                        )
-                    source_valid_time = source_valid_time or valid
-                values[name] = _nearest(ds, latitude, longitude)
+                        f"future RAP analysis {valid.isoformat()} > "
+                        f"radar {radar_time.isoformat()}"
+                    )
+                source_valid_time = source_valid_time or valid
+            values[name] = _nearest(ds, latitude, longitude)
         except Exception as exc:
             failures[name] = type(exc).__name__
 
