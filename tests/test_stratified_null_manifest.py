@@ -48,3 +48,27 @@ def test_stratified_nulls_raise_when_constraints_impossible(tmp_path):
             min_separation_hours=24,
             radars=("KCXX",),
         )
+
+
+def test_stratified_nulls_cover_multiple_years(tmp_path):
+    years = pd.DataFrame(
+        {
+            "case_id": ["CASE1"],
+            "event_start_utc": ["2005-02-13T09:24:00Z"],
+        }
+    )
+    cases_path = tmp_path / "cases.csv"
+    years.to_csv(cases_path, index=False)
+
+    result = build_null_windows(
+        cases_path,
+        "2002-11-01T00:00:00Z",
+        "2005-03-31T21:00:00Z",
+        sample_count=6,
+        seed=7,
+        min_separation_hours=24,
+        radars=("KCXX",),
+    )
+
+    selected = pd.to_datetime(result["window_center_utc"], utc=True)
+    assert selected.dt.year.nunique() >= 3
