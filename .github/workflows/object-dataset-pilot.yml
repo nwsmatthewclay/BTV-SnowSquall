@@ -13,7 +13,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 180
     env:
-      PYTHONPATH: \${{ github.workspace }}
+      PYTHONPATH: ${{ github.workspace }}
       PYTHONUNBUFFERED: '1'
 
     steps:
