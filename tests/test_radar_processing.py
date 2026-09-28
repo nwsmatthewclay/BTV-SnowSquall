@@ -3,6 +3,27 @@ import numpy as np
 from processing.object_detector import detect_reflectivity_objects
 from processing.object_tracker import CentroidTracker
 from processing.radar_features import object_field_summary, velocity_object_summary
+from processing.vertical_structure import summarize_vertical_profile
+
+
+def test_vertical_profile_summary():
+    result = summarize_vertical_profile(
+        reflectivity_dbz=[18.0, 25.0, 35.0, 30.0],
+        altitude_m=[1000.0, 2000.0, 4000.0, 6000.0],
+        threshold_dbz=20.0,
+    )
+
+    assert result["echo_top_km"] == 6.0
+    assert result["top_minus_base_km"] == 4.0
+    assert result["vertical_valid_points"] == 3
+    assert result["vertical_reflectivity_gradient"] > 0.0
+
+    empty = summarize_vertical_profile(
+        reflectivity_dbz=[10.0, 15.0],
+        altitude_m=[1000.0, 2000.0],
+        threshold_dbz=20.0,
+    )
+    assert empty["vertical_valid_points"] == 0
 
 
 def test_object_field_summary_and_velocity_texture():
