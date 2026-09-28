@@ -15,7 +15,7 @@ The object-population pilot combines verified-case context with winter null cand
 
 ## Radar/object fields
 
-Core fields include object ID, scan time, radar site, centroid latitude/longitude, reflectivity statistics, pixel count, area, length, width, geometry, and leakage-safe motion features.
+Core fields include object ID, scan time, radar site, centroid latitude/longitude, reflectivity statistics, pixel count, area, length, width, geometry, reader_backend provenance, and leakage-safe motion features.
 
 Track catalogs additionally carry qc_status and qc_flags for suspicious reconstruction artifacts such as very large connected objects, temporal gaps, geometry loss, or abrupt area jumps. QC flags do not automatically remove observations; they identify records for review.
 
