@@ -1,0 +1,144 @@
+name: Modern Independent Validation
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  modern-validation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    env:
+      PYTHONPATH: ${{ github.workspace }}
+      PYTHONUNBUFFERED: "1"
+
+    steps:
+      - name: Checkout validation revision
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install -r requirements-science.txt
+
+      - name: Configure repository imports
+        run: |
+          python -c "import acquisition, processing, scripts; print('Repository imports OK')"
+          git rev-parse HEAD
+
+      - name: Audit modern validation manifest
+        run: |
+          python scripts/audit_modern_validation_manifest.py             data/manifests/modern_independent_validation_cases.csv             --report data/derived/modern_validation_manifest_audit.json
+
+      - name: Build eligible radar reconstruction manifest
+        run: |
+          python - <<'PY'
+          import pandas as pd
+          from pathlib import Path
+
+          src = Path("data/manifests/modern_independent_validation_cases.csv")
+          out = Path("data/derived/modern_validation_level2_manifest.csv")
+          df = pd.read_csv(src)
+          eligible = df[
+              df["reconstruction_eligible"].astype(str).str.lower() == "true"
+          ].copy()
+          if eligible.empty:
+              raise SystemExit("No reconstruction-eligible modern validation cases.")
+          result = eligible[[
+              "case_id", "radar_site",
+              "analysis_window_start_utc", "analysis_window_end_utc"
+          ]].rename(columns={
+              "analysis_window_start_utc": "window_start_utc",
+              "analysis_window_end_utc": "window_end_utc",
+          })
+          result.to_csv(out, index=False)
+          print(result.to_string(index=False))
+          PY
+
+      - name: Download archived Level-II
+        run: |
+          python acquisition/historical_level2.py             --manifest data/derived/modern_validation_level2_manifest.csv             --output data/raw/modern_level2
+
+      - name: Acquire modern ASOS/METAR
+        run: |
+          python scripts/acquire_modern_validation_surface.py             --cases data/manifests/modern_independent_validation_cases.csv             --output data/raw/modern_surface
+
+      - name: Replay eligible cases through live processor
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import pandas as pd
+          from pathlib import Path
+          import subprocess
+          import sys
+
+          cases = pd.read_csv("data/derived/modern_validation_level2_manifest.csv")
+          for row in cases.itertuples(index=False):
+              case_id = str(row.case_id)
+              radar = str(row.radar_site)
+              start = pd.to_datetime(row.window_start_utc, utc=True)
+              day = start.strftime("%Y%m%d")
+              input_dir = Path("data/raw/modern_level2") / radar / day
+              output_dir = Path("data/derived/modern_validation_replay") / case_id
+              state = output_dir / "replay_state.json"
+              cmd = [
+                  sys.executable, "scripts/historical_operational_replay.py",
+                  "--case-id", case_id,
+                  "--input-dir", str(input_dir),
+                  "--output-dir", str(output_dir),
+                  "--state-path", str(state),
+              ]
+              print("RUN:", " ".join(cmd))
+              subprocess.run(cmd, check=True)
+          PY
+
+      - name: Acquire archived MRMS reflectivity
+        run: |
+          python scripts/acquire_modern_validation_mrms.py             --replay-root data/derived/modern_validation_replay             --output data/derived/modern_validation_mrms
+
+      - name: Build non-scoring validation inventory
+        run: |
+          python scripts/build_modern_validation_inventory.py             --cases data/manifests/modern_independent_validation_cases.csv             --replay-root data/derived/modern_validation_replay             --surface-root data/raw/modern_surface             --mrms-root data/derived/modern_validation_mrms
+
+      - name: Assert independent-validation boundary
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          manifest = json.loads(
+              Path("data/derived/modern_validation_inventory.json").read_text()
+          )
+          assert manifest["training_eligible"] is False
+          assert manifest["scoring_status"] == "not_scored"
+          for case in manifest["cases"]:
+              assert case["probability_scored"] is False
+          print("Independent validation boundary OK.")
+          PY
+
+      - name: Upload validation package
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: modern-independent-validation
+          path: |
+            data/manifests/modern_independent_validation_cases.csv
+            data/derived/modern_validation_level2_manifest.csv
+            data/derived/modern_validation_manifest_audit.json
+            data/derived/modern_validation_inventory.json
+            data/derived/modern_validation_inventory.csv
+            data/derived/modern_validation_replay
+            data/derived/modern_validation_mrms
+            data/raw/modern_surface
+            data/raw/modern_level2
+          if-no-files-found: warn
