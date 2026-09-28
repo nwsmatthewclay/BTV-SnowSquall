@@ -72,6 +72,7 @@ def process_volume(path: Path, tracker: CentroidTracker, radar_origin=None):
 
     reader_backend = meta.get("reader_backend")
     for obj in tracked:
+        obj["reader_backend"] = reader_backend
         cy = int(round(obj["row_centroid"]))
         cx = int(round(obj["column_centroid"]))
         if 0 <= cy < data.shape[0] and 0 <= cx < data.shape[1]:
@@ -146,7 +147,7 @@ def main():
                 "radar_site": radar,
                 "source_file": str(path),
                 "scan_time_utc": obj.get("scan_time_utc"),
-                "reader_backend": reader_backend,
+                "reader_backend": obj.get("reader_backend"),
                 "object_id": obj["object_id"],
                 "pixel_count": obj["pixel_count"],
                 "max_reflectivity_dbz": obj["max_reflectivity_dbz"],
