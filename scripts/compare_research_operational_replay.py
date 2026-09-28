@@ -54,6 +54,12 @@ def load_replay(path: Path):
 
 
 def compare(research: pd.DataFrame, replay: pd.DataFrame, match_radius_km: float = 15.0):
+    research = research.copy()
+    replay = replay.copy()
+    research["scan_time_utc"] = pd.to_datetime(research["scan_time_utc"], utc=True, errors="coerce")
+    replay["scan_time_utc"] = pd.to_datetime(replay["scan_time_utc"], utc=True, errors="coerce")
+    research = research.dropna(subset=["scan_time_utc"])
+    replay = replay.dropna(subset=["scan_time_utc"])
     research_by_time = {t: g for t, g in research.groupby("scan_time_utc")}
     replay_by_time = {t: g for t, g in replay.groupby("scan_time_utc")}
     times = sorted(set(research_by_time) | set(replay_by_time))
