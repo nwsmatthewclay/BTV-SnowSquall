@@ -1,23 +1,18 @@
 """
-BTV Snow Squall Project - real-time NEXRAD Level II acquisition.
+BTV Snow Squall Project - resilient real-time NEXRAD Level II acquisition.
 
-Phase 1:
-    Watch the public NOAA/Unidata NEXRAD Level II archive for one radar,
-    download each newly available completed volume, and log acquisition
-    latency.
-
-This is intentionally independent of the later snow-squall algorithm.
-The acquisition layer can later be switched from polling to SNS/SQS
-without changing the downstream processing interface.
+The watcher is intentionally idempotent: a volume is only downloaded when the
+local file is absent or empty. A future restart may rediscover the newest
+archive object, but the existing local file is reused rather than downloaded
+again.
 """
-
 from __future__ import annotations
 
 import argparse
 import logging
 import re
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import boto3
@@ -35,10 +30,9 @@ LOG_ROOT = PROJECT_ROOT / "logs"
 RADARS = ("KCXX", "KTYX")
 POLL_SECONDS = 10
 LOOKBACK_HOURS = 2
+DOWNLOAD_TIMEOUT = 60
+MAX_RETRIES = 3
 
-# NEXRAD archive filenames normally contain:
-#   RADAR + YYYYMMDD_HHMMSS...
-# Keep this regex broad enough for naming-version changes.
 VOLUME_TIME_RE = re.compile(
     r"(?P<radar>[A-Z0-9]{4})(?P<date>\d{8})[_-]?(?P<time>\d{6})",
     re.IGNORECASE,
@@ -47,17 +41,14 @@ VOLUME_TIME_RE = re.compile(
 
 def setup_logging(radar: str) -> None:
     LOG_ROOT.mkdir(parents=True, exist_ok=True)
-
     logger = logging.getLogger()
     logger.setLevel(logging.INFO)
-
     if logger.handlers:
         return
 
     formatter = logging.Formatter(
         "%(asctime)s UTC | %(levelname)s | %(message)s"
     )
-
     console = logging.StreamHandler()
     console.setFormatter(formatter)
     logger.addHandler(console)
@@ -73,10 +64,7 @@ def utc_now() -> datetime:
 
 def parse_volume_time(key: str, radar: str) -> datetime | None:
     match = VOLUME_TIME_RE.search(Path(key).name)
-    if not match:
-        return None
-
-    if match.group("radar").upper() != radar.upper():
+    if not match or match.group("radar").upper() != radar.upper():
         return None
 
     try:
@@ -89,11 +77,15 @@ def parse_volume_time(key: str, radar: str) -> datetime | None:
 
 
 def make_s3_client():
-    # NOAA/Unidata's public bucket does not require AWS credentials.
     return boto3.client(
         "s3",
         region_name=REGION,
-        config=Config(signature_version=UNSIGNED),
+        config=Config(
+            signature_version=UNSIGNED,
+            connect_timeout=15,
+            read_timeout=DOWNLOAD_TIMEOUT,
+            retries={"max_attempts": 3, "mode": "standard"},
+        ),
     )
 
 
@@ -105,80 +97,100 @@ def archive_prefix(radar: str, when: datetime) -> str:
 
 
 def find_newest_volume(s3, radar: str) -> tuple[str, datetime] | None:
-    """
-    Search the current and previous hour for the newest completed volume.
-    The archive bucket contains assembled volume files, so we don't need
-    to reconstruct chunks in this first test.
-    """
     now = utc_now()
-
     candidates: list[tuple[str, datetime]] = []
 
     for hour_offset in range(LOOKBACK_HOURS):
-        when = now.replace(minute=0, second=0, microsecond=0)
-        when = when.timestamp() - (hour_offset * 3600)
-        hour_dt = datetime.fromtimestamp(when, tz=timezone.utc)
-
-        prefix = archive_prefix(radar, hour_dt)
-
+        hour_dt = now.replace(minute=0, second=0, microsecond=0) - timedelta(
+            hours=hour_offset
+        )
         response = s3.list_objects_v2(
             Bucket=BUCKET,
-            Prefix=prefix,
+            Prefix=archive_prefix(radar, hour_dt),
         )
 
         for item in response.get("Contents", []):
-            key = item["Key"]
-            volume_time = parse_volume_time(key, radar)
-
+            volume_time = parse_volume_time(item["Key"], radar)
             if volume_time is not None:
-                candidates.append((key, volume_time))
+                candidates.append((item["Key"], volume_time))
 
-    if not candidates:
-        return None
-
-    return max(candidates, key=lambda x: x[1])
+    return max(candidates, key=lambda x: x[1]) if candidates else None
 
 
-def download_volume(s3, radar: str, key: str, volume_time: datetime) -> Path:
+def download_volume(
+    s3, radar: str, key: str, volume_time: datetime
+) -> Path:
     radar_dir = RAW_ROOT / radar
     radar_dir.mkdir(parents=True, exist_ok=True)
-
     local_path = radar_dir / Path(key).name
 
-    if not local_path.exists():
-        logging.info("Downloading %s -> %s", key, local_path)
-        s3.download_file(BUCKET, key, str(local_path))
-    else:
-        logging.info("Already have %s", local_path.name)
+    if local_path.exists() and local_path.stat().st_size > 0:
+        logging.info(
+            "Already have %s (%d bytes); skipping download.",
+            local_path.name,
+            local_path.stat().st_size,
+        )
+        return local_path
 
-    return local_path
+    for attempt in range(1, MAX_RETRIES + 1):
+        temp_path = local_path.with_suffix(local_path.suffix + ".part")
+        try:
+            logging.info(
+                "Downloading %s -> %s (attempt %d/%d)",
+                key,
+                local_path,
+                attempt,
+                MAX_RETRIES,
+            )
+
+            if temp_path.exists():
+                temp_path.unlink()
+
+            s3.download_file(BUCKET, key, str(temp_path))
+
+            if not temp_path.exists() or temp_path.stat().st_size == 0:
+                raise IOError("empty download")
+
+            temp_path.replace(local_path)
+            return local_path
+
+        except Exception:
+            if temp_path.exists():
+                temp_path.unlink()
+
+            logging.exception(
+                "Download failed for %s on attempt %d/%d",
+                key,
+                attempt,
+                MAX_RETRIES,
+            )
+            if attempt < MAX_RETRIES:
+                time.sleep(2**attempt)
+            else:
+                raise
+
+    raise RuntimeError("unreachable")
 
 
-def log_latency(radar: str, volume_time: datetime, downloaded_at: datetime) -> None:
-    age = downloaded_at - volume_time
-    logging.info(
-        "%s volume=%s | acquired=%s | age=%s",
-        radar,
-        volume_time.isoformat(),
-        downloaded_at.isoformat(),
-        age,
-    )
-
-
-def run(radar: str, poll_seconds: int) -> None:
+def run(radar: str, poll_seconds: int, max_polls: int | None = None) -> None:
     setup_logging(radar)
 
     logging.info("=" * 72)
     logging.info("BTV SNOW SQUALL - %s REAL-TIME ACQUISITION TEST", radar)
     logging.info("Bucket: %s", BUCKET)
     logging.info("Poll interval: %s seconds", poll_seconds)
+    if max_polls is not None:
+        logging.info("Maximum polls: %s", max_polls)
     logging.info("Started: %s", utc_now().isoformat())
     logging.info("=" * 72)
 
     s3 = make_s3_client()
     last_key: str | None = None
 
-    while True:
+    polls = 0
+    while max_polls is None or polls < max_polls:
+        polls += 1
+
         try:
             newest = find_newest_volume(s3, radar)
 
@@ -189,7 +201,6 @@ def run(radar: str, poll_seconds: int) -> None:
 
                 if key != last_key:
                     discovered_at = utc_now()
-
                     logging.info(
                         "New %s volume found: %s | radar time=%s",
                         radar,
@@ -198,22 +209,32 @@ def run(radar: str, poll_seconds: int) -> None:
                     )
 
                     path = download_volume(
-                        s3,
-                        radar,
-                        key,
-                        volume_time,
+                        s3, radar, key, volume_time
                     )
 
                     completed_at = utc_now()
-                    log_latency(radar, volume_time, completed_at)
-
+                    logging.info(
+                        "%s volume=%s | acquired=%s | age=%s",
+                        radar,
+                        volume_time.isoformat(),
+                        completed_at.isoformat(),
+                        completed_at - volume_time,
+                    )
                     logging.info(
                         "Local file ready: %s | download_time=%s",
                         path,
                         completed_at - discovered_at,
                     )
-
                     last_key = key
+                else:
+                    logging.info(
+                        "No newer %s volume; latest is still %s.",
+                        radar,
+                        key,
+                    )
+
+            if max_polls is not None and polls >= max_polls:
+                break
 
             time.sleep(poll_seconds)
 
@@ -222,8 +243,12 @@ def run(radar: str, poll_seconds: int) -> None:
             break
 
         except Exception:
-            logging.exception("Watcher error; retrying after 5 seconds.")
+            logging.exception(
+                "Watcher error; retrying after 5 seconds."
+            )
             time.sleep(5)
+
+    logging.info("Watcher test finished after %d poll(s).", polls)
 
 
 def parse_args() -> argparse.Namespace:
@@ -242,9 +267,19 @@ def parse_args() -> argparse.Namespace:
         default=POLL_SECONDS,
         help=f"Polling interval in seconds (default: {POLL_SECONDS}).",
     )
+    parser.add_argument(
+        "--max-polls",
+        type=int,
+        default=None,
+        help="Stop after this many polls; useful for CI tests.",
+    )
     return parser.parse_args()
 
 
 if __name__ == "__main__":
     args = parse_args()
-    run(args.radar, max(2, args.poll_seconds))
+    run(
+        args.radar,
+        max(2, args.poll_seconds),
+        max_polls=args.max_polls,
+    )
