@@ -305,6 +305,8 @@ jobs:
             --null-radar-audit data/derived/null_radar_reconstruction_audit.json \
             --baseline-root data/derived \
             --coverage data/derived/object_model_features_pilot.coverage.json \
+            --positive-level2-fields data/derived/positive_level2_field_audit.json \
+            --null-level2-fields data/derived/null_level2_field_audit.json \
             --output data/derived/pilot_report.html
 
       - name: Run tests
