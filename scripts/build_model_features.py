@@ -37,6 +37,10 @@ BLOCKED_PREFIXES = (
 )
 
 NON_PREDICTOR_COLUMNS = TARGET_COLUMNS | {
+    # Derived from verified future event timing; never a forecast-time predictor.
+    "lead_time_min",
+    # Official SQW intersection is truth/evidence metadata, not a model input.
+    "sqw_intersection",
     "scan_time_utc", "source_file", "radar_site", "object_id",
     "population", "population_id", "population_source", "truth_status",
     "case_id", "null_id", "window_id", "source_study", "dataset_version",
