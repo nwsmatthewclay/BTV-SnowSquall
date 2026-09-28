@@ -13,7 +13,7 @@ def build_track_catalog(path: Path):
     df["scan_dt"] = pd.to_datetime(df["scan_time_utc"], utc=True, errors="coerce")
     df = df.dropna(subset=["scan_dt", "object_id"]).copy()
 
-    group_cols = [c for c in ("population", "radar_site", "object_id") if c in df.columns]
+    group_cols = [c for c in ("population", "case_id", "null_id", "radar_site", "object_id") if c in df.columns]
     if "radar_site" not in group_cols:
         group_cols.insert(0, "radar_site")
     if "object_id" not in group_cols:
