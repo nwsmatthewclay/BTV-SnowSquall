@@ -14,7 +14,7 @@ import requests
 
 
 BASE_URL = "https://nomads.ncep.noaa.gov/pub/data/nccf/com/rap/prod"
-FILENAME_TEMPLATE = "rap.t{hour:02d}z.awp130bgrbf00.grib2"
+FILENAME_TEMPLATE = "rap.t{hour:02d}z.awp130pgrbf00.grib2"
 DATE_RE = re.compile(r"rap\.(\d{8})$")
 
 
