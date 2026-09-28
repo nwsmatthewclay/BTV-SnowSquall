@@ -4,7 +4,7 @@ from __future__ import annotations
 # Pilot / BTV-domain radar coordinates. These are also used by the viewer.
 RADAR_ORIGINS = {
     "KCXX": (44.511, -73.166),
-    "KTYX": (43.755, -75.676),
+    "KTYX": (43.756, -75.680),
     "KBTV": (44.472, -73.154),
 }
 
