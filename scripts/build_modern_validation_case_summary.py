@@ -21,7 +21,15 @@ def build(cases_path: Path, inventory_path: Path, output_json: Path, output_csv:
         if str(row.reconstruction_eligible).lower() != "true":
             continue
 
-        surface_path = Path("data/raw/modern_surface") / str(row.observing_station) / f"{case_id}.csv"
+        observing_stations = [
+            s.strip() for s in str(
+                getattr(row, "observing_stations", getattr(row, "observing_station", ""))
+            ).split(";") if s.strip()
+        ]
+        surface_files = [
+            Path("data/raw/modern_surface") / station / f"{case_id}.csv"
+            for station in observing_stations
+        ]
         surface_diag = Path("data/derived") / f"modern_surface_radar_diagnostic_{case_id}.json"
 
         item = {
@@ -38,14 +46,30 @@ def build(cases_path: Path, inventory_path: Path, output_json: Path, output_csv:
             "scoring_status": "not_scored",
             "probability_scored": False,
         }
+        surface_frames = []
+        for surface_file in surface_files:
+            if surface_file.exists():
+                frame = pd.read_csv(surface_file)
+                frame["source_station"] = surface_file.parent.name
+                surface_frames.append(frame)
+        if surface_frames:
+            combined_surface = pd.concat(surface_frames, ignore_index=True)
+            vis = pd.to_numeric(combined_surface.get("visibility_mi"), errors="coerce")
+            gust = pd.to_numeric(combined_surface.get("wind_gust_kt"), errors="coerce")
+            item["surface_rows"] = int(len(combined_surface))
+            item["surface_stations_available"] = sorted(combined_surface["source_station"].unique().tolist())
+            item["minimum_visibility_mi"] = float(vis.min()) if vis.notna().any() else None
+            item["maximum_gust_kt"] = float(gust.max()) if gust.notna().any() else None
+        else:
+            item["surface_rows"] = 0
+            item["surface_stations_available"] = []
+
         item.update({
+            "primary_observing_station": str(row.observing_station),
             "replay_scans": inventory.get(case_id, {}).get("replay_scans", 0),
             "replay_failed_scans": inventory.get(case_id, {}).get("replay_failed_scans", 0),
             "replay_failure_rate": inventory.get(case_id, {}).get("replay_failure_rate"),
             "replay_object_scan_count": inventory.get(case_id, {}).get("replay_object_scan_count", 0),
-            "surface_rows": inventory.get(case_id, {}).get("surface_rows", 0),
-            "minimum_visibility_mi": inventory.get(case_id, {}).get("min_visibility_mi"),
-            "maximum_gust_kt": inventory.get(case_id, {}).get("max_gust_kt"),
             "mrms_lcref_files": inventory.get(case_id, {}).get("mrms_lcref_files", 0),
         })
 
