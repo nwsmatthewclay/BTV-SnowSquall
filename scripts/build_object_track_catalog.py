@@ -28,7 +28,7 @@ def build_track_catalog(path: Path):
         max_z = pd.to_numeric(g.get("max_reflectivity_dbz"), errors="coerce").max()
         mean_z = pd.to_numeric(g.get("mean_reflectivity_dbz"), errors="coerce").mean()
         area = pd.to_numeric(g.get("area_km2"), errors="coerce")
-        aspect = pd.to_numeric(g.get("aspect_ratio"), errors="coerce")
+        aspect = pd.to_numeric(g["aspect_ratio"], errors="coerce") if "aspect_ratio" in g.columns else pd.Series(dtype="float64")
 
         groups.append({
             "object_id": object_id,
@@ -41,8 +41,8 @@ def build_track_catalog(path: Path):
             "mean_reflectivity_dbz": mean_z,
             "max_area_km2": area.max(),
             "median_area_km2": area.median(),
-            "max_aspect_ratio": aspect.max(),
-            "median_aspect_ratio": aspect.median(),
+            "max_aspect_ratio": float(aspect.max()) if not aspect.empty else np.nan,
+            "median_aspect_ratio": float(aspect.median()) if not aspect.empty else np.nan,
             "track_quality": (
                 "short"
                 if len(g) < 3 else
