@@ -43,7 +43,7 @@ def prepare_dataset(frame: pd.DataFrame, schema: dict, target: str):
     pre_onset_case = (
         d["label_status"].isin(["prospective_positive", "case_associated_nonimpact"])
         if "label_status" in d.columns
-        else pd.Series(False, index=d.index)
+        else positive_population
     )
     positive_rows = positive_population & pre_onset_case & d[target].eq(1)
     associated_negative_rows = (
