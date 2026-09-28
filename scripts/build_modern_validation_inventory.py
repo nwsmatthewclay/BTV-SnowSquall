@@ -33,6 +33,12 @@ def build(cases_path: Path, replay_root: Path, surface_root: Path, mrms_root: Pa
             "analysis_window_start_utc": str(row.analysis_window_start_utc),
             "analysis_window_end_utc": str(row.analysis_window_end_utc),
             "replay_scans": int(replay.get("scan_count", 0)),
+            "replay_attempted_scans": int(replay.get("attempted_scan_count", replay.get("scan_count", 0))),
+            "replay_failed_scans": int(replay.get("failed_scan_count", 0)),
+            "replay_failure_rate": (
+                float(replay.get("failed_scan_count", 0)) / float(replay.get("attempted_scan_count", 1))
+                if replay.get("attempted_scan_count") else None
+            ),
             "replay_object_scan_count": int(replay.get("object_scan_count", 0)),
             "surface_rows": int(len(surface)),
             "min_visibility_mi": (
