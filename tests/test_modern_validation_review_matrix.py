@@ -20,9 +20,9 @@ def test_validation_review_matrix_remains_non_scoring(tmp_path):
 
     pd.DataFrame([
         {"episode_id": "SQE1", "station": "KBTV", "query_status": "success",
-         "min_visibility_mi": 0.25, "max_wind_gust_kt": 30, "present_weather_codes": "SN"},
+         "min_visibility_mi": 0.25, "max_wind_gust_kt": 30, "present_weather_codes": "SN", "snow_code_at_visibility_min": True},
         {"episode_id": "SQE1", "station": "KMPV", "query_status": "success",
-         "min_visibility_mi": 0.5, "max_wind_gust_kt": 35, "present_weather_codes": ""},
+         "min_visibility_mi": 0.5, "max_wind_gust_kt": 35, "present_weather_codes": "", "snow_code_at_visibility_min": False},
     ]).to_csv(surface, index=False)
 
     result = build(frame, surface, output)
