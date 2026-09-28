@@ -215,9 +215,12 @@ def build_labels(df: pd.DataFrame, cases_csv: Path):
                 out.at[idx, f"squall_ongoing_within_{horizon}m"] = 1
                 out.at[idx, f"label_confidence_{horizon}m"] = "verified_visibility_interval"
 
-        if start is not None and scan >= start and (end is None or scan < end):
+        if start is not None and scan >= start and end is not None and scan < end:
             out.at[idx, "label_status"] = "verified_event_interval"
             out.at[idx, "label_reason"] = "track_associated_with_verified_event_interval"
+        elif start is not None and scan >= start and end is None:
+            out.at[idx, "label_status"] = "event_onset_no_verified_end"
+            out.at[idx, "label_reason"] = "event_onset_documented_but_end_interval_unverified"
         elif start is not None and scan < start and any(
             out.at[idx, f"squall_onset_within_{h}m"] for h in HORIZONS
         ):
