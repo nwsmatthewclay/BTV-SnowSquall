@@ -18,6 +18,7 @@ from processing.object_detector import detect_reflectivity_objects
 from processing.object_tracker import CentroidTracker
 from processing.radar_grid import grid_field_2d, grid_latlon, grid_lowest_sweep
 from processing.motion import add_motion_features
+from processing.radar_features import object_field_summary, velocity_object_summary
 
 
 def object_geometry(mask, lat, lon, spacing_km=1.0):
@@ -54,9 +55,10 @@ def process_volume(path: Path, tracker: CentroidTracker, radar_origin=None):
     if radar_origin:
         origin_lat, origin_lon = radar_origin
 
+    available_fields = [name for name in fields.values() if name]
     grid = grid_lowest_sweep(
         radar,
-        reflectivity,
+        available_fields,
         origin_lat=origin_lat,
         origin_lon=origin_lon,
         grid_size_km=180.0,
@@ -64,6 +66,11 @@ def process_volume(path: Path, tracker: CentroidTracker, radar_origin=None):
     )
     data = grid_field_2d(grid, reflectivity)
     lat, lon = grid_latlon(grid)
+    gridded = {
+        canonical: grid_field_2d(grid, actual)
+        for canonical, actual in fields.items()
+        if actual
+    }
 
     objects = detect_reflectivity_objects(data)
     meta = volume_metadata(radar, path)
