@@ -2,6 +2,11 @@ name: Modern Independent Validation
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - snow-squall-model-foundation
+    paths:
+      - .github/modern-validation-trigger
 
 permissions:
   contents: read
