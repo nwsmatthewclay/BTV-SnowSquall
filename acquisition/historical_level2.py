@@ -2,9 +2,6 @@
 
 The NOAA/Unidata Level-II archive is public. This module deliberately separates
 manifest generation from downloading so a case can be reconstructed reproducibly.
-
-Example:
-    python acquisition/historical_level2.py --manifest data/manifests/banacos_radar_windows.csv --output data/raw/level2 --case-id BTV20060224
 """
 from __future__ import annotations
 
@@ -41,8 +38,6 @@ def list_volume_keys(client, radar: str, day: datetime) -> list[str]:
     for page in paginator.paginate(Bucket=BUCKET, Prefix=prefix):
         for obj in page.get("Contents", []):
             key = obj["Key"]
-            # Historical Level-II objects can be stored without a filename extension.
-            # The timestamp parser below is the authoritative filter.
             if Path(key).name:
                 keys.append(key)
     return keys
@@ -75,6 +70,15 @@ def download_window(client, radar: str, start: datetime, end: datetime, output: 
     return downloaded
 
 
+def row_identifier(row: dict) -> str:
+    return (
+        row.get("case_id")
+        or row.get("window_id")
+        or row.get("null_id")
+        or "UNKNOWN"
+    )
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--manifest", required=True)
@@ -86,7 +90,10 @@ def main() -> None:
         rows = list(csv.DictReader(fh))
 
     if args.case_id:
-        rows = [r for r in rows if r["case_id"] == args.case_id]
+        rows = [
+            r for r in rows
+            if args.case_id in {r.get("case_id"), r.get("window_id"), r.get("null_id")}
+        ]
 
     client = s3_client()
     total = 0
@@ -95,7 +102,7 @@ def main() -> None:
         end = parse_utc(row["window_end_utc"])
         n = download_window(client, row["radar_site"], start, end, Path(args.output))
         total += n
-        print(f"{row['case_id']} {row['radar_site']}: downloaded {n} volumes")
+        print(f"{row_identifier(row)} {row['radar_site']}: downloaded {n} volumes")
 
     print(f"Downloaded {total} new Level-II volumes.")
 
