@@ -23,7 +23,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: snow-squall-model-foundation
+          ref: ${{ github.sha }}
 
       - uses: actions/setup-python@v5
         with:
@@ -38,6 +38,8 @@ jobs:
       - name: Configure repository imports
         run: |
           python -c "import acquisition, processing, scripts; print('Repository imports OK')"
+          echo "Pilot checkout:"
+          git rev-parse HEAD
 
       - name: Build five-case positive pilot manifest
         run: |
