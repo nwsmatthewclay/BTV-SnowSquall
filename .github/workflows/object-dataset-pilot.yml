@@ -116,6 +116,30 @@ jobs:
           assert "future_information_policy" in d.columns
           PY
 
+      - name: Build leakage-safe model features
+        run: |
+          python scripts/build_model_features.py data/derived/object_population_pilot.csv --output data/derived/object_model_features_pilot.csv
+
+      - name: Audit model feature policy
+        run: |
+          python - <<'PY'
+          import pandas as pd
+          d = pd.read_csv("data/derived/object_model_features_pilot.csv")
+          forbidden = [c for c in d.columns if c.startswith("squall_") or c in {
+              "label_status", "label_reason", "track_event_distance_km",
+              "track_event_associated", "case_station_distance_km",
+              "association_method",
+          }]
+          assert "future_information_policy" in d.columns
+          assert "track_age_min" in d.columns
+          assert "max_reflectivity_dbz_delta" in d.columns
+          assert "area_km2_rate_per_min" in d.columns
+          print("MODEL FEATURE RECORDS:", len(d))
+          print("MODEL FEATURE COLUMNS:", len(d.columns))
+          print("Target/association columns retained only as outputs:", forbidden)
+          print("Future-information policy:", d["future_information_policy"].value_counts(dropna=False).to_dict())
+          PY
+
       - name: Build SOO-ready pilot report
         run: |
           python scripts/build_pilot_report.py \
@@ -145,6 +169,7 @@ jobs:
             data/derived/null_object_environment.csv
             data/derived/null_object_tracks.csv
             data/derived/object_population_pilot.csv
+            data/derived/object_model_features_pilot.csv
             data/derived/pilot_report.html
             data/raw/NARR
             data/raw/RUC
