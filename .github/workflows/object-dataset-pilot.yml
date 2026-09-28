@@ -8,7 +8,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 180
     env:
-      PYTHONPATH: ${{ github.workspace }}
+      PYTHONPATH: \${{ github.workspace }}
       PYTHONUNBUFFERED: '1'
 
     steps:
@@ -46,11 +46,31 @@ jobs:
           out.to_csv("data/manifests/banacos_positive_pilot.csv", index=False)
           print(out[["case_id", "radar_site", "window_start_utc", "event_start_utc"]].to_string(index=False))
           assert len(out) == 10
+          assert set(out["case_id"]) == set(cases)
           PY
 
       - name: Build five-window null pilot manifest
         run: |
           python scripts/build_null_window_manifest.py --sample-count 5 --seed 42 --radars KCXX KTYX --output data/manifests/banacos_null_windows_pilot.csv
+
+      - name: Audit manifest identity
+        run: |
+          python - <<'PY'
+          import pandas as pd
+          p = pd.read_csv("data/manifests/banacos_positive_pilot.csv")
+          n = pd.read_csv("data/manifests/banacos_null_windows_pilot.csv")
+          expected = {
+              "BTV20040315", "BTV20050213", "BTV20060207",
+              "BTV20060224", "BTV20101127"
+          }
+          assert set(p["case_id"]) == expected
+          assert n["case_id"].fillna("").eq("").all()
+          assert n["window_id"].notna().all()
+          assert n["window_id"].is_unique
+          assert n["null_id"].notna().all()
+          print("Positive case IDs:", sorted(p["case_id"].unique()))
+          print("Null IDs:", sorted(n["null_id"].unique()))
+          PY
 
       - name: Download positive radar windows
         run: |
@@ -75,6 +95,30 @@ jobs:
       - name: Annotate null IDs
         run: |
           python scripts/annotate_object_population.py data/derived/null_object_scans.csv --manifest data/manifests/banacos_null_windows_pilot.csv --output data/derived/null_object_scans_annotated.csv
+
+      - name: Audit annotation identity
+        run: |
+          python - <<'PY'
+          import pandas as pd
+          expected = {
+              "BTV20040315", "BTV20050213", "BTV20060207",
+              "BTV20060224", "BTV20101127"
+          }
+          p = pd.read_csv("data/derived/positive_object_scans_annotated.csv")
+          n = pd.read_csv("data/derived/null_object_scans_annotated.csv")
+          observed = set(p["case_id"].dropna().astype(str))
+          unexpected = observed - expected
+          missing = expected - observed
+          print("Positive observed case IDs:", sorted(observed))
+          print("Unexpected positive case IDs:", sorted(unexpected))
+          print("Missing positive case IDs:", sorted(missing))
+          print("Null case IDs populated:", int(n["case_id"].notna().sum()))
+          print("Null IDs observed:", sorted(n["null_id"].dropna().astype(str).unique()))
+          assert not unexpected
+          assert not missing
+          assert int(n["case_id"].notna().sum()) == 0
+          assert n["population_id"].notna().all()
+          PY
 
       - name: Build positive historical dataset with multi-era environment
         run: |
@@ -102,6 +146,17 @@ jobs:
           python - <<'PY'
           import pandas as pd
           d = pd.read_csv("data/derived/object_population_pilot.csv")
+          expected = {
+              "BTV20040315", "BTV20050213", "BTV20060207",
+              "BTV20060224", "BTV20101127"
+          }
+          positive = set(
+              d.loc[d["population"] == "verified_case_context", "case_id"]
+              .dropna().astype(str)
+          )
+          null_case_values = d.loc[
+              d["population"] == "winter_null_candidate", "case_id"
+          ].dropna()
           print("UNIFIED OBJECT RECORDS:", len(d))
           print("POPULATIONS:")
           print(d["population"].value_counts(dropna=False).to_string())
@@ -109,11 +164,42 @@ jobs:
           print(d["environment_source"].value_counts(dropna=False).to_string())
           print("ENVIRONMENT STATUS:")
           print(d["environment_status"].value_counts(dropna=False).to_string())
-          print("CASE IDs:", d["case_id"].nunique(dropna=True))
-          print("NULL IDs:", d["null_id"].nunique(dropna=True))
-          assert len(d) > 0
-          assert set(d["population"].dropna()) == {"verified_case_context", "winter_null_candidate"}
+          print("POSITIVE CASE IDS:", sorted(positive))
+          print("NULL CASE IDs populated:", len(null_case_values))
+          print("NULL IDs:", sorted(d["null_id"].dropna().astype(str).unique()))
+          assert positive == expected
+          assert len(null_case_values) == 0
           assert "future_information_policy" in d.columns
+          PY
+
+      - name: Build leakage-safe model features
+        run: |
+          python scripts/build_model_features.py data/derived/object_population_pilot.csv \
+            --output data/derived/object_model_features_pilot.csv \
+            --schema-output data/derived/object_model_features_pilot.schema.json
+
+      - name: Audit model feature policy
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          schema = json.loads(Path("data/derived/object_model_features_pilot.schema.json").read_text())
+          required = {
+              "track_age_min",
+              "max_reflectivity_dbz_delta",
+              "area_km2_rate_per_min",
+              "motion_speed_kmh",
+          }
+          predictors = set(schema["predictor_columns"])
+          blocked = set(schema["blocked_non_predictors"])
+          targets = set(schema["target_columns"])
+          print("Predictor columns:", len(predictors))
+          print("Target columns:", len(targets))
+          print("Future-information policy:", schema["future_information_policy"])
+          assert schema["future_information_policy"] == "current_and_past_only"
+          assert required <= predictors
+          assert targets <= blocked | set()
+          assert not predictors.intersection(blocked)
           PY
 
       - name: Build SOO-ready pilot report
@@ -136,15 +222,19 @@ jobs:
             data/manifests/banacos_positive_pilot.csv
             data/manifests/banacos_null_windows_pilot.csv
             data/derived/positive_object_scans.csv
+            data/derived/positive_object_scans_errors.csv
             data/derived/positive_object_scans_annotated.csv
             data/derived/positive_object_environment.csv
             data/derived/positive_object_labeled.csv
             data/derived/positive_object_tracks.csv
             data/derived/null_object_scans.csv
+            data/derived/null_object_scans_errors.csv
             data/derived/null_object_scans_annotated.csv
             data/derived/null_object_environment.csv
             data/derived/null_object_tracks.csv
             data/derived/object_population_pilot.csv
+            data/derived/object_model_features_pilot.csv
+            data/derived/object_model_features_pilot.schema.json
             data/derived/pilot_report.html
             data/raw/NARR
             data/raw/RUC
