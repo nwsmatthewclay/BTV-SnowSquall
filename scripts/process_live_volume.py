@@ -132,6 +132,9 @@ def process_volume(path: Path, state_path: Path, output_path: Path):
                 radar_site = candidate.upper()
                 break
 
+    if state.get("radar_site") and state["radar_site"] != radar_site:
+        raise RuntimeError(f"Tracker state belongs to {state['radar_site']}, not {radar_site}")
+
     radar_origin = radar_origin_for_site(radar_site)
     if radar_origin is not None:
         apply_radar_origin(radar, radar_origin)
@@ -338,6 +341,7 @@ def process_volume(path: Path, state_path: Path, output_path: Path):
 
     processed.add(source_name)
     state["processed_sources"] = sorted(processed)[-500:]
+    state["radar_site"] = radar_site
     state["last_scan_time_utc"] = timestamp
     state["last_source"] = source_name
     state["last_object_count"] = len(features)
