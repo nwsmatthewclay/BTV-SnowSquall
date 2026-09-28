@@ -41,6 +41,7 @@ def detect_reflectivity_objects(reflectivity, config=ObjectDetectionConfig()):
             "max_reflectivity_dbz": float(np.nanmax(values)),
             "mean_reflectivity_dbz": float(np.nanmean(values)),
             "core_pixel_count": int(np.sum(values >= config.core_threshold_dbz)),
+            "touches_grid_edge": bool(yy.min() == 0 or xx.min() == 0 or yy.max() == arr.shape[0] - 1 or xx.max() == arr.shape[1] - 1),
             "row_indices": yy.tolist(),
             "column_indices": xx.tolist(),
         })
