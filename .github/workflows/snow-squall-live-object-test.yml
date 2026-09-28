@@ -7,50 +7,27 @@ jobs:
   live-object-test:
     runs-on: ubuntu-latest
     timeout-minutes: 12
-
     steps:
       - name: Check out feature branch
         uses: actions/checkout@v4
         with:
           ref: snow-squall-model-foundation
-
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-
       - name: Install scientific dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt -r requirements-science.txt
-
       - name: Run live object worker
         run: |
-          python scripts/live_object_worker.py             --radar KCXX             --poll-seconds 10             --max-polls 3
-
+          python scripts/live_object_worker.py             --radar KCXX --poll-seconds 10 --max-polls 3
       - name: Validate live object products
         run: |
           test -f data/derived/live_tracker_state.json
           test -f data/derived/live_objects.geojson
-          python - <<'PY'
-          import json
-          from pathlib import Path
-
-          state = json.loads(Path("data/derived/live_tracker_state.json").read_text())
-          geo = json.loads(Path("data/derived/live_objects.geojson").read_text())
-
-          print("Last source:", state.get("last_source"))
-          print("Last scan:", state.get("last_scan_time_utc"))
-          print("Object count:", state.get("last_object_count"))
-          print("GeoJSON features:", len(geo.get("features", [])))
-          print("Probability status:", geo.get("metadata", {}).get("probability_status"))
-
-          assert state.get("last_source")
-          assert "last_scan_time_utc" in state
-          assert geo["type"] == "FeatureCollection"
-          assert geo["metadata"]["probability_status"] == "not_scored"
-          PY
-
+          python scripts/audit_operational_readiness.py
       - name: Upload live object products
         if: always()
         uses: actions/upload-artifact@v4
