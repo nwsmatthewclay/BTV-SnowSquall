@@ -88,13 +88,38 @@ def _nearest(ds, latitude: float, longitude: float):
     return float(value) if np.isfinite(value) else None
 
 
+def _dataset_valid_time(ds):
+    """Return the dataset valid time from cfgrib/xarray metadata."""
+    for key in ("valid_time", "time"):
+        value = ds.attrs.get(key)
+        parsed = _valid_time(value)
+        if parsed is not None:
+            return parsed
+    for coord_name in ("valid_time", "time"):
+        if coord_name in ds.coords:
+            try:
+                values = np.asarray(ds[coord_name].values).reshape(-1)
+                for value in values:
+                    parsed = _valid_time(value)
+                    if parsed is not None:
+                        return parsed
+            except Exception:
+                pass
+    return None
+
+
 def extract_features(
     path: Path,
     latitude: float,
     longitude: float,
     radar_time: datetime,
+    expected_valid_time: datetime | None = None,
 ) -> dict:
     radar_time = radar_time.astimezone(timezone.utc)
+    expected_valid_time = (
+        expected_valid_time.astimezone(timezone.utc)
+        if expected_valid_time is not None else None
+    )
     values = {name: None for name in FIELD_SPECS}
     source_valid_time = None
     failures = {}
@@ -102,7 +127,7 @@ def extract_features(
     for name, (level_type, short_name, level) in FIELD_SPECS.items():
         try:
             with _open_field(path, level_type, short_name, level) as ds:
-                valid = _valid_time(ds.attrs.get("valid_time"))
+                valid = _dataset_valid_time(ds) or expected_valid_time
                 if valid is not None:
                     if valid > radar_time:
                         raise ValueError(
