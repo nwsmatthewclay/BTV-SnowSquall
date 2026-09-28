@@ -1,8 +1,8 @@
 """Process one newly acquired Level-II volume into live object state.
 
-This is the first bridge between real-time acquisition and the object-based
-snow-squall pipeline. It is intentionally probability-free: no model score is
-invented until trained predictors and leakage-safe labels exist.
+This bridge remains probability-free until trained predictors and leakage-safe
+labels exist. All time-evolving diagnostics use only the current scan and
+state retained from earlier scans.
 """
 from __future__ import annotations
 
@@ -33,6 +33,32 @@ def object_geometry(mask, lat, lon, spacing_km=1.0):
         return None, float(len(xx) * spacing_km**2)
 
     return hull.__geo_interface__, float(len(xx) * spacing_km**2)
+
+
+def object_shape_metrics(rows, cols, lat, lon, spacing_km=1.0):
+    """Estimate object major/minor axes and orientation from the footprint.
+
+    The calculation is local-grid/PCA based and is intended as a deterministic
+    radar diagnostic, not a geodesic shape retrieval.
+    """
+    if len(rows) < 3:
+        return None, None, None
+
+    xy = np.column_stack((cols.astype(float), rows.astype(float)))
+    centered = xy - xy.mean(axis=0)
+    cov = np.cov(centered, rowvar=False)
+    if cov.shape != (2, 2) or not np.all(np.isfinite(cov)):
+        return None, None, None
+
+    eigenvalues, eigenvectors = np.linalg.eigh(cov)
+    order = np.argsort(eigenvalues)[::-1]
+    eigenvalues = np.maximum(eigenvalues[order], 0.0)
+    major = 4.0 * sqrt(float(eigenvalues[0])) * spacing_km
+    minor = 4.0 * sqrt(float(eigenvalues[1])) * spacing_km
+
+    vec = eigenvectors[:, order[0]]
+    angle_deg = (degrees(atan2(float(vec[0]), float(vec[1]))) + 180.0) % 180.0
+    return major, minor, angle_deg
 
 
 def motion_from_positions(previous, current_lat, current_lon, current_time):
@@ -114,6 +140,7 @@ def process_volume(path: Path, state_path: Path, output_path: Path):
     features = []
     current_positions = {}
     previous_positions = state.get("object_positions", {})
+    previous_metrics = state.get("object_metrics", {})
 
     for obj in tracked:
         rows = np.asarray(obj.get("row_indices", []), dtype=int)
@@ -126,6 +153,10 @@ def process_volume(path: Path, state_path: Path, output_path: Path):
         footprint[rows[valid], cols[valid]] = True
 
         geometry, area_km2 = object_geometry(footprint, lat, lon)
+        major_km, minor_km, orientation_deg = object_shape_metrics(
+            rows[valid], cols[valid], lat, lon
+        )
+
         cy = int(round(obj["row_centroid"]))
         cx = int(round(obj["column_centroid"]))
         centroid_lat = float(lat[cy, cx]) if 0 <= cy < lat.shape[0] and 0 <= cx < lat.shape[1] else None
@@ -137,34 +168,80 @@ def process_volume(path: Path, state_path: Path, output_path: Path):
             centroid_lon,
             timestamp,
         )
-        current_positions[str(obj["object_id"])] = {
+
+        track_key = str(obj["object_id"])
+        previous = previous_metrics.get(track_key, {})
+        max_z = float(obj["max_reflectivity_dbz"])
+        mean_z = float(obj["mean_reflectivity_dbz"])
+        previous_max_z = previous.get("max_reflectivity_dbz")
+        previous_mean_z = previous.get("mean_reflectivity_dbz")
+        previous_time = previous.get("timestamp")
+
+        z_trend = None
+        if previous_max_z is not None and previous_time:
+            try:
+                dt_hours = (
+                    datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
+                    - datetime.fromisoformat(previous_time.replace("Z", "+00:00"))
+                ).total_seconds() / 3600.0
+                if dt_hours > 0:
+                    z_trend = (max_z - float(previous_max_z)) / dt_hours
+            except (TypeError, ValueError):
+                z_trend = None
+
+        area_growth = None
+        previous_area = previous.get("area_km2")
+        if previous_area is not None and previous_area > 0:
+            area_growth = (area_km2 - float(previous_area)) / float(previous_area)
+
+        age_scans = int(
+            tracker.tracks.get(obj["object_id"]).age_scans
+            if obj["object_id"] in tracker.tracks else 1
+        )
+
+        current_positions[track_key] = {
             "timestamp": timestamp,
             "lat": centroid_lat,
             "lon": centroid_lon,
         }
+        state.setdefault("object_metrics", {})
+        state["object_metrics"][track_key] = {
+            "timestamp": timestamp,
+            "max_reflectivity_dbz": max_z,
+            "mean_reflectivity_dbz": mean_z,
+            "area_km2": area_km2,
+        }
 
         features.append({
-            "track_id": str(obj["object_id"]),
+            "track_id": track_key,
             "timestamp": timestamp,
             "radar_site": metadata.get("radar_id"),
-            "geometry": geometry,
             "centroid_lat": centroid_lat,
             "centroid_lon": centroid_lon,
-            "pixel_count": obj["pixel_count"],
+            "pixel_count": int(obj["pixel_count"]),
             "area_km2": area_km2,
-            "max_reflectivity_dbz": obj["max_reflectivity_dbz"],
-            "mean_reflectivity_dbz": obj["mean_reflectivity_dbz"],
-            "core_pixel_count": obj["core_pixel_count"],
+            "length_km": major_km,
+            "width_km": minor_km,
+            "orientation_deg": orientation_deg,
+            "aspect_ratio": (major_km / minor_km) if major_km is not None and minor_km and minor_km > 0 else None,
+            "max_reflectivity_dbz": max_z,
+            "mean_reflectivity_dbz": mean_z,
+            "core_pixel_count": int(obj["core_pixel_count"]),
+            "core_fraction": float(obj["core_pixel_count"]) / max(1, int(obj["pixel_count"])),
             "motion_speed_kt": speed_kt,
             "motion_dir_deg": direction_deg,
+            "age_scans": age_scans,
+            "reflectivity_trend_dbz_per_hr": z_trend,
+            "area_growth_fraction": area_growth,
             "probability_15min": None,
             "probability_30min": None,
             "probability_45min": None,
             "probability_60min": None,
             "probability_trend": "unknown",
             "drivers": [],
+            "environment_status": "not_attached",
             "data_quality": "good",
-            "model_version": "live-object-foundation-v1",
+            "model_version": "live-object-foundation-v2",
         })
 
     result = {
@@ -172,7 +249,7 @@ def process_volume(path: Path, state_path: Path, output_path: Path):
         "features": [
             {
                 "type": "Feature",
-                "geometry": f.pop("geometry"),
+                "geometry": f.pop("geometry", None),
                 "properties": f,
             }
             for f in features
@@ -183,6 +260,7 @@ def process_volume(path: Path, state_path: Path, output_path: Path):
             "fields": fields,
             "object_count": len(features),
             "probability_status": "not_scored",
+            "environment_status": "not_attached",
         },
     }
 
