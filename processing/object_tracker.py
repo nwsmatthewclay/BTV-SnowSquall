@@ -63,10 +63,8 @@ class CentroidTracker:
                 object_id = self.next_id
                 self.next_id += 1
                 self.tracks[object_id] = Track(
-                    object_id,
-                    timestamp,
-                    obj["row_centroid"],
-                    obj["column_centroid"],
+                    object_id, timestamp,
+                    obj["row_centroid"], obj["column_centroid"]
                 )
             else:
                 object_id = best
@@ -80,3 +78,36 @@ class CentroidTracker:
             assignments.append((object_id, obj))
 
         return [{"object_id": object_id, **obj} for object_id, obj in assignments]
+
+    def to_state(self):
+        return {
+            "next_id": self.next_id,
+            "tracks": {
+                str(tid): {
+                    "object_id": track.object_id,
+                    "last_time": self._as_datetime(track.last_time).isoformat(),
+                    "row": track.row,
+                    "column": track.column,
+                    "age_scans": track.age_scans,
+                }
+                for tid, track in self.tracks.items()
+            },
+        }
+
+    @classmethod
+    def from_state(cls, state, config=TrackerConfig()):
+        tracker = cls(config=config)
+        if not state:
+            return tracker
+
+        tracker.next_id = int(state.get("next_id", 1))
+        for tid_text, raw in state.get("tracks", {}).items():
+            tid = int(tid_text)
+            tracker.tracks[tid] = Track(
+                object_id=int(raw["object_id"]),
+                last_time=raw["last_time"],
+                row=float(raw["row"]),
+                column=float(raw["column"]),
+                age_scans=int(raw.get("age_scans", 1)),
+            )
+        return tracker
