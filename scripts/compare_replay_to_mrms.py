@@ -100,8 +100,22 @@ def build(replay_root: Path, mrms_root: Path, output_csv: Path) -> dict:
         "scan_count_compared": int(df["scan_time_utc"].nunique()) if not df.empty else 0,
         "cases_compared": sorted(df["case_id"].astype(str).unique().tolist()) if not df.empty else [],
         "max_mrms_age_minutes": float(df["mrms_age_minutes"].max()) if not df.empty else None,
+        "neighborhood_radius_cells": 10,
         "scoring_status": "not_scored",
     }
+    if not df.empty:
+        paired = df[["level2_max_reflectivity_dbz", "mrms_neighborhood_max_dbz"]].apply(pd.to_numeric, errors="coerce").dropna()
+        summary["paired_records"] = int(len(paired))
+        if len(paired) >= 3:
+            l2 = paired["level2_max_reflectivity_dbz"].to_numpy()
+            mrms = paired["mrms_neighborhood_max_dbz"].to_numpy()
+            diffs = mrms - l2
+            summary.update({
+                "pearson_r_level2_vs_mrms_neighborhood": float(np.corrcoef(l2, mrms)[0, 1]),
+                "mean_signed_difference_dbz_mrms_minus_level2": float(np.mean(diffs)),
+                "mean_absolute_difference_dbz": float(np.mean(np.abs(diffs))),
+                "median_absolute_difference_dbz": float(np.median(np.abs(diffs))),
+            })
     output_csv.with_suffix(".json").write_text(
         json.dumps(summary, indent=2) + "\n", encoding="utf-8"
     )
