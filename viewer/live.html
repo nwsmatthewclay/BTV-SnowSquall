@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>BTV Snow Squall Live Object Viewer</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<link rel="stylesheet" href="style.css">
+<style>
+.live-main{display:grid;grid-template-columns:minmax(0,1fr) 360px;height:calc(100vh - 68px)}
+#liveMap{min-width:0;height:100%;background:#14202a}
+.live-panel{padding:14px;background:var(--panel);border-left:1px solid var(--line);overflow:auto}
+.live-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}
+.live-card{background:#121e29;border:1px solid #2b4051;border-radius:7px;padding:10px}
+.live-card h3{margin:0 0 6px;font-size:13px}
+.live-stat{display:flex;justify-content:space-between;padding:4px 0;color:#b9c7d4}
+.live-stat b{color:#fff}
+.live-status{padding:9px 10px;background:#141f28;border-left:3px solid var(--green);border-radius:5px;margin-top:9px}
+.live-status.degraded{border-left-color:var(--amber)}
+.live-status strong{display:block;color:#fff}
+.live-object-list{display:grid;gap:8px;margin-top:8px}
+.live-object{background:#16212b;border:1px solid #243847;border-radius:7px;padding:9px;cursor:pointer}
+.live-object:hover{border-color:#4f7591}
+.live-object.selected{border-color:#fff}
+.live-object .title{font-weight:750;color:#9dd4ff}
+.live-object .sub{font-size:11px;color:var(--muted);margin-top:2px}
+.live-object .chips{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}
+.chip{padding:3px 6px;border-radius:4px;background:#243746;color:#c8d7e5;font-size:10px}
+.nav-link{color:#9dd4ff;text-decoration:none;border:1px solid #405468;border-radius:6px;padding:6px 9px}
+@media(max-width:900px){.live-main{grid-template-columns:1fr}.live-panel{position:absolute;right:0;top:68px;bottom:0;width:min(360px,92vw);z-index:1000;box-shadow:-8px 0 25px rgba(0,0,0,.35)}}
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <div class="eyebrow">BTV SNOW SQUALL PROJECT</div>
+    <h1>Live Object Viewer</h1>
+    <div id="subtitle">Loading live KCXX/KTYX radar objects…</div>
+  </div>
+  <div class="header-actions">
+    <span class="badge research">FOUNDATION</span>
+    <a class="nav-link" href="index.html">Historical Explorer</a>
+    <button id="refreshBtn">Refresh</button>
+  </div>
+</header>
+<main class="live-main">
+  <section id="liveMap"></section>
+  <aside class="live-panel">
+    <div class="live-status" id="overallStatus">
+      <strong id="overallTitle">Loading live feeds…</strong>
+      <span id="overallText">Checking KCXX and KTYX.</span>
+    </div>
+    <div class="live-grid" id="radarCards"></div>
+
+    <div class="section-head"><h2>Current objects</h2><span id="objectCount">0</span></div>
+    <div class="live-object-list" id="objectList"></div>
+
+    <div class="section-head compact"><h3>Selected object</h3><span id="selectionState">None</span></div>
+    <div class="live-card" id="selectedObject">Click a radar object to inspect it.</div>
+
+    <div class="section-head compact"><h3>Model status</h3></div>
+    <div class="live-status degraded">
+      <strong>Probability scoring disabled</strong>
+      <span>The live worker is producing track/object/environment diagnostics only. No forecast probability is exposed until the independent training and verification gates are complete.</span>
+    </div>
+  </aside>
+</main>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="live.js"></script>
+</body>
+</html>

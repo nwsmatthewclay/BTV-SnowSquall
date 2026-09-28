@@ -1,0 +1,61 @@
+name: Publish Live Snow Squall Objects
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "*/15 * * * *"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: snow-squall-live-object-publisher
+  cancel-in-progress: true
+
+jobs:
+  publish-live-objects:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    env:
+      PYTHONPATH: ${{ github.workspace }}
+      PYTHONUNBUFFERED: "1"
+
+    steps:
+      - name: Check out live branch
+        uses: actions/checkout@v4
+        with:
+          ref: snow-squall-model-foundation
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install scientific dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt -r requirements-science.txt
+
+      - name: Process latest KCXX volume
+        run: |
+          mkdir -p viewer/data/live
+          python scripts/live_object_worker.py             --radar KCXX             --poll-seconds 2             --max-polls 1             --state viewer/data/live/KCXX_state.json             --output viewer/data/live/KCXX_objects.geojson
+
+      - name: Process latest KTYX volume
+        run: |
+          mkdir -p viewer/data/live
+          python scripts/live_object_worker.py             --radar KTYX             --poll-seconds 2             --max-polls 1             --state viewer/data/live/KTYX_state.json             --output viewer/data/live/KTYX_objects.geojson
+
+      - name: Commit changed live products
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "BTV Snow Squall Live Worker"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add viewer/data/live/KCXX_state.json viewer/data/live/KCXX_objects.geojson                   viewer/data/live/KTYX_state.json viewer/data/live/KTYX_objects.geojson
+          if git diff --cached --quiet; then
+            echo "No live-product changes to publish."
+            exit 0
+          fi
+          git commit -m "Update live snow squall objects [skip ci]"
+          git push origin HEAD:snow-squall-model-foundation
