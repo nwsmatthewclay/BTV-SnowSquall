@@ -19,6 +19,7 @@ from processing.object_tracker import CentroidTracker
 from processing.radar_grid import grid_field_2d, grid_latlon, grid_lowest_sweep
 from processing.motion import add_motion_features
 from processing.radar_features import object_field_summary, velocity_object_summary
+from processing.vertical_structure import summarize_vertical_structure
 
 
 def object_geometry(mask, lat, lon, spacing_km=1.0):
@@ -102,6 +103,15 @@ def process_volume(path: Path, tracker: CentroidTracker, radar_origin=None):
         obj["area_km2"] = area_km2
         obj["length_km"] = length_km
         obj["width_km"] = width_km
+
+        if np.isfinite(obj.get("centroid_lat", np.nan)) and np.isfinite(obj.get("centroid_lon", np.nan)):
+            vertical = summarize_vertical_structure(
+                radar,
+                float(obj["centroid_lat"]),
+                float(obj["centroid_lon"]),
+                reflectivity,
+            )
+            obj.update(vertical)
 
         if 0 <= cy < data.shape[0] and 0 <= cx < data.shape[1]:
             for canonical in ("zdr", "rhohv", "kdp", "velocity"):
