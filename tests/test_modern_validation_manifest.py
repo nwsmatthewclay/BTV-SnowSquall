@@ -116,7 +116,7 @@ def test_case_summary_keeps_mrms_statistics_case_specific(tmp_path, monkeypatch)
     inventory.write_text(json.dumps({"cases":[
         {"case_id":"A","replay_scans":1,"replay_failed_scans":0,"replay_failure_rate":0,"replay_object_scan_count":3,"surface_rows":1,"min_visibility_mi":1,"max_gust_kt":10,"mrms_lcref_files":1},
         {"case_id":"B","replay_scans":1,"replay_failed_scans":0,"replay_failure_rate":0,"replay_object_scan_count":3,"surface_rows":1,"min_visibility_mi":1,"max_gust_kt":10,"mrms_lcref_files":1},
-    ]),encoding="utf-8")
+    ]}),encoding="utf-8")
     pd.DataFrame([
         {"case_id":"A","level2_max_reflectivity_dbz":10,"mrms_neighborhood_max_dbz":11,"mrms_age_minutes":1},
         {"case_id":"A","level2_max_reflectivity_dbz":20,"mrms_neighborhood_max_dbz":19,"mrms_age_minutes":1},
