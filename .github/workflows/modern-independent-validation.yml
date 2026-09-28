@@ -108,6 +108,28 @@ jobs:
               subprocess.run(cmd, check=True)
           PY
 
+      - name: Audit replay scan quality
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          manifests = sorted(Path("data/derived/modern_validation_replay").glob("*/replay_manifest.json"))
+          if not manifests:
+              raise SystemExit("No modern replay manifests were produced.")
+          for path in manifests:
+              data = json.loads(path.read_text(encoding="utf-8"))
+              attempted = int(data.get("attempted_scan_count", 0))
+              failed = int(data.get("failed_scan_count", 0))
+              successful = int(data.get("successful_scan_count", 0))
+              if attempted == 0 or successful == 0:
+                  raise SystemExit(f"{path}: no successful replay scans")
+              rate = failed / attempted
+              print(f"{path.parent.name}: attempted={attempted} successful={successful} failed={failed} failure_rate={rate:.3f}")
+              if rate > 0.20:
+                  raise SystemExit(f"{path}: replay failure rate {rate:.3f} exceeds 0.20")
+          PY
+
       - name: Acquire archived MRMS reflectivity
         run: |
           python scripts/acquire_modern_validation_mrms.py             --replay-root data/derived/modern_validation_replay             --output data/derived/modern_validation_mrms
