@@ -2,6 +2,11 @@ name: Object Dataset Pilot
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - snow-squall-model-foundation
+    paths:
+      - .github/pilot-trigger
 
 jobs:
   dataset-pilot:
@@ -202,6 +207,10 @@ jobs:
           assert not predictors.intersection(blocked)
           PY
 
+      - name: Train case-held-out baseline model
+        run: |
+          python scripts/train_baseline_model.py             data/derived/object_model_features_pilot.csv             --schema data/derived/object_model_features_pilot.schema.json             --target squall_onset_within_15m             --output-dir data/derived/baseline_model
+
       - name: Build SOO-ready pilot report
         run: |
           python scripts/build_pilot_report.py \
@@ -235,6 +244,7 @@ jobs:
             data/derived/object_population_pilot.csv
             data/derived/object_model_features_pilot.csv
             data/derived/object_model_features_pilot.schema.json
+            data/derived/baseline_model
             data/derived/pilot_report.html
             data/raw/NARR
             data/raw/RUC
