@@ -33,6 +33,9 @@ jobs:
           echo "PYTHONPATH=${GITHUB_WORKSPACE}" >> "\${GITHUB_ENV}"
           export PYTHONPATH="${GITHUB_WORKSPACE}"
           python -c "import acquisition, processing, scripts; print('Repository imports OK')"
+      - name: Compile viewer build scripts
+        run: python -m py_compile scripts/build_static_viewer.py scripts/export_viewer_radar_frames.py
+
       - name: Run tests
         run: pytest -q
       - name: Initialize training-table smoke test
