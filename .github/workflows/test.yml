@@ -41,6 +41,8 @@ jobs:
 
       - name: Run tests
         run: pytest -q
+      - name: Validate modern validation / training separation
+        run: python scripts/audit_validation_training_separation.py
       - name: Initialize training-table smoke test
         run: python scripts/initialize_training_table.py
       - name: Validate repository foundation
