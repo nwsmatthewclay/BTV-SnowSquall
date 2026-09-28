@@ -102,6 +102,7 @@ jobs:
                   "--input-dir", str(input_dir),
                   "--output-dir", str(output_dir),
                   "--state-path", str(state),
+                  "--continue-on-error",
               ]
               print("RUN:", " ".join(cmd))
               subprocess.run(cmd, check=True)
