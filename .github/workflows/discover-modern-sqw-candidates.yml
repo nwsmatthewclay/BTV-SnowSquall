@@ -17,6 +17,10 @@ on:
         required: false
         default: "2026"
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
 
