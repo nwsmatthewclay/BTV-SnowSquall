@@ -81,6 +81,8 @@ def build_features(frame: pd.DataFrame) -> pd.DataFrame:
     df["track_age_min"] = (df["scan_dt"] - first_time).dt.total_seconds() / 60.0
 
     dt_min = (df["scan_dt"] - g["scan_dt"].shift(1)).dt.total_seconds() / 60.0
+    continuity_ok = dt_min.between(0, 10, inclusive="both")
+    df["track_gap_gt_10min"] = dt_min.gt(10).fillna(False)
     temporal_columns = [
         "max_reflectivity_dbz", "mean_reflectivity_dbz", "area_km2",
         "length_km", "width_km", "core_pixel_count", "pixel_count",
