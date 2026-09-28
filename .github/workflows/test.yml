@@ -13,6 +13,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       PYTHONUNBUFFERED: "1"
+      PYTHONPATH: ${{ github.workspace }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -25,8 +26,8 @@ jobs:
           pip install -r requirements-science.txt
       - name: Configure repository import path
         run: |
-          echo "PYTHONPATH=\${GITHUB_WORKSPACE}" >> "\${GITHUB_ENV}"
-          export PYTHONPATH="\${GITHUB_WORKSPACE}"
+          echo "PYTHONPATH=${GITHUB_WORKSPACE}" >> "\${GITHUB_ENV}"
+          export PYTHONPATH="${GITHUB_WORKSPACE}"
           python -c "import acquisition, processing, scripts; print('Repository imports OK')"
       - name: Run tests
         run: pytest -q
