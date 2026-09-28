@@ -1,0 +1,1 @@
+import inspect\nfrom scripts.build_historical_dataset import enrich\n\ndef test_temporal_case_inference_is_opt_in():\n    params=inspect.signature(enrich).parameters\n    assert params['allow_temporal_case_inference'].default is False\n
