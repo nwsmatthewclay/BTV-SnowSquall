@@ -75,9 +75,12 @@ def build_labels(df: pd.DataFrame, cases_csv: Path):
         start = parse_time(case.event_start_utc)
         if start is None:
             continue
-        end = event_end(case) or (start + timedelta(minutes=60))
+        verified_end = event_end(case)
+        # Association may use a bounded search corridor when end time is
+        # missing, but target labels must never invent an event duration.
+        corridor_end_time = verified_end or (start + timedelta(minutes=60))
         corridor_start = start - timedelta(minutes=PRE_EVENT_ASSOCIATION_MIN)
-        corridor_end = end + timedelta(minutes=POST_EVENT_ASSOCIATION_MIN)
+        corridor_end = corridor_end_time + timedelta(minutes=POST_EVENT_ASSOCIATION_MIN)
 
         case_mask = (
             (out["case_id"] == case_id)

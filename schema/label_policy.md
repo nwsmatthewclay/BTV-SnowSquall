@@ -37,3 +37,4 @@ low = plausible classification requiring review.
 ## Initial modeling target
 
 Probability that a radar object will meet the positive snow-squall definition within the next 30 minutes.
+\n## Missing end times\n\nA bounded association corridor may be used to search for the continuation of a documented case when its end time is unavailable, but supervised `ongoing` targets require a verified event end/visibility interval. The labeling system must not fabricate event duration from a fixed default.\n
