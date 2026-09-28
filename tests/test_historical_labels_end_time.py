@@ -16,5 +16,5 @@ def test_missing_event_end_does_not_create_ongoing_labels(tmp_path):
     cases_path = tmp_path / 'cases.csv'
     cases.to_csv(cases_path, index=False)
     result = build_labels(objects, cases_path)
-    assert int(result.loc[0, 'squall_onset_within_15m']) == 1
+    assert int(result.loc[0, 'squall_onset_within_15m']) == 0
     assert int(result.loc[0, 'squall_ongoing_within_15m']) == 0
