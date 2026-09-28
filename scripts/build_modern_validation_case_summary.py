@@ -52,16 +52,26 @@ def build(cases_path: Path, inventory_path: Path, output_json: Path, output_csv:
         if surface_diag.exists():
             item.update(json.loads(surface_diag.read_text(encoding="utf-8")))
 
-        mrms_diag = Path("data/derived/modern_validation_mrms_object_comparison.json")
+        mrms_diag = Path("data/derived/modern_validation_mrms_object_comparison.csv")
         if mrms_diag.exists():
-            data = json.loads(mrms_diag.read_text(encoding="utf-8"))
-            item["mrms_object_records_compared"] = data.get("object_records_compared", 0)
-            item["mrms_paired_records"] = data.get("paired_records", 0)
-            item["mrms_max_age_minutes"] = data.get("max_mrms_age_minutes")
-            item["mrms_neighborhood_pearson_r"] = data.get("pearson_r_level2_vs_mrms_neighborhood")
-            item["mrms_mean_absolute_difference_dbz"] = data.get("mean_absolute_difference_dbz")
-            item["mrms_mean_signed_difference_dbz"] = data.get("mean_signed_difference_dbz_mrms_minus_level2")
-            item["mrms_median_absolute_difference_dbz"] = data.get("median_absolute_difference_dbz")
+            mrms = pd.read_csv(mrms_diag)
+            mrms = mrms[mrms["case_id"].astype(str) == case_id].copy()
+            item["mrms_object_records_compared"] = int(len(mrms))
+            paired = mrms[["level2_max_reflectivity_dbz", "mrms_neighborhood_max_dbz"]].apply(
+                pd.to_numeric, errors="coerce"
+            ).dropna()
+            item["mrms_paired_records"] = int(len(paired))
+            item["mrms_max_age_minutes"] = (
+                float(mrms["mrms_age_minutes"].max()) if "mrms_age_minutes" in mrms and not mrms.empty else None
+            )
+            if len(paired) >= 3:
+                l2 = paired["level2_max_reflectivity_dbz"].to_numpy()
+                mr = paired["mrms_neighborhood_max_dbz"].to_numpy()
+                diff = mr - l2
+                item["mrms_neighborhood_pearson_r"] = float(pd.Series(l2).corr(pd.Series(mr)))
+                item["mrms_mean_absolute_difference_dbz"] = float((abs(diff)).mean())
+                item["mrms_mean_signed_difference_dbz"] = float(diff.mean())
+                item["mrms_median_absolute_difference_dbz"] = float(pd.Series(abs(diff)).median())
 
         rows.append(item)
 
