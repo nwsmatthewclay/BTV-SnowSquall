@@ -8,6 +8,7 @@ on:
       - viewer/**
       - scripts/build_static_viewer.py
       - .github/workflows/publish-historical-viewer.yml
+      - .github/pilot-trigger
   workflow_dispatch:
 
 permissions:
