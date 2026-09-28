@@ -10,6 +10,7 @@ import argparse
 import json
 from datetime import datetime, timezone
 from pathlib import Path
+from math import asin, atan2, cos, degrees, radians, sin, sqrt
 
 import numpy as np
 
@@ -32,6 +33,32 @@ def object_geometry(mask, lat, lon, spacing_km=1.0):
         return None, float(len(xx) * spacing_km**2)
 
     return hull.__geo_interface__, float(len(xx) * spacing_km**2)
+
+
+def motion_from_positions(previous, current_lat, current_lon, current_time):
+    if not previous or current_lat is None or current_lon is None:
+        return None, None
+    try:
+        previous_time = datetime.fromisoformat(previous["timestamp"].replace("Z", "+00:00"))
+        current_dt = datetime.fromisoformat(current_time.replace("Z", "+00:00"))
+        dt_hours = (current_dt - previous_time).total_seconds() / 3600.0
+        if dt_hours <= 0:
+            return None, None
+
+        lat1 = radians(previous["lat"])
+        lat2 = radians(current_lat)
+        dlat = lat2 - lat1
+        dlon = radians(current_lon - previous["lon"])
+        a = sin(dlat / 2) ** 2 + cos(lat1) * cos(lat2) * sin(dlon / 2) ** 2
+        distance_km = 6371.0088 * 2 * asin(sqrt(a))
+        speed_kt = distance_km / dt_hours / 1.852
+
+        y = sin(dlon) * cos(lat2)
+        x = cos(lat1) * sin(lat2) - sin(lat1) * cos(lat2) * cos(dlon)
+        direction = (degrees(atan2(y, x)) + 360.0) % 360.0
+        return speed_kt, direction
+    except (KeyError, TypeError, ValueError, OverflowError):
+        return None, None
 
 
 def load_state(path: Path):
@@ -85,6 +112,9 @@ def process_volume(path: Path, state_path: Path, output_path: Path):
     tracked = tracker.update(timestamp, detections)
 
     features = []
+    current_positions = {}
+    previous_positions = state.get("object_positions", {})
+
     for obj in tracked:
         rows = np.asarray(obj.get("row_indices", []), dtype=int)
         cols = np.asarray(obj.get("column_indices", []), dtype=int)
@@ -101,6 +131,18 @@ def process_volume(path: Path, state_path: Path, output_path: Path):
         centroid_lat = float(lat[cy, cx]) if 0 <= cy < lat.shape[0] and 0 <= cx < lat.shape[1] else None
         centroid_lon = float(lon[cy, cx]) if 0 <= cy < lon.shape[0] and 0 <= cx < lon.shape[1] else None
 
+        speed_kt, direction_deg = motion_from_positions(
+            previous_positions.get(str(obj["object_id"])),
+            centroid_lat,
+            centroid_lon,
+            timestamp,
+        )
+        current_positions[str(obj["object_id"])] = {
+            "timestamp": timestamp,
+            "lat": centroid_lat,
+            "lon": centroid_lon,
+        }
+
         features.append({
             "track_id": str(obj["object_id"]),
             "timestamp": timestamp,
@@ -113,8 +155,8 @@ def process_volume(path: Path, state_path: Path, output_path: Path):
             "max_reflectivity_dbz": obj["max_reflectivity_dbz"],
             "mean_reflectivity_dbz": obj["mean_reflectivity_dbz"],
             "core_pixel_count": obj["core_pixel_count"],
-            "motion_speed_kt": None,
-            "motion_dir_deg": None,
+            "motion_speed_kt": speed_kt,
+            "motion_dir_deg": direction_deg,
             "probability_15min": None,
             "probability_30min": None,
             "probability_45min": None,
@@ -154,6 +196,7 @@ def process_volume(path: Path, state_path: Path, output_path: Path):
     state["last_scan_time_utc"] = timestamp
     state["last_source"] = source_name
     state["last_object_count"] = len(features)
+    state["object_positions"] = current_positions
     state["updated_utc"] = datetime.now(timezone.utc).isoformat()
     save_state(state_path, state, tracker)
 
