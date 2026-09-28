@@ -22,8 +22,12 @@ def ordered_inputs(input_dir: Path) -> list[Path]:
     files=[p for p in input_dir.rglob("*") if p.is_file() and not p.name.endswith((".part",".tmp"))]
     return sorted(files, key=scan_time)
 
-def replay_case(input_dir: Path, output_dir: Path, state_path: Path, case_id: str, max_scans: int|None=None, resume: bool=False, continue_on_error: bool=False) -> dict:
+def replay_case(input_dir: Path, output_dir: Path, state_path: Path, case_id: str, max_scans: int|None=None, resume: bool=False, continue_on_error: bool=False, window_start: datetime|None=None, window_end: datetime|None=None) -> dict:
     scans=ordered_inputs(input_dir)
+    if window_start is not None:
+        scans=[p for p in scans if scan_time(p) >= window_start]
+    if window_end is not None:
+        scans=[p for p in scans if scan_time(p) <= window_end]
     if max_scans is not None: scans=scans[:max_scans]
     if not scans: raise RuntimeError(f"No replayable Level-II files found under {input_dir}")
     output_dir.mkdir(parents=True, exist_ok=True); state_path.parent.mkdir(parents=True, exist_ok=True)
@@ -58,6 +62,8 @@ def replay_case(input_dir: Path, output_dir: Path, state_path: Path, case_id: st
         "probability_status":"not_scored",
         "future_information_policy":"one_scan_at_a_time",
         "input_directory":str(input_dir),
+        "window_start_utc":window_start.isoformat() if window_start else None,
+        "window_end_utc":window_end.isoformat() if window_end else None,
         "attempted_scan_count":len(scans),
         "successful_scan_count":len(records),
         "failed_scan_count":len(errors),
@@ -80,9 +86,13 @@ def main():
     parser.add_argument("--max-scans",type=int,default=None)
     parser.add_argument("--resume",action="store_true",help="Resume from an existing replay tracker state instead of resetting it.")
     parser.add_argument("--continue-on-error",action="store_true",help="Record unreadable scans and continue replaying later volumes.")
+    parser.add_argument("--window-start-utc",default=None)
+    parser.add_argument("--window-end-utc",default=None)
     args=parser.parse_args()
     state=args.state_path or (args.output_dir/"replay_state.json")
-    manifest=replay_case(args.input_dir,args.output_dir,state,args.case_id,args.max_scans,args.resume,args.continue_on_error)
+    window_start=datetime.fromisoformat(args.window_start_utc.replace("Z","+00:00")) if args.window_start_utc else None
+    window_end=datetime.fromisoformat(args.window_end_utc.replace("Z","+00:00")) if args.window_end_utc else None
+    manifest=replay_case(args.input_dir,args.output_dir,state,args.case_id,args.max_scans,args.resume,args.continue_on_error,window_start,window_end)
     print(json.dumps({k:manifest[k] for k in ("case_id","scan_count","object_scan_count","first_scan_utc","last_scan_utc")},indent=2))
 
 if __name__=="__main__":
