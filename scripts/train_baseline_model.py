@@ -222,11 +222,15 @@ def main():
 
     report = {
         "model_version": "baseline_hist_gradient_boosting_v1",
+        "dataset_revision": str(args.features_csv),
+        "schema_revision": str(args.schema),
         "target": args.target,
         "future_information_policy": schema["future_information_policy"],
         "predictor_columns": predictors,
         "training_rows": int(len(data)),
         "training_groups": int(data["split_group"].nunique()),
+        "location_predictor_policy": schema.get("location_predictor_policy", "unspecified"),
+        "evaluation_unit": "case_or_null_group",
         "training_class_counts": {
             "positive": int(data[args.target].sum()),
             "negative": int((1 - data[args.target]).sum()),
