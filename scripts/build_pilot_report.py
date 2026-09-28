@@ -35,6 +35,7 @@ def main():
     p.add_argument("--positive-radar-audit")
     p.add_argument("--null-radar-audit")
     p.add_argument("--baseline-root")
+    p.add_argument("--coverage")
     p.add_argument("--output", required=True)
     args = p.parse_args()
 
@@ -99,6 +100,20 @@ def main():
                     f"{table_html(pd.DataFrame(backend_rows), ['reader_backend','volumes'])}"
                 )
     radar_section = "".join(radar_sections) or "<p><em>No reconstruction audit supplied.</em></p>"
+
+    coverage_section = "<p><em>Feature coverage audit not supplied.</em></p>"
+    if args.coverage and Path(args.coverage).exists():
+        coverage = load_json(Path(args.coverage))
+        group_rows = coverage.get("group_coverage", [])
+        coverage_section = table_html(
+            pd.DataFrame(group_rows),
+            ["group", "fields_present", "fields", "mean_field_coverage_pct"],
+        )
+        zero = coverage.get("zero_coverage_fields", [])
+        coverage_section += (
+            f"<p class=\"small\">Zero-coverage schema fields: "
+            f"<strong>{len(zero)}</strong>.</p>"
+        )
 
     baseline_section = "<p><em>Baseline model metrics not supplied.</em></p>"
     if args.baseline_root:
@@ -177,6 +192,9 @@ main{{max-width:1200px;margin:24px auto;padding:0 20px}}
 
 <h2>Radar reconstruction audit</h2>
 {radar_section}
+
+<h2>Realized feature coverage</h2>
+{coverage_section}
 
 <h2>Case-held-out baseline model</h2>
 {baseline_section}
