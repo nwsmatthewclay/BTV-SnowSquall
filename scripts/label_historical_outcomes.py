@@ -40,9 +40,10 @@ def distance_km(lat1, lon1, lat2, lon2):
 
 
 def event_end(case):
-    start = parse_time(case["event_start_utc"])
-    duration = case.get("vis_below_0p8_min")
-    if pd.isna(duration):
+    # Cases are namedtuples from itertuples(), not dictionaries.
+    start = parse_time(getattr(case, "event_start_utc", None))
+    duration = getattr(case, "vis_below_0p8_min", None)
+    if start is None or duration is None or pd.isna(duration):
         return None
     return start + timedelta(minutes=float(duration))
 
