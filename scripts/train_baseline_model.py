@@ -113,10 +113,12 @@ def evaluate(frame: pd.DataFrame, predictor_cols: list[str], target: str):
     groups = frame["split_group"].to_numpy()
 
     oof = np.full(len(frame), np.nan)
+    climatology_oof = np.full(len(frame), np.nan)
     fold_rows = []
 
     for fold, (train_idx, test_idx) in enumerate(logo.split(X, y, groups), start=1):
         train_y = y[train_idx]
+        climatology_oof[test_idx] = float(train_y.mean())
         if len(np.unique(train_y)) < 2:
             fold_rows.append({
                 "fold": fold,
@@ -143,6 +145,7 @@ def evaluate(frame: pd.DataFrame, predictor_cols: list[str], target: str):
         })
 
     valid = np.isfinite(oof)
+    climatology_valid = np.isfinite(climatology_oof)
     metrics = {
         "evaluated_rows": int(valid.sum()),
         "positive_rows": int(y[valid].sum()),
@@ -160,6 +163,16 @@ def evaluate(frame: pd.DataFrame, predictor_cols: list[str], target: str):
             float(brier_score_loss(y[valid], oof[valid]))
             if valid.any() else None
         ),
+        "climatology": {
+            "brier_score": (
+                float(brier_score_loss(y[climatology_valid], climatology_oof[climatology_valid]))
+                if climatology_valid.any() else None
+            ),
+            "average_probability": (
+                float(climatology_oof[climatology_valid].mean())
+                if climatology_valid.any() else None
+            ),
+        },
     }
 
     return oof, metrics, fold_rows
