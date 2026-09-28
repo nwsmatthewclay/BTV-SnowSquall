@@ -13,6 +13,6 @@ def test_surface_impact_summary_extracts_visibility_and_gust():
     assert result["surface_rows"] == 3
     assert result["min_visibility_mi"] == 0.125
     assert result["max_wind_gust_kt"] == 35.0
-    assert result["first_visibility_le_0p5_sm_utc"] == "2024-01-01T00:10:00+00:00"
-    assert result["first_visibility_le_0p25_sm_utc"] == "2024-01-01T00:20:00+00:00"
+    assert result["first_visibility_le_0p5_sm_utc"] == "2024-01-01T00:10:00Z"
+    assert result["first_visibility_le_0p25_sm_utc"] == "2024-01-01T00:20:00Z"
     assert "SN" in result["present_weather_codes"]
