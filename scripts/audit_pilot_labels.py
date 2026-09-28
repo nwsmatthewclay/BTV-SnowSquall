@@ -31,7 +31,12 @@ def main() -> None:
     args = parser.parse_args()
 
     d = pd.read_csv(args.labeled_csv)
-    cases = pd.read_csv(args.cases).set_index("case_id")
+    cases = pd.read_csv(args.cases)
+    case_lookup = (
+        cases.drop_duplicates("case_id", keep="first")
+        .set_index("case_id")
+        .to_dict("index")
+    )
     horizons = (15, 30, 45, 60)
     rows = []
     nearest_rows = []
@@ -47,9 +52,11 @@ def main() -> None:
             row[f"positive_{h}m"] = int(g[target].fillna(0).eq(1).sum())
         rows.append(row)
 
-        case = cases.loc[case_id] if case_id in cases.index else None
-        station = str(case["observing_station"]) if case is not None and pd.notna(case["observing_station"]) else None
-        onset_text = str(case["event_start_utc"]) if case is not None and pd.notna(case["event_start_utc"]) else None
+        case = case_lookup.get(case_id)
+        station_value = case.get("observing_station") if case else None
+        onset_value = case.get("event_start_utc") if case else None
+        station = str(station_value) if pd.notna(station_value) else None
+        onset_text = str(onset_value) if pd.notna(onset_value) else None
         if station in STATIONS and onset_text:
             onset = pd.to_datetime(onset_text, utc=True, errors="coerce")
             work = g.copy()
