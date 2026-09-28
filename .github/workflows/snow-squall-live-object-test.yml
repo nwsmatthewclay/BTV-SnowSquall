@@ -5,13 +5,17 @@ on:
 
 jobs:
   live-object-test:
+    strategy:
+      fail-fast: false
+      matrix:
+        radar: [KCXX, KTYX]
     runs-on: ubuntu-latest
     timeout-minutes: 12
     steps:
       - name: Check out feature branch
         uses: actions/checkout@v4
         with:
-          ref: snow-squall-model-foundation
+          ref: ${{ github.sha }}
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
@@ -22,19 +26,31 @@ jobs:
           pip install -r requirements.txt -r requirements-science.txt
       - name: Run live object worker
         run: |
-          python scripts/live_object_worker.py             --radar KCXX --poll-seconds 10 --max-polls 3
+          python scripts/live_object_worker.py \
+            --radar "${{ matrix.radar }}" \
+            --poll-seconds 10 \
+            --max-polls 3 \
+            --state "data/derived/${{ matrix.radar }}_live_tracker_state.json" \
+            --output "data/derived/${{ matrix.radar }}_live_objects.geojson"
       - name: Validate live object products
         run: |
-          test -f data/derived/live_tracker_state.json
-          test -f data/derived/live_objects.geojson
-          python scripts/audit_operational_readiness.py
+          test -f "data/derived/${{ matrix.radar }}_live_tracker_state.json"
+          test -f "data/derived/${{ matrix.radar }}_live_objects.geojson"
+          python scripts/audit_operational_readiness.py \
+            --state "data/derived/${{ matrix.radar }}_live_tracker_state.json" \
+            --geojson "data/derived/${{ matrix.radar }}_live_objects.geojson" \
+            --max-age-minutes 30
+          python scripts/live_healthcheck.py \
+            --state "data/derived/${{ matrix.radar }}_live_tracker_state.json" \
+            --geojson "data/derived/${{ matrix.radar }}_live_objects.geojson" \
+            --max-age-minutes 30
       - name: Upload live object products
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: live-object-worker-test
+          name: live-object-worker-test-${{ matrix.radar }}
           path: |
             logs/
-            data/raw/KCXX/
-            data/derived/live_tracker_state.json
-            data/derived/live_objects.geojson
+            data/raw/${{ matrix.radar }}/
+            data/derived/${{ matrix.radar }}_live_tracker_state.json
+            data/derived/${{ matrix.radar }}_live_objects.geojson
