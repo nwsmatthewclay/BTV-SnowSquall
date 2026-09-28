@@ -16,7 +16,6 @@ def acquire(cases_path: Path, output_root: Path) -> dict:
     cases = pd.read_csv(cases_path)
     required = {
         "case_id",
-        "observing_station",
         "reconstruction_eligible",
         "analysis_window_start_utc",
         "analysis_window_end_utc",
@@ -25,6 +24,10 @@ def acquire(cases_path: Path, output_root: Path) -> dict:
     if missing:
         raise ValueError(f"Manifest missing required fields: {missing}")
 
+    if "observing_stations" not in cases.columns:
+        if "observing_station" not in cases.columns:
+            raise ValueError("Manifest requires observing_station or observing_stations")
+        cases["observing_stations"] = cases["observing_station"]
     eligible = cases[cases["reconstruction_eligible"].astype(str).str.lower() == "true"].copy()
     output_root.mkdir(parents=True, exist_ok=True)
     manifest_rows, errors = [], []
