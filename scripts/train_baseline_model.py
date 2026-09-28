@@ -38,13 +38,22 @@ def prepare_dataset(frame: pd.DataFrame, schema: dict, target: str):
     #   - positives are verified prospective-onset rows
     #   - negatives are candidate-null rows or associated case-context rows
     #     where the onset target is explicitly zero
-    usable = (
-        ((positive_population & d[target].eq(1)))
-        | (
-            ((null_population) | d["track_event_associated"].fillna(False))
-            & d[target].eq(0)
-        )
+    # Forecast-training rows must represent a state that existed before the
+    # verified onset. Post-onset observations are not valid negative examples.
+    pre_onset_case = (
+        d["label_status"].isin(["prospective_positive", "case_associated_nonimpact"])
+        if "label_status" in d.columns
+        else pd.Series(False, index=d.index)
     )
+    positive_rows = positive_population & pre_onset_case & d[target].eq(1)
+    associated_negative_rows = (
+        positive_population
+        & d["track_event_associated"].fillna(False)
+        & pre_onset_case
+        & d[target].eq(0)
+    )
+    null_negative_rows = null_population & d[target].eq(0)
+    usable = positive_rows | associated_negative_rows | null_negative_rows
     d = d.loc[usable].copy()
 
     if d.empty:
@@ -180,7 +189,10 @@ def main():
         "metrics": metrics,
         "folds": folds,
         "negative_label_policy": (
-            "winter_null_candidate OR associated case-context row with explicit target zero"
+            "winter_null_candidate OR pre-onset associated case-context row with explicit target zero"
+        ),
+        "post_onset_exclusion_policy": (
+            "verified_event_interval rows are excluded from baseline forecast training"
         ),
     }
     (output_dir / "metrics.json").write_text(
