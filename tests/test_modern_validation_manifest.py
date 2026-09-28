@@ -30,3 +30,15 @@ def test_repository_modern_manifest_is_csv_parseable():
     assert len(df)==2
     assert set(df['truth_role'])=={'validation_candidate'}
     assert set(df['independence_status'])=={'independent_candidate'}
+
+
+def test_modern_manifest_rejects_missing_or_invalid_provenance_url(tmp_path):
+    p=tmp_path/'modern.csv'
+    pd.DataFrame([{
+      'case_id':'BTV20181121','event_date_utc':'2018-11-21','radar_site':'KCXX',
+      'truth_role':'validation_candidate','independence_status':'independent_candidate',
+      'evidence_source':'NWS_BTV','source_url':'not-a-url'
+    }]).to_csv(p,index=False)
+    import pytest
+    with pytest.raises(ValueError,match='invalid_source_url'):
+        audit(p)
