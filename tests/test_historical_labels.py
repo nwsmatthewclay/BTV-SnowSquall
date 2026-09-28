@@ -95,3 +95,37 @@ def test_only_nearest_track_per_radar_is_event_associated(tmp_path):
     assert bool(near["track_event_associated"])
     assert not bool(far["track_event_associated"])
     assert far["label_status"] == "unassociated_object"
+
+
+def test_onset_timing_prevents_early_unrelated_track_from_winning(tmp_path):
+    cases = pd.DataFrame([{
+        "case_id": "TEST",
+        "observing_station": "KBTV",
+        "event_start_utc": "2020-01-01T12:00:00Z",
+        "vis_below_0p8_min": 30,
+    }])
+    path = tmp_path / "cases.csv"
+    cases.to_csv(path, index=False)
+
+    rows = [
+        # This track gets very close to the station well before the event.
+        {
+            "case_id": "TEST", "radar_site": "KCXX", "object_id": "EARLY",
+            "scan_time_utc": "2020-01-01T10:30:00Z",
+            "centroid_lat": 44.48, "centroid_lon": -73.16,
+        },
+        # At the actual onset, this track is the relevant nearby object.
+        {
+            "case_id": "TEST", "radar_site": "KCXX", "object_id": "ONSET",
+            "scan_time_utc": "2020-01-01T11:55:00Z",
+            "centroid_lat": 44.52, "centroid_lon": -73.20,
+        },
+    ]
+
+    result = build_labels(pd.DataFrame(rows), Path(path))
+    early = result[result["object_id"] == "EARLY"].iloc[0]
+    onset = result[result["object_id"] == "ONSET"].iloc[0]
+
+    assert not bool(early["track_event_associated"])
+    assert bool(onset["track_event_associated"])
+    assert onset["squall_onset_within_15m"] == 1
