@@ -1,0 +1,155 @@
+"""Build a static, multi-case historical viewer package from reconstructed objects."""
+from __future__ import annotations
+
+import argparse
+import json
+from pathlib import Path
+
+import pandas as pd
+from shapely import wkt
+from shapely.geometry import mapping
+
+
+ENVIRONMENT_FIELDS = [
+    ("SBCAPE", "sbcape_jkg", "J/kg"),
+    ("SBCIN", "sbcin_jkg", "J/kg"),
+    ("MLCAPE", "mlcape_jkg", "J/kg"),
+    ("MLCIN", "mlcin_jkg", "J/kg"),
+    ("MUCAPE", "mucape_jkg", "J/kg"),
+    ("PWAT", "pwat_mm", "mm"),
+    ("0–1 km SRH", "srh01_m2s2", "m²/s²"),
+    ("0–6 km shear", "shear_0_6km_kt", "kt"),
+    ("SNSQ", "snsq", ""),
+]
+
+def clean(value):
+    if pd.isna(value):
+        return None
+    if hasattr(value, "item"):
+        try:
+            return value.item()
+        except Exception:
+            pass
+    return value
+
+def safe_name(*parts):
+    raw = "_".join(str(p) for p in parts if str(p) not in ("", "nan", "None"))
+    return "".join(ch if ch.isalnum() or ch in "-_." else "_" for ch in raw)
+
+def object_properties(row):
+    props = {
+        "track_key": f"{row.get('case_id', 'UNKNOWN')}:{row.get('radar_site', 'UNKNOWN')}:{row.get('object_id', 'UNKNOWN')}",
+        "object_id": clean(row.get("object_id")),
+        "case_id": clean(row.get("case_id")),
+        "radar_site": clean(row.get("radar_site")),
+        "timestamp": row["scan_time_utc"].isoformat(),
+        "centroid_lat": clean(row.get("centroid_lat")),
+        "centroid_lon": clean(row.get("centroid_lon")),
+        "max_reflectivity_dbz": clean(row.get("max_reflectivity_dbz")),
+        "mean_reflectivity_dbz": clean(row.get("mean_reflectivity_dbz")),
+        "area_km2": clean(row.get("area_km2")),
+        "length_km": clean(row.get("length_km")),
+        "width_km": clean(row.get("width_km")),
+        "aspect_ratio": clean(row.get("aspect_ratio")),
+        "motion_speed_kt": clean(row.get("motion_speed_kt")),
+        "motion_direction_deg": clean(row.get("motion_direction_deg")),
+        "reflectivity_trend_dbz_per_hr": clean(row.get("reflectivity_trend_dbz_per_hr")),
+        "age_scans": clean(row.get("age_scans")),
+        "core_fraction": clean(row.get("core_fraction")),
+        "environment_status": clean(row.get("environment_status")),
+        "environment_source": clean(row.get("environment_source")),
+        "environment_valid_time_utc": clean(row.get("environment_valid_time_utc")),
+        "environment_age_minutes": clean(row.get("environment_age_minutes")),
+        "track_event_associated": clean(row.get("track_event_associated")),
+        "case_time_relation": clean(row.get("case_time_relation")),
+    }
+
+    env = {}
+    for label, column, units in ENVIRONMENT_FIELDS:
+        value = clean(row.get(column))
+        env[column] = {"label": label, "value": value, "units": units}
+    props["environment"] = env
+    return props
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--objects", required=True)
+    parser.add_argument("--cases", required=True)
+    parser.add_argument("--output-dir", required=True)
+    args = parser.parse_args()
+
+    objects = pd.read_csv(args.objects)
+    cases = pd.read_csv(args.cases)
+    objects["scan_time_utc"] = pd.to_datetime(objects["scan_time_utc"], utc=True, errors="coerce")
+    objects = objects.dropna(subset=["scan_time_utc", "case_id", "radar_site"]).copy()
+
+    root = Path(args.output_dir)
+    data_dir = root / "data"
+    cases_dir = data_dir / "cases"
+    cases_dir.mkdir(parents=True, exist_ok=True)
+
+    catalog = []
+    for (case_id, radar_site), group in objects.groupby(["case_id", "radar_site"], sort=True):
+        group = group.sort_values(["scan_time_utc", "object_id"])
+        features = []
+        for _, row in group.iterrows():
+            geom_text = row.get("geometry_wkt")
+            if not isinstance(geom_text, str) or not geom_text:
+                continue
+            try:
+                geom = mapping(wkt.loads(geom_text))
+            except Exception:
+                continue
+            features.append({
+                "type": "Feature",
+                "geometry": geom,
+                "properties": object_properties(row),
+            })
+        if not features:
+            continue
+
+        case_rows = cases[cases["case_id"].astype(str) == str(case_id)]
+        case = case_rows.iloc[0].to_dict() if not case_rows.empty else {}
+        times = sorted({f["properties"]["timestamp"] for f in features})
+        tracks = sorted({f["properties"]["track_key"] for f in features})
+        filename = f"{safe_name(case_id, radar_site)}.geojson"
+        (cases_dir / filename).write_text(
+            json.dumps({"type": "FeatureCollection", "features": features}, indent=2),
+            encoding="utf-8",
+        )
+
+        catalog.append({
+            "case_id": str(case_id),
+            "radar_site": str(radar_site),
+            "file": f"cases/{filename}",
+            "event_start_utc": clean(case.get("event_start_utc")),
+            "observing_station": clean(case.get("observing_station")),
+            "peak_wind_kt": clean(case.get("peak_wind_kt")),
+            "min_visibility_km": clean(case.get("min_visibility_km")),
+            "hybrid_case": clean(case.get("hybrid_case")),
+            "source_study": clean(case.get("source_study")),
+            "scan_count": len(times),
+            "track_count": len(tracks),
+            "first_scan_utc": times[0],
+            "last_scan_utc": times[-1],
+            "status": "historical_pilot",
+        })
+
+    catalog.sort(key=lambda x: (x["event_start_utc"] or "", x["case_id"], x["radar_site"]))
+    (data_dir / "catalog.json").write_text(
+        json.dumps({
+            "product": "BTV Snow Squall Historical Object Viewer",
+            "version": "0.2-pilot",
+            "data_status": "research_pilot",
+            "probability_status": "not_scored",
+            "truth_note": "Historical case context is not final object-level event truth.",
+            "future_information_policy": "Viewer may display historical outcome context, but model predictors remain separate from future labels.",
+            "cases": catalog,
+        }, indent=2),
+        encoding="utf-8",
+    )
+    print(f"Built viewer package: {len(catalog)} case/radar datasets")
+    print(f"Object records included: {len(objects)}")
+
+if __name__ == "__main__":
+    main()
