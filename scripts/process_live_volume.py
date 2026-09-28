@@ -226,7 +226,11 @@ def process_volume(path: Path, state_path: Path, output_path: Path):
             rap_match, rap_path = rap_result
             try:
                 environment = extract_features(
-                    rap_path, centroid_lat, centroid_lon, radar_dt
+                    rap_path,
+                    centroid_lat,
+                    centroid_lon,
+                    radar_dt,
+                    expected_valid_time=rap_match.valid_time,
                 )
             except Exception as exc:
                 environment = {
