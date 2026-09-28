@@ -27,11 +27,20 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          RUN=$(gh api "/repos/${GITHUB_REPOSITORY}/actions/runs?branch=snow-squall-model-foundation&per_page=100" |
-            jq -c '[.workflow_runs[] | select(.name=="Object Dataset Pilot" and .conclusion=="success")] | sort_by(.id) | reverse | .[0]')
-          test "${RUN}" != "null"
-          echo "run_id=$(printf '%s' "${RUN}" | jq -r '.id')" >> "${GITHUB_OUTPUT}"
-          echo "Using pilot run $(printf '%s' "${RUN}" | jq -r '.id')"
+          MIN_SHA="626048af263afaef735118e653aecc3ae884ff75"
+          RUNS=$(gh api "/repos/${GITHUB_REPOSITORY}/actions/runs?branch=snow-squall-model-foundation&per_page=100" |
+            jq -c '[.workflow_runs[] | select(.name=="Object Dataset Pilot" and .conclusion=="success")] | sort_by(.id) | reverse')
+          SELECTED=""
+          for RUN in $(printf '%s' "${RUNS}" | jq -c '.[]'); do
+            SHA=$(printf '%s' "${RUN}" | jq -r '.head_sha')
+            if git merge-base --is-ancestor "${MIN_SHA}" "${SHA}"; then
+              SELECTED="${RUN}"
+              break
+            fi
+          done
+          test -n "${SELECTED}" || { echo "No successful Object Dataset Pilot is descended from repaired geolocation lineage ${MIN_SHA}."; exit 1; }
+          echo "run_id=$(printf '%s' "${SELECTED}" | jq -r '.id')" >> "${GITHUB_OUTPUT}"
+          echo "Using repaired-lineage pilot run $(printf '%s' "${SELECTED}" | jq -r '.id') at $(printf '%s' "${SELECTED}" | jq -r '.head_sha')"
 
       - name: Download completed pilot artifact
         uses: actions/download-artifact@v4
