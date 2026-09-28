@@ -277,6 +277,7 @@ def process_volume(path: Path, state_path: Path, output_path: Path):
             "max_reflectivity_dbz": max_z,
             "mean_reflectivity_dbz": mean_z,
             "core_pixel_count": int(obj["core_pixel_count"]),
+            "touches_grid_edge": bool(obj.get("touches_grid_edge", False)),
             "core_fraction": float(obj["core_pixel_count"]) / max(1, int(obj["pixel_count"])),
             "motion_speed_kt": speed_kt,
             "motion_dir_deg": direction_deg,
@@ -292,7 +293,7 @@ def process_volume(path: Path, state_path: Path, output_path: Path):
             "drivers": [],
             "environment_status": environment.get("status", "unavailable"),
             "environment": environment,
-            "data_quality": "good",
+            "data_quality": "review" if obj.get("touches_grid_edge", False) else "good",
             "model_version": "live-object-foundation-v2",
         })
 
