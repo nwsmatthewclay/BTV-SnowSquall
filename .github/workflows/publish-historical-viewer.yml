@@ -33,58 +33,111 @@ jobs:
         with:
           ref: ${{ github.sha }}
 
-      - name: Locate latest Object Dataset Pilot run
+      - name: Locate latest dataset run
         id: source
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         shell: bash
         run: |
           set -euo pipefail
-          for attempt in $(seq 1 90); do
-            RUN=$(gh run list               --workflow "Object Dataset Pilot"               --branch snow-squall-model-foundation               --limit 1               --json databaseId,status,conclusion,headSha               --jq '.[0] // empty')
+          BEST_ID=""
+          BEST_NAME=""
+          BEST_STATUS=""
+          BEST_CONCLUSION=""
+          BEST_SHA=""
+
+          for NAME in "Object Dataset Pilot" "Object Dataset Full Expansion"; do
+            RUN=$(gh run list               --workflow "${NAME}"               --branch snow-squall-model-foundation               --limit 1               --json databaseId,status,conclusion,headSha               --jq '.[0] // empty')
             if [ -z "${RUN}" ]; then
-              echo "No Object Dataset Pilot run found yet."
-              sleep 60
               continue
             fi
 
             ID=$(printf '%s' "${RUN}" | jq -r '.databaseId')
+            if [ -z "${BEST_ID}" ] || [ "${ID}" -gt "${BEST_ID}" ]; then
+              BEST_ID="${ID}"
+              BEST_NAME="${NAME}"
+              BEST_STATUS=$(printf '%s' "${RUN}" | jq -r '.status')
+              BEST_CONCLUSION=$(printf '%s' "${RUN}" | jq -r '.conclusion')
+              BEST_SHA=$(printf '%s' "${RUN}" | jq -r '.headSha')
+            fi
+          done
+
+          if [ -z "${BEST_ID}" ]; then
+            echo "No dataset workflow runs found."
+            sleep 60
+            exit 1
+          fi
+
+          echo "Latest dataset run: ${BEST_ID} (${BEST_NAME}) status=${BEST_STATUS} conclusion=${BEST_CONCLUSION} sha=${BEST_SHA}"
+
+          if [ "${BEST_STATUS}" != "completed" ]; then
+            echo "run_id=${BEST_ID}" >> "${GITHUB_OUTPUT}"
+            echo "workflow_name=${BEST_NAME}" >> "${GITHUB_OUTPUT}"
+            echo "waiting=true" >> "${GITHUB_OUTPUT}"
+            exit 0
+          fi
+
+          if [ "${BEST_CONCLUSION}" != "success" ]; then
+            echo "Latest dataset workflow did not succeed."
+            exit 1
+          fi
+
+          echo "run_id=${BEST_ID}" >> "${GITHUB_OUTPUT}"
+          echo "workflow_name=${BEST_NAME}" >> "${GITHUB_OUTPUT}"
+          echo "waiting=false" >> "${GITHUB_OUTPUT}"
+
+      - name: Wait for active dataset run
+        if: steps.source.outputs.waiting == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SOURCE_RUN_ID: ${{ steps.source.outputs.run_id }}
+          SOURCE_WORKFLOW: ${{ steps.source.outputs.workflow_name }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 90); do
+            RUN=$(gh run view "${SOURCE_RUN_ID}" --json status,conclusion,headSha)
             STATUS=$(printf '%s' "${RUN}" | jq -r '.status')
             CONCLUSION=$(printf '%s' "${RUN}" | jq -r '.conclusion')
-            SHA=$(printf '%s' "${RUN}" | jq -r '.headSha')
-            echo "Pilot run ${ID}: status=${STATUS} conclusion=${CONCLUSION} sha=${SHA}"
-
+            echo "${SOURCE_WORKFLOW} run ${SOURCE_RUN_ID}: status=${STATUS} conclusion=${CONCLUSION}"
             if [ "${STATUS}" = "completed" ]; then
               if [ "${CONCLUSION}" != "success" ]; then
-                echo "Latest pilot run did not succeed."
+                echo "Dataset run failed."
                 exit 1
               fi
-              echo "run_id=${ID}" >> "${GITHUB_OUTPUT}"
-              echo "head_sha=${SHA}" >> "${GITHUB_OUTPUT}"
               exit 0
             fi
             sleep 60
           done
-          echo "Timed out waiting for a completed pilot run."
+          echo "Timed out waiting for dataset run."
           exit 1
 
-      - name: Download pilot dataset artifact
+      - name: Download dataset artifact
         uses: actions/download-artifact@v4
         with:
-          name: object-population-pilot
+          name: ${{ steps.source.outputs.workflow_name == 'Object Dataset Full Expansion' && 'object-population-expansion' || 'object-population-pilot' }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
           repository: ${{ github.repository }}
           run-id: ${{ steps.source.outputs.run_id }}
-          path: pilot_artifact
+          path: dataset_artifact
 
       - name: Assemble viewer site
         shell: bash
         run: |
+          set -euo pipefail
           rm -rf _site
           mkdir -p _site
           cp viewer/index.html viewer/app.js viewer/style.css _site/
           python -m py_compile scripts/build_static_viewer.py
-          python scripts/build_static_viewer.py             --objects pilot_artifact/data/derived/positive_object_labeled.csv             --cases pilot_artifact/data/manifests/banacos_positive_pilot.csv             --output-dir _site
+
+          if [ "${{ steps.source.outputs.workflow_name }}" = "Object Dataset Full Expansion" ]; then
+            CASES="dataset_artifact/data/manifests/banacos_2014_cases.csv"
+          else
+            CASES="dataset_artifact/data/manifests/banacos_positive_pilot.csv"
+          fi
+
+          python scripts/build_static_viewer.py             --objects dataset_artifact/data/derived/positive_object_labeled.csv             --cases "${CASES}"             --output-dir _site
+
           printf 'BTV Snow Squall Historical Object Viewer\nResearch/pilot historical reconstruction only.\nNo production probability forecast is exposed.\n' > _site/README.txt
 
       - name: Configure GitHub Pages
