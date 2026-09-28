@@ -43,6 +43,11 @@ jobs:
         run: |
           python scripts/build_modern_sqw_surface_impact_inventory.py             --episodes /tmp/modern_sqw_candidate_episodes.csv             --stations data/manifests/observing_stations.csv             --output data/derived/modern_sqw_surface_impact
 
+      - name: Build validation evidence matrix
+        run: |
+          python scripts/build_modern_validation_sampling_frame.py             --input /tmp/modern_sqw_candidate_episodes.csv             --output /tmp/modern_validation_sampling_frame.csv
+          python scripts/build_modern_validation_review_matrix.py             --frame /tmp/modern_validation_sampling_frame.csv             --surface data/derived/modern_sqw_surface_impact/modern_sqw_surface_impact_inventory.csv             --output data/derived/modern_sqw_surface_impact/modern_validation_review_matrix.csv
+
       - name: Upload surface impact inventory
         uses: actions/upload-artifact@v4
         with:
@@ -50,4 +55,5 @@ jobs:
           path: |
             data/derived/modern_sqw_surface_impact
             /tmp/modern_sqw_candidate_episodes.csv
+            /tmp/modern_validation_sampling_frame.csv
           if-no-files-found: error
