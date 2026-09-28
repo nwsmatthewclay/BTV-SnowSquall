@@ -52,12 +52,20 @@ def prepare_dataset(frame: pd.DataFrame, schema: dict, target: str):
         & pre_onset_case
         & d[target].eq(0)
     )
-    null_negative_rows = null_population & d[target].eq(0)
+    # Null-window rows are provisional negative context by design. They do not
+    # have a future outcome label, so their target columns are NaN in the
+    # unified table. Treat the null population as class 0 only after selecting
+    # it here, rather than filtering on target==0.
+    null_negative_rows = null_population
     usable = positive_rows | associated_negative_rows | null_negative_rows
     d = d.loc[usable].copy()
 
     if d.empty:
         raise ValueError("No usable labeled rows remain for baseline training.")
+
+    # Materialize the provisional-null target after row selection so sklearn
+    # receives a complete binary y vector.
+    d.loc[d["population"].eq("winter_null_candidate"), target] = 0
 
     predictor_cols = [
         c for c in schema["predictor_columns"]
