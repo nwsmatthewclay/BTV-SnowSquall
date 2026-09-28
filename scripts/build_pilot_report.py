@@ -60,9 +60,9 @@ def main():
         if "environment_status" in null.columns else pd.DataFrame()
     )
 
-    rows = []
+    population_rows = []
     for name, frame in [("Verified-case context", pos), ("Winter null candidates", null)]:
-        rows.append(
+        population_rows.append(
             f"<tr><td>{name}</td><td>{len(frame):,}</td>"
             f"<td>{nuniq(frame, 'object_id'):,}</td>"
             f"<td>{nuniq(frame, 'radar_site'):,}</td></tr>"
@@ -117,7 +117,7 @@ def main():
 
     baseline_section = "<p><em>Baseline model metrics not supplied.</em></p>"
     if args.baseline_root:
-        rows = []
+        baseline_rows = []
         root = Path(args.baseline_root)
         baseline_paths = sorted(
             list(root.glob("baseline_model_*m/metrics.json"))
@@ -128,7 +128,7 @@ def main():
             metrics = data.get("metrics", {})
             folder = path.parent.name
             horizon = folder.replace("baseline_model_", "").replace("baseline_expansion_", "")
-            rows.append({
+            baseline_rows.append({
                 "horizon": horizon,
                 "training_rows": data.get("training_rows"),
                 "groups": data.get("training_groups"),
@@ -136,7 +136,7 @@ def main():
                 "Average_Precision": metrics.get("average_precision"),
                 "Brier": metrics.get("brier_score"),
             })
-        baseline_section = table_html(pd.DataFrame(rows), [
+        baseline_section = table_html(pd.DataFrame(baseline_rows), [
             "horizon", "training_rows", "groups", "ROC_AUC",
             "Average_Precision", "Brier",
         ])
@@ -176,7 +176,7 @@ main{{max-width:1200px;margin:24px auto;padding:0 20px}}
 
 <h2>Population</h2>
 <table class="data"><thead><tr><th>Population</th><th>Object scans</th><th>Unique objects</th><th>Radars</th></tr></thead>
-<tbody>{''.join(rows)}</tbody></table>
+<tbody>{''.join(population_rows)}</tbody></table>
 
 <h2>Positive-context label status</h2>
 {table_html(label_counts, ["status","records"])}
