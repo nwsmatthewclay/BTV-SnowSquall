@@ -1,0 +1,43 @@
+name: Historical Dataset QC
+
+on:
+  workflow_dispatch:
+    inputs:
+      case_id:
+        required: true
+        default: BTV20060224
+      radar_site:
+        required: true
+        default: KCXX
+
+jobs:
+  qc:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      CASE_ID: ${{ inputs.case_id || 'BTV20060224' }}
+      RADAR_SITE: ${{ inputs.radar_site || 'KCXX' }}
+      PYTHONPATH: ${{ github.workspace }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: snow-squall-model-foundation
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install -r requirements-science.txt
+      - name: Run tests
+        run: pytest -q
+      - name: Build null-window manifest
+        run: |
+          python scripts/build_null_window_manifest.py \
+            --output data/manifests/banacos_null_windows.csv
+      - name: Upload QC products
+        uses: actions/upload-artifact@v4
+        with:
+          name: historical-dataset-qc
+          path: data/manifests/banacos_null_windows.csv
