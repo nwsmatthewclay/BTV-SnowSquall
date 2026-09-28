@@ -12,9 +12,6 @@ on:
       - .github/workflows/publish-historical-viewer.yml
       - .github/pilot-trigger
   workflow_dispatch:
-  workflow_run:
-    workflows: ["Object Dataset Pilot", "Object Dataset Full Expansion"]
-    types: [completed]
 
 permissions:
   contents: read
@@ -28,7 +25,6 @@ concurrency:
 
 jobs:
   publish:
-    if: ${{ github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
     environment:
       name: github-pages
