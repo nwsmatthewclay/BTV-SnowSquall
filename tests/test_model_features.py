@@ -1,6 +1,6 @@
 import pandas as pd
 
-from scripts.build_model_features import build_features
+from scripts.build_model_features import build_features, write_schema
 
 
 def test_model_features_are_causal():
@@ -43,3 +43,25 @@ def test_model_features_are_causal():
 
     # Running maximum at t=5 min cannot know the t=10 min value.
     assert result.loc[1, "max_reflectivity_dbz_running_max"] == 30.0
+
+
+def test_schema_blocks_targets_and_identifiers(tmp_path):
+    frame = pd.DataFrame(
+        {
+            "population": ["verified_case_context"],
+            "case_id": ["BTV20040315"],
+            "radar_site": ["KCXX"],
+            "object_id": [1],
+            "scan_time_utc": ["2006-02-07T12:00:00Z"],
+            "max_reflectivity_dbz": [20.0],
+            "squall_onset_within_15m": [0],
+        }
+    )
+    schema_path = tmp_path / "schema.json"
+    features = build_features(frame)
+    schema = write_schema(features, schema_path)
+
+    assert "max_reflectivity_dbz" in schema["predictor_columns"]
+    assert "case_id" not in schema["predictor_columns"]
+    assert "squall_onset_within_15m" in schema["target_columns"]
+    assert "squall_onset_within_15m" not in schema["predictor_columns"]
