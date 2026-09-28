@@ -30,5 +30,5 @@ def test_validation_review_matrix_remains_non_scoring(tmp_path):
     assert result.iloc[0]["stations_queried"] == 2
     assert result.iloc[0]["minimum_visibility_mi"] == 0.25
     assert result.iloc[0]["maximum_gust_kt"] == 35
-    assert result.iloc[0]["surface_evidence_review_status"] == "candidate_review_required"
+    assert result.iloc[0]["surface_evidence_review_status"] == "surface_visibility_at_or_below_0p25_sm"
     assert result.iloc[0]["training_eligible"] == False
