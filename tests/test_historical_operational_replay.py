@@ -39,3 +39,36 @@ def test_replay_can_record_bad_scan_and_continue(tmp_path, monkeypatch):
 def test_modern_surface_radar_distance_is_reasonable():
     from scripts.build_modern_surface_radar_diagnostic import distance_km
     assert 10 < distance_km(44.47, -73.15, 44.56, -73.15) < 11
+
+
+def test_replay_respects_explicit_case_window(tmp_path, monkeypatch):
+    from scripts import historical_operational_replay as replay
+    for name in ("KCXX20191218_222000_V06", "KCXX20191218_224000_V06", "KCXX20191218_231000_V06"):
+        (tmp_path / name).write_bytes(b"placeholder")
+
+    calls=[]
+    def fake_process(source, state_path, output_path):
+        calls.append(source.name)
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        timestamp={
+            "KCXX20191218_224000_V06":"2019-12-18T22:40:00+00:00",
+            "KCXX20191218_231000_V06":"2019-12-18T23:10:00+00:00",
+        }[source.name]
+        output_path.write_text(
+            '{"metadata":{"scan_time_utc":"'+timestamp+'","object_count":1}}',
+            encoding="utf-8",
+        )
+        return True
+
+    monkeypatch.setattr(replay, "process_volume", fake_process)
+    result=replay.replay_case(
+        tmp_path,
+        tmp_path/"out",
+        tmp_path/"state.json",
+        "CASE",
+        window_start=replay.scan_time(tmp_path/"KCXX20191218_224000_V06"),
+        window_end=replay.scan_time(tmp_path/"KCXX20191218_224000_V06"),
+    )
+    assert calls==["KCXX20191218_224000_V06"]
+    assert result["attempted_scan_count"]==1
+    assert result["successful_scan_count"]==1
