@@ -1,9 +1,6 @@
-"""Read NEXRAD Level-II volumes with Py-ART.
-
-This module does not download data; it converts one archived Level-II volume
-into a radar object with explicit field-name discovery and provenance.
-"""
+"""Read NEXRAD Level-II volumes with Py-ART and xradar fallback."""
 from __future__ import annotations
+
 from pathlib import Path
 
 FIELD_ALIASES = {
@@ -16,12 +13,37 @@ FIELD_ALIASES = {
 }
 
 
+def _tag_backend(radar, backend: str):
+    metadata = getattr(radar, "metadata", None)
+    if not isinstance(metadata, dict):
+        try:
+            radar.metadata = {}
+            metadata = radar.metadata
+        except Exception:
+            return radar
+    metadata["reader_backend"] = backend
+    return radar
+
+
 def read_level2(path):
+    """Read one Level-II volume, falling back to xradar if Py-ART fails."""
+    path = Path(path)
     try:
         import pyart
-    except ImportError as exc:
-        raise ImportError("Install requirements-science.txt to read Level-II data") from exc
-    return pyart.io.read_nexrad_archive(str(Path(path)))
+        radar = pyart.io.read_nexrad_archive(str(path))
+        return _tag_backend(radar, "pyart_legacy_nexrad")
+    except Exception as pyart_exc:
+        try:
+            import xradar as xd
+            tree = xd.io.open_nexradlevel2_datatree(str(path))
+            radar = tree.pyart.to_radar()
+            return _tag_backend(radar, "xradar")
+        except Exception as xradar_exc:
+            raise RuntimeError(
+                "Both Level-II readers failed. "
+                f"Py-ART {type(pyart_exc).__name__}: {pyart_exc}; "
+                f"xradar {type(xradar_exc).__name__}: {xradar_exc}"
+            ) from xradar_exc
 
 
 def resolve_fields(radar):
@@ -44,6 +66,7 @@ def volume_metadata(radar, source_path=None):
     return {
         "source_path": str(source_path) if source_path else None,
         "radar_id": getattr(radar, "metadata", {}).get("instrument_name"),
+        "reader_backend": getattr(radar, "metadata", {}).get("reader_backend"),
         "scan_time_utc": first_time.isoformat() if first_time else None,
         "time_units": time_units,
         "nsweeps": int(radar.nsweeps),
