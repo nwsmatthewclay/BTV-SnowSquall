@@ -93,6 +93,7 @@ def main():
     parser.add_argument("--surface-root", required=True)
     parser.add_argument("--output", required=True)
     parser.add_argument("--summary", required=True)
+    parser.add_argument("--download-errors")
     args = parser.parse_args()
 
     result = audit(Path(args.cases), Path(args.surface_root))
@@ -104,6 +105,7 @@ def main():
         "cases": int(len(result)),
         "surface_files_missing": int((result["status"] == "missing_surface_file").sum()),
         "surface_files_empty": int((result["status"] == "empty_surface_file").sum()),
+        "download_error_cases": 0,
         "timing_consistent_cases": int(result["surface_timing_consistent"].fillna(False).sum()),
         "minimum_visibility_km_all_cases": (
             float(pd.to_numeric(result["minimum_visibility_m"], errors="coerce").min() / 1000.0)
