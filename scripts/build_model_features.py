@@ -69,7 +69,7 @@ def build_features(frame: pd.DataFrame) -> pd.DataFrame:
     df["scan_dt"] = pd.to_datetime(df["scan_time_utc"], utc=True, errors="coerce")
     df = df.dropna(subset=["scan_dt", "object_id"]).copy()
 
-    group_cols = [c for c in ("population", "radar_site", "object_id") if c in df.columns]
+    group_cols = [c for c in ("population", "case_id", "null_id", "radar_site", "object_id") if c in df.columns]
     if not group_cols:
         group_cols = ["object_id"]
     df = df.sort_values(group_cols + ["scan_dt"]).reset_index(drop=True)
