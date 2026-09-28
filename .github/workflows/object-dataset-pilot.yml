@@ -1,3 +1,7 @@
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 name: Object Dataset Pilot
 
 on:
@@ -245,6 +249,7 @@ jobs:
           predictors = set(schema["predictor_columns"])
           blocked = set(schema["blocked_non_predictors"])
           targets = set(schema["target_columns"])
+          blocked_prefixes = tuple(schema["blocked_prefixes"])
           print("Predictor columns:", len(predictors))
           print("Target columns:", len(targets))
           print("Future-information policy:", schema["future_information_policy"])
@@ -252,6 +257,10 @@ jobs:
           assert required <= predictors
           assert targets <= blocked | set()
           assert not predictors.intersection(blocked)
+          assert not any(
+              any(column.startswith(prefix) for prefix in blocked_prefixes)
+              for column in predictors
+          )
           PY
 
       - name: Train case-held-out baseline models
