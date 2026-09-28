@@ -202,6 +202,10 @@ jobs:
         run: |
           python scripts/build_historical_dataset.py data/derived/positive_object_scans_annotated.csv --output data/derived/positive_object_environment.csv --rap-dir data/raw/RAP --ruc-dir data/raw/RUC
 
+      - name: Audit positive environment attachment
+        run: |
+          python scripts/audit_environment_attachment.py data/derived/positive_object_environment.csv --report data/derived/positive_environment_audit.json
+
       - name: Apply leakage-safe positive outcome labels
         run: |
           python scripts/label_historical_outcomes.py data/derived/positive_object_environment.csv --output data/derived/positive_object_labeled.csv
@@ -226,6 +230,10 @@ jobs:
       - name: Enrich null population with multi-era environment
         run: |
           python scripts/enrich_object_environment.py data/derived/null_object_scans_annotated.csv --output data/derived/null_object_environment.csv --rap-dir data/raw/RAP --ruc-dir data/raw/RUC
+
+      - name: Audit null environment attachment
+        run: |
+          python scripts/audit_environment_attachment.py data/derived/null_object_environment.csv --report data/derived/null_environment_audit.json
 
       - name: Build track catalogs
         run: |
