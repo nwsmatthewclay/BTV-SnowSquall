@@ -124,6 +124,7 @@ def write_schema(frame: pd.DataFrame, schema_path: Path):
         "future_information_policy": "current_and_past_only",
         "predictor_columns": predictor_columns(frame),
         "blocked_non_predictors": sorted(NON_PREDICTOR_COLUMNS),
+        "blocked_prefixes": list(BLOCKED_PREFIXES),
         "target_columns": sorted(TARGET_COLUMNS & set(frame.columns)),
     }
     schema_path.parent.mkdir(parents=True, exist_ok=True)
