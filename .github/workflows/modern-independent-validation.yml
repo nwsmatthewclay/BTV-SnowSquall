@@ -171,6 +171,10 @@ jobs:
               subprocess.run(cmd, check=True)
           PY
 
+      - name: Build case-level evidence summary
+        run: |
+          python scripts/build_modern_validation_case_summary.py             --cases data/manifests/modern_independent_validation_cases.csv             --inventory data/derived/modern_validation_inventory.json             --output-json data/derived/modern_validation_case_summary.json             --output-csv data/derived/modern_validation_case_summary.csv
+
       - name: Assert independent-validation boundary
         run: |
           python - <<'PY'
@@ -204,6 +208,8 @@ jobs:
             data/derived/modern_validation_mrms_object_comparison.json
             data/derived/modern_surface_radar_diagnostic_*.csv
             data/derived/modern_surface_radar_diagnostic_*.json
+            data/derived/modern_validation_case_summary.json
+            data/derived/modern_validation_case_summary.csv
             data/raw/modern_surface
             data/raw/modern_level2
           if-no-files-found: warn
