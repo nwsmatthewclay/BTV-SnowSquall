@@ -22,3 +22,11 @@ def test_modern_manifest_rejects_non_validation_role(tmp_path):
     import pytest
     with pytest.raises(ValueError,match='non_validation_truth_role') as exc:
         audit(p)
+
+def test_repository_modern_manifest_is_csv_parseable():
+    from pathlib import Path
+    root=Path(__file__).resolve().parents[1]
+    df=pd.read_csv(root/'data/manifests/modern_independent_validation_cases.csv')
+    assert len(df)==2
+    assert set(df['truth_role'])=={'validation_candidate'}
+    assert set(df['independence_status'])=={'independent_candidate'}
