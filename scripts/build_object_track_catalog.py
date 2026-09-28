@@ -41,6 +41,10 @@ def build_track_catalog(path: Path):
         max_gap = float(intervals.max()) if not intervals.empty else 0.0
         median_area = float(area.median()) if not area.dropna().empty else np.nan
         max_area = float(area.max()) if not area.dropna().empty else np.nan
+        motion = pd.to_numeric(g["motion_speed_kt"], errors="coerce") if "motion_speed_kt" in g.columns else pd.Series(dtype="float64")
+        max_motion = float(motion.max()) if not motion.dropna().empty else np.nan
+        median_motion = float(motion.median()) if not motion.dropna().empty else np.nan
+        duplicate_scan_times = int(g["scan_dt"].duplicated().sum())
 
         flags = []
         if g["geometry_wkt"].isna().any() if "geometry_wkt" in g.columns else True:
@@ -53,6 +57,10 @@ def build_track_catalog(path: Path):
             flags.append("rapid_area_jump")
         if aspect.dropna().empty:
             flags.append("missing_aspect_ratio")
+        if duplicate_scan_times:
+            flags.append("duplicate_scan_time")
+        if np.isfinite(max_motion) and max_motion > 100:
+            flags.append("implausible_motion_gt_100kt")
 
         groups.append({
             **key_map,
@@ -67,6 +75,9 @@ def build_track_catalog(path: Path):
             "median_area_km2": median_area,
             "max_aspect_ratio": float(aspect.max()) if not aspect.empty else np.nan,
             "median_aspect_ratio": float(aspect.median()) if not aspect.empty else np.nan,
+            "max_motion_speed_kt": max_motion,
+            "median_motion_speed_kt": median_motion,
+            "duplicate_scan_times": duplicate_scan_times,
             "track_quality": (
                 "short" if len(g) < 3 else
                 "moderate" if len(g) < 6 else
