@@ -52,7 +52,8 @@ def build_null_windows(
     for t in all_times:
         if any(left <= t <= right for left, right in excluded):
             continue
-        # Favor one window per day, then enforce a larger separation below.
+        # Keep the candidate pool broad enough to stratify across winter years.
+        # Year/month remain attached to each candidate for deterministic quotas.
         if t.hour not in (0, 3, 6, 9, 12, 15, 18, 21):
             continue
         candidates.append(t)
@@ -60,14 +61,44 @@ def build_null_windows(
     rng = random.Random(seed)
     rng.shuffle(candidates)
 
+    # First pass: distribute windows across cool-season years as evenly as the
+    # available candidate pool permits. This reduces year-specific background
+    # bias before the final time-separation constraint is applied.
+    by_year = {}
+    for candidate in candidates:
+        by_year.setdefault(candidate.year, []).append(candidate)
+    years = sorted(by_year)
+    per_year = max(1, sample_count // max(len(years), 1))
+
     selected = []
     minimum_gap = pd.Timedelta(hours=min_separation_hours)
-    for candidate in candidates:
-        if any(abs(candidate - chosen) < minimum_gap for chosen in selected):
-            continue
-        selected.append(candidate)
-        if len(selected) >= sample_count:
+    year_quota = {year: per_year for year in years}
+    while len(selected) < sample_count:
+        added = False
+        for year in years:
+            if year_quota[year] <= 0:
+                continue
+            choices = by_year[year]
+            for candidate in choices:
+                if any(abs(candidate - chosen) < minimum_gap for chosen in selected):
+                    continue
+                selected.append(candidate)
+                year_quota[year] -= 1
+                added = True
+                break
+            if len(selected) >= sample_count:
+                break
+        if not added:
             break
+
+    if len(selected) < sample_count:
+        for candidate in candidates:
+            if len(selected) >= sample_count:
+                break
+            if any(abs(candidate - chosen) < minimum_gap for chosen in selected):
+                continue
+            if candidate not in selected:
+                selected.append(candidate)
 
     selected.sort()
     if len(selected) < sample_count:
