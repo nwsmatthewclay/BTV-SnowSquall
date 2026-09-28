@@ -74,7 +74,18 @@ def build(cases_path: Path, inventory_path: Path, output_json: Path, output_csv:
         })
 
         if surface_diag.exists():
-            item.update(json.loads(surface_diag.read_text(encoding="utf-8")))
+            primary_diag = json.loads(surface_diag.read_text(encoding="utf-8"))
+            for key in (
+                "minimum_visibility_mi",
+                "minimum_visibility_time_utc",
+                "first_visibility_le_0p5_utc",
+                "first_visibility_le_0p25_utc",
+                "first_visibility_le_0p125_utc",
+                "radar_distance_km_at_min_visibility",
+                "radar_max_reflectivity_at_min_visibility_dbz",
+            ):
+                if key in primary_diag:
+                    item[f"primary_{key}"] = primary_diag[key]
 
         mrms_diag = Path("data/derived/modern_validation_mrms_object_comparison.csv")
         if mrms_diag.exists():
