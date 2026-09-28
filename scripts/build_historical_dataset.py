@@ -14,8 +14,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from acquisition.rap_environment import acquire_for_radar_time
-from processing.rap_features import extract_features
+from processing.environment import acquire_for_radar_time, extract_features
 
 
 def parse_time(value):
@@ -45,7 +44,7 @@ def choose_case(scan_time, cases):
     return min(candidates, key=lambda item: item[0])
 
 
-def enrich(input_csv: Path, output_csv: Path, cases_csv: Path, rap_dir: Path):
+def enrich(input_csv: Path, output_csv: Path, cases_csv: Path, rap_dir: Path, ruc_dir: Path):
     objects = pd.read_csv(input_csv)
     objects["scan_dt"] = pd.to_datetime(objects["scan_time_utc"], utc=True, errors="coerce")
     objects = objects.dropna(subset=["scan_dt"]).copy()
@@ -96,7 +95,8 @@ def enrich(input_csv: Path, output_csv: Path, cases_csv: Path, rap_dir: Path):
         if hour_key not in cache:
             acquired = acquire_for_radar_time(
                 scan_time,
-                output_dir=rap_dir,
+                rap_dir=rap_dir,
+                ruc_dir=ruc_dir,
                 max_age_minutes=180,
             )
             cache[hour_key] = acquired
@@ -107,9 +107,10 @@ def enrich(input_csv: Path, output_csv: Path, cases_csv: Path, rap_dir: Path):
             rows.append(row)
             continue
 
-        match, rap_path = acquired
+        provider, match, environment_path = acquired
         environment = extract_features(
-            rap_path,
+            provider,
+            environment_path,
             float(lat),
             float(lon),
             scan_time,
@@ -117,7 +118,7 @@ def enrich(input_csv: Path, output_csv: Path, cases_csv: Path, rap_dir: Path):
         )
 
         row["environment_status"] = environment.get("status", "partial")
-        row["environment_source"] = "RAP"
+        row["environment_source"] = provider
         row["environment_valid_time_utc"] = environment.get("source_valid_time_utc")
         row["environment_age_minutes"] = environment.get("age_minutes")
         for key, value in (environment.get("fields") or {}).items():
@@ -146,8 +147,15 @@ def main():
     parser.add_argument("--output", required=True)
     parser.add_argument("--cases", default="data/manifests/banacos_2014_cases.csv")
     parser.add_argument("--rap-dir", default="data/raw/RAP")
+    parser.add_argument("--ruc-dir", default="data/raw/RUC")
     args = parser.parse_args()
-    enrich(Path(args.input_csv), Path(args.output), Path(args.cases), Path(args.rap_dir))
+    enrich(
+        Path(args.input_csv),
+        Path(args.output),
+        Path(args.cases),
+        Path(args.rap_dir),
+        Path(args.ruc_dir),
+    )
 
 
 if __name__ == "__main__":
