@@ -30,7 +30,12 @@ def prepare(frame, population, truth_status, source_column):
     return out
 
 
-def build(positive_csv: Path, null_csv: Path, output_csv: Path):
+def build(
+    positive_csv: Path,
+    null_csv: Path,
+    output_csv: Path,
+    null_activity_csv: Path | None = None,
+):
     positive = prepare(
         pd.read_csv(positive_csv),
         "verified_case_context",
@@ -43,6 +48,21 @@ def build(positive_csv: Path, null_csv: Path, output_csv: Path):
         "unverified_null_candidate",
         "null_id",
     )
+    if null_activity_csv is not None:
+        activity = pd.read_csv(null_activity_csv)
+        required_activity = {"null_id", "activity_class"}
+        missing_activity = required_activity - set(activity.columns)
+        if missing_activity:
+            raise ValueError(
+                f"Null activity file missing columns: {sorted(missing_activity)}"
+            )
+        activity = activity[["null_id", "activity_class"]].drop_duplicates("null_id")
+        nulls = nulls.drop(columns=["activity_class"], errors="ignore").merge(
+            activity,
+            on="null_id",
+            how="left",
+            validate="many_to_one",
+        )
 
     columns = list(dict.fromkeys(list(positive.columns) + list(nulls.columns)))
     positive = positive.reindex(columns=columns)
@@ -96,9 +116,19 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("positive_csv")
     parser.add_argument("null_csv")
+    parser.add_argument(
+        "--null-activity",
+        default=None,
+        help="Optional null-window activity classification CSV.",
+    )
     parser.add_argument("--output", required=True)
     args = parser.parse_args()
-    build(Path(args.positive_csv), Path(args.null_csv), Path(args.output))
+    build(
+        Path(args.positive_csv),
+        Path(args.null_csv),
+        Path(args.output),
+        Path(args.null_activity) if args.null_activity else None,
+    )
 
 
 if __name__ == "__main__":
