@@ -333,24 +333,28 @@ def distance_km(lat1, lon1, lat2, lon2):
     a = sin(dp / 2) ** 2 + cos(p1) * cos(p2) * sin(dl / 2) ** 2
     return 2 * r * asin(min(1.0, sqrt(a)))
 
-def merged_verification_class(source_types: set[str]) -> str:
+def merged_verification_class(source_types: set[str], warning_verified: bool = False) -> str:
     has_ncei = "NCEI_STORM_EVENTS" in source_types
     has_lsr = "IEM_LSR" in source_types
+    has_plsr = "SWDI_PLSR" in source_types
     has_sqw = "IEM_COW_SQW" in source_types
-    if has_ncei and has_lsr and has_sqw:
+    if has_ncei and has_sqw and warning_verified:
+        return "official_plus_warning_verified"
+    if has_ncei and (has_lsr or has_plsr) and has_sqw:
         return "official_plus_warning_and_report"
-    if has_ncei and has_lsr:
+    if has_ncei and (has_lsr or has_plsr):
         return "official_plus_independent_report"
     if has_ncei and has_sqw:
         return "official_plus_warning"
     if has_ncei:
         return "official_documented"
-    if has_lsr and has_sqw:
+    if has_sqw and warning_verified:
+        return "warning_verified"
+    if has_lsr and has_sqw or has_plsr and has_sqw:
         return "warning_plus_report"
     if has_sqw:
         return "warning_only"
     return "unverified_report_only"
-
 def merge_candidates(records: list[dict], cfg: dict) -> list[dict]:
     ordered = sorted(records, key=lambda r: r["event_start_utc"])
     merged = []
