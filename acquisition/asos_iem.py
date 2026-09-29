@@ -11,6 +11,7 @@ import argparse
 from io import StringIO
 from pathlib import Path
 import time
+import random
 
 import pandas as pd
 import requests
@@ -53,9 +54,10 @@ def request_observations(
         "Accept": "text/csv,*/*;q=0.8",
     }
     last_error = None
-    for attempt, delay in enumerate((0, 2, 5, 10, 20), start=1):
+    retry_schedule = (0, 4, 10, 20, 35)
+    for attempt, delay in enumerate(retry_schedule, start=1):
         if delay:
-            time.sleep(delay)
+            time.sleep(delay + random.uniform(0.0, 1.5))
         try:
             response = requests.get(
                 BASE,
@@ -69,10 +71,23 @@ def request_observations(
             last_error = exc
             status = getattr(getattr(exc, "response", None), "status_code", None)
             retryable = status is None or status == 429 or 500 <= status < 600
-            if not retryable or attempt == 5:
+            if not retryable or attempt == len(retry_schedule):
                 raise
+
+            retry_after = None
+            response_obj = getattr(exc, "response", None)
+            if response_obj is not None:
+                raw_retry_after = response_obj.headers.get("Retry-After")
+                try:
+                    retry_after = float(raw_retry_after)
+                except (TypeError, ValueError):
+                    retry_after = None
+
+            if retry_after is not None:
+                time.sleep(min(max(retry_after, 1.0), 60.0))
+
             print(
-                f"IEM request retry {attempt}/5 for {station} after "
+                f"IEM request retry {attempt}/{len(retry_schedule)} for {station} after "
                 f"{type(exc).__name__}: {exc}"
             )
     else:
