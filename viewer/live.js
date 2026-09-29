@@ -2,7 +2,7 @@ const map=L.map("liveMap",{zoomControl:true,preferCanvas:true}).setView([44.15,-
 L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{maxZoom:12,attribution:"© OpenStreetMap contributors"}).addTo(map);
 const layers={KCXX:L.layerGroup().addTo(map),KTYX:L.layerGroup().addTo(map)};
 const radarLocations={KCXX:[44.511,-73.166],KTYX:[43.756,-75.680]};
-const LIVE_BASE="https://raw.githubusercontent.com/nwsmatthewclay/BTV-SnowSquall/snow-squall-model-foundation/viewer/data/live/";
+const LIVE_BASE="https://raw.githubusercontent.com/nwsmatthewclay/BTV-SnowSquall/snow-squall-live-data/viewer/data/live/";
 let datasets={},selected=null,refreshTimer=null,hasInitialExtent=false;
 
 const num=(v,d=1)=>v==null||Number.isNaN(Number(v))?"—":Number(v).toFixed(d);
