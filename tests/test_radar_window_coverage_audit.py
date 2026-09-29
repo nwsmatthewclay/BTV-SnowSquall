@@ -15,8 +15,8 @@ def test_radar_window_coverage_counts_matching_volumes(tmp_path):
         {
             "null_id": ["NULL0001", "NULL0002"],
             "radar_site": ["KCXX", "KCXX"],
-            "window_start_utc": ["2002-01-01T00:00:00Z"] * 2,
-            "window_end_utc": ["2002-01-01T00:30:00Z"] * 2,
+            "window_start_utc": ["2002-01-01T00:00:00Z", "2002-01-01T01:00:00Z"],
+            "window_end_utc": ["2002-01-01T00:30:00Z", "2002-01-01T01:30:00Z"],
         }
     ).to_csv(manifest, index=False)
 
