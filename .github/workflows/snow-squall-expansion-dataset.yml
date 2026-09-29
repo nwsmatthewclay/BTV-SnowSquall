@@ -139,6 +139,13 @@ jobs:
             --buffer-before 120 \
             --buffer-after 150
 
+      - name: Audit expanded ASOS/METAR timing and visibility
+        run: |
+          python scripts/audit_surface_truth.py \
+            --cases data/manifests/snow_squall_expansion/snow_squall_expansion_cases.csv \
+            --surface-root data/raw/ASOS_IEM_expansion \
+            --output data/derived/snow_squall_expansion_surface_truth.csv \
+            --summary data/derived/snow_squall_expansion_surface_truth.json
       - name: Acquire expanded SWDI PLSR evidence
         run: |
           python scripts/acquire_swdi_plsr.py \
