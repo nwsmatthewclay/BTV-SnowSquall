@@ -38,6 +38,10 @@ def main():
     p.add_argument("--coverage")
     p.add_argument("--positive-level2-fields")
     p.add_argument("--null-level2-fields")
+    p.add_argument("--positive-level2-coverage")
+    p.add_argument("--null-level2-coverage")
+    p.add_argument("--positive-association")
+    p.add_argument("--null-coverage")
     p.add_argument("--null-activity")
     p.add_argument("--output", required=True)
     args = p.parse_args()
@@ -141,6 +145,44 @@ def main():
             ["sample", "files_sampled", "successful_reads", "failed_reads",
              "reflectivity", "velocity", "zdr", "rhohv", "kdp"],
         )
+    window_section = "<p><em>Radar-window coverage audits not supplied.</em></p>"
+    window_rows = []
+    for label, path in [
+        ("Positive Level-II windows", args.positive_level2_coverage),
+        ("Null Level-II windows", args.null_level2_coverage),
+        ("Null object windows", args.null_coverage),
+    ]:
+        if path and Path(path).exists():
+            data = load_json(Path(path))
+            window_rows.append({
+                "audit": label,
+                "expected_windows": data.get("manifest_rows", data.get("expected_null_windows")),
+                "populated_windows": data.get("rows_with_level2", data.get("populated_null_windows")),
+                "empty_windows": data.get("rows_without_level2", data.get("empty_null_windows")),
+                "coverage_fraction": data.get("coverage_fraction", data.get("population_fraction")),
+                "minimum_required": data.get("minimum_coverage_fraction", data.get("minimum_population_fraction")),
+                "passed": data.get("passed"),
+            })
+    if window_rows:
+        window_section = table_html(pd.DataFrame(window_rows), ["audit","expected_windows","populated_windows","empty_windows","coverage_fraction","minimum_required","passed"])
+
+    association_section = "<p><em>Positive event-association diagnostics not supplied.</em></p>"
+    if args.positive_association and Path(args.positive_association).exists():
+        assoc = load_json(Path(args.positive_association))
+        rows = []
+        for case_id, item in assoc.get("by_case", {}).items():
+            rows.append({
+                "case_id": case_id,
+                "object_timesteps": item.get("object_timesteps"),
+                "associated_timesteps": item.get("associated_timesteps"),
+                "associated_fraction": item.get("associated_fraction"),
+                "radars": ", ".join(item.get("radars_with_association", [])),
+                "status": item.get("association_status"),
+            })
+        association_section = table_html(pd.DataFrame(rows), ["case_id","object_timesteps","associated_timesteps","associated_fraction","radars","status"])
+        missing_cases = assoc.get("cases_without_association", [])
+        if missing_cases:
+            association_section += "<div class=\"note\"><strong>Association QC:</strong> " + f"{len(missing_cases)} expected case(s) currently have no track-level association: {\", \".join(missing_cases)}. This is diagnostic only.</div>"
     coverage_section = "<p><em>Feature coverage audit not supplied.</em></p>"
     if args.coverage and Path(args.coverage).exists():
         coverage = load_json(Path(args.coverage))
@@ -268,7 +310,7 @@ main{{max-width:1200px;margin:24px auto;padding:0 20px}}
 <h2>Null-window activity classification</h2>
 {null_activity_section}
 
-<h2>Environmental data availability</h2>
+<h2>Radar-window coverage</h2>\n{window_section}\n\n<h2>Positive event/object association QC</h2>\n{association_section}\n\n<h2>Environmental data availability</h2>
 <h3>Positive-context objects</h3>
 {table_html(env_counts, ["status","records"])}
 <h3>Null candidates</h3>
