@@ -46,3 +46,13 @@ def test_missing_model_bundle_stays_disabled(tmp_path):
     runtime = ModelRuntime.load(tmp_path)
     assert runtime.enabled is False
     assert runtime.score(pd.DataFrame({"x": [1.0]})) is None
+
+
+def test_model_horizon_is_read_from_target():
+    runtime = ModelRuntime(metadata={"target": "squall_onset_within_45m"})
+    assert runtime.horizon_minutes == 45
+
+
+def test_unknown_model_horizon_is_none():
+    runtime = ModelRuntime(metadata={"target": "snow_squall_probability"})
+    assert runtime.horizon_minutes is None
