@@ -116,6 +116,13 @@ jobs:
         run: |
           python scripts/audit_surface_truth.py             --cases data/manifests/banacos_positive_pilot.csv             --surface-root data/raw/ASOS_IEM             --output data/derived/surface_truth_audit.csv             --summary data/derived/surface_truth_audit.json
 
+      - name: Acquire SWDI preliminary Local Storm Reports
+        run: |
+          python scripts/acquire_swdi_plsr.py \
+            --cases data/manifests/banacos_positive_pilot.csv \
+            --output data/derived/swdi_plsr_candidates.csv \
+            --status data/derived/swdi_plsr_status.json
+
       - name: Acquire NCEI Storm Events truth candidates
         run: |
           python scripts/acquire_ncei_storm_events.py --start-year 2002 --end-year 2011 --output data/derived/ncei_storm_events_candidates.csv
@@ -447,6 +454,8 @@ jobs:
             --path data/derived/object_model_features_pilot.schema.json \
             --path data/derived/object_model_features_pilot.coverage.json \
             --path data/derived/positive_level2_window_coverage.json \
+            --path data/derived/swdi_plsr_candidates.csv \
+            --path data/derived/swdi_plsr_status.json \
             --path data/derived/ncei_storm_events_candidates.csv \
             --path data/derived/ncei_storm_event_timing_audit.json \
             --path data/derived/null_level2_window_coverage.json \
@@ -549,6 +558,8 @@ jobs:
             data/derived/viewer
             data/derived/positive_level2_field_audit.json
             data/derived/positive_level2_window_coverage.json
+            data/derived/swdi_plsr_candidates.csv
+            data/derived/swdi_plsr_status.json
             data/derived/ncei_storm_events_candidates.csv
             data/derived/ncei_storm_event_timing_audit.csv
             data/derived/ncei_storm_event_timing_audit.json
