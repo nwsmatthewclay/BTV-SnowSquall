@@ -309,6 +309,12 @@ def main():
         "negative_label_policy": (
             "winter_null_candidate OR pre-onset associated case-context row with explicit target zero"
         ),
+        "null_activity_policy": args.null_activity_policy,
+        "null_activity_exclusion_policy": (
+            "exclude moderate/high-activity candidate null windows from clean baseline training"
+            if args.null_activity_policy == "clean_quiet_light" and "activity_class" in source.columns
+            else "all candidate null windows allowed"
+        ),
         "post_onset_exclusion_policy": (
             "verified_event_interval rows are excluded from baseline forecast training"
         ),
@@ -322,6 +328,7 @@ def main():
     print(f"Independent groups: {data['split_group'].nunique()}")
     print(f"Predictors: {len(predictors)}")
     print("Positive case groups:", positive_case_groups)
+    print("Null activity policy:", args.null_activity_policy)
     print("Evaluation status:", "case_held_out_not_interpretable" if positive_case_group_count < 3 else "case_held_out_exploratory")
     print("Metrics:", json.dumps(metrics, indent=2))
 
