@@ -294,6 +294,24 @@ def distance_km(lat1, lon1, lat2, lon2):
     a = sin(dp / 2) ** 2 + cos(p1) * cos(p2) * sin(dl / 2) ** 2
     return 2 * r * asin(min(1.0, sqrt(a)))
 
+def merged_verification_class(source_types: set[str]) -> str:
+    has_ncei = "NCEI_STORM_EVENTS" in source_types
+    has_lsr = "IEM_LSR" in source_types
+    has_sqw = "IEM_COW_SQW" in source_types
+    if has_ncei and has_lsr and has_sqw:
+        return "official_plus_warning_and_report"
+    if has_ncei and has_lsr:
+        return "official_plus_independent_report"
+    if has_ncei and has_sqw:
+        return "official_plus_warning"
+    if has_ncei:
+        return "official_documented"
+    if has_lsr and has_sqw:
+        return "warning_plus_report"
+    if has_sqw:
+        return "warning_only"
+    return "unverified_report_only"
+
 def merge_candidates(records: list[dict], cfg: dict) -> list[dict]:
     ordered = sorted(records, key=lambda r: r["event_start_utc"])
     merged = []
@@ -335,14 +353,22 @@ def merge_candidates(records: list[dict], cfg: dict) -> list[dict]:
         match["source_records"] += 1
         match["source_types"].add(rec["candidate_source"])
         match["evidence_sources"].add(rec["candidate_source"])
-        if rec["candidate_source"] == "NCEI_STORM_EVENTS":
-            match["verification_class"] = "official_plus_independent_report"
-            match["verification_status"] = "documented_with_lsr_support"
-            if not match.get("narrative"):
-                match["narrative"] = rec.get("narrative", "")
-            if match.get("event_type") == "" or match.get("event_type") is None:
-                match["event_type"] = rec.get("event_type", "")
+        if not match.get("narrative"):
+            match["narrative"] = rec.get("narrative", "")
+        if match.get("event_type") in ("", None):
+            match["event_type"] = rec.get("event_type", "")
+        if rec.get("warning_verified_by_iem"):
+            match["warning_verified_by_iem"] = True
+        if rec.get("warning_status"):
+            match["warning_status"] = rec.get("warning_status")
+        if rec.get("warning_wfo"):
+            match["warning_wfo"] = rec.get("warning_wfo")
         match["lsr_count"] = int(match.get("lsr_count", 0)) + int(rec.get("lsr_count", 0))
+        match["verification_class"] = merged_verification_class(set(match["source_types"]))
+        if match["verification_class"].startswith("official"):
+            match["verification_status"] = "documented_with_independent_evidence"
+        elif "warning" in match["verification_class"]:
+            match["verification_status"] = "warning_candidate"
 
     for rec in merged:
         rec["source_types"] = ",".join(sorted(rec["source_types"]))
@@ -398,14 +424,15 @@ def main():
 
     ncei = gather_ncei(cfg)
     lsr = gather_lsr(cfg)
-    merged = merge_candidates(ncei + lsr, cfg)
+    cow = gather_cow_sqw(cfg)
+    merged = merge_candidates(ncei + lsr + cow, cfg)
     radar = radar_manifest(merged, cfg)
 
     columns = [
         "candidate_id","candidate_source","verification_class","verification_status",
         "event_start_utc","window_start_utc","window_end_utc","state","county",
         "lat","lon","event_type","event_id","source","narrative","evidence",
-        "ncei_explicit_snow_squall","lsr_count","source_records","source_types","evidence_sources",
+        "ncei_explicit_snow_squall","lsr_count","source_records","source_types","evidence_sources","warning_verified_by_iem","warning_status","warning_wfo",
     ]
     pd.DataFrame(merged).reindex(columns=columns).to_csv(out / "snow_squall_candidates.csv", index=False)
     pd.DataFrame(radar).to_csv(out / "snow_squall_radar_manifest.csv", index=False)
@@ -415,8 +442,9 @@ def main():
         "end_year": cfg["end_year"],
         "raw_ncei_records": len(ncei),
         "raw_iem_lsr_records": len(lsr),
+        "raw_iem_sqw_records": len(cow),
         "merged_candidates": len(merged),
-        "official_documented_candidates": sum(r["verification_class"] in {"official_documented","official_plus_independent_report"} for r in merged),
+        "official_documented_candidates": sum(r["verification_class"] in {"official_documented","official_plus_independent_report","official_plus_warning","official_plus_warning_and_report"} for r in merged),
         "unverified_report_only_candidates": sum(r["verification_class"] == "unverified_report_only" for r in merged),
         "radar_manifest_rows": len(radar),
         "policy": (
