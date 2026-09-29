@@ -114,7 +114,7 @@ def save_state(path: Path, state: dict, tracker: CentroidTracker):
     tmp.replace(path)
 
 
-def process_volume(path: Path, state_path: Path, output_path: Path):
+def process_volume(\n    path: Path,\n    state_path: Path,\n    output_path: Path,\n    history_jsonl_path: Path | None = None,\n    history_csv_path: Path | None = None,\n):
     state, tracker = load_state(state_path)
     source_name = path.name
 
@@ -361,7 +361,7 @@ def main():
     parser.add_argument("--output", default="data/derived/live_objects.geojson")
     args = parser.parse_args()
 
-    process_volume(Path(args.input), Path(args.state), Path(args.output))
+    process_volume(\n        Path(args.input),\n        Path(args.state),\n        Path(args.output),\n        history_jsonl_path=Path(args.history_jsonl) if args.history_jsonl else None,\n        history_csv_path=Path(args.history_csv) if args.history_csv else None,\n    )
 
 
 if __name__ == "__main__":
