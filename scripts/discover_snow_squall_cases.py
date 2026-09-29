@@ -27,7 +27,7 @@ from scripts.acquire_swdi_plsr import _bulk_year
 
 NCEI_BASE = "https://www.ncei.noaa.gov/pub/data/swdi/stormevents/csvfiles"
 IEM_LSR_BASE = "https://mesonet.agron.iastate.edu/cgi-bin/request/gis/lsr.py"
-LOCAL_TZ = ZoneInfo("America/New_York")
+LOCAL_STANDARD_TZ = timezone(timedelta(hours=-5))
 
 NCEI_EVENT_TYPES = {
     "Snow Squall",
@@ -108,7 +108,7 @@ def event_start_utc(row: pd.Series) -> datetime | None:
             hm // 100,
             hm % 100,
         )
-        return naive.replace(tzinfo=LOCAL_TZ).astimezone(timezone.utc)
+        return naive.replace(tzinfo=LOCAL_STANDARD_TZ).astimezone(timezone.utc)
     except (KeyError, TypeError, ValueError, OverflowError):
         return None
 
