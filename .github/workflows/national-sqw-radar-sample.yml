@@ -1,0 +1,139 @@
+name: National SQW Radar Sample
+
+on:
+  workflow_run:
+    workflows:
+      - National Snow Squall Warning Inventory
+    types:
+      - completed
+  workflow_dispatch:
+    inputs:
+      verified_offset:
+        description: "Verified warnings to skip"
+        required: false
+        default: "0"
+        type: string
+      review_offset:
+        description: "Review warnings to skip"
+        required: false
+        default: "0"
+        type: string
+      max_verified:
+        description: "Verified warnings to sample"
+        required: false
+        default: "30"
+        type: string
+      max_review:
+        description: "Review warnings to sample"
+        required: false
+        default: "15"
+        type: string
+
+permissions:
+  actions: read
+  contents: read
+
+concurrency:
+  group: national-sqw-radar-sample
+  cancel-in-progress: true
+
+jobs:
+  sample:
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    env:
+      PYTHONPATH: ${{ github.workspace }}
+      PYTHONUNBUFFERED: "1"
+
+    steps:
+      - name: Checkout foundation
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
+
+      - name: Download national inventory
+        if: github.event_name == 'workflow_run'
+        uses: actions/download-artifact@v4
+        with:
+          name: national-snow-squall-warning-inventory
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          repository: ${{ github.repository }}
+          run-id: ${{ github.event.workflow_run.id }}
+          path: inventory
+
+      - name: Generate inventory for manual run
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          set -euo pipefail
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          python scripts/discover_national_sqw_cases.py             --start-year 2018             --end-year 2026             --output-dir inventory
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install science dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt -r requirements-science.txt
+
+      - name: Test radar selector
+        run: pytest -q tests/test_select_national_sqw_radar_cases.py
+
+      - name: Select verified and review SQW warnings
+        run: |
+          set -euo pipefail
+          rm -rf data/discovery/national_sqw_radar
+          python scripts/select_national_sqw_radar_cases.py             --input inventory/national_sqw_warnings.csv             --output-dir data/discovery/national_sqw_radar             --max-verified "${{ inputs.max_verified || '30' }}"             --max-unverified "${{ inputs.max_review || '15' }}"             --verified-offset "${{ inputs.verified_offset || '0' }}"             --unverified-offset "${{ inputs.review_offset || '0' }}"             --max-radars 2             --max-range-km 230
+
+      - name: Preflight Level-II archive coverage
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          import boto3
+          from botocore import UNSIGNED
+          from botocore.client import Config
+          import pandas as pd
+          from acquisition.historical_level2 import list_volume_keys, key_time
+
+          manifest=Path("data/discovery/national_sqw_radar/national_sqw_radar_manifest.csv")
+          d=pd.read_csv(manifest)
+          client=boto3.client("s3",region_name="us-east-1",config=Config(signature_version=UNSIGNED))
+          rows=[]
+          for r in d.to_dict("records"):
+              start=pd.Timestamp(r["window_start_utc"])
+              end=pd.Timestamp(r["window_end_utc"])
+              ok=False
+              day=start.normalize()
+              while day<=end.normalize():
+                  keys=list_volume_keys(client,r["radar_site"],day.to_pydatetime())
+                  if any(
+                      (t:=key_time(k)) is not None
+                      and start.to_pydatetime() <= t <= end.to_pydatetime()
+                      for k in keys
+                  ):
+                      ok=True
+                      break
+                  day += pd.Timedelta(days=1)
+              rows.append({
+                  "case_id":r["case_id"],
+                  "radar_site":r["radar_site"],
+                  "level2_window_available":ok,
+              })
+          out=pd.DataFrame(rows)
+          out.to_csv("data/discovery/national_sqw_radar/level2_preflight.csv",index=False)
+          print(out["level2_window_available"].value_counts(dropna=False).to_string())
+          print("Rows:",len(out))
+          PY
+
+      - name: Upload radar-ready case sample
+        uses: actions/upload-artifact@v4
+        with:
+          name: national-sqw-radar-sample
+          path: data/discovery/national_sqw_radar
+          if-no-files-found: error
