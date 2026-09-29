@@ -16,11 +16,13 @@ from acquisition.mrms import find_latest, download
 def acquire(replay_root: Path, output_root: Path) -> dict:
     output_root.mkdir(parents=True, exist_ok=True)
     rows = []
-    for geo_path in sorted(replay_root.glob("*/[0-9][0-9][0-9][0-9]_*.geojson")):
+    for geo_path in sorted(replay_root.rglob("[0-9][0-9][0-9][0-9]_*.geojson")):
         payload = json.loads(geo_path.read_text(encoding="utf-8"))
         scan_time = payload.get("metadata", {}).get("scan_time_utc")
         radar_site = payload.get("metadata", {}).get("radar_id") or geo_path.parent.name
-        case_id = geo_path.parent.name
+        rel_parts = geo_path.relative_to(replay_root).parts
+        case_id = rel_parts[-2] if len(rel_parts) >= 3 else geo_path.parent.name
+        radar_site = rel_parts[-2] if len(rel_parts) == 2 else (rel_parts[-2] if len(rel_parts) >= 3 else geo_path.parent.name)
         if not scan_time:
             rows.append({
                 "case_id": case_id,
@@ -43,7 +45,7 @@ def acquire(replay_root: Path, output_root: Path) -> dict:
             })
             continue
 
-        case_out = output_root / case_id
+        case_out = output_root / case_id / (radar_site if radar_site in {"KCXX", "KTYX"} else "")
         path = download(match, case_out)
         rows.append({
             "case_id": case_id,
