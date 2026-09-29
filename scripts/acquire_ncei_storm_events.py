@@ -70,7 +70,7 @@ def filter_candidates(df: pd.DataFrame) -> pd.DataFrame:
         "CZ_NAME", "EVENT_TYPE", "MAGNITUDE", "MAGNITUDE_TYPE",
         "BEGIN_LAT", "BEGIN_LON", "END_LAT", "END_LON",
         "SOURCE", "FLOOD_CAUSE", "EPISODE_ID", "EVENT_NARRATIVE",
-        "EPISODE_NARRATIVE",
+        "EPISODE_NARRATIVE", "LAST_DATE_MODIFIED", "LAST_DATE_CERTIFIED",
     ]
     keep = [c for c in keep if c in out.columns]
     out = out[keep]
