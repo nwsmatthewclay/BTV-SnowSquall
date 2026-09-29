@@ -47,6 +47,11 @@ def _kt_from_ms(value):
     return None if value is None else value * 1.943844492
 
 
+def _mi_from_m(value):
+    value = _number(value)
+    return None if value is None else value / 1609.344
+
+
 def build_live_feature_row(current: dict, previous: dict | None = None, track_count: int | None = None) -> dict:
     row = {}
 
@@ -80,6 +85,7 @@ def build_live_feature_row(current: dict, previous: dict | None = None, track_co
         if key in current:
             row[key] = _number(current.get(key))
 
+    row["visibility_sm"] = _mi_from_m(current.get("visibility_m"))
     row["wind_gust_kt"] = _kt_from_ms(current.get("gust_ms"))
     row["shear_0_6km_kt"] = _kt_from_ms(current.get("shear_0_6km_ms"))
 
