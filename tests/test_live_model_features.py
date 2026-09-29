@@ -73,3 +73,38 @@ def test_feature_coverage_reports_missing_predictors():
     assert coverage["available"] == 1
     assert coverage["fraction"] == 0.333
     assert coverage["missing"] == ["b", "c"]
+
+
+def test_operational_predictor_set_is_live_covered():
+    from scripts.build_model_features import OPERATIONAL_LIVE_PREDICTORS
+
+    base = {
+        "timestamp": "2026-01-01T12:05:00Z",
+        "track_id": "7",
+        "centroid_lat": 44.03,
+        "centroid_lon": -73.0,
+    }
+    for name in OPERATIONAL_LIVE_PREDICTORS:
+        if name.endswith("_delta") or name.endswith("_rate_per_min") or name.endswith("_running_max"):
+            continue
+        if name in {"track_scan_index", "track_scan_count_to_date", "track_age_min", "track_gap_gt_10min", "centroid_displacement_km", "motion_speed_kmh"}:
+            continue
+        base[name] = 1.0
+    base["max_reflectivity_dbz"] = 30.0
+    base["mean_reflectivity_dbz"] = 20.0
+    base["area_km2"] = 12.0
+    base["length_km"] = 5.0
+    base["width_km"] = 2.0
+    base["pixel_count"] = 12
+    base["core_pixel_count"] = 4
+    previous = dict(base)
+    previous["timestamp"] = "2026-01-01T12:00:00Z"
+    previous["centroid_lat"] = 44.0
+    previous["max_reflectivity_dbz"] = 28.0
+    previous["mean_reflectivity_dbz"] = 19.0
+    previous["area_km2"] = 10.0
+
+    frame = build_live_feature_frame([previous, base], "7")
+    coverage = feature_coverage(frame.tail(1), OPERATIONAL_LIVE_PREDICTORS)
+    assert coverage["fraction"] == 1.0
+    assert coverage["missing"] == []
