@@ -102,6 +102,8 @@ def main():
     parser.add_argument("--max-polls", type=int, default=None)
     parser.add_argument("--state", default="data/derived/live_tracker_state.json")
     parser.add_argument("--output", default="data/derived/live_objects.geojson")
+    parser.add_argument("--history-jsonl", default=None)
+    parser.add_argument("--history-csv", default=None)
     args = parser.parse_args()
     run(
         args.radar,
@@ -109,6 +111,8 @@ def main():
         args.max_polls,
         Path(args.state),
         Path(args.output),
+        Path(args.history_jsonl) if args.history_jsonl else None,
+        Path(args.history_csv) if args.history_csv else None,
     )
 
 
