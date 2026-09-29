@@ -103,6 +103,7 @@ def attach_radars(frame, locations, max_radars: int, max_range_km: float):
 def main():
     p = argparse.ArgumentParser()
     p.add_argument("--input", required=True)
+    p.add_argument("--episodes", default=None, help="Optional national SQW episode table for leakage-safe episode grouping.")
     p.add_argument("--output-dir", required=True)
     p.add_argument("--max-verified", type=int, default=60)
     p.add_argument("--max-unverified", type=int, default=30)
@@ -115,6 +116,16 @@ def main():
     out.mkdir(parents=True, exist_ok=True)
 
     d = pd.read_csv(a.input)
+    if a.episodes:
+        episodes = pd.read_csv(a.episodes)
+        episode_map = {}
+        for _, episode in episodes.iterrows():
+            for case_id in str(episode.get("case_ids", "")).split(";"):
+                if case_id and case_id != "nan":
+                    episode_map[case_id] = episode.get("episode_id")
+        d["episode_id"] = d["case_id"].map(episode_map)
+    else:
+        d["episode_id"] = d["case_id"]
     verified = d[d["iem_verified"].fillna(False)].copy()
     review = d[~d["iem_verified"].fillna(False)].copy()
 
