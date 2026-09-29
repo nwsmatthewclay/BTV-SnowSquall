@@ -238,10 +238,27 @@ function renderSelectedHistory(p){
 function selectObject(p){
   selected=p;
   document.getElementById("selectionState").textContent="Selected: "+p.radar_site+" track "+p.track_id;
+
   const env=p.environment||{};
-  const envFields=env.fields||{};
+  const nested=env.fields||{};
+  const envFields={
+    ...nested,
+    cape_jkg: nested.cape_jkg?.value ?? p.cape_jkg,
+    cin_jkg: nested.cin_jkg?.value ?? p.cin_jkg,
+    mlcape_jkg: nested.mlcape_jkg?.value ?? p.mlcape_jkg,
+    mlcin_jkg: nested.mlcin_jkg?.value ?? p.mlcin_jkg,
+    mucape_jkg: nested.mucape_jkg?.value ?? p.mucape_jkg,
+    pwat_mm: nested.pwat_mm?.value ?? p.pwat_mm,
+    srh01_m2s2: nested.srh01_m2s2?.value ?? p.srh01_m2s2,
+    shear_0_6km_ms: nested.shear_0_6km_ms?.value ?? p.shear_0_6km_ms,
+    temperature_2m_k: nested.temperature_2m_k?.value ?? p.temperature_2m_k,
+    dewpoint_2m_k: nested.dewpoint_2m_k?.value ?? p.dewpoint_2m_k,
+    gust_ms: nested.gust_ms?.value ?? p.gust_ms,
+    visibility_m: nested.visibility_m?.value ?? p.visibility_m
+  };
   const envSource=env.source||p.environment_source||"—";
   const envStatus=p.environment_status||env.status||"—";
+  const motionDir=p.motion_direction_deg ?? p.motion_dir_deg;
   document.getElementById("selectedSummary").innerHTML=
     "<div class='live-stat'><span>Radar</span><b>"+esc(p.radar_site)+"</b></div>"+
     "<div class='live-stat'><span>Track</span><b>"+esc(p.track_id)+"</b></div>"+
@@ -250,12 +267,13 @@ function selectObject(p){
     "<div class='live-stat'><span>Mean Z</span><b>"+num(p.mean_reflectivity_dbz)+" dBZ</b></div>"+
     "<div class='live-stat'><span>Area</span><b>"+num(p.area_km2)+" km²</b></div>"+
     "<div class='live-stat'><span>Shape</span><b>"+num(p.length_km)+" × "+num(p.width_km)+" km</b></div>"+
-    "<div class='live-stat'><span>Motion</span><b>"+num(p.motion_speed_kt)+" kt @ "+num(p.motion_direction_deg,0)+"°</b></div>"+
+    "<div class='live-stat'><span>Motion</span><b>"+num(p.motion_speed_kt)+" kt @ "+num(motionDir,0)+"°</b></div>"+
     "<div class='live-stat'><span>Age</span><b>"+(p.age_scans==null?"—":esc(p.age_scans+" scans"))+"</b></div>"+
     "<div class='live-stat'><span>Z trend</span><b>"+num(p.reflectivity_trend_dbz_per_hr)+" dBZ/hr</b></div>"+
     "<div class='live-stat'><span>Environment</span><b>"+esc(envSource)+" • "+esc(envStatus)+"</b></div>"+
     renderEnvironment(envFields)+
-    "<div class='live-stat'><span>Data quality</span><b>"+esc(p.data_quality||"—")+"</b></div>";
+    "<div class='live-stat'><span>Data quality</span><b>"+esc(p.data_quality||"—")+"</b></div>"+
+    "<div class='live-status degraded'><strong>Learned probability</strong><span>Scoring remains gated until independent validation and explicit release.</span></div>";
   renderSelectedHistory(p);
 }
 
