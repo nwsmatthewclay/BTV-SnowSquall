@@ -59,6 +59,10 @@ jobs:
         run: |
           python scripts/build_modern_human_review_worksheet.py             --manifest data/derived/modern_candidate_reconstruction_manifest.csv             --output data/derived/modern_human_review_worksheet.csv
 
+      - name: Freeze reconstruction inputs
+        run: |
+          python scripts/write_modern_validation_freeze.py             --output data/derived/modern_validation_freeze.json             data/derived/modern_candidate_reconstruction_manifest.csv             data/manifests/modern_independent_validation_cases.csv             data/manifests/observing_stations.csv
+
       - name: Download two-radar Level-II cohort
         run: |
           python acquisition/historical_level2.py             --manifest data/derived/modern_candidate_reconstruction_manifest.csv             --output data/raw/modern_candidate_level2
@@ -159,6 +163,7 @@ jobs:
             data/derived/modern_reconstruction_archive_preflight.csv
             data/derived/modern_candidate_reconstruction_manifest.csv
             data/derived/modern_human_review_worksheet.csv
+            data/derived/modern_validation_freeze.json
             data/derived/modern_candidate_replay
             data/derived/modern_candidate_mrms
             data/derived/modern_candidate_mrms_object_comparison.csv
