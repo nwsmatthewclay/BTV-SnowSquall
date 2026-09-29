@@ -23,8 +23,11 @@ function addRadarMarkers(){
   });
 }
 
+const OBJECT_FEED_SUFFIX="_objects.geojson";
 function feedUrl(site,kind){
-  return url(site+"_"+kind+(kind==="objects"?".geojson":".json"));
+  return kind==="objects"
+    ? url(site+OBJECT_FEED_SUFFIX)
+    : url(site+"_"+kind+".json");
 }
 
 async function fetchOptionalJson(target,fallback){
