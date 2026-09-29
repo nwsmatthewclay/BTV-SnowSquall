@@ -166,7 +166,7 @@ def gather_ncei(cfg: dict) -> list[dict]:
                 "event_id": str(row.get("EVENT_ID", "") or ""),
                 "source": str(row.get("SOURCE", "") or ""),
                 "narrative": str(narrative).strip(),
-                "evidence": "event_type:snow_squall" if str(row.get("EVENT_TYPE", "")).strip() == "Snow Squall" else "narrative:snow_squall",
+                "evidence": ("event_type:snow_squall" if str(row.get("EVENT_TYPE", "")).strip() == "Snow Squall" else ("narrative:snow_squall" if bool(SNOW_RE.search(str(narrative))) else "screening:snow-impact-language")),
                 "ncei_explicit_snow_squall": explicit,
                 "lsr_count": 0,
             })
