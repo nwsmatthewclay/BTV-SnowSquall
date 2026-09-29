@@ -45,6 +45,7 @@ def main():
     p.add_argument("--positive-environment-audit")
     p.add_argument("--null-environment-audit")
     p.add_argument("--null-activity")
+    p.add_argument("--plsr-status")
     p.add_argument("--output", required=True)
     args = p.parse_args()
 
@@ -267,6 +268,23 @@ def main():
                 'interpretable as model skill yet.</div>'
             )
 
+    plsr_section = "<p><em>SWDI preliminary Local Storm Report acquisition status not supplied.</em></p>"
+    if args.plsr_status and Path(args.plsr_status).exists():
+        plsr = load_json(Path(args.plsr_status))
+        plsr_df = pd.DataFrame(plsr.get("cases", []))
+        plsr_section = (
+            f"<p>Cases requested: <strong>{plsr.get('cases_requested', 0)}</strong> · "
+            f"cases with data: <strong>{plsr.get('cases_with_data', 0)}</strong> · "
+            f"empty: <strong>{plsr.get('cases_empty', 0)}</strong> · "
+            f"unavailable: <strong>{plsr.get('cases_unavailable', 0)}</strong> · "
+            f"records: <strong>{plsr.get('records', 0):,}</strong></p>"
+            + table_html(
+                plsr_df,
+                ["case_id", "observing_station", "status", "record_count", "error"],
+            )
+            + '<div class="note"><strong>LSR guardrail:</strong> Preliminary SWDI LSRs are evidence only. Service absence and report absence are never interpreted as a negative event label.</div>'
+        )
+
     event_level_section = "<p><em>Event/window diagnostics not supplied.</em></p>"
     if args.baseline_root:
         event_rows = []
@@ -333,6 +351,9 @@ main{{max-width:1200px;margin:24px auto;padding:0 20px}}
 
 <h2>Independent ASOS/METAR surface audit</h2>
 {surface_section}
+
+<h2>SWDI preliminary Local Storm Reports</h2>
+{plsr_section}
 
 <h2>Null-window activity classification</h2>
 {null_activity_section}
