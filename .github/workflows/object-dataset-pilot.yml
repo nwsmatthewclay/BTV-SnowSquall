@@ -45,28 +45,35 @@ jobs:
           echo "Pilot checkout:"
           git rev-parse HEAD
 
-      - name: Build five-case positive pilot manifest
+      - name: Build 12-case positive diversity pilot manifest
         run: |
           python - <<'PY'
           import pandas as pd
           cases = [
+              "BTV20020323",
+              "BTV20030113",
+              "BTV20030209",
+              "BTV20031202",
               "BTV20040315",
+              "BTV20041217",
               "BTV20050213",
               "BTV20060207",
               "BTV20060224",
+              "BTV20070205",
+              "BTV20090125",
               "BTV20101127",
           ]
           src = pd.read_csv("data/manifests/banacos_radar_windows.csv")
           out = src[src["case_id"].isin(cases)].copy()
           out.to_csv("data/manifests/banacos_positive_pilot.csv", index=False)
           print(out[["case_id", "radar_site", "window_start_utc", "event_start_utc"]].to_string(index=False))
-          assert len(out) == 10
+          assert len(out) == 24
           assert set(out["case_id"]) == set(cases)
           PY
 
-      - name: Build five-window null pilot manifest
+      - name: Build 12-window null pilot manifest
         run: |
-          python scripts/build_null_window_manifest.py --sample-count 5 --seed 42 --radars KCXX KTYX --output data/manifests/banacos_null_windows_pilot.csv
+          python scripts/build_null_window_manifest.py --sample-count 12 --seed 42 --start 2002-01-01T00:00:00Z --end 2011-12-31T21:00:00Z --radars KCXX KTYX --output data/manifests/banacos_null_windows_pilot.csv
 
       - name: Audit manifest identity
         run: |
@@ -75,8 +82,18 @@ jobs:
           p = pd.read_csv("data/manifests/banacos_positive_pilot.csv")
           n = pd.read_csv("data/manifests/banacos_null_windows_pilot.csv")
           expected = {
-              "BTV20040315", "BTV20050213", "BTV20060207",
-              "BTV20060224", "BTV20101127"
+              "BTV20020323",
+              "BTV20030113",
+              "BTV20030209",
+              "BTV20031202",
+              "BTV20040315",
+              "BTV20041217",
+              "BTV20050213",
+              "BTV20060207",
+              "BTV20060224",
+              "BTV20070205",
+              "BTV20090125",
+              "BTV20101127",
           }
           assert set(p["case_id"]) == expected
           assert n["case_id"].fillna("").eq("").all()
@@ -182,7 +199,7 @@ jobs:
         run: |
           python scripts/annotate_object_population.py data/derived/null_object_scans.csv --manifest data/manifests/banacos_null_windows_pilot.csv --output data/derived/null_object_scans_annotated.csv
 
-      - name: Audit annotation identity
+      - name: Audit pilot annotation identity
         run: |
           python - <<'PY'
           import pandas as pd
@@ -196,6 +213,8 @@ jobs:
           unexpected = observed - expected
           missing = expected - observed
           print("Positive observed case IDs:", sorted(observed))
+          print("Positive object rows by case:")
+          print(p.groupby("case_id").size().sort_index().to_string())
           print("Unexpected positive case IDs:", sorted(unexpected))
           print("Missing positive case IDs:", sorted(missing))
           print("Null case IDs populated:", int(n["case_id"].notna().sum()))
@@ -256,7 +275,7 @@ jobs:
         run: |
           python scripts/build_unified_object_dataset.py data/derived/positive_object_labeled.csv data/derived/null_object_environment.csv --output data/derived/object_population_pilot.csv
 
-      - name: Audit unified dataset
+      - name: Audit unified 12-case dataset
         run: |
           python - <<'PY'
           import pandas as pd
