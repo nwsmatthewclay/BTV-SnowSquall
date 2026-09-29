@@ -166,6 +166,10 @@ jobs:
           print(json.dumps(rows,indent=2))
           PY
 
+      - name: Audit learned candidate replay
+        run: |
+          set -euo pipefail
+          python scripts/audit_candidate_replay.py replay-output
       - name: Upload learned candidate replay package
         uses: actions/upload-artifact@v4
         with:
