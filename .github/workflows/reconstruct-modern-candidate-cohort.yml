@@ -142,6 +142,10 @@ jobs:
         run: |
           python scripts/build_modern_candidate_inventory.py             --manifest data/derived/modern_candidate_reconstruction_manifest.csv             --replay-root data/derived/modern_candidate_replay             --surface-root data/raw/modern_candidate_surface             --mrms-root data/derived/modern_candidate_mrms             --output-json data/derived/modern_candidate_inventory.json             --output-csv data/derived/modern_candidate_inventory.csv
 
+      - name: Build candidate evidence summary
+        run: |
+          python scripts/build_modern_candidate_evidence_summary.py             --inventory data/derived/modern_candidate_inventory.csv             --mrms data/derived/modern_candidate_mrms_object_comparison.csv             --surface data/derived/modern_surface_network_diagnostic.csv             --output-json data/derived/modern_candidate_evidence_summary.json             --output-csv data/derived/modern_candidate_evidence_summary.csv
+
       - name: Assert non-scoring candidate boundary
         run: |
           python - <<'PY'
@@ -180,6 +184,8 @@ jobs:
             data/derived/modern_surface_network_diagnostic.json
             data/derived/modern_candidate_inventory.json
             data/derived/modern_candidate_inventory.csv
+            data/derived/modern_candidate_evidence_summary.json
+            data/derived/modern_candidate_evidence_summary.csv
             data/raw/modern_candidate_surface
             data/raw/modern_candidate_level2
           if-no-files-found: warn
