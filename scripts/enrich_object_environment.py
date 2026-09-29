@@ -6,7 +6,7 @@ from datetime import timezone
 from pathlib import Path
 import pandas as pd
 
-from processing.environment import acquire_for_radar_time, extract_features
+from processing.environment import acquire_for_radar_time, extract_features, environment_cache_key
 
 
 def enrich(input_csv: Path, output_csv: Path, rap_dir: Path, ruc_dir: Path):
@@ -31,7 +31,7 @@ def enrich(input_csv: Path, output_csv: Path, rap_dir: Path, ruc_dir: Path):
             rows.append(row)
             continue
 
-        hour_key = scan_time.replace(minute=0, second=0, microsecond=0).isoformat()
+        hour_key = environment_cache_key(scan_time)
         if hour_key not in cache:
             cache[hour_key] = acquire_for_radar_time(
                 scan_time, rap_dir=rap_dir, ruc_dir=ruc_dir, max_age_minutes=180
