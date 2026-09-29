@@ -109,6 +109,11 @@ def main():
         history_path = args.output_root / f"{site}_shadow_history.json"
         history = read_json(history_path, [])
         history.extend(rows)
+        dedup = {}
+        for row in history:
+            key = (str(row.get("timestamp", "")), str(row.get("track_id", "")))
+            dedup[key] = row
+        history = list(dedup.values())
         cleaned = []
         for row in history:
             try:
