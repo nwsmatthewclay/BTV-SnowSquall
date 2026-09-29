@@ -189,6 +189,56 @@ def in_primary_lsr(row: pd.Series, cfg: dict) -> bool:
         return county in set(cfg["ny_cwa_counties"])
     return False
 
+def gather_cow_sqw(cfg: dict) -> list[dict]:
+    rows = []
+    start_year = max(int(cfg["start_year"]), int(cfg.get("warning_start_year", 2018)))
+    for year in range(start_year, int(cfg["end_year"]) + 1):
+        params = {
+            "phenomena": "SQ",
+            "begints": f"{year}-01-01T00:00Z",
+            "endts": f"{year}-12-31T23:59Z",
+        }
+        for wfo in cfg.get("warning_wfos", ["BTV"]):
+            params["wfo"] = wfo
+            print(f"IEM COW SQW {year} {wfo}")
+            try:
+                payload = request(IEM_COW_BASE, params=params).json()
+            except Exception as exc:
+                print(f"  unavailable: {exc}")
+                continue
+            features = (payload.get("events") or {}).get("features") or []
+            for feature in features:
+                props = feature.get("properties") or {}
+                issue = pd.to_datetime(props.get("issue"), utc=True, errors="coerce")
+                if pd.isna(issue):
+                    continue
+                lat = finite_float(props.get("lat0"))
+                lon = finite_float(props.get("lon0"))
+                report_ids = str(props.get("stormreports_all") or "").strip()
+                lsr_count = len([item for item in report_ids.split(",") if item.strip()])
+                rows.append({
+                    "candidate_id": case_key("SQW", issue.to_pydatetime(), lat, lon, f"{wfo}|{props.get("eventid", "")}"),
+                    "candidate_source": "IEM_COW_SQW",
+                    "verification_class": "warning_only",
+                    "verification_status": "warning_issued",
+                    "event_start_utc": issue.isoformat(),
+                    "event_end_utc": props.get("expire"),
+                    "state": None,
+                    "county": None,
+                    "lat": lat,
+                    "lon": lon,
+                    "event_type": "Snow Squall Warning",
+                    "event_id": str(props.get("eventid") or ""),
+                    "source": f"NWS WFO {wfo}",
+                    "narrative": "",
+                    "evidence": "iem_cow_sqw",
+                    "ncei_explicit_snow_squall": False,
+                    "lsr_count": lsr_count,
+                    "warning_verified_by_iem": bool(props.get("verify")),
+                    "warning_status": str(props.get("status") or ""),
+                    "warning_wfo": str(props.get("wfo") or wfo),
+                })
+    return rows
 def gather_lsr(cfg: dict) -> list[dict]:
     rows = []
     for year in range(int(cfg["start_year"]), int(cfg["end_year"]) + 1):
