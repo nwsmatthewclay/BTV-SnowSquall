@@ -20,6 +20,9 @@ CSV_FIELDS = [
     "core_fraction", "motion_speed_kt", "motion_dir_deg",
     "age_scans", "reflectivity_trend_dbz_per_hr", "area_growth_fraction",
     "environment_status", "environment_source", "environment_valid_time_utc",
+    "echo_top_km", "top_minus_base_km", "vertical_reflectivity_gradient", "vertical_valid_points",
+    "zdr_mean_db", "zdr_p90_db", "zdr_gradient_dbkm", "rhohv_mean", "rhohv_max", "rhohv_p90", "rhohv_min",
+    "kdp_mean_degkm", "kdp_p90_degkm", "velocity_mean_kt", "velocity_std_kt", "velocity_p90_abs_kt", "velocity_gradient_ktkm",
     "environment_age_minutes",
     "visibility_m", "gust_ms", "surface_temperature_k",
     "cape_jkg", "cin_jkg", "pwat_mm", "mlcape_jkg", "mlcin_jkg",
@@ -53,6 +56,9 @@ def flatten(feature, source_file):
         "motion_dir_deg", "age_scans", "reflectivity_trend_dbz_per_hr",
         "area_growth_fraction", "environment_status", "data_quality",
         "model_version",
+        "echo_top_km", "top_minus_base_km", "vertical_reflectivity_gradient", "vertical_valid_points",
+        "zdr_mean_db", "zdr_p90_db", "zdr_gradient_dbkm", "rhohv_mean", "rhohv_max", "rhohv_p90", "rhohv_min",
+        "kdp_mean_degkm", "kdp_p90_degkm", "velocity_mean_kt", "velocity_std_kt", "velocity_p90_abs_kt", "velocity_gradient_ktkm",
     ]
     for key in direct:
         row[key] = _clean(props.get(key))
