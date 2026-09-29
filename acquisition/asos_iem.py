@@ -77,7 +77,8 @@ def request_observations(
             retry_after = None
             response_obj = getattr(exc, "response", None)
             if response_obj is not None:
-                raw_retry_after = response_obj.headers.get("Retry-After")
+                headers = getattr(response_obj, "headers", {}) or {}
+                raw_retry_after = headers.get("Retry-After")
                 try:
                     retry_after = float(raw_retry_after)
                 except (TypeError, ValueError):
