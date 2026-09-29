@@ -100,13 +100,15 @@ def audit(manifest_path: Path, raw_root: Path, min_fraction: float, required_pri
         "rows": details.to_dict(orient="records"),
     }
 
-    if fraction < min_fraction:
+    if evaluated_fraction < min_fraction:
+        scope_name = required_priority or "all_manifest_rows"
         raise ValueError(
             f"Only {evaluated_populated}/{evaluated} evaluated manifest rows have Level-II volumes "
             f"({evaluated_fraction:.1%}); minimum is {min_fraction:.1%}. "
-            f"Coverage scope: {required_priority or \"all_manifest_rows\"}. "
+            f"Coverage scope: {scope_name}. "
             f"No-data rows: {evaluated_no_data}"
         )
+
     return summary
 
 
