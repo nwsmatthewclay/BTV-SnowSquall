@@ -46,3 +46,44 @@ def test_shadow_scoring_keeps_candidate_non_operational(tmp_path, monkeypatch):
     assert payload["operational_release_status"] == "candidate_only_not_operational"
     assert rows[0]["research_probabilities"]
     assert sorted(rows[0]["research_probabilities"]) == ["15", "30", "45", "60"]
+
+
+def test_shadow_score_is_withheld_when_feature_coverage_is_low(tmp_path, monkeypatch):
+    import json
+    live = tmp_path / "live"
+    models = tmp_path / "models"
+    live.mkdir()
+    models.mkdir()
+    (live / "KCXX_objects.geojson").write_text(json.dumps({
+        "metadata": {},
+        "features": [{
+            "type": "Feature",
+            "geometry": None,
+            "properties": {
+                "track_id": "1",
+                "timestamp": "2026-01-01T12:05:00Z",
+                "max_reflectivity_dbz": 30.0,
+            },
+        }],
+    }), encoding="utf-8")
+    (live / "KCXX_history.json").write_text(json.dumps([]), encoding="utf-8")
+    (live / "KTYX_objects.geojson").write_text(json.dumps({"features":[],"metadata":{}}), encoding="utf-8")
+    (live / "KTYX_history.json").write_text("[]", encoding="utf-8")
+
+    class StubRuntime:
+        def __init__(self):
+            self.model = object()
+            self.metadata = {"operational_release_status": "candidate_only"}
+            self.feature_columns = ["missing_a", "missing_b"]
+
+        def score_candidate(self, frame):
+            return [0.99]
+
+    monkeypatch.setattr(
+        "scripts.shadow_live_model_scorer.ModelRuntime.load",
+        lambda directory: StubRuntime(),
+    )
+    payload, rows = score_site("KCXX", live, models)
+    assert rows[0]["research_probabilities"] == {}
+    assert "low_feature_coverage" in rows[0]["score_errors"]["15"]
+    assert payload["scored_object_count"] == 0
