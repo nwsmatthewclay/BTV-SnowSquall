@@ -87,8 +87,12 @@ def norm_county(value) -> str:
     text = re.sub(r"\b(COUNTY|PARISH|BOROUGH|CENSUS AREA)\b", "", text)
     return re.sub(r"\s+", " ", text).strip()
 
+def normalize_state(value) -> str:
+    state = str(value or "").upper().strip()
+    return {"VERMONT": "VT", "NEW YORK": "NY"}.get(state, state)
+
 def in_primary_cwa(row: pd.Series, cfg: dict) -> bool:
-    state = str(row.get("STATE", "")).upper().strip()
+    state = normalize_state(row.get("STATE", ""))
     county = norm_county(row.get("CZ_NAME", ""))
     if state == "VT":
         return county not in set(cfg["vt_excluded_counties"])
@@ -170,7 +174,7 @@ def gather_ncei(cfg: dict) -> list[dict]:
                 "verification_status": "documented_candidate",
                 "event_start_utc": start.isoformat(),
                 "event_end_utc": end.isoformat() if end else None,
-                "state": str(row.get("STATE", "")).strip().upper(),
+                "state": normalize_state(row.get("STATE", "")),
                 "county": norm_county(row.get("CZ_NAME", "")),
                 "lat": lat,
                 "lon": lon,
