@@ -38,10 +38,17 @@ NCEI_EVENT_TYPES = {
     "Thunderstorm Wind",
 }
 SNOW_RE = re.compile(r"\bsnow\s+squall(?:s)?\b", re.I)
-UNVERIFIED_RE = re.compile(
-    r"(?:\bsnow\s+squall(?:s)?\b|\bwhite[- ]?out\b|\bnear[- ]?zero\s+visibility\b)",
+SCREEN_RE = re.compile(
+    r"(?:\bwhite[- ]?out\b|\bnear[- ]?zero\s+visibility\b|"
+    r"\bnear[- ]?zero\s+vis\b|\bblinding\s+snow\b|\bflash\s+freeze\b)",
     re.I,
 )
+UNVERIFIED_RE = re.compile(
+    r"(?:\bsnow\s+squall(?:s)?\b|\bwhite[- ]?out\b|\bnear[- ]?zero\s+visibility\b|"
+    r"\bnear[- ]?zero\s+vis\b|\bblinding\s+snow\b)",
+    re.I,
+)
+IEM_COW_BASE = "https://mesonet.agron.iastate.edu/api/1/cow.json"
 
 def request(url: str, **kwargs) -> requests.Response:
     last = None
@@ -131,7 +138,7 @@ def gather_ncei(cfg: dict) -> list[dict]:
             + df.get("EPISODE_NARRATIVE", pd.Series("", index=df.index)).fillna("").astype(str)
         )
         narrative_mask = narratives.str.contains(SNOW_RE, na=False)
-        candidate = df[state_mask & type_mask & (narrative_mask | event_type.eq("Snow Squall"))].copy()
+        candidate = df[state_mask & type_mask & (narrative_mask | event_type.eq("Snow Squall") | narratives.str.contains(SCREEN_RE, na=False))].copy()
 
         for _, row in candidate.iterrows():
             if not in_primary_cwa(row, cfg):
