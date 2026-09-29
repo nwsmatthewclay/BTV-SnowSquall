@@ -90,6 +90,7 @@ def audit(input_csv: Path, schema_csv: Path) -> dict:
         ].tolist(),
         "zero_coverage_expected": detail.loc[(detail["coverage_pct"].eq(0)) & detail["coverage_interpretation"].eq("expected_gap"), "field"].tolist(),
         "zero_coverage_unexpected": detail.loc[(detail["coverage_pct"].eq(0)) & detail["coverage_interpretation"].eq("unexpected_gap"), "field"].tolist(),
+        "partial_coverage_fields": detail.loc[(detail["coverage_pct"].gt(0)) & (detail["coverage_pct"].lt(100)), ["field", "coverage_pct", "availability_policy"]].to_dict(orient="records"),
     }
 
 
@@ -112,6 +113,8 @@ def main():
             f"({row['fields_present']} defined); mean field coverage={row['mean_field_coverage_pct']:.1f}%"
         )
     print(f"Zero-coverage fields: {len(summary['zero_coverage_fields'])}")
+    print(f"Unexpected zero-coverage fields: {len(summary['zero_coverage_unexpected'])}")
+    print(f"Partially populated fields: {len(summary['partial_coverage_fields'])}")
 
 
 if __name__ == "__main__":
