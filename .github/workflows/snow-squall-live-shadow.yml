@@ -31,7 +31,7 @@ jobs:
       - name: Check out model foundation
         uses: actions/checkout@v4
         with:
-          ref: snow-squall-model-foundation
+          ref: ${{ github.sha }}
           fetch-depth: 2
 
       - name: Find latest expanded model bundle
