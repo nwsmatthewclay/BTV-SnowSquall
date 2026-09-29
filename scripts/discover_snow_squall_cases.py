@@ -23,6 +23,8 @@ from zoneinfo import ZoneInfo
 import pandas as pd
 import requests
 
+from scripts.acquire_swdi_plsr import _bulk_year
+
 NCEI_BASE = "https://www.ncei.noaa.gov/pub/data/swdi/stormevents/csvfiles"
 IEM_LSR_BASE = "https://mesonet.agron.iastate.edu/cgi-bin/request/gis/lsr.py"
 LOCAL_TZ = ZoneInfo("America/New_York")
@@ -136,10 +138,10 @@ def gather_ncei(cfg: dict) -> list[dict]:
     for year in range(int(cfg["start_year"]), int(cfg["end_year"]) + 1):
         print(f"NCEI {year}")
         df = ncei_year(year)
-        state = df.get("STATE", pd.Series("", index=df.index)).astype(str).str.upper().str.strip()
+        state_raw = df.get("STATE", pd.Series("", index=df.index)).astype(str).str.upper().str.strip()
+        state = state_raw.replace({"VERMONT": "VT", "NEW YORK": "NY"})
         event_type = df.get("EVENT_TYPE", pd.Series("", index=df.index)).astype(str).str.strip()
         state_mask = state.isin(set(cfg["primary_states"]))
-        type_mask = event_type.isin(NCEI_EVENT_TYPES)
 
         narratives = (
             df.get("EVENT_NARRATIVE", pd.Series("", index=df.index)).fillna("").astype(str)
@@ -147,7 +149,7 @@ def gather_ncei(cfg: dict) -> list[dict]:
             + df.get("EPISODE_NARRATIVE", pd.Series("", index=df.index)).fillna("").astype(str)
         )
         narrative_mask = narratives.str.contains(SNOW_RE, na=False)
-        candidate = df[state_mask & type_mask & (narrative_mask | event_type.eq("Snow Squall") | narratives.str.contains(SCREEN_RE, na=False))].copy()
+        candidate = df[state_mask & (narrative_mask | event_type.eq("Snow Squall") | narratives.str.contains(SCREEN_RE, na=False))].copy()
 
         for _, row in candidate.iterrows():
             if not in_primary_cwa(row, cfg):
