@@ -252,50 +252,66 @@ def gather_cow_sqw(cfg: dict) -> list[dict]:
                     "warning_wfo": str(props.get("wfo") or wfo),
                 })
     return rows
-def gather_lsr(cfg: dict) -> list[dict]:
+def gather_swdi_plsr(cfg: dict) -> list[dict]:
     rows = []
-    for year in range(int(cfg["start_year"]), int(cfg["end_year"]) + 1):
-        for state in cfg["primary_states"]:
-            print(f"IEM LSR {year} {state}")
-            try:
-                df = iem_lsr_year(year, state)
-            except Exception as exc:
-                print(f"  unavailable: {exc}")
+    for year in range(max(int(cfg["start_year"]), 2005), int(cfg["end_year"]) + 1):
+        print(f"SWDI PLSR {year}")
+        try:
+            frame = _bulk_year(
+                year,
+                pd.Timestamp(f"{year}-01-01", tz="UTC"),
+                pd.Timestamp(f"{year}-12-31 23:59:59", tz="UTC"),
+                "",
+            )
+        except Exception as exc:
+            print(f"  unavailable: {exc}")
+            continue
+        if frame.empty:
+            continue
+        normalized = {str(col).strip().upper(): col for col in frame.columns}
+        state_col = next((normalized.get(x) for x in ("STATE", "STATE_ABBR", "STATE_CODE") if normalized.get(x)), None)
+        time_col = next((normalized.get(x) for x in ("VALID", "VALID_TIME", "UTC_TIME", "DATE_TIME", "DATETIME") if normalized.get(x)), None)
+        if state_col is None or time_col is None:
+            continue
+        states = frame[state_col].astype(str).str.upper().str.strip()
+        frame = frame[states.isin(set(cfg["primary_states"]))].copy()
+        if frame.empty:
+            continue
+        remarks = frame.get("REMARK", pd.Series("", index=frame.index)).fillna("").astype(str)
+        typetext = frame.get("TYPETEXT", pd.Series("", index=frame.index)).fillna("").astype(str)
+        mask = (remarks + " " + typetext).str.contains(UNVERIFIED_RE, na=False)
+        for _, row in frame[mask].iterrows():
+            valid = pd.to_datetime(row.get(time_col), utc=True, errors="coerce")
+            if pd.isna(valid):
                 continue
-            if df.empty:
+            state = str(row.get(state_col, "")).upper().strip()
+            county = norm_county(row.get("COUNTY", ""))
+            if state == "VT" and county in set(cfg["vt_excluded_counties"]):
                 continue
-            remarks = df.get("REMARK", pd.Series("", index=df.index)).fillna("").astype(str)
-            typetext = df.get("TYPETEXT", pd.Series("", index=df.index)).fillna("").astype(str)
-            text = remarks + " " + typetext
-            mask = text.str.contains(UNVERIFIED_RE, na=False)
-            candidate = df[mask].copy()
-            for _, row in candidate.iterrows():
-                if not in_primary_lsr(row, cfg):
-                    continue
-                valid = pd.to_datetime(row.get("VALID"), utc=True, errors="coerce")
-                if pd.isna(valid):
-                    continue
-                rows.append({
-                    "candidate_id": case_key("IEM", valid.to_pydatetime(), finite_float(row.get("LAT")), finite_float(row.get("LON")), str(row.get("WFO", "")) + "|" + str(row.get("CITY", ""))),
-                    "candidate_source": "IEM_LSR",
-                    "verification_class": "unverified_report_only",
-                    "verification_status": "unverified_candidate",
-                    "event_start_utc": valid.isoformat(),
-                    "event_end_utc": None,
-                    "state": str(row.get("STATE", "")).strip().upper(),
-                    "county": norm_county(row.get("COUNTY", "")),
-                    "lat": finite_float(row.get("LAT")),
-                    "lon": finite_float(row.get("LON")),
-                    "event_type": str(row.get("TYPETEXT", "") or ""),
-                    "event_id": "",
-                    "source": str(row.get("SOURCE", "") or ""),
-                    "narrative": str(row.get("REMARK", "") or "").strip(),
-                    "evidence": "iem_lsr_text",
-                    "ncei_explicit_snow_squall": False,
-                    "lsr_count": 1,
-                })
+            if state == "NY" and county not in set(cfg["ny_cwa_counties"]):
+                continue
+            lat = finite_float(row.get("LAT"))
+            lon = finite_float(row.get("LON"))
+            rows.append({
+                "candidate_id": case_key("SWDI", valid.to_pydatetime(), lat, lon, f"{row.get('WFO', '')}|{row.get('CITY', '')}|{row.get('TYPECODE', '')}"),
+                "candidate_source": "SWDI_PLSR",
+                "verification_class": "unverified_report_only",
+                "verification_status": "unverified_candidate",
+                "event_start_utc": valid.isoformat(),
+                "event_end_utc": None,
+                "state": state,
+                "county": county,
+                "lat": lat,
+                "lon": lon,
+                "event_type": str(row.get("TYPETEXT", "") or ""),
+                "event_id": "",
+                "source": str(row.get("SOURCE", "") or ""),
+                "narrative": str(row.get("REMARK", "") or "").strip(),
+                "evidence": "swdi_plsr_text",
+                "ncei_explicit_snow_squall": False,
+                "lsr_count": 1,
+            })
     return rows
-
 def distance_km(lat1, lon1, lat2, lon2):
     from math import asin, cos, radians, sin, sqrt
     if None in (lat1, lon1, lat2, lon2):
@@ -436,9 +452,9 @@ def main():
     cfg = json.loads(Path(args.config).read_text(encoding="utf-8"))
 
     ncei = gather_ncei(cfg)
-    lsr = gather_lsr(cfg)
+    plsr = gather_swdi_plsr(cfg)
     cow = gather_cow_sqw(cfg)
-    merged = merge_candidates(ncei + lsr + cow, cfg)
+    merged = merge_candidates(ncei + plsr + cow, cfg)
     radar = radar_manifest(merged, cfg)
 
     columns = [
@@ -454,7 +470,7 @@ def main():
         "start_year": cfg["start_year"],
         "end_year": cfg["end_year"],
         "raw_ncei_records": len(ncei),
-        "raw_iem_lsr_records": len(lsr),
+        "raw_swdi_plsr_records": len(plsr),
         "raw_iem_sqw_records": len(cow),
         "merged_candidates": len(merged),
         "official_documented_candidates": sum(r["verification_class"] in {"official_documented","official_plus_independent_report","official_plus_warning","official_plus_warning_and_report"} for r in merged),
@@ -470,7 +486,7 @@ def main():
             "IEM LSR is converted into a negative label."
         ),
         "ncei_source": NCEI_BASE,
-        "iem_lsr_source": IEM_LSR_BASE,
+        "swdi_plsr_source": "https://www.ncei.noaa.gov/swdiws/csv/plsr",
     }
     (out / "snow_squall_discovery_summary.json").write_text(
         json.dumps(summary, indent=2) + "\n", encoding="utf-8"
