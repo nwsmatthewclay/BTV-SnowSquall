@@ -3,6 +3,7 @@ L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{maxZoom:12,att
 const layers={KCXX:L.layerGroup().addTo(map),KTYX:L.layerGroup().addTo(map)};
 const radarLocations={KCXX:[44.511,-73.166],KTYX:[43.756,-75.680]};
 const LIVE_BASE="https://raw.githubusercontent.com/nwsmatthewclay/BTV-SnowSquall/snow-squall-live-data/viewer/data/live/";
+const SHADOW_BASE="https://raw.githubusercontent.com/nwsmatthewclay/BTV-SnowSquall/snow-squall-shadow-data/viewer/data/shadow/";
 let datasets={},selected=null,refreshTimer=null,hasInitialExtent=false;
 
 const num=(v,d=1)=>v==null||Number.isNaN(Number(v))?"—":Number(v).toFixed(d);
@@ -12,6 +13,7 @@ const esc=s=>String(s??"—").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">"
 const ktFromMs=v=>v==null||Number.isNaN(Number(v))?null:Number(v)*1.943844492;
 const cFromK=v=>v==null||Number.isNaN(Number(v))?null:Number(v)-273.15;
 const url=name=>LIVE_BASE+name+"?cb="+Date.now();
+const shadowUrl=name=>SHADOW_BASE+name+"?cb="+Date.now();
 
 function markerIcon(site){
   return L.divIcon({className:"radar-station",iconSize:[12,12],iconAnchor:[6,6],html:""});
@@ -41,22 +43,23 @@ async function fetchOptionalJson(target,fallback){
 }
 
 async function getFeed(site){
-  const [geo,state,history,health]=await Promise.all([
+  const [geo,state,history,health,shadow]=await Promise.all([
     fetch(feedUrl(site,"objects")).then(r=>r.ok?r.json():Promise.reject(new Error(site+" objects HTTP "+r.status))),
     fetch(feedUrl(site,"state")).then(r=>r.ok?r.json():Promise.reject(new Error(site+" state HTTP "+r.status))),
     fetchOptionalJson(feedUrl(site,"history"),[]),
-    fetchOptionalJson(feedUrl(site,"health"),null)
+    fetchOptionalJson(feedUrl(site,"health"),null),
+    fetchOptionalJson(shadowUrl(site+"_shadow.json"),null)
   ]);
-  return {geo,state,history,health};
+  return {geo,state,history,health,shadow};
 }
 
 function summarize(site,item){
-  const {geo,state,history,health}=item;
+  const {geo,state,history,health,shadow}=item;
   const features=geo.features||[];
   const last=state.last_scan_time_utc||geo.metadata?.scan_time_utc||geo.metadata?.last_scan_utc;
   const age=ageMinutes(last);
   const good=age<=30;
-  return {site,features,state,geo,history,health,last,age,good};
+  return {site,features,state,geo,history,health,shadow,last,age,good};
 }
 
 function renderRadarCards(summary){
@@ -65,7 +68,7 @@ function renderRadarCards(summary){
       return "<div class='live-card'><h3>"+esc(x.site)+" <span class='chip'>ERROR</span></h3>"+
         "<div class='live-stat'><span>Feed</span><b>Unavailable</b></div>"+
         "<div class='live-stat'><span>Reason</span><b>"+esc(x.error)+"</b></div>"+
-        "<div class='live-stat'><span>Probability</span><b>Disabled</b></div></div>";
+        "<div class='live-stat'><span>Live shadow</span><b>"+(x.shadow?.scored_object_count??0)+" scored</b></div></div>";
     }
     const quality=x.good?"LIVE":"STALE";
     return "<div class='live-card'><h3>"+x.site+" <span class='chip'>"+quality+"</span></h3>"+
@@ -74,7 +77,7 @@ function renderRadarCards(summary){
       "<div class='live-stat'><span>Objects</span><b>"+x.features.length+"</b></div>"+
       "<div class='live-stat'><span>History</span><b>"+x.history.length.toLocaleString()+" records</b></div>"+
       "<div class='live-stat'><span>Publish state</span><b>"+esc(x.health?.status||"unknown")+"</b></div>"+
-      "<div class='live-stat'><span>Probability</span><b>Disabled</b></div></div>";
+      "<div class='live-stat'><span>Live shadow</span><b>"+(x.shadow?.scored_object_count??0)+" scored</b></div></div>";
   }).join("");
 }
 
@@ -178,6 +181,15 @@ function renderObjectList(summary){
   });
 }
 
+function shadowRecord(site,trackId){
+  const records=datasets[site]?.shadow?.records||[];
+  return records.find(r=>String(r.track_id)===String(trackId))||null;
+}
+function shadowGrid(record){
+  const probs=record?.research_probabilities||{};
+  if(!Object.keys(probs).length) return "<div class='shadow-note'>No live research score is available yet.</div>";
+  return "<div class='shadow-grid'>"+[15,30,45,60].map(h=>"<div class='shadow-cell'><span>"+h+" min</span><b>"+(probs[String(h)]==null?"—":(Number(probs[String(h)])*100).toFixed(1)+"%")+"</b></div>").join("")+"</div>";
+}
 function renderEnvironment(fields){
   const env=fields||{};
   const rows=[
@@ -272,8 +284,9 @@ function selectObject(p){
     "<div class='live-stat'><span>Z trend</span><b>"+num(p.reflectivity_trend_dbz_per_hr)+" dBZ/hr</b></div>"+
     "<div class='live-stat'><span>Environment</span><b>"+esc(envSource)+" • "+esc(envStatus)+"</b></div>"+
     renderEnvironment(envFields)+
-    "<div class='live-stat'><span>Data quality</span><b>"+esc(p.data_quality||"—")+"</b></div>"+
-    "<div class='live-status degraded'><strong>Learned probability</strong><span>Scoring remains gated until independent validation and explicit release.</span></div>";
+    "<div class='live-card'><h3>Live research shadow</h3>"+shadowGrid(shadowRecord(p.radar_site,p.track_id))+
+    "<div class='shadow-note'>Candidate model scored this live object separately from the operational feed. Research only.</div></div>"+
+    "<div class='live-stat'><span>Data quality</span><b>"+esc(p.data_quality||"—")+"</b></div>";
   renderSelectedHistory(p);
 }
 
@@ -308,7 +321,7 @@ async function refresh(){
     document.getElementById("overallTitle").textContent=degraded.length?"Live feed degraded":"Live feeds healthy";
     document.getElementById("overallText").textContent=degraded.length?
       degraded.map(x=>x.site+" "+(x.error?"unavailable":"stale")).join(", ")+" • "+allObjects+" current objects":
-      "KCXX/KTYX current object feeds • "+allObjects+" candidate objects • probability scoring disabled";
+      "KCXX/KTYX current object feeds • "+allObjects+" candidate objects • live research shadow "+summary.reduce((n,x)=>n+(x.shadow?.scored_object_count||0),0)+" scored";
     document.getElementById("overallStatus").classList.toggle("degraded",degraded.length>0);
     document.getElementById("subtitle").textContent="Last successful refresh: "+fmt(new Date().toISOString());
   }catch(err){
