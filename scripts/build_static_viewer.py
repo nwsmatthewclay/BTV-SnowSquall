@@ -93,6 +93,7 @@ def main():
     parser.add_argument("--cases",required=True)
     parser.add_argument("--output-dir",required=True)
     parser.add_argument("--frames-root",default=None)
+    parser.add_argument("--model-summary",default=None,help="Optional baseline_horizon_summary.json to embed as research-only viewer diagnostics.")
     args=parser.parse_args()
 
     objects=pd.read_csv(args.objects)
@@ -105,6 +106,12 @@ def main():
     cases_dir=data_dir/"cases"
     cases_dir.mkdir(parents=True,exist_ok=True)
     frames_root=Path(args.frames_root) if args.frames_root else root
+    model_summary=None
+    if args.model_summary:
+        model_path=Path(args.model_summary)
+        if model_path.exists():
+            model_summary=json.loads(model_path.read_text(encoding="utf-8"))
+            (data_dir/"model_summary.json").write_text(json.dumps(model_summary,indent=2)+"\n",encoding="utf-8")
 
     catalog=[]
     for (case_id,radar_site),group in objects.groupby(["case_id","radar_site"],sort=True):
@@ -162,9 +169,12 @@ def main():
         "version":"0.3-pilot",
         "data_status":"research_pilot",
         "probability_status":"not_scored",
+        "model_diagnostics_status": "research_only" if model_summary else "not_available",
+        "model_summary_file": "model_summary.json" if model_summary else None,
         "truth_note":"Historical case context is not final object-level event truth.",
         "future_information_policy":"Viewer may display historical outcome context, but model predictors remain separate from future labels.",
         "radar_note":"Radar imagery is reconstructed from archived Level-II reflectivity and is shown as a historical diagnostic background.",
+        "model_summary": model_summary,
         "cases":catalog,
     },indent=2),encoding="utf-8")
     print(f"Built viewer package: {len(catalog)} case/radar datasets; {len(objects)} source object rows")
