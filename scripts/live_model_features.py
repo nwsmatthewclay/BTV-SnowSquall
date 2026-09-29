@@ -95,32 +95,6 @@ def build_live_feature_row(current: dict, previous: dict | None = None, track_co
         if key in current:
             row[key] = _number(current.get(key))
 
-    u10 = _number(current.get("u10_ms"))
-    v10 = _number(current.get("v10_ms"))
-    if u10 is not None and v10 is not None:
-        row["surface_wind_speed_kt"] = math.hypot(u10, v10) * 1.94384449244
-    su = _number(current.get("shear_u_0_6km_ms"))
-    sv = _number(current.get("shear_v_0_6km_ms"))
-    if su is not None and sv is not None:
-        row["shear_0_6km_kt"] = math.hypot(su, sv) * 1.94384449244
-    temp = _number(current.get("temperature_2m_k"))
-    dew = _number(current.get("dewpoint_2m_k"))
-    if temp is not None and dew is not None:
-        row["temperature_dewpoint_spread_k"] = temp - dew
-    cape = _number(current.get("cape_jkg"))
-    shear_kt = row.get("shear_0_6km_kt")
-    if cape is not None and shear_kt is not None:
-        row["cape_shear_product"] = cape * shear_kt
-    gust_kt = row.get("wind_gust_kt")
-    surface_wind_kt = row.get("surface_wind_speed_kt")
-    if gust_kt is not None and surface_wind_kt is not None:
-        row["gust_excess_kt"] = gust_kt - surface_wind_kt
-    if max_z is not None and mean_z is not None:
-        row["reflectivity_core_excess"] = max_z - mean_z
-    if area is not None and length not in (None, 0):
-        row["area_per_length"] = area / length
-    if shear_kt is not None and motion is not None and abs(motion) > 0:
-        row["shear_motion_ratio"] = shear_kt / abs(motion)
 
     row["visibility_sm"] = _mi_from_m(current.get("visibility_m"))
     row["wind_gust_kt"] = _kt_from_ms(current.get("gust_ms"))
@@ -147,6 +121,28 @@ def build_live_feature_row(current: dict, previous: dict | None = None, track_co
     motion = _number(current.get("motion_speed_kt"))
     shear = row.get("shear_0_6km_kt")
 
+    u10 = _number(current.get("u10_ms"))
+    v10 = _number(current.get("v10_ms"))
+    if u10 is not None and v10 is not None:
+        row["surface_wind_speed_kt"] = math.hypot(u10, v10) * 1.94384449244
+    su = _number(current.get("shear_u_0_6km_ms"))
+    sv = _number(current.get("shear_v_0_6km_ms"))
+    if su is not None and sv is not None:
+        row["shear_0_6km_kt"] = math.hypot(su, sv) * 1.94384449244
+    elif row.get("shear_0_6km_kt") is None:
+        row["shear_0_6km_kt"] = _kt_from_ms(current.get("shear_0_6km_ms"))
+    shear = row.get("shear_0_6km_kt")
+    temp = _number(current.get("temperature_2m_k"))
+    dew = _number(current.get("dewpoint_2m_k"))
+    if temp is not None and dew is not None:
+        row["temperature_dewpoint_spread_k"] = temp - dew
+    cape = _number(current.get("cape_jkg"))
+    if cape is not None and shear is not None:
+        row["cape_shear_product"] = cape * shear
+    gust_kt = _kt_from_ms(current.get("gust_ms"))
+    surface_wind_kt = row.get("surface_wind_speed_kt")
+    if gust_kt is not None and surface_wind_kt is not None:
+        row["gust_excess_kt"] = gust_kt - surface_wind_kt
     if max_z is not None and mean_z is not None:
         row["reflectivity_core_excess"] = max_z - mean_z
     if area is not None and length not in (None, 0):
