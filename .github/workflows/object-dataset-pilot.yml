@@ -407,14 +407,18 @@ jobs:
               "motion_speed_kmh",
           }
           predictors = set(schema["predictor_columns"])
+          operational = set(schema.get("operational_predictor_columns", []))
           blocked = set(schema["blocked_non_predictors"])
           targets = set(schema["target_columns"])
           blocked_prefixes = tuple(schema["blocked_prefixes"])
           print("Predictor columns:", len(predictors))
+          print("Operational/live-compatible predictors:", len(operational))
           print("Target columns:", len(targets))
           print("Future-information policy:", schema["future_information_policy"])
           assert schema["future_information_policy"] == "current_and_past_only"
           assert required <= predictors
+          assert operational
+          assert operational <= predictors
           assert targets <= blocked | set()
           assert not predictors.intersection(blocked)
           assert not any(
