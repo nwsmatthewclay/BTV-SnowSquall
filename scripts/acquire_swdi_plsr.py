@@ -22,6 +22,7 @@ import pandas as pd
 import requests
 
 BASE_URL = "https://www.ncei.noaa.gov/swdiws/csv/plsr"
+BULK_BASE_URL = "https://www.ncei.noaa.gov/pub/data/swdi/database-csv/v2"
 STATION_STATE = {
     "KBTV": "VT",
     "KMPV": "VT",
@@ -29,6 +30,7 @@ STATION_STATE = {
 }
 TIMEOUT_SECONDS = 60
 RETRIES = 4
+BULK_START_YEAR = 2005
 
 
 def _request(url: str) -> requests.Response:
@@ -45,49 +47,78 @@ def _request(url: str) -> requests.Response:
     raise RuntimeError(str(last))
 
 
+def _find_column(frame: pd.DataFrame, names: tuple[str, ...]) -> str | None:
+    normalized = {str(col).strip().upper(): col for col in frame.columns}
+    for name in names:
+        if name in normalized:
+            return normalized[name]
+    return None
+
+
+def _bulk_year(year: int, start: pd.Timestamp, end: pd.Timestamp, state: str) -> pd.DataFrame:
+    if year < BULK_START_YEAR:
+        return pd.DataFrame()
+    url = f"{BULK_BASE_URL}/plsr-{year}.csv.gz"
+    response = _request(url)
+    header = pd.read_csv(io.BytesIO(response.content), compression="gzip", nrows=0)
+    time_col = _find_column(header, ("VALID", "VALID_TIME", "UTC_TIME", "DATE_TIME", "DATETIME"))
+    state_col = _find_column(header, ("STATE", "STATE_ABBR", "STATE_CODE"))
+    if time_col is None:
+        raise RuntimeError(f"PLSR bulk file {year} has no recognized time column")
+    usecols = list(header.columns)
+    frame = pd.read_csv(io.BytesIO(response.content), compression="gzip", usecols=usecols, low_memory=False)
+    times = pd.to_datetime(frame[time_col], utc=True, errors="coerce")
+    mask = times.between(start, end, inclusive="both")
+    if state_col is not None and state:
+        mask &= frame[state_col].astype(str).str.upper().eq(state)
+    return frame.loc[mask].copy()
+
+
 def acquire_case(case: pd.Series) -> tuple[pd.DataFrame, dict]:
     case_id = str(case["case_id"])
     station = str(case.get("observing_station", "") or "").upper().strip()
     state = STATION_STATE.get(station)
     expected = pd.Timestamp(case["event_start_utc"], tz="UTC")
-    start = (expected - pd.Timedelta(days=1)).date().isoformat().replace("-", "")
-    end = (expected + pd.Timedelta(days=1)).date().isoformat().replace("-", "")
-
-    params = f"?state={state}" if state else ""
-    url = f"{BASE_URL}/{start}:{end}{params}"
+    start = expected - pd.Timedelta(days=1)
+    end = expected + pd.Timedelta(days=1)
+    year = int(expected.year)
 
     status = {
         "case_id": case_id,
         "observing_station": station,
         "state": state,
-        "url": url,
+        "query_expected_event_start_utc": expected.isoformat(),
+        "query_start_utc": start.isoformat(),
+        "query_end_utc": end.isoformat(),
+        "source": "SWDI_PLSR_BULK",
         "status": "unavailable",
         "record_count": 0,
         "error": None,
     }
 
+    if year < BULK_START_YEAR:
+        status["status"] = "archive_not_available"
+        status["error"] = f"SWDI bulk PLSR archive begins in {BULK_START_YEAR}; no annual file for {year}"
+        return pd.DataFrame(), status
+
     try:
-        response = _request(url)
-        text = response.text.strip()
-        if not text:
+        frame = _bulk_year(year, start, end, state or "")
+        if frame.empty:
             status["status"] = "available_empty"
             return pd.DataFrame(), status
-
-        frame = pd.read_csv(io.StringIO(text))
         frame.insert(0, "case_id", case_id)
         frame.insert(1, "truth_source", "NCEI_SWDI_PLSR")
         frame.insert(2, "truth_status", "preliminary_local_storm_report")
         frame.insert(3, "observing_station", station)
         frame.insert(4, "query_expected_event_start_utc", expected.isoformat())
-        frame.insert(5, "query_start_utc", (expected - pd.Timedelta(days=1)).isoformat())
-        frame.insert(6, "query_end_utc", (expected + pd.Timedelta(days=1)).isoformat())
+        frame.insert(5, "query_start_utc", start.isoformat())
+        frame.insert(6, "query_end_utc", end.isoformat())
         status["status"] = "available"
         status["record_count"] = int(len(frame))
         return frame, status
     except Exception as exc:
         status["error"] = str(exc)
         return pd.DataFrame(), status
-
 
 def main() -> None:
     parser = argparse.ArgumentParser()
