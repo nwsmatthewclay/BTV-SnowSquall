@@ -89,6 +89,26 @@ function renderMap(summary){
   Object.values(layers).forEach(l=>l.clearLayers());
   const bounds=[];
   summary.filter(x=>!x.error).forEach(x=>{
+    const grouped={};
+    (x.history||[]).forEach(r=>{
+      if(r.track_id==null||r.centroid_lat==null||r.centroid_lon==null)return;
+      (grouped[String(r.track_id)]??=[]).push(r);
+    });
+    Object.values(grouped).forEach(rows=>{
+      rows.sort((a,b)=>String(a.timestamp).localeCompare(String(b.timestamp)));
+      const coords=rows.slice(-12).map(r=>[Number(r.centroid_lat),Number(r.centroid_lon)])
+        .filter(v=>v.every(Number.isFinite));
+      if(coords.length<2)return;
+      const id=String(rows[0].track_id);
+      const selectedTrack=selected&&selected.radar_site===x.site&&String(selected.track_id)===id;
+      L.polyline(coords,{
+        color:selectedTrack?"#ffffff":"#8795a3",
+        weight:selectedTrack?4:2,
+        opacity:selectedTrack?.9:.38,
+        dashArray:selectedTrack?null:"4 5",
+        interactive:false
+      }).addTo(layers[x.site]);
+    });
     (x.features||[]).forEach(f=>{
       const p=f.properties||{};
       const isSelected=selected&&selected.track_id===p.track_id&&selected.radar_site===p.radar_site;
