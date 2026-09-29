@@ -131,7 +131,24 @@ jobs:
             --warnings data/manifests/national_sqw_pretraining/national_sqw_verified_radar_manifest.csv \
             --output data/derived/national_sqw_pretraining_weak_labels.csv
 
-      - name: Build leakage-safe radar features,        run: |,          python scripts/build_model_features.py \,            data/derived/national_sqw_pretraining_weak_labels.csv \,            --output data/derived/national_sqw_pretraining_features.csv \,            --schema-output data/derived/national_sqw_pretraining_features.schema.json,,      - name: Train national weak pretraining models,        run: |,          for h in 15 30 45 60; do,            python scripts/train_sqw_weak_pretrain.py \,              --features data/derived/national_sqw_pretraining_features.csv \,              --target weak_onset_within_${h}m \,              --output-dir data/derived/national_sqw_weak_model_${h}m \,              --exclude-wfo BTV,          done,      - name: Audit weak-label population
+      - name: Build leakage-safe radar features
+        run: |
+          python scripts/build_model_features.py \
+            data/derived/national_sqw_pretraining_weak_labels.csv \
+            --output data/derived/national_sqw_pretraining_features.csv \
+            --schema-output data/derived/national_sqw_pretraining_features.schema.json
+
+      - name: Train national weak pretraining models
+        run: |
+          for h in 15 30 45 60; do
+            python scripts/train_sqw_weak_pretrain.py \
+              --features data/derived/national_sqw_pretraining_features.csv \
+              --target weak_onset_within_${h}m \
+              --output-dir data/derived/national_sqw_weak_model_${h}m \
+              --exclude-wfo BTV
+          done
+
+      - name: Audit weak-label population
         run: |
           python - <<'PY'
           import json
