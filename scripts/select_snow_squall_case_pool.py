@@ -99,6 +99,12 @@ def main():
             print("Excluding modern validation-window candidates:", int(exclude_mask.sum()))
             candidates = candidates.loc[~exclude_mask].copy()
 
+    radar_candidate_ids = set(radar["candidate_id"].dropna().astype(str)) if not radar.empty else set()
+    before_radar_filter = len(candidates)
+    candidates = candidates[candidates["candidate_id"].astype(str).isin(radar_candidate_ids)].copy()
+    if candidates.empty:
+        raise ValueError("No discovery candidates have a radar acquisition path.")
+
     official = candidates[
         candidates["verification_class"].isin(
             ["official_documented", "official_plus_independent_report", "official_plus_warning", "official_plus_warning_and_report", "official_plus_warning_verified", "official_study_warning_verified", "official_plus_study", "study_verified", "study_warning_verified", "warning_verified"]
@@ -119,6 +125,25 @@ def main():
     selected = pd.concat([official, unverified], ignore_index=True)
     selected["case_id"] = selected["candidate_id"]
     selected["source_study"] = "expanded_ncei_iem_case_discovery"
+    tier_map = {
+        "official_documented": ("B", 0.70),
+        "official_plus_independent_report": ("A-", 0.90),
+        "official_plus_warning": ("B+", 0.85),
+        "official_plus_warning_and_report": ("A-", 0.90),
+        "official_plus_warning_verified": ("B+", 0.85),
+        "official_study_warning_verified": ("A+", 1.00),
+        "official_plus_study": ("A+", 1.00),
+        "study_verified": ("A", 1.00),
+        "study_warning_verified": ("A+", 1.00),
+        "warning_verified": ("B+", 0.85),
+        "warning_only": ("C", 0.45),
+        "warning_plus_report": ("C+", 0.55),
+        "unverified_report_only": ("D", 0.25),
+        "official_screening_candidate": ("D", 0.20),
+    }
+    selected["truth_tier"] = selected["verification_class"].map(lambda x: tier_map.get(x, ("D", 0.10))[0])
+    selected["evidence_weight"] = selected["verification_class"].map(lambda x: tier_map.get(x, ("D", 0.10))[1])
+
     selected["observing_station"] = [
         nearest_station(lat, lon)
         for lat, lon in zip(selected["lat"], selected["lon"])
@@ -139,6 +164,8 @@ def main():
     selected_radar.to_csv(out / "snow_squall_expansion_radar_manifest.csv", index=False)
 
     summary = {
+        "discovery_candidates_before_radar_filter": int(before_radar_filter),
+        "discovery_candidates_with_radar_path": int(len(candidates)),
         "official_selected": int(len(official)),
         "unverified_selected": int(len(unverified)),
         "total_selected": int(len(selected)),
