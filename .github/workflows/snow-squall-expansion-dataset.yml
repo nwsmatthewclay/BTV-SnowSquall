@@ -26,7 +26,7 @@ on:
       max_official:
         description: "Documented cases in this batch"
         required: false
-        default: "50"
+        default: "30"
         type: string
       max_unverified:
         description: "Review candidates in this batch"
@@ -52,7 +52,7 @@ on:
       max_unverified:
         description: "Review candidates in this batch"
         required: false
-        default: "25"
+        default: "15"
         type: string
 
 permissions:
@@ -219,7 +219,7 @@ jobs:
             --cases data/manifests/snow_squall_expansion/snow_squall_verified_cases.csv \
             --start 2008-10-01T00:00:00Z \
             --end 2026-06-30T21:00:00Z \
-            --sample-count 100 \
+            --sample-count 40 \
             --seed 20260929 \
             --radars KCXX KTYX \
             --output data/manifests/snow_squall_expansion/snow_squall_null_windows.csv
