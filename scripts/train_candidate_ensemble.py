@@ -112,7 +112,8 @@ def main():
     pred.to_csv(out/"oof_predictions.csv",index=False)
 
     final=estimator()
-    final.fit(data[predictors],data[args.target].astype(int),model__sample_weight=class_balanced_weights(data[args.target].astype(int)))
+    final_evidence = pd.to_numeric(data.get("evidence_weight", pd.Series(1.0, index=data.index)), errors="coerce").fillna(1.0).to_numpy()
+    final.fit(data[predictors],data[args.target].astype(int),model__sample_weight=class_balanced_weights(data[args.target].astype(int)) * final_evidence)
     joblib.dump(final,out/"baseline_model.joblib")
     positive_groups=sorted(data.loc[data[args.target].eq(1),"split_group"].astype(str).unique())
     report={
@@ -132,7 +133,7 @@ def main():
         "operational_release_status":"candidate_only",
         "operational_release_note":"Research candidate only; independent modern verification and calibration are required before operational release.",
         "estimator_family":["HistGradientBoostingClassifier","RandomForestClassifier","ExtraTreesClassifier"],
-        "training_weight_policy":"inverse_class_frequency_with_equal_class_total",
+        "training_weight_policy":"inverse_class_frequency_with_equal_class_total_multiplied_by_evidence_weight",
         "metrics":metrics,
         "folds":folds,
         "null_activity_policy":"clean_quiet_light",
