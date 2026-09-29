@@ -19,7 +19,7 @@ def test_live_row_maps_environment_and_units():
     assert row["reflectivity_max_dbz"] == 36.0
     assert row["reflectivity_mean_dbz"] == 28.0
     assert row["wind_gust_kt"] > 19.0
-    assert row["visibility_sm"] == 1200.0
+    assert 0.74 < row["visibility_sm"] < 0.75
     assert row["sbcape_jkg"] == 180.0
     assert row["sbcin_jkg"] == -35.0
     assert row["shear_0_6km_kt"] > 23.0
