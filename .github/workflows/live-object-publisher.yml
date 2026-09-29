@@ -118,6 +118,24 @@ jobs:
           python scripts/audit_operational_readiness.py             --state viewer/data/live/KTYX_state.json             --geojson viewer/data/live/KTYX_objects.geojson             --max-age-minutes 30
           python scripts/live_healthcheck.py             --state viewer/data/live/KTYX_state.json             --geojson viewer/data/live/KTYX_objects.geojson             --max-age-minutes 30
 
+      - name: Write compact radar health reports
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          from scripts.live_healthcheck import healthcheck
+          for site in ("KCXX", "KTYX"):
+              state = Path(f"viewer/data/live/{site}_state.json")
+              geo = Path(f"viewer/data/live/{site}_objects.geojson")
+              out = Path(f"viewer/data/live/{site}_health.json")
+              if state.exists() and geo.exists():
+                  report = healthcheck(state, geo, max_age_minutes=30)
+              else:
+                  report = {"status":"unavailable","site":site,"reason":"missing live product"}
+              out.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
+              print(site, report["status"])
+          PY
+
       - name: Publish isolated live-data branch
         run: |
           set -euo pipefail
