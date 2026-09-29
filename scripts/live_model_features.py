@@ -61,6 +61,7 @@ def build_live_feature_row(current: dict, previous: dict | None = None, track_co
     for key in (
         "area_km2", "length_km", "width_km", "orientation_deg",
         "motion_dir_deg", "motion_speed_kt", "max_reflectivity_dbz",
+        "mean_reflectivity_dbz", "core_pixel_count", "pixel_count",
         "mean_reflectivity_dbz", "core_pixel_count", "core_fraction",
         "age_scans",
     ):
@@ -88,6 +89,18 @@ def build_live_feature_row(current: dict, previous: dict | None = None, track_co
     row["visibility_sm"] = _mi_from_m(current.get("visibility_m"))
     row["wind_gust_kt"] = _kt_from_ms(current.get("gust_ms"))
     row["shear_0_6km_kt"] = _kt_from_ms(current.get("shear_0_6km_ms"))
+
+    # Match the historical feature builder temporal state using only current
+    # and prior records from the same track.
+    current_time = _utc(current.get("timestamp"))
+    previous_time = _utc(previous.get("timestamp")) if previous else None
+    dt_min = None
+    if current_time is not None and previous_time is not None:
+        dt_min = (current_time - previous_time).total_seconds() / 60.0
+    row["track_gap_gt_10min"] = bool(dt_min is not None and dt_min > 10.0)
+
+    # Track age is finalized in build_live_feature_frame where the full
+    # chronological track is available.
 
     # Common historical names expected by the feature schema.
 
@@ -153,9 +166,36 @@ def build_live_feature_frame(history: Iterable[dict], track_id: str | int) -> pd
     rows = [dict(r) for r in history if str(r.get("track_id")) == str(track_id)]
     rows.sort(key=lambda r: str(r.get("timestamp", "")))
     features = []
+    first_timestamp = rows[0].get("timestamp") if rows else None
+    running = {
+        "max_reflectivity_dbz": None,
+        "mean_reflectivity_dbz": None,
+        "area_km2": None,
+        "core_pixel_count": None,
+        "pixel_count": None,
+    }
     for idx, current in enumerate(rows):
+        current = dict(current)
         previous = rows[idx - 1] if idx else None
         row = build_live_feature_row(current, previous=previous, track_count=idx + 1)
+        current_time = _utc(current.get("timestamp"))
+        first_time = _utc(first_timestamp)
+        row["track_age_min"] = (
+            max(0.0, (current_time - first_time).total_seconds() / 60.0)
+            if current_time is not None and first_time is not None else None
+        )
+        for source, target in (
+            ("max_reflectivity_dbz", "max_reflectivity_dbz_running_max"),
+            ("mean_reflectivity_dbz", "mean_reflectivity_dbz_running_max"),
+            ("area_km2", "area_km2_running_max"),
+            ("core_pixel_count", "core_pixel_count_running_max"),
+            ("pixel_count", "pixel_count_running_max"),
+        ):
+            value = _number(current.get(source))
+            prior = running[source]
+            if value is not None:
+                running[source] = value if prior is None else max(prior, value)
+            row[target] = running[source]
         features.append(row)
     return pd.DataFrame(features)
 
