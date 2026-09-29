@@ -47,7 +47,7 @@ def safe_name(*parts):
     raw = "_".join(str(p) for p in parts if str(p) not in ("", "nan", "None"))
     return "".join(ch if ch.isalnum() or ch in "-_." else "_" for ch in raw)
 
-def object_properties(row):
+def object_properties(row, research_probabilities=None):
     props = {
         "track_key": f"{row.get('case_id', 'UNKNOWN')}:{row.get('radar_site', 'UNKNOWN')}:{row.get('object_id', 'UNKNOWN')}",
         "object_id": clean(row.get("object_id")),
@@ -74,6 +74,11 @@ def object_properties(row):
         "track_event_associated": clean(row.get("track_event_associated")),
         "case_time_relation": clean(row.get("case_time_relation")),
     }
+    if research_probabilities:
+        props["research_probabilities"] = research_probabilities.get(
+            (str(row.get("case_id")), str(row.get("radar_site")), str(row.get("object_id")), row["scan_time_utc"].isoformat()),
+            {},
+        )
     props["environment"] = {
         key: {"label": label, "value": clean(row.get(key)), "units": units}
         for label, key, units in ENVIRONMENT_FIELDS
@@ -94,6 +99,7 @@ def main():
     parser.add_argument("--output-dir",required=True)
     parser.add_argument("--frames-root",default=None)
     parser.add_argument("--model-summary",default=None,help="Optional baseline_horizon_summary.json to embed as research-only viewer diagnostics.")
+    parser.add_argument("--model-root",default=None,help="Optional root containing baseline_model_*m/oof_predictions.csv files for historical research-probability overlays.")
     args=parser.parse_args()
 
     objects=pd.read_csv(args.objects)
@@ -107,6 +113,24 @@ def main():
     cases_dir.mkdir(parents=True,exist_ok=True)
     frames_root=Path(args.frames_root) if args.frames_root else root
     model_summary=None
+    research_probabilities={}
+    if args.model_root:
+        model_root=Path(args.model_root)
+        for horizon in (15,30,45,60):
+            pred_path=model_root/f"baseline_model_{horizon}m"/"oof_predictions.csv"
+            if not pred_path.exists():
+                continue
+            try:
+                pred=pd.read_csv(pred_path)
+            except Exception:
+                continue
+            required={"case_id","radar_site","object_id","scan_time_utc","oof_probability"}
+            if not required <= set(pred.columns):
+                continue
+            pred["scan_time_utc"]=pd.to_datetime(pred["scan_time_utc"],utc=True,errors="coerce")
+            for _,rr in pred.dropna(subset=["scan_time_utc"]).iterrows():
+                key=(str(rr.get("case_id")),str(rr.get("radar_site")),str(rr.get("object_id")),rr["scan_time_utc"].isoformat())
+                research_probabilities.setdefault(key,{})[f"{horizon}min"]=clean(rr.get("oof_probability"))
     if args.model_summary:
         model_path=Path(args.model_summary)
         if model_path.exists():
@@ -125,7 +149,7 @@ def main():
                 geom=mapping(wkt.loads(geom_text))
             except Exception:
                 continue
-            features.append({"type":"Feature","geometry":geom,"properties":object_properties(row)})
+            features.append({"type":"Feature","geometry":geom,"properties":object_properties(row, research_probabilities)})
         if not features:
             continue
 
@@ -175,6 +199,7 @@ def main():
         "future_information_policy":"Viewer may display historical outcome context, but model predictors remain separate from future labels.",
         "radar_note":"Radar imagery is reconstructed from archived Level-II reflectivity and is shown as a historical diagnostic background.",
         "model_summary": model_summary,
+        "research_probability_status": "oof_research_only" if research_probabilities else "not_available",
         "cases":catalog,
     },indent=2),encoding="utf-8")
     print(f"Built viewer package: {len(catalog)} case/radar datasets; {len(objects)} source object rows")
