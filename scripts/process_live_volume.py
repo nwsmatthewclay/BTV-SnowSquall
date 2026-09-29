@@ -167,7 +167,7 @@ def process_volume(
     gridded = {
         canonical: grid_field_2d(grid, actual)
         for canonical, actual in fields.items()
-        if actual and actual in grid.fields
+        if actual and actual in (getattr(grid, "fields", {}) or {})
     }
     field_gradients = {}
     for canonical in ("zdr", "velocity"):
