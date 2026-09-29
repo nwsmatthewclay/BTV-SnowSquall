@@ -16,6 +16,7 @@ from pyproj import CRS, Transformer
 
 _FIELD_CACHE_MAX = 32
 _FIELD_CACHE = OrderedDict()
+_COORD_CACHE = {}
 
 FIELD_SPECS = {
     "visibility_m": ("surface", "vis", None),
@@ -66,11 +67,21 @@ def _nearest(ds, latitude, longitude):
     if not ds.data_vars or "x" not in ds.coords or "y" not in ds.coords:
         return None
 
-    x = np.asarray(ds["x"].values, dtype=float)
-    y = np.asarray(ds["y"].values, dtype=float)
-    xx, yy = np.meshgrid(x, y)
-    transformer = Transformer.from_crs(RUC_CRS, LL_CRS, always_xy=True)
-    lon, lat = transformer.transform(xx * 1000.0, yy * 1000.0)
+    cache_key = (
+        tuple(np.asarray(ds["x"].values, dtype=float)),
+        tuple(np.asarray(ds["y"].values, dtype=float)),
+    )
+    cached = _COORD_CACHE.get(cache_key)
+    if cached is None:
+        x = np.asarray(ds["x"].values, dtype=float)
+        y = np.asarray(ds["y"].values, dtype=float)
+        xx, yy = np.meshgrid(x, y)
+        transformer = Transformer.from_crs(RUC_CRS, LL_CRS, always_xy=True)
+        lon, lat = transformer.transform(xx * 1000.0, yy * 1000.0)
+        cached = (np.asarray(lat, dtype=float), np.asarray(lon, dtype=float))
+        _COORD_CACHE[cache_key] = cached
+    lat, lon = cached
+
     distance = (lat - latitude) ** 2 + (
         (lon - longitude) * np.cos(np.deg2rad(latitude))
     ) ** 2
