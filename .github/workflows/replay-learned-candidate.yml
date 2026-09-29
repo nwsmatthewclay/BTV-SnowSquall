@@ -6,6 +6,7 @@ on:
       case_id:
         description: "Historical case ID, e.g. BTV20060224"
         required: true
+        default: "BTV20060224"
         type: string
       radar_site:
         description: "Radar site"
@@ -66,6 +67,25 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt -r requirements-science.txt
+
+      - name: Preflight learned-model bundles
+        run: |
+          set -euo pipefail
+          for horizon in 15 30 45 60; do
+            model_dir="replay-package/data/derived/baseline_model_${horizon}m"
+            test -f "${model_dir}/metrics.json"
+            test -f "${model_dir}/baseline_model.joblib"
+            echo "${horizon}m bundle:"
+            python - <<PY
+          import json
+          from pathlib import Path
+          p=Path("${model_dir}/metrics.json")
+          m=json.loads(p.read_text(encoding="utf-8"))
+          print("  evaluation_status:", m.get("evaluation_status"))
+          print("  operational_release_status:", m.get("operational_release_status"))
+          print("  predictor_count:", len(m.get("predictor_columns") or []))
+          PY
+          done
 
       - name: Identify requested case input
         env:
