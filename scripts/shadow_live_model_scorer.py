@@ -11,6 +11,7 @@ from scripts.model_runtime import ModelRuntime
 
 HORIZONS = (15, 30, 45, 60)
 SITES = ("KCXX", "KTYX")
+MIN_FEATURE_COVERAGE = 0.80
 
 
 def read_json(path: Path, default):
@@ -65,11 +66,15 @@ def score_site(site: str, live_root: Path, model_root: Path) -> tuple[dict, list
             "feature_coverage": {},
             "research_probabilities": {},
             "score_errors": {},
+            "score_policy": {"minimum_feature_coverage": MIN_FEATURE_COVERAGE},
         }
         for horizon in HORIZONS:
             runtime = runtimes[horizon]
             coverage = feature_coverage(frame.tail(1), runtime.feature_columns)
             record["feature_coverage"][str(horizon)] = coverage
+            if coverage["fraction"] < MIN_FEATURE_COVERAGE:
+                record["score_errors"][str(horizon)] = f"low_feature_coverage:{coverage["fraction"]:.3f}"
+                continue
             try:
                 score = runtime.score_candidate(frame.tail(1))
                 if score:
