@@ -76,7 +76,7 @@ jobs:
       - name: Checkout model foundation
         uses: actions/checkout@v4
         with:
-          ref: snow-squall-model-foundation
+          ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
 
       - name: Download discovery artifact
         if: github.event_name == 'workflow_run'
