@@ -74,6 +74,7 @@ def main():
     parser.add_argument("--max-unverified", type=int, default=50)
     parser.add_argument("--offset-official", type=int, default=0)
     parser.add_argument("--offset-unverified", type=int, default=0)
+    parser.add_argument("--exclude-modern-validation", default=None, help="Modern validation manifest whose analysis windows must remain out of training.")
     args = parser.parse_args()
 
     out = Path(args.output_dir)
@@ -83,6 +84,20 @@ def main():
     radar = pd.read_csv(args.radar_manifest)
     if candidates.empty:
         raise ValueError("Discovery produced no candidates.")
+
+    if args.exclude_modern_validation:
+        modern = pd.read_csv(args.exclude_modern_validation)
+        event_time = pd.to_datetime(candidates["event_start_utc"], utc=True, errors="coerce")
+        masks = []
+        for _, row in modern.iterrows():
+            start = pd.to_datetime(row.get("analysis_window_start_utc"), utc=True, errors="coerce")
+            end = pd.to_datetime(row.get("analysis_window_end_utc"), utc=True, errors="coerce")
+            if pd.notna(start) and pd.notna(end):
+                masks.append(event_time.between(start, end, inclusive="both"))
+        if masks:
+            exclude_mask = pd.concat(masks, axis=1).any(axis=1)
+            print("Excluding modern validation-window candidates:", int(exclude_mask.sum()))
+            candidates = candidates.loc[~exclude_mask].copy()
 
     official = candidates[
         candidates["verification_class"].isin(
