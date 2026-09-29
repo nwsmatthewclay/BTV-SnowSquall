@@ -31,6 +31,20 @@ def s3_client():
     )
 
 
+def s3_listing_client():
+    """Create a bounded-timeout client for archive preflight/list operations."""
+    return boto3.client(
+        "s3",
+        region_name="us-east-1",
+        config=Config(
+            signature_version=UNSIGNED,
+            connect_timeout=10,
+            read_timeout=20,
+            retries={"max_attempts": 4, "mode": "standard"},
+        ),
+    )
+
+
 def list_volume_keys(client, radar: str, day: datetime) -> list[str]:
     prefix = f"{day:%Y/%m/%d}/{radar}/"
     paginator = client.get_paginator("list_objects_v2")
