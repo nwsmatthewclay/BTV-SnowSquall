@@ -39,3 +39,16 @@ def test_live_history_wiring_and_utc_normalization_are_present():
 
     assert "--max-age-minutes" in audit
     assert "age_minutes" in audit
+
+
+
+def test_live_feed_isolated_from_model_branch():
+    root = Path(__file__).resolve().parents[1]
+    js = (root / "viewer/live.js").read_text(encoding="utf-8")
+    workflow = (
+        root / ".github" / "workflows" / "snow-squall-live-publisher.yml"
+    ).read_text(encoding="utf-8")
+
+    assert "snow-squall-live-data/viewer/data/live/" in js
+    assert "snow-squall-live-data" in workflow
+    assert "HEAD:snow-squall-model-foundation" not in workflow
