@@ -39,8 +39,8 @@ def annotate(input_csv: Path, manifest_csv: Path, output_csv: Path):
             manifest["end_dt"] - manifest["start_dt"]
         ) / 2
 
-    ids, studies, case_ids, null_ids, window_ids, match_counts = (
-        [], [], [], [], [], []
+    ids, studies, case_ids, null_ids, window_ids, episode_ids, match_counts = (
+        [], [], [], [], [], [], []
     )
 
     for _, obj in objects.iterrows():
@@ -58,6 +58,7 @@ def annotate(input_csv: Path, manifest_csv: Path, output_csv: Path):
             case_ids.append(None)
             null_ids.append(None)
             window_ids.append(None)
+            episode_ids.append(None)
             match_counts.append(0)
             continue
 
@@ -81,6 +82,7 @@ def annotate(input_csv: Path, manifest_csv: Path, output_csv: Path):
         case_ids.append(case_id)
         null_ids.append(null_id)
         window_ids.append(window_id)
+        episode_ids.append(_nonempty(row.get("episode_id")))
         match_counts.append(len(matches))
 
     objects["population_id"] = ids
@@ -88,6 +90,7 @@ def annotate(input_csv: Path, manifest_csv: Path, output_csv: Path):
     objects["case_id"] = case_ids
     objects["null_id"] = null_ids
     objects["window_id"] = window_ids
+    objects["episode_id"] = episode_ids
     objects["annotation_match_count"] = match_counts
     objects.drop(columns=["scan_dt"], inplace=True)
     output_csv.parent.mkdir(parents=True, exist_ok=True)
