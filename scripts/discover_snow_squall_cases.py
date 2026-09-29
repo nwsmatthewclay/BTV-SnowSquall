@@ -245,10 +245,25 @@ def merge_candidates(records: list[dict], cfg: dict) -> list[dict]:
         match = None
         for prior in reversed(merged[-50:]):
             pdt = datetime.fromisoformat(prior["event_start_utc"].replace("Z", "+00:00"))
-            if (dt - pdt).total_seconds() > int(cfg["ncei_match_minutes"]) * 60:
+            gap_min = (dt - pdt).total_seconds() / 60.0
+            if gap_min > max(int(cfg["ncei_match_minutes"]), int(cfg["lsr_cluster_minutes"])):
                 break
+            # Never merge two independent NCEI records. LSR-only records may
+            # cluster together; cross-source records may reconcile.
+            if rec["candidate_source"] == prior["candidate_source"] == "NCEI_STORM_EVENTS":
+                continue
             dist = distance_km(rec.get("lat"), rec.get("lon"), prior.get("lat"), prior.get("lon"))
-            if dist is not None and dist <= float(cfg["ncei_match_radius_km"]):
+            radius = (
+                float(cfg["lsr_cluster_radius_km"])
+                if rec["candidate_source"] == prior["candidate_source"] == "IEM_LSR"
+                else float(cfg["ncei_match_radius_km"])
+            )
+            minutes = (
+                int(cfg["lsr_cluster_minutes"])
+                if rec["candidate_source"] == prior["candidate_source"] == "IEM_LSR"
+                else int(cfg["ncei_match_minutes"])
+            )
+            if gap_min <= minutes and dist is not None and dist <= radius:
                 match = prior
                 break
         if match is None:
