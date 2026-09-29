@@ -473,7 +473,8 @@ jobs:
       - name: Build historical viewer data package
         run: |
           python scripts/build_static_viewer.py             --objects data/derived/positive_object_labeled.csv             --cases data/manifests/banacos_positive_pilot.csv             --output-dir data/derived/viewer             --frames-root data/derived/viewer \
-             --model-summary data/derived/baseline_horizon_summary.json
+             --model-summary data/derived/baseline_horizon_summary.json \
+             --model-root data/derived
 
       - name: Build operational replay readiness note
         run: |
