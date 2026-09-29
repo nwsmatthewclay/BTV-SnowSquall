@@ -37,6 +37,9 @@ def validate(
     assert state.get("last_scan_time_utc"), "Worker state is missing last_scan_time_utc"
     assert "last_object_count" in state, "Worker state is missing last_object_count"
 
+    assert str(state["last_scan_time_utc"]).endswith("Z"), "State scan timestamp must use explicit UTC suffix Z"
+    assert str(metadata.get("scan_time_utc", "")).endswith("Z"), "GeoJSON scan timestamp must use explicit UTC suffix Z"
+
     state_time = parse_dt(state["last_scan_time_utc"])
     output_time = parse_dt(metadata.get("scan_time_utc"))
     assert (
@@ -86,7 +89,10 @@ def validate(
             if value is not None and not (0.0 <= float(value) <= 1.0):
                 invalid_probability += 1
 
-        ts = parse_dt(props.get("timestamp"))
+        raw_ts = props.get("timestamp")
+        if not str(raw_ts).endswith("Z"):
+            invalid_timestamp += 1
+        ts = parse_dt(raw_ts)
         if ts is None:
             invalid_timestamp += 1
         elif abs((ts - output_time).total_seconds()) > max_future_seconds:
