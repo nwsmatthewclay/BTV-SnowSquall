@@ -1,0 +1,62 @@
+name: National SQW Full Radar Manifest
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - snow-squall-model-foundation
+    paths:
+      - scripts/build_national_sqw_episode_radar_manifest.py
+      - .github/workflows/national-sqw-full-radar-manifest.yml
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  manifest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      PYTHONPATH: ${{ github.workspace }}
+      PYTHONUNBUFFERED: "1"
+
+    steps:
+      - name: Checkout foundation
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+
+      - name: Find latest successful national inventory
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          run_id="$(gh run list --workflow "National Snow Squall Warning Inventory" --branch snow-squall-model-foundation --status success --limit 1 --json databaseId --jq '.[0].databaseId')"
+          test -n "${run_id}"
+          gh run download "${run_id}" --name national-snow-squall-warning-inventory --dir inventory
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt -r requirements-science.txt
+
+      - name: Build full episode radar manifest
+        run: |
+          python scripts/build_national_sqw_episode_radar_manifest.py \
+            --episodes inventory/national_sqw_episodes.csv \
+            --output-dir data/discovery/national_sqw_full_radar \
+            --max-radars 2 \
+            --max-range-km 230
+
+      - name: Upload complete acquisition map
+        uses: actions/upload-artifact@v4
+        with:
+          name: national-sqw-full-episode-radar-manifest
+          path: data/discovery/national_sqw_full_radar
+          if-no-files-found: error
