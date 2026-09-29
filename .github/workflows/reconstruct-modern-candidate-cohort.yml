@@ -55,6 +55,10 @@ jobs:
         run: |
           python scripts/build_modern_candidate_reconstruction_manifest.py             --cohort data/derived/modern_reconstruction_cohort.csv             --preflight data/derived/modern_reconstruction_archive_preflight.csv             --output data/derived/modern_candidate_reconstruction_manifest.csv
 
+      - name: Build human review worksheet
+        run: |
+          python scripts/build_modern_human_review_worksheet.py             --manifest data/derived/modern_candidate_reconstruction_manifest.csv             --output data/derived/modern_human_review_worksheet.csv
+
       - name: Download two-radar Level-II cohort
         run: |
           python acquisition/historical_level2.py             --manifest data/derived/modern_candidate_reconstruction_manifest.csv             --output data/raw/modern_candidate_level2
@@ -154,6 +158,7 @@ jobs:
             data/derived/modern_reconstruction_cohort.csv
             data/derived/modern_reconstruction_archive_preflight.csv
             data/derived/modern_candidate_reconstruction_manifest.csv
+            data/derived/modern_human_review_worksheet.csv
             data/derived/modern_candidate_replay
             data/derived/modern_candidate_mrms
             data/derived/modern_candidate_mrms_object_comparison.csv
