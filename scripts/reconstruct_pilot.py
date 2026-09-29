@@ -74,6 +74,14 @@ def process_volume(path: Path, tracker: CentroidTracker, radar_origin=None):
         for canonical, actual in fields.items()
         if actual
     }
+    field_gradients = {}
+    for canonical in ("zdr", "velocity"):
+        field = gridded.get(canonical)
+        if field is None:
+            continue
+        field_gradients[canonical] = np.hypot(
+            *np.gradient(field, 1.0, edge_order=1)
+        )
 
     objects = detect_reflectivity_objects(data)
     meta = volume_metadata(radar, path)
@@ -124,11 +132,9 @@ def process_volume(path: Path, tracker: CentroidTracker, radar_origin=None):
                 values = field[footprint]
                 finite = values[np.isfinite(values)]
                 if canonical == "zdr":
-                    gradient = np.hypot(
-                        *np.gradient(field, 1.0, edge_order=1)
-                    )
+                    gradient = field_gradients.get("zdr")
                     stats = object_field_summary(
-                        finite, "zdr", gradient[footprint], "_dbkm"
+                        finite, "zdr", gradient[footprint] if gradient is not None else None, "_dbkm"
                     )
                     obj["zdr_mean_db"] = stats["zdr_mean"]
                     obj["zdr_p90_db"] = stats["zdr_p90"]
@@ -144,12 +150,11 @@ def process_volume(path: Path, tracker: CentroidTracker, radar_origin=None):
                     obj["kdp_mean_degkm"] = stats["kdp_mean"]
                     obj["kdp_p90_degkm"] = stats["kdp_p90"]
                 elif canonical == "velocity":
-                    gradient = np.hypot(
-                        *np.gradient(field, 1.0, edge_order=1)
-                    )
+                    gradient = field_gradients.get("velocity")
                     obj.update(
                         velocity_object_summary(
-                            finite, gradient[footprint]
+                            finite,
+                            gradient[footprint] if gradient is not None else None,
                         )
                     )
 
