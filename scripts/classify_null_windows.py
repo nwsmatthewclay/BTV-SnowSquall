@@ -11,7 +11,7 @@ from pathlib import Path
 import pandas as pd
 
 
-def classify(objects: pd.DataFrame) -> pd.DataFrame:
+def classify(objects: pd.DataFrame, manifest: pd.DataFrame | None = None) -> pd.DataFrame:
     required = {"null_id", "radar_site", "scan_time_utc"}
     missing = sorted(required - set(objects.columns))
     if missing:
@@ -52,16 +52,40 @@ def classify(objects: pd.DataFrame) -> pd.DataFrame:
 
     grouped["activity_class"] = grouped.apply(level, axis=1)
     grouped["selection_policy"] = "diagnostic_only"
+
+    # Preserve genuinely quiet windows that produce zero object records.
+    if manifest is not None:
+        missing_manifest = {"null_id"} - set(manifest.columns)
+        if missing_manifest:
+            raise ValueError(f"Missing null-window manifest columns: {sorted(missing_manifest)}")
+        manifest_ids = (
+            manifest[["null_id"]]
+            .dropna()
+            .drop_duplicates()
+            .assign(null_id=lambda x: x["null_id"].astype(str))
+        )
+        grouped["null_id"] = grouped["null_id"].astype(str)
+        grouped = manifest_ids.merge(grouped, on="null_id", how="left")
+        for column in [
+            "radar_count", "object_records", "unique_objects", "scan_count",
+            "max_reflectivity_dbz", "max_core_pixels",
+        ]:
+            if column in grouped.columns:
+                grouped[column] = grouped[column].fillna(0)
+        grouped["activity_class"] = grouped["activity_class"].fillna("quiet_no_objects")
+        grouped["selection_policy"] = grouped["selection_policy"].fillna("diagnostic_only")
     return grouped
 
 
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("input_csv")
+    parser.add_argument("--manifest")
     parser.add_argument("--output", required=True)
     args = parser.parse_args()
 
-    result = classify(pd.read_csv(args.input_csv))
+    manifest = pd.read_csv(args.manifest) if args.manifest else None
+    result = classify(pd.read_csv(args.input_csv), manifest=manifest)
     Path(args.output).parent.mkdir(parents=True, exist_ok=True)
     result.to_csv(args.output, index=False)
     print("Null window activity classes:")
