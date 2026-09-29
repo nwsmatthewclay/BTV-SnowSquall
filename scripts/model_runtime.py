@@ -7,6 +7,7 @@ for offline replay/diagnostics but return no live probability.
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 
 import joblib
@@ -18,6 +19,12 @@ class ModelRuntime:
         self.model = model
         self.feature_columns = list(feature_columns or [])
         self.metadata = metadata or {}
+
+    @property
+    def horizon_minutes(self):
+        target = str(self.metadata.get("target") or "")
+        match = re.search(r"_(15|30|45|60)m$", target)
+        return int(match.group(1)) if match else None
 
     @property
     def enabled(self) -> bool:
