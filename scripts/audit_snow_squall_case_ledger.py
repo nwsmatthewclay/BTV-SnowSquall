@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pandas as pd
 
-ALLOWED_SOURCES = {"NCEI_STORM_EVENTS", "NCEI_STORM_EVENTS_SCREENING", "SWDI_PLSR", "IEM_COW_SQW", "BANACOS_STUDY_2014"}
+ALLOWED_SOURCES = {"NCEI_STORM_EVENTS", "NCEI_STORM_EVENTS_SCREENING", "SWDI_PLSR", "IEM_COW_SQW", "IEM_LSR", "BANACOS_STUDY_2014", "REGIONAL_NWS_TEXT", "STORM_EVENTS_REGIONAL"}
 ALLOWED_CLASSES = {
     "official_documented", "official_plus_independent_report", "official_plus_warning", "official_plus_study",
     "official_plus_warning_and_report", "official_plus_warning_verified", "official_study_warning_verified", "study_warning_verified", "study_verified", "warning_verified",
@@ -67,6 +67,10 @@ def audit(cases_path: Path, radar_path: Path, start_year: int, end_year: int):
         "bad_event_interval": int(bad_interval.sum()),
     }
     # Missing source geolocation is a tracked coverage gap, not a case-ledger integrity failure.
+    fatal_keys = [
+        "bad_time", "out_of_range_year", "bad_candidate_id", "bad_source",
+        "bad_verification_class", "bad_geo", "bad_event_interval",
+    ]
     errors["total_errors"] = sum(errors[k] for k in fatal_keys)
     if errors["total_errors"]:
         raise ValueError(json.dumps(errors, indent=2))
