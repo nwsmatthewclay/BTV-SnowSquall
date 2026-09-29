@@ -10,14 +10,11 @@ def test_live_viewer_references_operational_feed_assets():
     assert "KCXX" in js and "KTYX" in js
     assert "_objects.geojson" in js
     assert 'kind==="objects"' in js
-    assert 'kind==="objects"' in js
     assert '"history"' in js
     assert '+".json"' in js
     assert "probability scoring disabled" in html.lower()
-    assert (
-        "raw.githubusercontent.com/nwsmatthewclay/BTV-SnowSquall/"
-        "snow-squall-model-foundation/viewer/data/live/"
-    ) in js
+    assert "raw.githubusercontent.com/nwsmatthewclay/BTV-SnowSquall/" in js
+    assert "snow-squall-live-data/viewer/data/live/" in js
 
 
 def test_live_history_wiring_and_utc_normalization_are_present():
