@@ -150,9 +150,10 @@ def gather_ncei(cfg: dict) -> list[dict]:
             lon = finite_float(row.get("BEGIN_LON"))
             narrative = narratives.loc[row.name]
             explicit = bool(SNOW_RE.search(str(narrative))) or str(row.get("EVENT_TYPE", "")).strip() == "Snow Squall"
+            source_name = "NCEI_STORM_EVENTS" if explicit else "NCEI_STORM_EVENTS_SCREENING"
             rows.append({
                 "candidate_id": case_key("NCEI", start, lat, lon, str(row.get("EVENT_ID", ""))),
-                "candidate_source": "NCEI_STORM_EVENTS",
+                "candidate_source": source_name,
                 "verification_class": "official_documented",
                 "verification_status": "documented_candidate",
                 "event_start_utc": start.isoformat(),
@@ -445,6 +446,7 @@ def main():
         "raw_iem_sqw_records": len(cow),
         "merged_candidates": len(merged),
         "official_documented_candidates": sum(r["verification_class"] in {"official_documented","official_plus_independent_report","official_plus_warning","official_plus_warning_and_report"} for r in merged),
+        "ncei_screening_candidates": sum("NCEI_STORM_EVENTS_SCREENING" in str(r.get("source_types", "")) for r in merged),
         "screening_candidates": sum(r["verification_class"] == "official_screening_candidate" for r in merged),
         "warning_only_candidates": sum(r["verification_class"] == "warning_only" for r in merged),
         "warning_plus_report_candidates": sum(r["verification_class"] == "warning_plus_report" for r in merged),
