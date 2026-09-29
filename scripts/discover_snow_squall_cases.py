@@ -110,6 +110,15 @@ def event_start_utc(row: pd.Series) -> datetime | None:
     except (KeyError, TypeError, ValueError, OverflowError):
         return None
 
+def event_end_utc(row: pd.Series) -> datetime | None:
+    try:
+        ym = int(row["END_YEARMONTH"])
+        day = int(row["END_DAY"])
+        hm = int(row.get("END_TIME", 0) or 0)
+        naive = datetime(ym // 100, ym % 100, day, hm // 100, hm % 100)
+        return naive.replace(tzinfo=LOCAL_TZ).astimezone(timezone.utc)
+    except (KeyError, TypeError, ValueError, OverflowError):
+        return None
 def finite_float(value):
     try:
         v = float(value)
@@ -148,6 +157,7 @@ def gather_ncei(cfg: dict) -> list[dict]:
                 continue
             lat = finite_float(row.get("BEGIN_LAT"))
             lon = finite_float(row.get("BEGIN_LON"))
+            end = event_end_utc(row)
             narrative = narratives.loc[row.name]
             explicit = bool(SNOW_RE.search(str(narrative))) or str(row.get("EVENT_TYPE", "")).strip() == "Snow Squall"
             source_name = "NCEI_STORM_EVENTS" if explicit else "NCEI_STORM_EVENTS_SCREENING"
@@ -157,7 +167,7 @@ def gather_ncei(cfg: dict) -> list[dict]:
                 "verification_class": "official_documented",
                 "verification_status": "documented_candidate",
                 "event_start_utc": start.isoformat(),
-                "event_end_utc": None,
+                "event_end_utc": end.isoformat() if end else None,
                 "state": str(row.get("STATE", "")).strip().upper(),
                 "county": norm_county(row.get("CZ_NAME", "")),
                 "lat": lat,
