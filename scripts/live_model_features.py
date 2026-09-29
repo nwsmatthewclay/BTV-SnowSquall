@@ -137,6 +137,12 @@ def build_live_feature_row(current: dict, previous: dict | None = None, track_co
                 ("area_km2", "area_km2_delta"),
                 ("length_km", "length_km_delta"),
                 ("width_km", "width_km_delta"),
+                ("echo_top_km", "echo_top_km_delta"),
+                ("top_minus_base_km", "top_minus_base_km_delta"),
+                ("zdr_mean_db", "zdr_mean_db_delta"),
+                ("rhohv_mean", "rhohv_mean_delta"),
+                ("kdp_mean_degkm", "kdp_mean_degkm_delta"),
+                ("velocity_mean_kt", "velocity_mean_kt_delta"),
             )
             for source, target in pairs:
                 a = _number(current.get(source))
