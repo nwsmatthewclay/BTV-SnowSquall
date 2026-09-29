@@ -9,8 +9,8 @@ import pandas as pd
 
 ALLOWED_SOURCES = {"NCEI_STORM_EVENTS", "NCEI_STORM_EVENTS_SCREENING", "SWDI_PLSR", "IEM_COW_SQW"}
 ALLOWED_CLASSES = {
-    "official_documented", "official_plus_independent_report", "official_plus_warning",
-    "official_plus_warning_and_report", "official_plus_warning_verified", "warning_verified",
+    "official_documented", "official_plus_independent_report", "official_plus_warning", "official_plus_study",
+    "official_plus_warning_and_report", "official_plus_warning_verified", "official_study_warning_verified", "study_warning_verified", "study_verified", "warning_verified",
     "warning_only", "warning_plus_report", "unverified_report_only"
 }
 
