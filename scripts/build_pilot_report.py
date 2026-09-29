@@ -42,6 +42,8 @@ def main():
     p.add_argument("--null-level2-coverage")
     p.add_argument("--positive-association")
     p.add_argument("--null-coverage")
+    p.add_argument("--positive-environment-audit")
+    p.add_argument("--null-environment-audit")
     p.add_argument("--null-activity")
     p.add_argument("--output", required=True)
     args = p.parse_args()
@@ -183,6 +185,31 @@ def main():
         missing_cases = assoc.get("cases_without_association", [])
         if missing_cases:
             association_section += "<div class=\"note\"><strong>Association QC:</strong> " + f"{len(missing_cases)} expected case(s) currently have no track-level association: {\", \".join(missing_cases)}. This is diagnostic only.</div>"
+    environment_attachment_section = "<p><em>Environment attachment audits not supplied.</em></p>"
+    environment_rows = []
+    for label, path in [
+        ("Positive environment", args.positive_environment_audit),
+        ("Null environment", args.null_environment_audit),
+    ]:
+        if path and Path(path).exists():
+            data = load_json(Path(path))
+            environment_rows.append({
+                "population": label,
+                "records": data.get("records", 0),
+                "attached": data.get("environment_attached_records", 0),
+                "missing": data.get("environment_missing_records", 0),
+                "attachment_fraction": data.get("attachment_fraction"),
+                "future": data.get("future_environment_records", 0),
+                "stale": data.get("stale_environment_records", 0),
+                "wrong_provider": data.get("wrong_provider_records", 0),
+            })
+    if environment_rows:
+        environment_attachment_section = table_html(
+            pd.DataFrame(environment_rows),
+            ["population","records","attached","missing","attachment_fraction",
+             "future","stale","wrong_provider"],
+        )
+
     coverage_section = "<p><em>Feature coverage audit not supplied.</em></p>"
     if args.coverage and Path(args.coverage).exists():
         coverage = load_json(Path(args.coverage))
@@ -315,6 +342,9 @@ main{{max-width:1200px;margin:24px auto;padding:0 20px}}
 {table_html(env_counts, ["status","records"])}
 <h3>Null candidates</h3>
 {table_html(null_env, ["status","records"])}
+
+<h3>Attachment audit</h3>
+{environment_attachment_section}
 
 <h2>Radar reconstruction audit</h2>
 {radar_section}
