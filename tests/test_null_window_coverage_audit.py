@@ -42,3 +42,26 @@ def test_null_window_coverage_reports_empty_windows(tmp_path):
     assert summary["populated_null_windows"] == 1
     assert summary["empty_null_ids"] == ["NULL0002"]
     assert summary["population_fraction"] == 0.5
+
+
+def test_null_activity_preserves_manifest_only_quiet_windows():
+    from scripts.classify_null_windows import classify
+
+    manifest = pd.DataFrame({"null_id": ["NULL0001", "NULL0002"]})
+    objects = pd.DataFrame(
+        {
+            "null_id": ["NULL0001"],
+            "radar_site": ["KCXX"],
+            "scan_time_utc": ["2002-01-01T00:00:00Z"],
+            "object_id": ["OBJ1"],
+            "max_reflectivity_dbz": [20.0],
+            "core_pixel_count": [0],
+        }
+    )
+
+    result = classify(objects, manifest=manifest)
+
+    assert set(result["null_id"]) == {"NULL0001", "NULL0002"}
+    quiet = result.loc[result["null_id"] == "NULL0002"].iloc[0]
+    assert quiet["activity_class"] == "quiet_no_objects"
+    assert quiet["object_records"] == 0
