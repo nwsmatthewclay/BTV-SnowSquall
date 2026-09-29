@@ -107,3 +107,24 @@ def test_storm_event_audit_marks_timing_mismatch_without_making_a_positive():
     assert row["site_consistent"]
     assert not row["training_truth_eligible"]
     assert row["evidence_status"] == "verified_but_timing_mismatch"
+
+
+def test_filter_candidates_preserves_ncei_certification_provenance():
+    import pandas as pd
+
+    frame = pd.DataFrame(
+        [
+            {
+                "STATE": "VERMONT",
+                "EVENT_TYPE": "Snow Squall",
+                "EVENT_ID": 11,
+                "SOURCE": "NWS",
+                "LAST_DATE_MODIFIED": "2003-05-01",
+                "LAST_DATE_CERTIFIED": "2003-05-02",
+            }
+        ]
+    )
+    out = filter_candidates(frame)
+
+    assert out.loc[0, "LAST_DATE_MODIFIED"] == "2003-05-01"
+    assert out.loc[0, "LAST_DATE_CERTIFIED"] == "2003-05-02"
