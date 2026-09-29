@@ -1,15 +1,15 @@
 from scripts.acquire_ncei_storm_events import filter_candidates
 
 
-def test_filter_candidates_keeps_relevant_vt_ny_records_and_provenance():
+def test_filter_candidates_keeps_relevant_full_state_names():
     import pandas as pd
 
     frame = pd.DataFrame(
         [
-            {"STATE": "VT", "EVENT_TYPE": "Snow Squall", "EVENT_ID": 1, "SOURCE": "NWS"},
-            {"STATE": "NY", "EVENT_TYPE": "High Wind", "EVENT_ID": 2, "SOURCE": "NWS"},
-            {"STATE": "VT", "EVENT_TYPE": "Flood", "EVENT_ID": 3, "SOURCE": "NWS"},
-            {"STATE": "PA", "EVENT_TYPE": "Snow Squall", "EVENT_ID": 4, "SOURCE": "NWS"},
+            {"STATE": "VERMONT", "EVENT_TYPE": "Snow Squall", "EVENT_ID": 1, "SOURCE": "NWS"},
+            {"STATE": "NEW YORK", "EVENT_TYPE": "High Wind", "EVENT_ID": 2, "SOURCE": "NWS"},
+            {"STATE": "VERMONT", "EVENT_TYPE": "Flood", "EVENT_ID": 3, "SOURCE": "NWS"},
+            {"STATE": "PENNSYLVANIA", "EVENT_TYPE": "Snow Squall", "EVENT_ID": 4, "SOURCE": "NWS"},
         ]
     )
     out = filter_candidates(frame)
@@ -23,7 +23,7 @@ def test_filter_candidates_does_not_treat_absence_as_a_negative():
     import pandas as pd
 
     frame = pd.DataFrame(
-        [{"STATE": "VT", "EVENT_TYPE": "Flood", "EVENT_ID": 10}]
+        [{"STATE": "VERMONT", "EVENT_TYPE": "Flood", "EVENT_ID": 10}]
     )
     out = filter_candidates(frame)
 
