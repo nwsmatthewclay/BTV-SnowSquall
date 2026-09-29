@@ -11,3 +11,6 @@ def test_pilot_report_includes_operational_qc_inputs():
     assert "environment_attachment_section" in report
     assert "--positive-environment-audit data/derived/positive_environment_audit.json" in workflow
     assert "--null-environment-audit data/derived/null_environment_audit.json" in workflow
+    assert "--plsr-status" in report
+    assert "--plsr-status data/derived/swdi_plsr_status.json" in workflow
+    assert "SWDI preliminary Local Storm Reports" in report
