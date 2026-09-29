@@ -75,3 +75,15 @@ def test_ncei_screening_is_not_verified():
 def test_warning_plus_ncei_explicit_is_official_evidence():
     from scripts.discover_snow_squall_cases import merged_verification_class
     assert merged_verification_class({"NCEI_STORM_EVENTS", "IEM_COW_SQW"}) == "official_plus_warning"
+
+
+def test_ncei_state_normalization_accepts_full_names():
+    from scripts.discover_snow_squall_cases import normalize_state, in_primary_cwa
+    assert normalize_state("VERMONT") == "VT"
+    assert normalize_state("New York") == "NY"
+    cfg = {
+        "vt_excluded_counties": ["BENNINGTON", "WINDHAM"],
+        "ny_cwa_counties": ["CLINTON", "ESSEX", "FRANKLIN", "ST LAWRENCE"],
+    }
+    assert in_primary_cwa({"STATE": "VERMONT", "CZ_NAME": "CHITTENDEN"}, cfg)
+    assert in_primary_cwa({"STATE": "NEW YORK", "CZ_NAME": "CLINTON"}, cfg)
