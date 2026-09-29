@@ -52,4 +52,4 @@ def test_live_product_marks_edge_objects(monkeypatch, tmp_path):
     geo = json.loads(output.read_text())
     props = geo["features"][0]["properties"]
     assert props["touches_grid_edge"] is True
-    assert props["data_quality"] == "review"
+    assert props["data_quality"] == "degraded"
