@@ -39,6 +39,9 @@ def distance_km(lat1, lon1, lat2, lon2):
 
 
 def event_end(case):
+    documented_end = parse_time(getattr(case, "event_end_utc", None))
+    if documented_end is not None:
+        return documented_end
     start = parse_time(getattr(case, "event_start_utc", None))
     duration = getattr(case, "vis_below_0p8_min", None)
     if start is None or duration is None or pd.isna(duration):
