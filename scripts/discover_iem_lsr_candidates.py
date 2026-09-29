@@ -85,13 +85,21 @@ def case_id(ts,lat,lon,idx):
 
 def harvest(start_year,end_year):
     rows=[]
+    bad_csv_rows=0
+    out_of_range=0
     for year in range(start_year,end_year+1):
         for state in ('VT','NY'):
             print(f'IEM LSR {year} {state}')
             params={'state':state,'sts':f'{year}-01-01T00:00Z','ets':f'{year}-12-31T23:59Z','fmt':'csv'}
             try:
                 text=request(BASE,params=params).text
-                frame=pd.read_csv(io.StringIO(text)) if text.strip() else pd.DataFrame()
+                bad=[]
+                def _bad_line(line):
+                    bad.append(line)
+                    return None
+                frame=(pd.read_csv(io.StringIO(text), on_bad_lines=_bad_line, engine='python')
+                       if text.strip() else pd.DataFrame())
+                bad_csv_rows += len(bad)
             except Exception as exc:
                 print(f'  unavailable: {exc}')
                 continue
@@ -105,6 +113,9 @@ def harvest(start_year,end_year):
                 if state=='NY' and county not in {'CLINTON','ESSEX','FRANKLIN','ST LAWRENCE'}: continue
                 ts=parse_valid(row.get('VALID'))
                 if ts is None: continue
+                if ts < pd.Timestamp(f'{start_year}-01-01', tz='UTC') or ts > pd.Timestamp(f'{end_year}-12-31 23:59:59', tz='UTC'):
+                    out_of_range += 1
+                    continue
                 lat=pd.to_numeric(row.get('LAT'),errors='coerce'); lon=pd.to_numeric(row.get('LON'),errors='coerce')
                 lat=None if pd.isna(lat) else float(lat); lon=None if pd.isna(lon) else float(lon)
                 rows.append({
@@ -121,7 +132,7 @@ def harvest(start_year,end_year):
                     'narrative':str(row.get('REMARK','') or '').strip(),
                     'evidence':'iem_lsr_text',
                 })
-    return pd.DataFrame(rows)
+    return pd.DataFrame(rows), {'bad_csv_rows': bad_csv_rows, 'out_of_range_timestamps': out_of_range}
 
 def cluster(frame):
     if frame.empty: return frame.copy()
@@ -159,9 +170,9 @@ def cluster(frame):
 def main():
     parser=argparse.ArgumentParser(); parser.add_argument('--start-year',type=int,default=2002); parser.add_argument('--end-year',type=int,default=2026); parser.add_argument('--output-dir',required=True)
     args=parser.parse_args(); out=Path(args.output_dir); out.mkdir(parents=True,exist_ok=True)
-    reports=harvest(args.start_year,args.end_year); clusters=cluster(reports)
+    reports, diagnostics=harvest(args.start_year,args.end_year); clusters=cluster(reports)
     reports.to_csv(out/'iem_lsr_reports.csv',index=False); clusters.to_csv(out/'iem_lsr_case_clusters.csv',index=False)
-    summary={'raw_reports':len(reports),'clusters':len(clusters),'years':f'{args.start_year}-{args.end_year}','timestamp_policy':'IEM VALID numeric timestamps are interpreted as Unix seconds unless millisecond-scale.','training_policy':'unverified_report_only; never training truth without independent verification.'}
+    summary={'raw_reports':len(reports),'clusters':len(clusters),'years':f'{args.start_year}-{args.end_year}','timestamp_policy':'IEM VALID numeric timestamps are interpreted as Unix seconds unless millisecond-scale; rows outside the requested year interval are discarded.','csv_diagnostics':diagnostics,'training_policy':'unverified_report_only; never training truth without independent verification.'}
     (out/'iem_lsr_summary.json').write_text(json.dumps(summary,indent=2)+'\n',encoding='utf-8'); print(json.dumps(summary,indent=2))
 
 if __name__=='__main__': main()
