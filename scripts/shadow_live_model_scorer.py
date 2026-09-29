@@ -34,7 +34,9 @@ def score_site(site: str, live_root: Path, model_root: Path) -> tuple[dict, list
     runtimes = {}
     model_info = {}
     for horizon in HORIZONS:
-        directory = model_root / f"baseline_expansion_{horizon}m"
+        ensemble_dir = model_root / f"candidate_expansion_{horizon}m"
+        baseline_dir = model_root / f"baseline_expansion_{horizon}m"
+        directory = ensemble_dir if (ensemble_dir / "metrics.json").exists() else baseline_dir
         runtime = ModelRuntime.load(directory)
         runtimes[horizon] = runtime
         model_info[horizon] = {
@@ -42,6 +44,7 @@ def score_site(site: str, live_root: Path, model_root: Path) -> tuple[dict, list
             "model_version": runtime.metadata.get("model_version"),
             "operational_release_status": runtime.metadata.get("operational_release_status"),
             "predictor_count": len(runtime.feature_columns),
+            "bundle_family": "candidate_soft_vote_ensemble" if directory.name.startswith("candidate_expansion_") else "baseline_hist_gradient_boosting",
         }
 
     for feature in current_features:
