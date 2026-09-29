@@ -24,13 +24,15 @@ Use **Replay Learned Snow Squall Candidate** with:
 
 The workflow should preflight all four model bundles, replay scans chronologically through the live processor, isolate replay history to the selected case, and report the actual probability status from the generated scan metadata.
 
-## Live-product safety check
+## Live-product and shadow-scoring check
 
-The live publisher should continue to report:
+The operational live object feed should continue to report:
 
 - `probability_status: not_scored`
-- no model version attached to the live probability field
+- no model version attached to the operational probability field
 - healthy object/environment/geometry contract status when source data are available.
+
+Separately, the **Live research shadow** may show candidate scores from the expanded model bundle. The shadow feed is published on `snow-squall-shadow-data` and is explicitly marked `candidate_only_not_operational`.
 
 A candidate model artifact is not operationally enabled unless its metadata explicitly marks it as `operational_release_status: released`.
 
