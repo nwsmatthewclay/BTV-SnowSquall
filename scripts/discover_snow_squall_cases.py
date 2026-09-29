@@ -490,9 +490,13 @@ def radar_manifest(candidates: list[dict], cfg: dict) -> list[dict]:
     out = []
     for case in candidates:
         available = []
+        # Retain ungeolocated cases in the ledger, but never generate a
+        # radar acquisition row without finite coordinates.
+        if case.get("lat") is None or case.get("lon") is None:
+            continue
         for radar, origin in cfg["radars"].items():
             d = distance_km(case.get("lat"), case.get("lon"), origin[0], origin[1])
-            if d is None or d <= float(cfg["radar_max_range_km"]):
+            if d is not None and d <= float(cfg["radar_max_range_km"]):
                 available.append((radar, d))
         if not available:
             continue
