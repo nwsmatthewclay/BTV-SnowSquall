@@ -106,34 +106,34 @@ def harvest(start_year,end_year):
 def cluster(frame):
     if frame.empty: return frame.copy()
     d=frame.copy(); d['dt']=pd.to_datetime(d.warning_issue_utc,utc=True)
-    d=d.sort_values('dt')
+    d=d.sort_values('dt').reset_index(drop=True)
     groups=[]
     for _,r in d.iterrows():
         assigned=None
         for g in reversed(groups[-100:]):
-            gap=(r.dt-g['last']).total_seconds()/60
+            gap=(r['dt']-g['last']).total_seconds()/60
             if gap>90: break
-            if str(r.wfo)!=str(g['wfo']): continue
-            if pd.isna(r.lat) or pd.isna(r.lon) or g['lat'] is None or g['lon'] is None: continue
-            dlat=r.lat-g['lat']; dlon=(r.lon-g['lon'])
+            if str(r['wfo'])!=str(g['wfo']): continue
+            if pd.isna(r['lat']) or pd.isna(r['lon']) or g['lat'] is None or g['lon'] is None: continue
+            dlat=r['lat']-g['lat']; dlon=(r['lon']-g['lon'])
             if (dlat*dlat+dlon*dlon)**0.5 <= 1.0:
                 assigned=g; break
         if assigned is None:
-            groups.append({'last':r.dt,'wfo':r.wfo,'lat':r.lat,'lon':r.lon,'rows':[r]})
+            groups.append({'last':r['dt'],'wfo':r['wfo'],'lat':r['lat'],'lon':r['lon'],'rows':[r]})
         else:
-            assigned['last']=max(assigned['last'],r.dt); assigned['rows'].append(r)
+            assigned['last']=max(assigned['last'],r['dt']); assigned['rows'].append(r)
     out=[]
     for i,g in enumerate(groups,1):
-        rs=g['rows']; first=min(r.dt for r in rs)
+        rs=g['rows']; first=min(r['dt'] for r in rs)
         out.append({
             'episode_id':f'NSQEP{first:%Y%m%d%H%M}_{i:05d}',
             'episode_start_utc':first.isoformat(),
-            'episode_end_utc':max(r.dt for r in rs).isoformat(),
+            'episode_end_utc':max(r['dt'] for r in rs).isoformat(),
             'wfo':g['wfo'],'warning_count':len(rs),
-            'verified_warning_count':int(sum(bool(r.iem_verified) for r in rs)),
-            'verifying_lsr_count':int(sum(int(r.verifying_lsr_count) for r in rs)),
+            'verified_warning_count':int(sum(bool(r['iem_verified']) for r in rs)),
+            'verifying_lsr_count':int(sum(int(r['verifying_lsr_count']) for r in rs)),
             'lat':g['lat'],'lon':g['lon'],
-            'case_ids':';'.join(str(r.case_id) for r in rs),
+            'case_ids':';'.join(str(r['case_id']) for r in rs),
         })
     return pd.DataFrame(out)
 
