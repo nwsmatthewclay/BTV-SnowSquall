@@ -305,7 +305,7 @@ def process_volume(
             "drivers": [],
             "environment_status": environment.get("status", "unavailable"),
             "environment": environment,
-            "data_quality": "review" if obj.get("touches_grid_edge", False) else "good",
+            "data_quality": "degraded" if obj.get("touches_grid_edge", False) else "good",
             "model_version": "live-object-foundation-v2",
         })
 
