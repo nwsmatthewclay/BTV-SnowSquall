@@ -341,8 +341,8 @@ def process_volume(
 
     append_history(
         output_path,
-        Path("data/derived/live_object_history.jsonl"),
-        Path("data/derived/live_object_history.csv"),
+        history_jsonl_path or Path("data/derived/live_object_history.jsonl"),
+        history_csv_path or Path("data/derived/live_object_history.csv"),
     )
 
     processed.add(source_name)
