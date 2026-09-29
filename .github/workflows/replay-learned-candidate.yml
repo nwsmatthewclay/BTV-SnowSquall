@@ -40,16 +40,36 @@ jobs:
         with:
           ref: snow-squall-model-foundation
 
-      - name: Find latest successful object-dataset pilot
+      - name: Find latest usable object-dataset pilot artifact
         id: dataset
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
-          run_id="$(gh run list --workflow "Object Dataset Pilot" --branch snow-squall-model-foundation --status success --limit 20 --json databaseId --jq '.[0].databaseId')"
-          test -n "$run_id"
-          echo "run_id=$run_id" >> "$GITHUB_OUTPUT"
-          echo "Using dataset run: $run_id"
+          MIN_DATASET_SHA="626048af263afaef735118e653aecc3ae884ff75"
+          selected=""
+          while IFS= read -r run; do
+            run_id=$(printf '%s' "${run}" | jq -r '.id')
+            run_sha=$(printf '%s' "${run}" | jq -r '.head_sha')
+            status=$(printf '%s' "${run}" | jq -r '.status')
+            [ "${status}" = "completed" ] || continue
+            lineage=$(gh api "/repos/${GITHUB_REPOSITORY}/compare/${MIN_DATASET_SHA}...${run_sha}" -q '.status')
+            if [ "${lineage}" != "ahead" ] && [ "${run_sha}" != "${MIN_DATASET_SHA}" ]; then
+              continue
+            fi
+            artifact_count=$(gh api "/repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}/artifacts?per_page=100"               -q '[.artifacts[] | select(.name=="object-population-pilot" and .expired==false)] | length')
+            if [ "${artifact_count}" -gt 0 ]; then
+              selected="${run}"
+              break
+            fi
+          done < <(gh api "/repos/${GITHUB_REPOSITORY}/actions/runs?branch=snow-squall-model-foundation&per_page=100"             | jq -c '[.workflow_runs[] | select(.name=="Object Dataset Pilot")] | sort_by(.id) | reverse | .[]')
+
+          test -n "${selected}"
+          run_id=$(printf '%s' "${selected}" | jq -r '.id')
+          conclusion=$(printf '%s' "${selected}" | jq -r '.conclusion')
+          sha=$(printf '%s' "${selected}" | jq -r '.head_sha')
+          echo "Using dataset run ${run_id}: conclusion=${conclusion}, sha=${sha}"
+          echo "run_id=${run_id}" >> "${GITHUB_OUTPUT}"
 
       - name: Download object-dataset pilot artifact
         env:
