@@ -13,7 +13,7 @@ import pandas as pd
 import requests
 
 BASE = 'https://mesonet.agron.iastate.edu/cgi-bin/request/gis/lsr.py'
-SNOW_RE = re.compile(r'\b(snow\s+squall|white[- ]?out|near[- ]?zero\s+(?:vis|visibility)|blinding\s+snow)\b', re.I)
+SNOW_RE = re.compile(r'\b(?:snow\s+squall|white[- ]?out|near[- ]?zero\s+(?:vis|visibility)|blinding\s+snow)\b', re.I)
 
 def request(url, **kwargs):
     for attempt in range(4):
@@ -32,16 +32,45 @@ def norm_county(value):
     return re.sub(r'\s+',' ',text).strip()
 
 def parse_valid(value):
-    if value is None or pd.isna(value): return None
-    text=str(value).strip()
-    try:
-        numeric=float(text)
-        unit='ms' if abs(numeric)>=1e11 else 's'
-        ts=pd.to_datetime(numeric,unit=unit,utc=True,errors='coerce')
-    except (TypeError,ValueError):
-        ts=pd.to_datetime(value,utc=True,errors='coerce')
-    return None if pd.isna(ts) else ts
+    if value is None or pd.isna(value):
+        return None
+    text = str(value).strip()
+    if not text:
+        return None
 
+    # Some IEM exports use compact calendar stamps instead of Unix time.
+    digits = text.lstrip('-').split('.')[0]
+    if digits.isdigit() and len(digits) in (12, 14):
+        try:
+            fmt = '%Y%m%d%H%M%S' if len(digits) == 14 else '%Y%m%d%H%M'
+            ts = pd.Timestamp.strptime(digits, fmt).tz_localize('UTC')
+            if 1900 <= ts.year <= 2100:
+                return ts
+        except (TypeError, ValueError):
+            pass
+
+    try:
+        numeric = float(text)
+        magnitude = abs(numeric)
+        if magnitude >= 1e15:
+            unit = 'us'
+        elif magnitude >= 1e11:
+            unit = 'ms'
+        elif magnitude >= 1e9:
+            unit = 's'
+        else:
+            unit = None
+        if unit is not None:
+            ts = pd.to_datetime(numeric, unit=unit, utc=True, errors='coerce')
+        else:
+            ts = pd.to_datetime(text, utc=True, errors='coerce', format='mixed')
+    except (TypeError, ValueError, OverflowError):
+        ts = pd.to_datetime(text, utc=True, errors='coerce', format='mixed')
+    if pd.isna(ts):
+        return None
+    if not 1900 <= ts.year <= 2100:
+        return None
+    return ts
 def distance_km(lat1,lon1,lat2,lon2):
     from math import asin,cos,radians,sin,sqrt
     if None in (lat1,lon1,lat2,lon2): return None
