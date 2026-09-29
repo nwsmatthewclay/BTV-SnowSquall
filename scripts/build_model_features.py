@@ -14,6 +14,27 @@ import numpy as np
 import pandas as pd
 
 
+OPERATIONAL_LIVE_PREDICTORS = {
+    "area_km2", "length_km", "width_km", "aspect_ratio",
+    "motion_dir_deg", "motion_speed_kt",
+    "max_reflectivity_dbz", "mean_reflectivity_dbz",
+    "core_pixel_count", "pixel_count", "core_fraction",
+    "track_scan_index", "track_scan_count_to_date", "track_age_min",
+    "track_gap_gt_10min", "centroid_displacement_km", "motion_speed_kmh",
+    "max_reflectivity_dbz_delta", "max_reflectivity_dbz_rate_per_min",
+    "mean_reflectivity_dbz_delta", "mean_reflectivity_dbz_rate_per_min",
+    "area_km2_delta", "area_km2_rate_per_min",
+    "length_km_delta", "length_km_rate_per_min",
+    "width_km_delta", "width_km_rate_per_min",
+    "max_reflectivity_dbz_running_max", "mean_reflectivity_dbz_running_max",
+    "area_km2_running_max", "core_pixel_count_running_max", "pixel_count_running_max",
+    "visibility_m", "gust_ms", "surface_temperature_k", "cape_jkg", "cin_jkg",
+    "pwat_mm", "mlcape_jkg", "mlcin_jkg", "mucape_jkg", "mucin_jkg",
+    "srh01_m2s2", "srh03_m2s2", "shear_u_0_6km_ms", "shear_v_0_6km_ms",
+    "shear_0_6km_ms", "u10_ms", "v10_ms", "temperature_2m_k",
+    "dewpoint_2m_k", "rh_2m_pct",
+}
+
 TARGET_COLUMNS = {
     "squall_onset_within_15m", "squall_onset_within_30m",
     "squall_onset_within_45m", "squall_onset_within_60m",
@@ -147,6 +168,7 @@ def write_schema(frame: pd.DataFrame, schema_path: Path):
         "future_information_policy": "current_and_past_only",
         "location_predictor_policy": "excluded_from_baseline",
         "predictor_columns": predictor_columns(frame),
+        "operational_predictor_columns": [c for c in predictor_columns(frame) if c in OPERATIONAL_LIVE_PREDICTORS],
         "blocked_non_predictors": sorted(NON_PREDICTOR_COLUMNS),
         "blocked_prefixes": list(BLOCKED_PREFIXES),
         "target_columns": sorted(TARGET_COLUMNS & set(frame.columns)),
