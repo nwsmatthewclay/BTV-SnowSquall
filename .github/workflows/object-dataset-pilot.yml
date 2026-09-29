@@ -73,7 +73,7 @@ jobs:
 
       - name: Build 12-window null pilot manifest
         run: |
-          python scripts/build_null_window_manifest.py --sample-count 12 --seed 42 --start 2002-01-01T00:00:00Z --end 2011-12-31T21:00:00Z --radars KCXX KTYX --output data/manifests/banacos_null_windows_pilot.csv
+          python scripts/build_null_window_manifest.py --sample-count 12 --seed 42 --start 2002-01-01T00:00:00Z --end 2011-12-31T21:00:00Z --radars KCXX KTYX --output data/manifests/banacos_null_windows_pilot.csv --require-level2
 
       - name: Audit manifest identity
         run: |
