@@ -38,6 +38,7 @@ def main():
     p.add_argument("--coverage")
     p.add_argument("--positive-level2-fields")
     p.add_argument("--null-level2-fields")
+    p.add_argument("--null-activity")
     p.add_argument("--output", required=True)
     args = p.parse_args()
 
@@ -61,6 +62,16 @@ def main():
         null["environment_status"].value_counts(dropna=False).rename_axis("status").reset_index(name="records")
         if "environment_status" in null.columns else pd.DataFrame()
     )
+
+    null_activity_section = "<p><em>Null-window activity classification not supplied.</em></p>"
+    if args.null_activity and Path(args.null_activity).exists():
+        activity = pd.read_csv(args.null_activity)
+        null_activity_section = table_html(
+            activity,
+            ["null_id", "radar_count", "object_records", "unique_objects",
+             "scan_count", "max_reflectivity_dbz", "max_core_pixels",
+             "activity_class", "selection_policy"],
+        )
 
     population_rows = []
     for name, frame in [("Verified-case context", pos), ("Winter null candidates", null)]:
@@ -253,6 +264,9 @@ main{{max-width:1200px;margin:24px auto;padding:0 20px}}
 
 <h2>Independent ASOS/METAR surface audit</h2>
 {surface_section}
+
+<h2>Null-window activity classification</h2>
+{null_activity_section}
 
 <h2>Environmental data availability</h2>
 <h3>Positive-context objects</h3>
