@@ -229,12 +229,19 @@ def gather_cow_sqw(cfg: dict) -> list[dict]:
                 lon = finite_float(props.get("lon0"))
                 report_ids = str(props.get("stormreports_all") or "").strip()
                 lsr_count = len([item for item in report_ids.split(",") if item.strip()])
+                iem_verified = bool(props.get("verify"))
+                lead_min = finite_float(props.get("lead0"))
+                anchor = issue
+                anchor_type = "warning_issue"
+                if iem_verified and lead_min is not None and lead_min >= 0:
+                    anchor = issue + pd.Timedelta(minutes=lead_min)
+                    anchor_type = "first_verifying_lsr"
                 rows.append({
                     "candidate_id": case_key("SQW", issue.to_pydatetime(), lat, lon, f"{wfo}|{props.get('eventid', '')}"),
                     "candidate_source": "IEM_COW_SQW",
-                    "verification_class": "warning_only",
+                    "verification_class": "warning_verified" if iem_verified else "warning_only",
                     "verification_status": "warning_issued",
-                    "event_start_utc": issue.isoformat(),
+                    "event_start_utc": anchor.isoformat(),
                     "event_end_utc": props.get("expire"),
                     "state": None,
                     "county": None,
@@ -245,6 +252,9 @@ def gather_cow_sqw(cfg: dict) -> list[dict]:
                     "source": f"NWS WFO {wfo}",
                     "narrative": "",
                     "evidence": "iem_cow_sqw",
+                    "event_anchor_type": anchor_type,
+                    "warning_issue_utc": issue.isoformat(),
+                    "warning_leadtime_to_first_verifying_lsr_min": lead_min,
                     "ncei_explicit_snow_squall": False,
                     "lsr_count": lsr_count,
                     "warning_verified_by_iem": bool(props.get("verify")),
@@ -476,6 +486,7 @@ def main():
         "official_documented_candidates": sum(r["verification_class"] in {"official_documented","official_plus_independent_report","official_plus_warning","official_plus_warning_and_report"} for r in merged),
         "ncei_screening_candidates": sum("NCEI_STORM_EVENTS_SCREENING" in str(r.get("source_types", "")) for r in merged),
         "screening_candidates": sum(r["verification_class"] == "official_screening_candidate" for r in merged),
+        "warning_verified_candidates": sum(r["verification_class"] == "warning_verified" for r in merged),
         "warning_only_candidates": sum(r["verification_class"] == "warning_only" for r in merged),
         "warning_plus_report_candidates": sum(r["verification_class"] == "warning_plus_report" for r in merged),
         "unverified_report_only_candidates": sum(r["verification_class"] == "unverified_report_only" for r in merged),
