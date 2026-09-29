@@ -51,9 +51,17 @@ def test_live_feed_isolated_from_model_branch():
     assert "HEAD:snow-squall-model-foundation" not in workflow
 
 
-def test_object_dataset_pilot_does_not_cancel_active_science_run():
+def test_object_dataset_pilot_uses_latest_run_for_science_branch():
     root = Path(__file__).resolve().parents[1]
     workflow = (
         root / ".github" / "workflows" / "object-dataset-pilot.yml"
     ).read_text(encoding="utf-8")
-    assert "cancel-in-progress: false" in workflow
+    assert "cancel-in-progress: true" in workflow
+
+
+def test_live_viewer_degrades_per_radar_without_taking_down_other_feed():
+    root = Path(__file__).resolve().parents[1]
+    js = (root / "viewer/live.js").read_text(encoding="utf-8")
+    assert 'return {site,error:String(err.message||err)' in js
+    assert 'summary.filter(x=>!x.error)' in js
+    assert 'degraded.map(x=>x.site' in js
