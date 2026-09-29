@@ -1,0 +1,160 @@
+name: Reconstruct Modern Candidate Cohort
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - snow-squall-model-foundation
+    paths:
+      - .github/modern-candidate-reconstruction-trigger
+
+concurrency:
+  group: modern-candidate-reconstruction-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  reconstruct:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    env:
+      PYTHONPATH: ${{ github.workspace }}
+      PYTHONUNBUFFERED: "1"
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install -r requirements-science.txt
+
+      - name: Discover warning candidates
+        run: |
+          python scripts/discover_modern_sqw_candidates.py             --start-year 2019             --end-year 2026             --output data/derived/modern_sqw_candidate_review.csv
+          python scripts/cluster_modern_sqw_candidates.py             --input data/derived/modern_sqw_candidate_review.csv             --output data/derived/modern_sqw_candidate_episodes.csv
+          python scripts/build_modern_validation_sampling_frame.py             --input data/derived/modern_sqw_candidate_episodes.csv             --output data/derived/modern_validation_sampling_frame.csv
+          python scripts/build_modern_reconstruction_cohort.py             --frame data/derived/modern_validation_sampling_frame.csv             --existing-cases data/manifests/modern_independent_validation_cases.csv             --output data/derived/modern_reconstruction_cohort.csv
+
+      - name: Preflight Level-II archive
+        run: |
+          python scripts/preflight_modern_reconstruction_cohort.py             --cohort data/derived/modern_reconstruction_cohort.csv             --output data/derived/modern_reconstruction_archive_preflight.csv
+
+      - name: Build two-radar reconstruction manifest
+        run: |
+          python scripts/build_modern_candidate_reconstruction_manifest.py             --cohort data/derived/modern_reconstruction_cohort.csv             --preflight data/derived/modern_reconstruction_archive_preflight.csv             --output data/derived/modern_candidate_reconstruction_manifest.csv
+
+      - name: Download two-radar Level-II cohort
+        run: |
+          python acquisition/historical_level2.py             --manifest data/derived/modern_candidate_reconstruction_manifest.csv             --output data/raw/modern_candidate_level2
+
+      - name: Acquire fixed surface network
+        run: |
+          python scripts/acquire_modern_candidate_surface_network.py             --manifest data/derived/modern_candidate_reconstruction_manifest.csv             --stations data/manifests/observing_stations.csv             --output data/raw/modern_candidate_surface
+
+      - name: Replay both radars through live processor
+        run: |
+          python - <<'PY'
+          import pandas as pd
+          from pathlib import Path
+          import subprocess
+          import sys
+
+          manifest = pd.read_csv("data/derived/modern_candidate_reconstruction_manifest.csv")
+          for row in manifest.itertuples(index=False):
+              case_id = str(row.case_id)
+              radar = str(row.radar_site)
+              start = pd.to_datetime(row.window_start_utc, utc=True)
+              day = start.strftime("%Y%m%d")
+              input_dir = Path("data/raw/modern_candidate_level2") / radar / day
+              output_dir = Path("data/derived/modern_candidate_replay") / case_id / radar
+              state = output_dir / "replay_state.json"
+              cmd = [
+                  sys.executable,
+                  "scripts/historical_operational_replay.py",
+                  "--case-id", f"{case_id}_{radar}",
+                  "--input-dir", str(input_dir),
+                  "--output-dir", str(output_dir),
+                  "--state-path", str(state),
+                  "--continue-on-error",
+              ]
+              print("RUN:", " ".join(cmd))
+              subprocess.run(cmd, check=True)
+          PY
+
+      - name: Audit replay quality
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          manifests = sorted(Path("data/derived/modern_candidate_replay").glob("*/*/replay_manifest.json"))
+          if not manifests:
+              raise SystemExit("No candidate replay manifests found")
+          for path in manifests:
+              data = json.loads(path.read_text(encoding="utf-8"))
+              attempted = int(data.get("attempted_scan_count", 0))
+              successful = int(data.get("successful_scan_count", 0))
+              failed = int(data.get("failed_scan_count", 0))
+              print(path.parent, attempted, successful, failed)
+              if attempted == 0 or successful == 0:
+                  raise SystemExit(f"{path}: no usable scans")
+              if failed / attempted > 0.20:
+                  raise SystemExit(f"{path}: replay failure rate exceeds 20%")
+          PY
+
+      - name: Acquire MRMS reflectivity context
+        run: |
+          python scripts/acquire_modern_validation_mrms.py             --replay-root data/derived/modern_candidate_replay             --output data/derived/modern_candidate_mrms
+
+      - name: Compare Level-II objects with MRMS
+        run: |
+          python scripts/compare_replay_to_mrms.py             --replay-root data/derived/modern_candidate_replay             --mrms-root data/derived/modern_candidate_mrms             --output data/derived/modern_candidate_mrms_object_comparison.csv
+
+      - name: Build cohort inventory
+        run: |
+          python scripts/build_modern_validation_inventory.py             --cases data/manifests/modern_independent_validation_cases.csv             --replay-root data/derived/modern_candidate_replay             --surface-root data/raw/modern_candidate_surface             --mrms-root data/derived/modern_candidate_mrms
+
+      - name: Assert non-scoring candidate boundary
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import json
+
+          for path in Path("data/derived").glob("modern_validation_inventory.json"):
+              data = json.loads(path.read_text(encoding="utf-8"))
+              assert data["training_eligible"] is False
+              assert data["scoring_status"] == "not_scored"
+          print("Candidate reconstruction boundary OK.")
+          PY
+
+      - name: Upload candidate reconstruction package
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: modern-candidate-reconstruction
+          path: |
+            data/derived/modern_sqw_candidate_review.csv
+            data/derived/modern_sqw_candidate_episodes.csv
+            data/derived/modern_validation_sampling_frame.csv
+            data/derived/modern_reconstruction_cohort.csv
+            data/derived/modern_reconstruction_archive_preflight.csv
+            data/derived/modern_candidate_reconstruction_manifest.csv
+            data/derived/modern_candidate_replay
+            data/derived/modern_candidate_mrms
+            data/derived/modern_candidate_mrms_object_comparison.csv
+            data/derived/modern_candidate_mrms_object_comparison.json
+            data/raw/modern_candidate_surface
+            data/raw/modern_candidate_level2
+          if-no-files-found: warn
