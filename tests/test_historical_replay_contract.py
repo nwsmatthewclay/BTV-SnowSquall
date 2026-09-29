@@ -23,6 +23,7 @@ def test_replay_uses_case_local_history(tmp_path, monkeypatch):
             "metadata":{
                 "scan_time_utc":"2026-01-01T12:00:00Z",
                 "object_count":1,
+                "probability_status":"scored",
             }
         }
         output.write_text(json.dumps(payload), encoding="utf-8")
