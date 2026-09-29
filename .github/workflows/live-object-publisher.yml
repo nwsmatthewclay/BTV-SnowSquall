@@ -3,14 +3,24 @@ name: Publish Live Snow Squall Objects
 on:
   workflow_dispatch:
   schedule:
-    - cron: "*/15 * * * *"
+    - cron: "*/5 * * * *"
+  push:
+    branches:
+      - snow-squall-model-foundation
+    paths:
+      - scripts/live_object_worker.py
+      - scripts/process_live_volume.py
+      - scripts/append_live_object_history.py
+      - scripts/audit_operational_readiness.py
+      - scripts/live_healthcheck.py
+      - .github/workflows/live-object-publisher.yml
 
 permissions:
   contents: write
 
 concurrency:
   group: snow-squall-live-object-publisher
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   publish-live-objects:
@@ -21,10 +31,21 @@ jobs:
       PYTHONUNBUFFERED: "1"
 
     steps:
-      - name: Check out live branch
+      - name: Check out model foundation
         uses: actions/checkout@v4
         with:
           ref: snow-squall-model-foundation
+          fetch-depth: 2
+
+      - name: Restore prior live feed history
+        run: |
+          set -euo pipefail
+          mkdir -p viewer/data/live
+          if git ls-remote --exit-code --heads origin snow-squall-live-data >/dev/null 2>&1; then
+            git fetch --no-tags origin snow-squall-live-data
+            git checkout origin/snow-squall-live-data -- viewer/data/live || true
+          fi
+          mkdir -p viewer/data/live
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -38,13 +59,54 @@ jobs:
 
       - name: Process latest KCXX volume
         run: |
-          mkdir -p viewer/data/live
-          python scripts/live_object_worker.py             --radar KCXX             --poll-seconds 2             --max-polls 1             --state viewer/data/live/KCXX_state.json             --output viewer/data/live/KCXX_objects.geojson
+          python scripts/live_object_worker.py             --radar KCXX             --poll-seconds 2             --max-polls 1             --state viewer/data/live/KCXX_state.json             --output viewer/data/live/KCXX_objects.geojson             --history-jsonl viewer/data/live/KCXX_history.jsonl             --history-csv data/derived/KCXX_history.csv
 
       - name: Process latest KTYX volume
         run: |
-          mkdir -p viewer/data/live
-          python scripts/live_object_worker.py             --radar KTYX             --poll-seconds 2             --max-polls 1             --state viewer/data/live/KTYX_state.json             --output viewer/data/live/KTYX_objects.geojson
+          python scripts/live_object_worker.py             --radar KTYX             --poll-seconds 2             --max-polls 1             --state viewer/data/live/KTYX_state.json             --output viewer/data/live/KTYX_objects.geojson             --history-jsonl viewer/data/live/KTYX_history.jsonl             --history-csv data/derived/KTYX_history.csv
+
+      - name: Normalize persisted live timestamps
+        run: |
+          python scripts/normalize_live_products.py --root viewer/data/live
+
+      - name: Build bounded browser history payloads
+        run: |
+          python - <<'PY'
+          import json
+          from datetime import datetime, timedelta, timezone
+          from pathlib import Path
+
+          cutoff = datetime.now(timezone.utc) - timedelta(days=7)
+          max_rows = 20000
+
+          for site in ("KCXX", "KTYX"):
+              src = Path(f"viewer/data/live/{site}_history.jsonl")
+              rows = []
+              if src.exists():
+                  for line in src.read_text(encoding="utf-8").splitlines():
+                      try:
+                          row = json.loads(line)
+                          ts = datetime.fromisoformat(
+                              str(row["timestamp"]).replace("Z", "+00:00")
+                          ).astimezone(timezone.utc)
+                          if ts >= cutoff:
+                              rows.append(row)
+                      except (KeyError, TypeError, ValueError, json.JSONDecodeError):
+                          continue
+
+              rows.sort(key=lambda r: r.get("timestamp", ""))
+              rows = rows[-max_rows:]
+              src.write_text(
+                  "\n".join(json.dumps(r, separators=(",", ":")) for r in rows)
+                  + ("\n" if rows else ""),
+                  encoding="utf-8",
+              )
+              Path(f"viewer/data/live/{site}_history.json").write_text(
+                  json.dumps(rows, separators=(",", ":")) + "\n",
+                  encoding="utf-8",
+              )
+              print(site, "history rows:", len(rows))
+          PY
 
       - name: Validate KCXX live product
         run: |
@@ -56,16 +118,25 @@ jobs:
           python scripts/audit_operational_readiness.py             --state viewer/data/live/KTYX_state.json             --geojson viewer/data/live/KTYX_objects.geojson             --max-age-minutes 30
           python scripts/live_healthcheck.py             --state viewer/data/live/KTYX_state.json             --geojson viewer/data/live/KTYX_objects.geojson             --max-age-minutes 30
 
-      - name: Commit changed live products
-        shell: bash
+      - name: Publish isolated live-data branch
         run: |
           set -euo pipefail
-          git config user.name "BTV Snow Squall Live Worker"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add viewer/data/live/KCXX_state.json viewer/data/live/KCXX_objects.geojson                   viewer/data/live/KTYX_state.json viewer/data/live/KTYX_objects.geojson
+          rm -rf /tmp/snow-squall-live-payload
+          mkdir -p /tmp/snow-squall-live-payload
+          cp -R viewer/data/live/. /tmp/snow-squall-live-payload/
+
+          git checkout --orphan snow-squall-live-data
+          git rm -rf . >/dev/null 2>&1 || true
+          mkdir -p viewer/data/live
+          cp -R /tmp/snow-squall-live-payload/. viewer/data/live/
+          git add viewer/data/live
+
           if git diff --cached --quiet; then
-            echo "No live-product changes to publish."
+            echo "No live data changes; nothing to publish."
             exit 0
           fi
-          git commit -m "Update live snow squall objects [skip ci]"
-          git push origin HEAD:snow-squall-model-foundation
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "Update live snow squall object feeds"
+          git push --force origin HEAD:snow-squall-live-data
