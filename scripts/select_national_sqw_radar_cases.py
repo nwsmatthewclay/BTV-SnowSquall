@@ -27,7 +27,11 @@ def radar_locations():
     return {
         site: (float(meta["lat"]), float(meta["lon"]), float(meta["elev"]))
         for site, meta in NEXRAD_LOCATIONS.items()
-        if isinstance(meta, dict) and meta.get("lat") is not None and meta.get("lon") is not None
+        if site.upper().startswith("K")
+        and len(site) == 4
+        and isinstance(meta, dict)
+        and meta.get("lat") is not None
+        and meta.get("lon") is not None
     }
 
 
