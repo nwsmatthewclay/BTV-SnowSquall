@@ -8,6 +8,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+import random
+import time
 import requests
 
 BASE = "https://www.ncei.noaa.gov/thredds/fileServer"
@@ -45,19 +47,33 @@ def find_latest_analysis(radar_time: datetime, max_age_minutes: int = 180):
     for offset in range(0, max_age_minutes + 60, 60):
         valid = (radar_time - timedelta(minutes=offset)).replace(minute=0)
         for url in _candidate_urls(valid):
-            try:
-                response = requests.head(url, timeout=20, allow_redirects=True)
-                if response.status_code == 200:
-                    age = (radar_time - valid).total_seconds() / 60.0
-                    if age <= max_age_minutes:
-                        return RucMatch(
-                            valid,
-                            url,
-                            Path(url.rsplit("/", 1)[-1]),
-                            age,
-                        )
-            except requests.RequestException:
-                continue
+            for attempt, delay in enumerate((0, 1, 3, 7), start=1):
+                if delay:
+                    time.sleep(delay + random.uniform(0.0, 0.6))
+                try:
+                    response = requests.get(
+                        url,
+                        stream=True,
+                        timeout=(8, 15),
+                        allow_redirects=True,
+                        headers={"Range": "bytes=0-0"},
+                    )
+                    status = response.status_code
+                    response.close()
+                    if status in (200, 206):
+                        age = (radar_time - valid).total_seconds() / 60.0
+                        if age <= max_age_minutes:
+                            return RucMatch(
+                                valid,
+                                url,
+                                Path(url.rsplit("/", 1)[-1]),
+                                age,
+                            )
+                    if status not in (429, 500, 502, 503, 504):
+                        break
+                except requests.RequestException:
+                    if attempt == 4:
+                        break
     return None
 
 
