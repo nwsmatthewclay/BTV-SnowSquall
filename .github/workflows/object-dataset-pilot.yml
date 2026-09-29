@@ -1,5 +1,5 @@
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: object-dataset-pilot-v2-${{ github.ref }}
   cancel-in-progress: true
 
 name: Object Dataset Pilot
