@@ -31,8 +31,22 @@ def audit(cases_path: Path, radar_path: Path, start_year: int, end_year: int):
     lat = pd.to_numeric(cases["lat"], errors="coerce")
     lon = pd.to_numeric(cases["lon"], errors="coerce")
     bad_geo = lat.isna() | lon.isna() | ~lat.between(40, 48) | ~lon.between(-80, -67)
-    end = pd.to_datetime(cases.get("event_end_utc"), utc=True, errors="coerce", format="mixed") if "event_end_utc" in cases.columns else pd.Series(pd.NaT, index=cases.index)
-    bad_interval = end.notna() & (end < parsed)
+    if "event_end_utc" in cases.columns:
+        end = pd.to_datetime(
+            cases["event_end_utc"].astype("string"),
+            utc=True,
+            errors="coerce",
+            format="mixed",
+        )
+    else:
+        end = pd.Series(pd.NaT, index=cases.index, dtype="datetime64[ns, UTC]")
+    parsed = pd.to_datetime(
+        cases["event_start_utc"].astype("string"),
+        utc=True,
+        errors="coerce",
+        format="mixed",
+    )
+    bad_interval = end.notna() & parsed.notna() & (end < parsed)
     if not radar.empty:
         if not set(radar["candidate_id"].astype(str)).issubset(set(cases["candidate_id"].astype(str))):
             raise ValueError("radar manifest contains unknown candidate IDs")
