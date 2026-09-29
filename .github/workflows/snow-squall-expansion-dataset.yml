@@ -97,7 +97,7 @@ jobs:
             --max-official "${{ inputs.max_official || '50' }}" \
             --max-unverified "${{ inputs.max_unverified || '25' }}" \
             --offset-official "${{ inputs.official_offset || '0' }}" \
-            --offset-unverified "${{ inputs.unverified_offset || '0' }}"
+            --offset-unverified "${{ inputs.unverified_offset || '0' }}" \
             --exclude-modern-validation data/manifests/modern_independent_validation_cases.csv
           python - <<'PY'
           import pandas as pd
