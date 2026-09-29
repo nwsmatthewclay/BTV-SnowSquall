@@ -55,10 +55,15 @@ def sample_mrms(path: Path, lat_value: float, lon_value: float, radius_cells: in
 
 def build(replay_root: Path, mrms_root: Path, output_csv: Path) -> dict:
     rows = []
-    for replay_manifest in sorted(replay_root.glob("*/replay_manifest.json")):
-        case_id = replay_manifest.parent.name
+    for replay_manifest in sorted(replay_root.rglob("replay_manifest.json")):
+        rel_parts = replay_manifest.relative_to(replay_root).parts
+        case_id = rel_parts[-2] if len(rel_parts) >= 3 else replay_manifest.parent.name
+        radar_site = rel_parts[-2] if len(rel_parts) >= 3 else None
         replay = json.loads(replay_manifest.read_text(encoding="utf-8"))
-        mrms_files = sorted((mrms_root / case_id).glob("mrms_lcref_*.nc"))
+        if radar_site in {"KCXX", "KTYX"}:
+            mrms_files = sorted((mrms_root / case_id / radar_site).glob("mrms_lcref_*.nc"))
+        else:
+            mrms_files = sorted((mrms_root / case_id).glob("mrms_lcref_*.nc"))
         if not mrms_files:
             continue
 
