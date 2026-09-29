@@ -64,11 +64,21 @@ def replay_case(input_dir: Path, output_dir: Path, state_path: Path, case_id: st
             "object_count":metadata.get("object_count",0),
             "output_file":str(output.relative_to(output_dir)),
             "processing_seconds":round((finished-started).total_seconds(),3),
+            "probability_status":metadata.get("probability_status","not_scored"),
         })
+    probability_statuses=[r.get("probability_status","not_scored") for r in records]
+    if "scored" in probability_statuses:
+        probability_status = "research_candidate_scored"
+    elif "model_error" in probability_statuses:
+        probability_status = "model_error"
+    else:
+        probability_status = "not_scored"
+
     manifest={
         "case_id":case_id,
         "mode":"historical_replay_through_live_processor",
-        "probability_status": "research_candidate_scored" if model_dir else "not_scored",
+        "probability_status": probability_status,
+        "probability_status_counts": {s: probability_statuses.count(s) for s in sorted(set(probability_statuses))},
         "model_directory": str(model_dir) if model_dir else None,
         "future_information_policy":"one_scan_at_a_time",
         "input_directory":str(input_dir),
