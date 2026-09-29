@@ -159,3 +159,17 @@ def test_case_summary_preserves_all_station_surface_metrics(tmp_path, monkeypatc
     got=payload["cases"][0]
     assert got["minimum_visibility_mi"]==0.25
     assert got["primary_minimum_visibility_mi"]==1.0
+
+
+def test_modern_validation_freeze_records_sha256_and_non_scoring_boundary(tmp_path, monkeypatch):
+    from scripts.write_modern_validation_freeze import build
+    import json
+    source=tmp_path/"manifest.csv"
+    source.write_text("case_id\nCASE1\n",encoding="utf-8")
+    monkeypatch.setattr("scripts.write_modern_validation_freeze.subprocess.check_output", lambda *a, **k: "abc123\n")
+    out=tmp_path/"freeze.json"
+    payload=build([source],out)
+    assert payload["git_sha"]=="abc123"
+    assert payload["training_eligible"] is False
+    assert payload["scoring_status"]=="not_scored"
+    assert payload["files"][str(source)]["sha256"]
