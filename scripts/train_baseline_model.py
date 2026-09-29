@@ -104,9 +104,11 @@ def prepare_dataset(frame: pd.DataFrame, schema: dict, target: str):
 
     group_case = d["case_id"].fillna("")
     group_null = d["null_id"].fillna("")
+    episode = d["episode_id"].fillna("") if "episode_id" in d.columns else pd.Series("", index=d.index)
+    use_episode = positive_population.loc[d.index] & episode.ne("")
     d["split_group"] = np.where(
         positive_population.loc[d.index],
-        "case:" + group_case.astype(str),
+        np.where(use_episode, "episode:" + episode.astype(str), "case:" + group_case.astype(str)),
         "null:" + group_null.astype(str),
     )
     if d["split_group"].nunique() < 3:
@@ -287,12 +289,13 @@ def main():
         "training_rows": int(len(data)),
         "training_groups": int(data["split_group"].nunique()),
         "location_predictor_policy": schema.get("location_predictor_policy", "unspecified"),
-        "evaluation_unit": "case_or_null_group",
+        "evaluation_unit": "episode_or_case_or_null_group",
         "training_class_counts": {
             "positive": int(data[args.target].sum()),
             "negative": int((1 - data[args.target]).sum()),
         },
         "positive_case_groups": positive_case_groups,
+        "positive_group_policy": "physical_episode_when_available_else_case",
         "positive_case_group_count": positive_case_group_count,
         "evaluation_status": (
             "case_held_out_not_interpretable"
