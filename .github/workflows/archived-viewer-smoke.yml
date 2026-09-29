@@ -126,6 +126,11 @@ jobs:
           cp -R data/derived/viewer/data _site/data
           printf 'BTV Snow Squall Archived Viewer Smoke Test\nCase: %s\nRadar: %s\nResearch/pilot historical reconstruction only.\nProbability scoring is not exposed.\n'             "${{ inputs.case_id || 'BTV20060224' }}" "${{ inputs.radar_site || 'KCXX' }}" > _site/README.txt
 
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v5
+        with:
+          enablement: true
+
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
         with:
