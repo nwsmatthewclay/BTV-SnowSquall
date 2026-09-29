@@ -10,7 +10,18 @@ import argparse
 import random
 from pathlib import Path
 
+from acquisition.historical_level2 import key_time, list_volume_keys, s3_client
+
 import pandas as pd
+
+
+def select_candidates(candidates, sample_count, rng, availability=None):
+    """Select reproducible candidates, optionally requiring archive coverage."""
+    shuffled = list(candidates)
+    rng.shuffle(shuffled)
+    if availability is not None:
+        shuffled = [candidate for candidate in shuffled if availability(candidate)]
+    return sorted(shuffled[:sample_count])
 
 
 def build_null_windows(
@@ -23,6 +34,7 @@ def build_null_windows(
     seed: int = 42,
     sample_count: int = 100,
     radars: tuple[str, ...] = ("KCXX", "KTYX"),
+    require_level2: bool = False,
 ):
     cases = pd.read_csv(cases_csv)
     starts = pd.to_datetime(cases["event_start_utc"], utc=True).dropna()
@@ -47,8 +59,40 @@ def build_null_windows(
     ]
 
     rng = random.Random(seed)
-    rng.shuffle(candidates)
-    selected = sorted(candidates[:sample_count])
+    availability = None
+    if require_level2:
+        client = s3_client()
+        day_cache = {}
+
+        def has_archive_volume(timestamp):
+            start_time = timestamp - pd.Timedelta(minutes=90)
+            end_time = timestamp + pd.Timedelta(minutes=90)
+            day = start_time.normalize()
+            while day <= end_time.normalize():
+                for radar in radars:
+                    cache_key = (radar, day.date())
+                    if cache_key not in day_cache:
+                        keys = list_volume_keys(client, radar, day.to_pydatetime())
+                        day_cache[cache_key] = [key_time(key) for key in keys]
+                    if any(
+                        t is not None
+                        and start_time.to_pydatetime() <= t <= end_time.to_pydatetime()
+                        for t in day_cache[cache_key]
+                    ):
+                        return True
+                day += pd.Timedelta(days=1)
+            return False
+
+        availability = has_archive_volume
+
+    selected = select_candidates(
+        candidates, sample_count, rng, availability=availability
+    )
+    if len(selected) < sample_count:
+        raise RuntimeError(
+            f"Only {len(selected)} archive-covered null windows available; "
+            f"requested {sample_count}."
+        )
 
     rows = []
     for i, timestamp in enumerate(selected, start=1):
@@ -69,6 +113,7 @@ def build_null_windows(
                 "source": "banacos_winter_background",
                 "label_status": "candidate_null",
                 "selection_seed": seed,
+                "archive_preflight": "level2_available" if require_level2 else "not_checked",
             })
 
     return pd.DataFrame(rows)
@@ -82,6 +127,7 @@ def main():
     parser.add_argument("--sample-count", type=int, default=100)
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--radars", nargs="+", default=["KCXX", "KTYX"])
+    parser.add_argument("--require-level2", action="store_true", help="Only select windows with at least one requested radar archive volume in the ±90-minute window.")
     parser.add_argument("--output", default="data/manifests/banacos_null_windows.csv")
     args = parser.parse_args()
 
@@ -92,6 +138,7 @@ def main():
         seed=args.seed,
         sample_count=args.sample_count,
         radars=tuple(args.radars),
+        require_level2=args.require_level2,
     )
     Path(args.output).parent.mkdir(parents=True, exist_ok=True)
     result.to_csv(args.output, index=False)
