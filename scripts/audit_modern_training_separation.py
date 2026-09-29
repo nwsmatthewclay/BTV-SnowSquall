@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 from pathlib import Path
 
 import pandas as pd
@@ -63,8 +64,8 @@ def main():
     result = audit(Path(args.modern), Path(args.development_root))
     output = Path(args.report)
     output.parent.mkdir(parents=True, exist_ok=True)
-    output.write_text(pd.io.json.dumps(result, indent=2) + "\n", encoding="utf-8")
-    print(pd.io.json.dumps(result, indent=2))
+    output.write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")
+    print(json.dumps(result, indent=2))
 
 
 if __name__ == "__main__":
