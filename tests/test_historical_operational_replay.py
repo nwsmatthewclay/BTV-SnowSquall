@@ -20,7 +20,7 @@ def test_replay_can_record_bad_scan_and_continue(tmp_path, monkeypatch):
     for name in ("KCXX20181121_160000_V06", "KCXX20181121_161000_V06"):
         (tmp_path / name).write_bytes(b"placeholder")
     calls=[]
-    def fake_process(source, state_path, output_path):
+    def fake_process(source, state_path, output_path, history_jsonl_path=None, history_csv_path=None, model_dir=None):
         calls.append(source.name)
         if len(calls)==1:
             raise OSError("bad historical volume")
