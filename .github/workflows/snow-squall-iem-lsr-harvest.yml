@@ -1,0 +1,62 @@
+name: Snow Squall IEM LSR Harvest
+
+on:
+  push:
+    branches:
+      - snow-squall-model-foundation
+    paths:
+      - scripts/discover_iem_lsr_candidates.py
+      - .github/workflows/snow-squall-iem-lsr-harvest.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  harvest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    env:
+      PYTHONPATH: ${{ github.workspace }}
+      PYTHONUNBUFFERED: '1'
+
+    steps:
+      - name: Checkout model foundation
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run IEM LSR harvest
+        run: |
+          python scripts/discover_iem_lsr_candidates.py --start-year 2002 --end-year 2026 --output-dir data/discovery/iem_lsr
+
+      - name: Validate timestamps
+        run: |
+          python - <<'PY'
+          import pandas as pd
+          d=pd.read_csv('data/discovery/iem_lsr/iem_lsr_reports.csv')
+          t=pd.to_datetime(d['event_start_utc'],utc=True,errors='coerce',format='mixed')
+          assert t.notna().all(), 'Invalid IEM LSR timestamps remain'
+          assert t.dt.year.between(2002,2026).all(), 'Out-of-range IEM LSR year detected'
+          assert len(d) > 0, 'No IEM LSR candidates found'
+          print('IEM LSR candidate reports:',len(d))
+          print('Year range:',int(t.dt.year.min()),int(t.dt.year.max()))
+          print('Clusters:',len(pd.read_csv('data/discovery/iem_lsr/iem_lsr_case_clusters.csv')))
+          PY
+
+      - name: Upload IEM LSR review package
+        uses: actions/upload-artifact@v4
+        with:
+          name: snow-squall-iem-lsr-review
+          path: data/discovery/iem_lsr
+          if-no-files-found: error
