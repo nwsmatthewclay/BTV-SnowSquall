@@ -1,0 +1,92 @@
+name: Modern Snow Squall Independent Validation
+
+on:
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    env:
+      PYTHONPATH: ${{ github.workspace }}
+      PYTHONUNBUFFERED: '1'
+
+    steps:
+      - name: Check out model foundation
+        uses: actions/checkout@v4
+        with:
+          ref: snow-squall-model-foundation
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install science dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt -r requirements-science.txt
+
+      - name: Audit validation manifest
+        run: |
+          python scripts/audit_modern_validation_manifest.py data/manifests/modern_independent_validation_cases.csv --report data/derived/modern_validation_manifest_audit.json
+
+      - name: Build validation acquisition manifests
+        run: |
+          python - <<'PY'
+          import pandas as pd
+          from pathlib import Path
+          src=pd.read_csv('data/manifests/modern_independent_validation_cases.csv')
+          out=src.copy()
+          out['event_start_utc']=out['event_anchor_utc'].fillna(out['event_date_utc'])
+          out['source_study']=out['evidence_source']
+          out['hybrid_case']=False
+          out['peak_wind_kt']=pd.to_numeric(out['wind_gust_kt'],errors='coerce')
+          out['min_visibility_km']=pd.to_numeric(out['visibility_miles'],errors='coerce')*1.609344
+          out['window_start_utc']=out['analysis_window_start_utc']
+          out['window_end_utc']=out['analysis_window_end_utc']
+          Path('data/manifests').mkdir(parents=True,exist_ok=True)
+          out[['case_id','event_start_utc','source_study','observing_station','peak_wind_kt','min_visibility_km','hybrid_case','window_start_utc','window_end_utc']].to_csv('data/manifests/modern_validation_cases_normalized.csv',index=False)
+          out[['case_id','radar_site','event_start_utc','window_start_utc','window_end_utc','observing_station']].to_csv('data/manifests/modern_validation_radar_manifest.csv',index=False)
+          Path('data/derived').mkdir(parents=True,exist_ok=True)
+          PY
+
+      - name: Acquire ASOS/METAR validation observations
+        run: |
+          python acquisition/asos_iem.py --cases data/manifests/modern_validation_cases_normalized.csv --output data/raw/modern_validation_ASOS_IEM --buffer-before 120 --buffer-after 150
+
+      - name: Download validation Level-II
+        run: |
+          python acquisition/historical_level2.py --manifest data/manifests/modern_validation_radar_manifest.csv --output data/raw/modern_validation_level2
+
+      - name: Reconstruct validation radar objects
+        run: |
+          python scripts/reconstruct_pilot.py --input data/raw/modern_validation_level2 --output data/derived/modern_validation_objects.csv --error-log data/derived/modern_validation_objects_errors.csv
+
+      - name: Annotate validation objects
+        run: |
+          python scripts/annotate_object_population.py data/derived/modern_validation_objects.csv --manifest data/manifests/modern_validation_radar_manifest.csv --output data/derived/modern_validation_objects_annotated.csv
+
+      - name: Attach modern-case environment
+        run: |
+          python scripts/enrich_object_environment.py data/derived/modern_validation_objects_annotated.csv --output data/derived/modern_validation_environment.csv --rap-dir data/raw/modern_validation_RAP --ruc-dir data/raw/modern_validation_RUC
+
+      - name: Build leakage-safe validation features
+        run: |
+          python scripts/build_model_features.py data/derived/modern_validation_environment.csv --output data/derived/modern_validation_features.csv --schema-output data/derived/modern_validation_features.schema.json
+
+      - name: Upload independent validation package
+        uses: actions/upload-artifact@v4
+        with:
+          name: modern-snow-squall-independent-validation
+          path: |
+            data/manifests/modern_validation_*.csv
+            data/derived/modern_validation_*
+            data/raw/modern_validation_ASOS_IEM
+            data/raw/modern_validation_level2
+            data/raw/modern_validation_RAP
+            data/raw/modern_validation_RUC
