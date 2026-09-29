@@ -146,6 +146,10 @@ jobs:
         run: |
           python scripts/build_modern_candidate_evidence_summary.py             --inventory data/derived/modern_candidate_inventory.csv             --mrms data/derived/modern_candidate_mrms_object_comparison.csv             --surface data/derived/modern_surface_network_diagnostic.csv             --output-json data/derived/modern_candidate_evidence_summary.json             --output-csv data/derived/modern_candidate_evidence_summary.csv
 
+      - name: Build validation viewer catalog
+        run: |
+          python scripts/build_modern_validation_viewer_catalog.py             --summary data/derived/modern_candidate_evidence_summary.csv             --output viewer/data/validation/catalog.json
+
       - name: Assert non-scoring candidate boundary
         run: |
           python - <<'PY'
@@ -186,6 +190,9 @@ jobs:
             data/derived/modern_candidate_inventory.csv
             data/derived/modern_candidate_evidence_summary.json
             data/derived/modern_candidate_evidence_summary.csv
+            viewer/validation.html
+            viewer/validation.js
+            viewer/data/validation/catalog.json
             data/raw/modern_candidate_surface
             data/raw/modern_candidate_level2
           if-no-files-found: warn
