@@ -159,15 +159,17 @@ def main():
             data = load_json(Path(path))
             window_rows.append({
                 "audit": label,
-                "expected_windows": data.get("manifest_rows", data.get("expected_null_windows")),
-                "populated_windows": data.get("rows_with_level2", data.get("populated_null_windows")),
-                "empty_windows": data.get("rows_without_level2", data.get("empty_null_windows")),
-                "coverage_fraction": data.get("coverage_fraction", data.get("population_fraction")),
+                "expected_windows": data.get("evaluated_manifest_rows", data.get("manifest_rows", data.get("expected_null_windows"))),
+                "populated_windows": data.get("evaluated_rows_with_level2", data.get("rows_with_level2", data.get("populated_null_windows"))),
+                "empty_windows": data.get("evaluated_rows_without_level2", data.get("rows_without_level2", data.get("empty_null_windows"))),
+                "coverage_fraction": data.get("evaluated_coverage_fraction", data.get("coverage_fraction", data.get("population_fraction"))),
+                "coverage_scope": data.get("coverage_scope"),
+                "supplemental_all_row_fraction": data.get("coverage_fraction") if data.get("coverage_scope") else None,
                 "minimum_required": data.get("minimum_coverage_fraction", data.get("minimum_population_fraction")),
                 "passed": data.get("passed"),
             })
     if window_rows:
-        window_section = table_html(pd.DataFrame(window_rows), ["audit","expected_windows","populated_windows","empty_windows","coverage_fraction","minimum_required","passed"])
+        window_section = table_html(pd.DataFrame(window_rows), ["audit","expected_windows","populated_windows","empty_windows","coverage_fraction","minimum_required","coverage_scope","supplemental_all_row_fraction","passed"])
 
     association_section = "<p><em>Positive event-association diagnostics not supplied.</em></p>"
     if args.positive_association and Path(args.positive_association).exists():
