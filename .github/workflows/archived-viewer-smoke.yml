@@ -1,0 +1,147 @@
+name: Archived Snow Squall Viewer Smoke Test
+
+on:
+  push:
+    branches:
+      - snow-squall-model-foundation
+    paths:
+      - .github/workflows/archived-viewer-smoke.yml
+  workflow_dispatch:
+    inputs:
+      case_id:
+        description: "Archived case to build"
+        required: true
+        default: "BTV20060224"
+      radar_site:
+        description: "Radar site"
+        required: true
+        default: "KCXX"
+        type: choice
+        options:
+          - KCXX
+          - KTYX
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: archived-snow-squall-viewer-smoke
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    env:
+      PYTHONPATH: ${{ github.workspace }}
+      PYTHONUNBUFFERED: "1"
+
+    steps:
+      - name: Check out model foundation
+        uses: actions/checkout@v4
+        with:
+          ref: snow-squall-model-foundation
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt -r requirements-science.txt
+
+      - name: Resolve requested case
+        env:
+          CASE_ID: ${{ inputs.case_id || 'BTV20060224' }}
+          RADAR: ${{ inputs.radar_site || 'KCXX' }}
+        run: |
+          python - <<'PY'
+          import os
+          import pandas as pd
+          cases = pd.read_csv("data/manifests/banacos_2014_cases.csv")
+          windows = pd.read_csv("data/manifests/banacos_radar_windows.csv")
+          case_id = os.environ["CASE_ID"]
+          radar = os.environ["RADAR"]
+          assert len(cases[cases.case_id.astype(str) == case_id]) == 1, f"Unknown case: {case_id}"
+          match = windows[(windows.case_id.astype(str) == case_id) & (windows.radar_site.astype(str) == radar)]
+          assert not match.empty, f"No {radar} radar window for {case_id}"
+          print(match[["case_id","radar_site","window_start_utc","window_end_utc"]].to_string(index=False))
+          PY
+
+      - name: Download archived Level-II
+        run: |
+          python acquisition/historical_level2.py             --manifest data/manifests/banacos_radar_windows.csv             --case-id "${{ inputs.case_id || 'BTV20060224' }}"             --radar-site "${{ inputs.radar_site || 'KCXX' }}"             --output data/raw/archived_viewer_level2
+
+      - name: Reconstruct archived objects
+        run: |
+          python scripts/reconstruct_pilot.py             --input data/raw/archived_viewer_level2             --output data/derived/archived_viewer_objects.csv             --error-log data/derived/archived_viewer_errors.csv
+
+      - name: Annotate archived objects
+        run: |
+          python scripts/annotate_object_population.py             data/derived/archived_viewer_objects.csv             --manifest data/manifests/banacos_radar_windows.csv             --output data/derived/archived_viewer_objects_annotated.csv
+
+      - name: Export archived radar frames
+        run: |
+          python scripts/export_viewer_radar_frames.py             --manifest data/manifests/banacos_radar_windows.csv             --input data/raw/archived_viewer_level2             --output-dir data/derived/viewer
+
+      - name: Build static historical viewer
+        env:
+          GITHUB_SHA: ${{ github.sha }}
+        run: |
+          python scripts/build_static_viewer.py             --objects data/derived/archived_viewer_objects_annotated.csv             --cases data/manifests/banacos_2014_cases.csv             --output-dir data/derived/viewer             --frames-root data/derived/viewer
+
+      - name: Validate viewer package
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          root = Path("data/derived/viewer/data")
+          catalog = json.loads((root / "catalog.json").read_text())
+          assert catalog["cases"], "Viewer catalog is empty"
+          assert catalog["probability_status"] == "not_scored"
+          assert catalog["data_status"] == "research_pilot"
+          case = catalog["cases"][0]
+          assert case["radar_frames"], "No archived radar frames were exported"
+          geo = json.loads((root / case["file"]).read_text())
+          assert geo["features"], "No reconstructed object features were exported"
+          print("Viewer cases:", len(catalog["cases"]))
+          print("Object features:", len(geo["features"]))
+          print("Radar frames:", len(case["radar_frames"]))
+          print("Tracks:", case["track_count"])
+          print("Viewer validation: PASS")
+          PY
+
+      - name: Assemble Pages site
+        run: |
+          rm -rf _site
+          mkdir -p _site
+          cp viewer/*.html viewer/*.js viewer/*.css _site/
+          cp -R data/derived/viewer/data _site/data
+          printf 'BTV Snow Squall Archived Viewer Smoke Test\nCase: %s\nRadar: %s\nResearch/pilot historical reconstruction only.\nProbability scoring is not exposed.\n'             "${{ inputs.case_id || 'BTV20060224' }}" "${{ inputs.radar_site || 'KCXX' }}" > _site/README.txt
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
+
+      - name: Upload diagnostic bundle
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: archived-viewer-smoke
+          path: |
+            data/derived/archived_viewer_objects.csv
+            data/derived/archived_viewer_objects_annotated.csv
+            data/derived/archived_viewer_errors.csv
+            data/derived/viewer
