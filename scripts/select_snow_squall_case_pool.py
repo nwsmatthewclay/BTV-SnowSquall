@@ -88,7 +88,12 @@ def main():
         )
     ].copy()
     unverified = candidates[
-        candidates["verification_class"].eq("unverified_report_only")
+        candidates["verification_class"].isin([
+            "unverified_report_only",
+            "warning_only",
+            "warning_plus_report",
+            "official_screening_candidate",
+        ])
     ].copy()
 
     official = choose_diverse(official, args.max_official)
