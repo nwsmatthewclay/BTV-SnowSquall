@@ -10,7 +10,9 @@ def test_live_viewer_references_operational_feed_assets():
     assert "KCXX" in js and "KTYX" in js
     assert "_objects.geojson" in js
     assert 'kind==="objects"' in js
-    assert 'kind==="history"' in js
+    assert 'kind==="objects"' in js
+    assert '"history"' in js
+    assert '+".json"' in js
     assert "probability scoring disabled" in html.lower()
     assert (
         "raw.githubusercontent.com/nwsmatthewclay/BTV-SnowSquall/"
