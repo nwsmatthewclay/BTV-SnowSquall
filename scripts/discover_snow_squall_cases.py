@@ -118,7 +118,7 @@ def event_end_utc(row: pd.Series) -> datetime | None:
         day = int(row["END_DAY"])
         hm = int(row.get("END_TIME", 0) or 0)
         naive = datetime(ym // 100, ym % 100, day, hm // 100, hm % 100)
-        return naive.replace(tzinfo=LOCAL_TZ).astimezone(timezone.utc)
+        return naive.replace(tzinfo=LOCAL_STANDARD_TZ).astimezone(timezone.utc)
     except (KeyError, TypeError, ValueError, OverflowError):
         return None
 def finite_float(value):
