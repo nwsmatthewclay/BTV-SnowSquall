@@ -30,7 +30,7 @@ jobs:
       - name: Checkout model foundation
         uses: actions/checkout@v4
         with:
-          ref: snow-squall-model-foundation
+          ref: ${{ github.sha }}
 
       - name: Set up Python
         uses: actions/setup-python@v5
