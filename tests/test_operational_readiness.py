@@ -3,7 +3,7 @@ from datetime import datetime,timezone
 from scripts.audit_operational_readiness import validate
 
 def test_operational_readiness_accepts_unscored_polygon_product(tmp_path):
-    now=datetime.now(timezone.utc).replace(microsecond=0).isoformat()
+    now=datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
     state={"last_source":"KCXX20260928_190000_V06","last_scan_time_utc":now,"last_object_count":1}
     geo={"type":"FeatureCollection","features":[{
         "type":"Feature",
