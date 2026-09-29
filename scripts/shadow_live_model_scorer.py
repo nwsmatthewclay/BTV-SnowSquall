@@ -73,7 +73,7 @@ def score_site(site: str, live_root: Path, model_root: Path) -> tuple[dict, list
             coverage = feature_coverage(frame.tail(1), runtime.feature_columns)
             record["feature_coverage"][str(horizon)] = coverage
             if coverage["fraction"] < MIN_FEATURE_COVERAGE:
-                record["score_errors"][str(horizon)] = f"low_feature_coverage:{coverage["fraction"]:.3f}"
+                record["score_errors"][str(horizon)] = "low_feature_coverage:{:.3f}".format(coverage["fraction"])
                 continue
             try:
                 score = runtime.score_candidate(frame.tail(1))
