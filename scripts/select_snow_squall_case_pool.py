@@ -86,7 +86,7 @@ def main():
 
     official = candidates[
         candidates["verification_class"].isin(
-            ["official_documented", "official_plus_independent_report", "official_plus_warning", "official_plus_warning_and_report", "official_plus_warning_verified", "warning_verified"]
+            ["official_documented", "official_plus_independent_report", "official_plus_warning", "official_plus_warning_and_report", "official_plus_warning_verified", "official_study_warning_verified", "official_plus_study", "study_verified", "study_warning_verified", "warning_verified"]
         )
     ].copy()
     unverified = candidates[
