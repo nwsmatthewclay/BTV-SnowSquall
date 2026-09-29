@@ -7,6 +7,7 @@ on:
       - snow-squall-model-foundation
     paths:
       - .github/modern-discovery-trigger
+  workflow_dispatch:
     inputs:
       start_year:
         description: "First year to search"
