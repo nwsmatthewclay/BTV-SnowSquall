@@ -365,6 +365,8 @@ def main():
     parser.add_argument("input")
     parser.add_argument("--state", default="data/derived/live_tracker_state.json")
     parser.add_argument("--output", default="data/derived/live_objects.geojson")
+    parser.add_argument("--history-jsonl", default=None)
+    parser.add_argument("--history-csv", default=None)
     args = parser.parse_args()
 
     process_volume(
