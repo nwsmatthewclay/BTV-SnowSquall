@@ -1,11 +1,10 @@
 """Translate live object history records into the leakage-safe model feature schema.
 
-The adapter is deliberately conservative: it only derives values from the current
-record and earlier records for the same track. Unavailable fields remain null.
+The adapter derives forecast-time predictors only from the current observation and
+earlier observations for the same track. Unavailable fields remain null.
 """
 from __future__ import annotations
 
-from datetime import datetime, timezone
 import math
 from typing import Iterable
 
@@ -19,6 +18,9 @@ LIVE_TO_MODEL = {
     "visibility_sm": "visibility_m",
     "sbcape_jkg": "cape_jkg",
     "sbcin_jkg": "cin_jkg",
+}
+
+
 def _number(value):
     try:
         if value is None or pd.isna(value):
@@ -48,154 +50,189 @@ def _mi_from_m(value):
     return None if value is None else value / 1609.344
 
 
-def build_live_feature_row(current: dict, previous: dict | None = None, track_count: int | None = None) -> dict:
+def build_live_feature_row(
+    current: dict,
+    previous: dict | None = None,
+    track_count: int | None = None,
+) -> dict:
     row = {}
 
-    for target, source in LIVE_TO_MODEL.items():
-        row[target] = _number(current.get(source))
-
+    # Direct canonical/radar fields.
     for key in (
-        "area_km2", "length_km", "width_km", "orientation_deg",
-        "motion_dir_deg", "motion_speed_kt", "max_reflectivity_dbz",
-        "mean_reflectivity_dbz", "core_pixel_count", "pixel_count",
-        "mean_reflectivity_dbz", "core_pixel_count", "core_fraction",
+        "area_km2",
+        "length_km",
+        "width_km",
+        "orientation_deg",
+        "motion_dir_deg",
+        "motion_direction_deg",
+        "motion_speed_kt",
+        "max_reflectivity_dbz",
+        "mean_reflectivity_dbz",
+        "core_pixel_count",
+        "pixel_count",
+        "core_fraction",
         "age_scans",
+        "echo_top_km",
+        "top_minus_base_km",
+        "vertical_reflectivity_gradient",
+        "vertical_valid_points",
+        "zdr_mean_db",
+        "zdr_p90_db",
+        "zdr_gradient_dbkm",
+        "rhohv_mean",
+        "rhohv_max",
+        "rhohv_p90",
+        "rhohv_min",
+        "kdp_mean_degkm",
+        "kdp_p90_degkm",
+        "velocity_mean_kt",
+        "velocity_std_kt",
+        "velocity_p90_abs_kt",
+        "velocity_gradient_ktkm",
     ):
         if key in current:
             row[key] = _number(current.get(key))
 
-    # Canonical names used by the historical model-feature builder.
-    row["area_km2"] = _number(current.get("area_km2"))
-    row["length_km"] = _number(current.get("length_km"))
-    row["width_km"] = _number(current.get("width_km"))
-    row["motion_dir_deg"] = _number(current.get("motion_dir_deg", current.get("motion_direction_deg")))
+    # Canonical motion naming used by the historical feature builder.
+    if row.get("motion_dir_deg") is None:
+        row["motion_dir_deg"] = _number(current.get("motion_direction_deg"))
     row["motion_speed_kt"] = _number(current.get("motion_speed_kt"))
 
-    # Environment fields already flattened by append_live_object_history.py.
+    # Environment fields flattened into the live history.
     for key in (
-        "mlcape_jkg", "mlcin_jkg", "mucape_jkg", "mucin_jkg", "pwat_mm",
-        "srh01_m2s2", "srh03_m2s2", "shear_u_0_6km_ms", "shear_v_0_6km_ms",
-        "shear_0_6km_ms", "u10_ms", "v10_ms", "temperature_2m_k",
-        "dewpoint_2m_k", "rh_2m_pct", "gust_ms", "visibility_m", "cape_jkg",
+        "mlcape_jkg",
+        "mlcin_jkg",
+        "mucape_jkg",
+        "mucin_jkg",
+        "pwat_mm",
+        "srh01_m2s2",
+        "srh03_m2s2",
+        "shear_u_0_6km_ms",
+        "shear_v_0_6km_ms",
+        "shear_0_6km_ms",
+        "u10_ms",
+        "v10_ms",
+        "temperature_2m_k",
+        "dewpoint_2m_k",
+        "rh_2m_pct",
+        "gust_ms",
+        "visibility_m",
+        "cape_jkg",
         "cin_jkg",
-    "echo_top_km", "top_minus_base_km", "vertical_reflectivity_gradient",
-    "vertical_valid_points", "zdr_mean_db", "zdr_p90_db", "zdr_gradient_dbkm",
-    "rhohv_mean", "rhohv_max", "rhohv_p90", "rhohv_min",
-    "kdp_mean_degkm", "kdp_p90_degkm", "velocity_mean_kt", "velocity_std_kt",
-    "velocity_p90_abs_kt", "velocity_gradient_ktkm",
-    "surface_wind_speed_kt", "shear_0_6km_kt", "temperature_dewpoint_spread_k",
-    "cape_shear_product", "gust_excess_kt", "reflectivity_core_excess",
-    "area_per_length", "shear_motion_ratio",
-        "echo_top_km", "top_minus_base_km", "vertical_reflectivity_gradient",
-        "vertical_valid_points", "zdr_mean_db", "zdr_p90_db", "zdr_gradient_dbkm",
-        "rhohv_mean", "rhohv_max", "rhohv_p90", "rhohv_min",
-        "kdp_mean_degkm", "kdp_p90_degkm", "velocity_mean_kt", "velocity_std_kt",
-        "velocity_p90_abs_kt", "velocity_gradient_ktkm",
+        "surface_temperature_k",
+        "echo_top_km",
+        "top_minus_base_km",
+        "vertical_reflectivity_gradient",
+        "vertical_valid_points",
+        "zdr_mean_db",
+        "zdr_p90_db",
+        "zdr_gradient_dbkm",
+        "rhohv_mean",
+        "rhohv_max",
+        "rhohv_p90",
+        "rhohv_min",
+        "kdp_mean_degkm",
+        "kdp_p90_degkm",
+        "velocity_mean_kt",
+        "velocity_std_kt",
+        "velocity_p90_abs_kt",
+        "velocity_gradient_ktkm",
     ):
         if key in current:
             row[key] = _number(current.get(key))
 
-
+    # Unit-safe derived fields.
     row["visibility_sm"] = _mi_from_m(current.get("visibility_m"))
     row["wind_gust_kt"] = _kt_from_ms(current.get("gust_ms"))
-    row["shear_0_6km_kt"] = _kt_from_ms(current.get("shear_0_6km_ms"))
 
-    # Match the historical feature builder temporal state using only current
-    # and prior records from the same track.
-    current_time = _utc(current.get("timestamp"))
-    previous_time = _utc(previous.get("timestamp")) if previous else None
-    dt_min = None
-    if current_time is not None and previous_time is not None:
-        dt_min = (current_time - previous_time).total_seconds() / 60.0
-    row["track_gap_gt_10min"] = bool(dt_min is not None and dt_min > 10.0)
+    u10 = _number(current.get("u10_ms"))
+    v10 = _number(current.get("v10_ms"))
+    if u10 is not None and v10 is not None:
+        row["surface_wind_speed_kt"] = math.hypot(u10, v10) * 1.943844492
 
-    # Track age is finalized in build_live_feature_frame where the full
-    # chronological track is available.
+    su = _number(current.get("shear_u_0_6km_ms"))
+    sv = _number(current.get("shear_v_0_6km_ms"))
+    if su is not None and sv is not None:
+        row["shear_0_6km_kt"] = math.hypot(su, sv) * 1.943844492
+    else:
+        row["shear_0_6km_kt"] = _kt_from_ms(current.get("shear_0_6km_ms"))
 
-    # Common historical names expected by the feature schema.
+    temp = _number(current.get("temperature_2m_k"))
+    dew = _number(current.get("dewpoint_2m_k"))
+    if temp is not None and dew is not None:
+        row["temperature_dewpoint_spread_k"] = temp - dew
+
+    cape = _number(current.get("cape_jkg"))
+    if cape is not None and row.get("shear_0_6km_kt") is not None:
+        row["cape_shear_product"] = cape * row["shear_0_6km_kt"]
+
+    gust_kt = row.get("wind_gust_kt")
+    surface_wind_kt = row.get("surface_wind_speed_kt")
+    if gust_kt is not None and surface_wind_kt is not None:
+        row["gust_excess_kt"] = gust_kt - surface_wind_kt
 
     max_z = _number(current.get("max_reflectivity_dbz"))
     mean_z = _number(current.get("mean_reflectivity_dbz"))
     area = _number(current.get("area_km2"))
     length = _number(current.get("length_km"))
     motion = _number(current.get("motion_speed_kt"))
-    shear = row.get("shear_0_6km_kt")
-
-    u10 = _number(current.get("u10_ms"))
-    v10 = _number(current.get("v10_ms"))
-    if u10 is not None and v10 is not None:
-        row["surface_wind_speed_kt"] = math.hypot(u10, v10) * 1.94384449244
-    su = _number(current.get("shear_u_0_6km_ms"))
-    sv = _number(current.get("shear_v_0_6km_ms"))
-    if su is not None and sv is not None:
-        row["shear_0_6km_kt"] = math.hypot(su, sv) * 1.94384449244
-    elif row.get("shear_0_6km_kt") is None:
-        row["shear_0_6km_kt"] = _kt_from_ms(current.get("shear_0_6km_ms"))
-    shear = row.get("shear_0_6km_kt")
-    temp = _number(current.get("temperature_2m_k"))
-    dew = _number(current.get("dewpoint_2m_k"))
-    if temp is not None and dew is not None:
-        row["temperature_dewpoint_spread_k"] = temp - dew
-    cape = _number(current.get("cape_jkg"))
-    if cape is not None and shear is not None:
-        row["cape_shear_product"] = cape * shear
-    gust_kt = _kt_from_ms(current.get("gust_ms"))
-    surface_wind_kt = row.get("surface_wind_speed_kt")
-    if gust_kt is not None and surface_wind_kt is not None:
-        row["gust_excess_kt"] = gust_kt - surface_wind_kt
     if max_z is not None and mean_z is not None:
         row["reflectivity_core_excess"] = max_z - mean_z
     if area is not None and length not in (None, 0):
         row["area_per_length"] = area / length
-    if shear is not None and motion is not None:
-        row["shear_motion_ratio"] = shear / (abs(motion) + 1e-6)
+    if row.get("shear_0_6km_kt") is not None and motion not in (None, 0):
+        row["shear_motion_ratio"] = row["shear_0_6km_kt"] / abs(motion)
 
-    if previous:
-        current_time = _utc(current.get("timestamp"))
-        previous_time = _utc(previous.get("timestamp"))
-        dt_min = None
-        if current_time is not None and previous_time is not None:
-            dt_min = (current_time - previous_time).total_seconds() / 60.0
+    current_time = _utc(current.get("timestamp"))
+    previous_time = _utc(previous.get("timestamp")) if previous else None
+    dt_min = None
+    if current_time is not None and previous_time is not None:
+        dt_min = (current_time - previous_time).total_seconds() / 60.0
+    continuity = dt_min is not None and 0 < dt_min <= 10
 
-        if dt_min is not None and 0 < dt_min <= 10:
-            pairs = (
-                ("max_reflectivity_dbz", "max_reflectivity_dbz_delta"),
-                ("mean_reflectivity_dbz", "mean_reflectivity_dbz_delta"),
-                ("area_km2", "area_km2_delta"),
-                ("length_km", "length_km_delta"),
-                ("width_km", "width_km_delta"),
-                ("echo_top_km", "echo_top_km_delta"),
-                ("top_minus_base_km", "top_minus_base_km_delta"),
-                ("zdr_mean_db", "zdr_mean_db_delta"),
-                ("rhohv_mean", "rhohv_mean_delta"),
-                ("kdp_mean_degkm", "kdp_mean_degkm_delta"),
-                ("velocity_mean_kt", "velocity_mean_kt_delta"),
+    row["track_gap_gt_10min"] = bool(dt_min is not None and dt_min > 10.0)
+
+    if previous and continuity:
+        pairs = (
+            ("max_reflectivity_dbz", "max_reflectivity_dbz_delta"),
+            ("mean_reflectivity_dbz", "mean_reflectivity_dbz_delta"),
+            ("area_km2", "area_km2_delta"),
+            ("length_km", "length_km_delta"),
+            ("width_km", "width_km_delta"),
+            ("echo_top_km", "echo_top_km_delta"),
+            ("top_minus_base_km", "top_minus_base_km_delta"),
+            ("zdr_mean_db", "zdr_mean_db_delta"),
+            ("rhohv_mean", "rhohv_mean_delta"),
+            ("kdp_mean_degkm", "kdp_mean_degkm_delta"),
+            ("velocity_mean_kt", "velocity_mean_kt_delta"),
+        )
+        for source, target in pairs:
+            a = _number(current.get(source))
+            b = _number(previous.get(source))
+            if a is not None and b is not None:
+                delta = a - b
+                row[target] = delta
+                row[target.replace("_delta", "_rate_per_min")] = delta / dt_min
+
+        current_lat = _number(current.get("centroid_lat"))
+        current_lon = _number(current.get("centroid_lon"))
+        previous_lat = _number(previous.get("centroid_lat"))
+        previous_lon = _number(previous.get("centroid_lon"))
+        if None not in (current_lat, current_lon, previous_lat, previous_lon):
+            dlat = math.radians(current_lat - previous_lat)
+            dlon = math.radians(current_lon - previous_lon)
+            mean_lat = math.radians((current_lat + previous_lat) / 2.0)
+            a = (
+                math.sin(dlat / 2.0) ** 2
+                + math.cos(mean_lat) ** 2 * math.sin(dlon / 2.0) ** 2
             )
-            for source, target in pairs:
-                a = _number(current.get(source))
-                b = _number(previous.get(source))
-                if a is not None and b is not None:
-                    delta = a - b
-                    row[target] = delta
-                    row[target.replace("_delta", "_rate_per_min")] = delta / dt_min
-
-            current_lat = _number(current.get("centroid_lat"))
-            current_lon = _number(current.get("centroid_lon"))
-            previous_lat = _number(previous.get("centroid_lat"))
-            previous_lon = _number(previous.get("centroid_lon"))
-            if None not in (current_lat, current_lon, previous_lat, previous_lon):
-                dlat = math.radians(current_lat - previous_lat)
-                dlon = math.radians(current_lon - previous_lon)
-                mean_lat = math.radians((current_lat + previous_lat) / 2.0)
-                a = math.sin(dlat / 2.0) ** 2 + math.cos(mean_lat) * math.cos(mean_lat) * math.sin(dlon / 2.0) ** 2
-                displacement = 6371.0 * 2.0 * math.asin(min(1.0, math.sqrt(a)))
-                row["centroid_displacement_km"] = displacement
-                row["motion_speed_kmh"] = displacement / dt_min * 60.0
+            displacement = 6371.0 * 2.0 * math.asin(min(1.0, math.sqrt(a)))
+            row["centroid_displacement_km"] = displacement
+            row["motion_speed_kmh"] = displacement / dt_min * 60.0
 
     if track_count is not None:
         row["track_scan_count_to_date"] = int(track_count)
-        if track_count > 0:
-            row["track_scan_index"] = int(track_count) - 1
+        row["track_scan_index"] = int(track_count) - 1
 
     return row
 
@@ -203,6 +240,7 @@ def build_live_feature_row(current: dict, previous: dict | None = None, track_co
 def build_live_feature_frame(history: Iterable[dict], track_id: str | int) -> pd.DataFrame:
     rows = [dict(r) for r in history if str(r.get("track_id")) == str(track_id)]
     rows.sort(key=lambda r: str(r.get("timestamp", "")))
+
     features = []
     first_timestamp = rows[0].get("timestamp") if rows else None
     running = {
@@ -212,16 +250,23 @@ def build_live_feature_frame(history: Iterable[dict], track_id: str | int) -> pd
         "core_pixel_count": None,
         "pixel_count": None,
     }
+
     for idx, current in enumerate(rows):
-        current = dict(current)
         previous = rows[idx - 1] if idx else None
-        row = build_live_feature_row(current, previous=previous, track_count=idx + 1)
+        row = build_live_feature_row(
+            current,
+            previous=previous,
+            track_count=idx + 1,
+        )
+
         current_time = _utc(current.get("timestamp"))
         first_time = _utc(first_timestamp)
         row["track_age_min"] = (
             max(0.0, (current_time - first_time).total_seconds() / 60.0)
-            if current_time is not None and first_time is not None else None
+            if current_time is not None and first_time is not None
+            else None
         )
+
         for source, target in (
             ("max_reflectivity_dbz", "max_reflectivity_dbz_running_max"),
             ("mean_reflectivity_dbz", "mean_reflectivity_dbz_running_max"),
@@ -234,7 +279,9 @@ def build_live_feature_frame(history: Iterable[dict], track_id: str | int) -> pd
             if value is not None:
                 running[source] = value if prior is None else max(prior, value)
             row[target] = running[source]
+
         features.append(row)
+
     return pd.DataFrame(features)
 
 
@@ -242,6 +289,7 @@ def feature_coverage(frame: pd.DataFrame, predictor_columns: Iterable[str]) -> d
     columns = list(predictor_columns)
     if not columns:
         return {"predictors": 0, "available": 0, "fraction": 0.0, "missing": []}
+
     available = [c for c in columns if c in frame.columns and frame[c].notna().any()]
     missing = [c for c in columns if c not in available]
     return {
