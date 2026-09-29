@@ -67,6 +67,7 @@ def audit(cases_path: Path, radar_path: Path, start_year: int, end_year: int):
         "bad_event_interval": int(bad_interval.sum()),
     }
     # Missing source geolocation is a tracked coverage gap, not a case-ledger integrity failure.
+    errors["total_errors"] = sum(errors[k] for k in fatal_keys)
     if errors["total_errors"]:
         raise ValueError(json.dumps(errors, indent=2))
     return {
