@@ -22,7 +22,15 @@ from acquisition.radar_watcher import (
 from scripts.process_live_volume import process_volume
 
 
-def run(\n    radar: str,\n    poll_seconds: int,\n    max_polls: int | None,\n    state: Path,\n    output: Path,\n    history_jsonl: Path | None,\n    history_csv: Path | None,\n):
+def run(
+    radar: str,
+    poll_seconds: int,
+    max_polls: int | None,
+    state: Path,
+    output: Path,
+    history_jsonl: Path | None,
+    history_csv: Path | None,
+):
     setup_logging(radar)
     logging.info("=" * 72)
     logging.info("BTV SNOW SQUALL - %s LIVE OBJECT WORKER", radar)
@@ -59,7 +67,13 @@ def run(\n    radar: str,\n    poll_seconds: int,\n    max_polls: int | None,\n 
                         radar, key, volume_time.isoformat()
                     )
                     path = download_volume(s3, radar, key, volume_time)
-                    changed = process_volume(\n                        path,\n                        state,\n                        output,\n                        history_jsonl_path=history_jsonl,\n                        history_csv_path=history_csv,\n                    )
+                    changed = process_volume(
+                        path,
+                        state,
+                        output,
+                        history_jsonl_path=history_jsonl,
+                        history_csv_path=history_csv,
+                    )
                     logging.info(
                         "Processed=%s | source=%s | output=%s",
                         changed, path.name, output
