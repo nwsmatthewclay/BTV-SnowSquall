@@ -96,7 +96,7 @@ jobs:
         run: |
           set -euo pipefail
           rm -rf data/discovery/national_sqw_radar
-          python scripts/select_national_sqw_radar_cases.py             --input inventory/national_sqw_warnings.csv             --output-dir data/discovery/national_sqw_radar             --max-verified "${{ inputs.max_verified || '30' }}"             --max-unverified "${{ inputs.max_review || '15' }}"             --verified-offset "${{ inputs.verified_offset || '0' }}"             --unverified-offset "${{ inputs.review_offset || '0' }}"             --max-radars 2             --max-range-km 230
+          python scripts/select_national_sqw_radar_cases.py             --input inventory/national_sqw_warnings.csv             --output-dir data/discovery/national_sqw_radar             --max-verified "${{ inputs.max_verified || '30' }}"             --max-unverified "${{ inputs.max_review || '15' }}"             --verified-offset "${{ inputs.verified_offset || '0' }}"             --unverified-offset "${{ inputs.review_offset || '0' }}"             --max-radars 2             --max-range-km 230             --episodes inventory/national_sqw_episodes.csv
 
       - name: Preflight Level-II archive coverage
         run: |
