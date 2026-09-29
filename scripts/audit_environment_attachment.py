@@ -36,6 +36,24 @@ def audit(path: Path, max_age_minutes: float | None = None) -> dict:
         if float(ages.loc[idx]) > limit:
             stale_rows.loc[idx] = True
 
+    missing_by_case = {}
+    if "case_id" in df.columns:
+        missing_by_case = (
+            df.loc[~attached & df["case_id"].notna(), "case_id"]
+            .astype(str)
+            .value_counts()
+            .to_dict()
+        )
+    missing_by_radar = {}
+    if "radar_site" in df.columns:
+        missing_by_radar = (
+            df.loc[~attached, "radar_site"]
+            .fillna("unknown")
+            .astype(str)
+            .value_counts()
+            .to_dict()
+        )
+
     summary = {
         "records": int(len(df)),
         "environment_attached_records": int(attached.sum()),
@@ -44,6 +62,8 @@ def audit(path: Path, max_age_minutes: float | None = None) -> dict:
         "stale_environment_records": int(stale_rows.sum()),
         "wrong_provider_era_records": len(bad_provider),
         "provider_counts": df.loc[attached, "environment_source"].value_counts(dropna=False).to_dict(),
+        "missing_by_case": missing_by_case,
+        "missing_by_radar": missing_by_radar,
     }
 
     if future_rows.any():
