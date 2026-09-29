@@ -322,7 +322,56 @@ def gather_swdi_plsr(cfg: dict) -> list[dict]:
                 "lsr_count": 1,
             })
     return rows
-def distance_km(lat1, lon1, lat2, lon2):
+def gather_banacos_seed(cfg: dict) -> list[dict]:
+    seed_path = Path("data/manifests/banacos_historical_36.csv")
+    if not seed_path.exists():
+        return []
+    station_meta = {
+        "KBTV": (44.471955, -73.153276),
+        "KMPV": (44.203489, -72.562096),
+        "KMSS": (44.936241, -74.845120),
+    }
+    frame = pd.read_csv(seed_path)
+    rows = []
+    for _, row in frame.iterrows():
+        try:
+            local_date = pd.Timestamp(str(row["date_local"])).date()
+            hh, mm = [int(x) for x in str(row["start_time_utc"]).split(":")[:2]]
+            start = datetime(local_date.year, local_date.month, local_date.day, hh, mm, tzinfo=timezone.utc)
+        except (TypeError, ValueError, IndexError):
+            continue
+        station = str(row["observing_station"]).upper().strip()
+        lat, lon = station_meta.get(station, (None, None))
+        duration = finite_float(row.get("vis_lt_08_min"))
+        end = start + timedelta(minutes=duration) if duration is not None else None
+        rows.append({
+            "candidate_id": str(row["case_id"]),
+            "candidate_source": "BANACOS_STUDY_2014",
+            "verification_class": "study_verified",
+            "verification_status": "historical_manual_radar_surface_verification",
+            "event_start_utc": start.isoformat(),
+            "event_end_utc": end.isoformat() if end else None,
+            "state": "VT" if station in {"KBTV", "KMPV"} else "NY",
+            "county": None,
+            "lat": lat,
+            "lon": lon,
+            "event_type": "Snow Squall",
+            "event_id": str(row["case_id"]),
+            "source": "Banacos et al. 2014 NWA JOM Table 2",
+            "narrative": "Historically identified snow squall case; manually checked against ASOS and 2-km radar mosaic in the published study.",
+            "evidence": "banacos_2014_table2",
+            "ncei_explicit_snow_squall": True,
+            "lsr_count": 0,
+            "source_records": 1,
+            "source_types": {"BANACOS_STUDY_2014"},
+            "evidence_sources": {"BANACOS_STUDY_2014"},
+            "peak_wind_kt": finite_float(row.get("peak_gust_kt")),
+            "min_visibility_km": finite_float(row.get("min_visibility_km")),
+            "hybrid_case": bool(row.get("hybrid_case", False)),
+        })
+    return rows
+
+ef distance_km(lat1, lon1, lat2, lon2):
     from math import asin, cos, radians, sin, sqrt
     if None in (lat1, lon1, lat2, lon2):
         return None
@@ -335,22 +384,28 @@ def distance_km(lat1, lon1, lat2, lon2):
 
 def merged_verification_class(source_types: set[str], warning_verified: bool = False) -> str:
     has_ncei = "NCEI_STORM_EVENTS" in source_types
+    has_study = "BANACOS_STUDY_2014" in source_types
     has_lsr = "IEM_LSR" in source_types
     has_plsr = "SWDI_PLSR" in source_types
     has_sqw = "IEM_COW_SQW" in source_types
-    if has_ncei and has_sqw and warning_verified:
-        return "official_plus_warning_verified"
-    if has_ncei and (has_lsr or has_plsr) and has_sqw:
-        return "official_plus_warning_and_report"
-    if has_ncei and (has_lsr or has_plsr):
-        return "official_plus_independent_report"
+    has_report = has_lsr or has_plsr
+    if has_ncei and has_study and has_sqw and warning_verified:
+        return "official_study_warning_verified"
+    if has_study and has_sqw and warning_verified:
+        return "study_warning_verified"
+    if has_ncei and has_study:
+        return "official_plus_study"
     if has_ncei and has_sqw:
         return "official_plus_warning"
+    if has_ncei and has_report:
+        return "official_plus_independent_report"
     if has_ncei:
         return "official_documented"
+    if has_study:
+        return "study_verified"
     if has_sqw and warning_verified:
         return "warning_verified"
-    if has_lsr and has_sqw or has_plsr and has_sqw:
+    if has_sqw and has_report:
         return "warning_plus_report"
     if has_sqw:
         return "warning_only"
@@ -468,7 +523,8 @@ def main():
     ncei = gather_ncei(cfg)
     plsr = gather_swdi_plsr(cfg)
     cow = gather_cow_sqw(cfg)
-    merged = merge_candidates(ncei + plsr + cow, cfg)
+    seed = gather_banacos_seed(cfg)
+    merged = merge_candidates(ncei + plsr + cow + seed, cfg)
     radar = radar_manifest(merged, cfg)
 
     columns = [
@@ -486,8 +542,10 @@ def main():
         "raw_ncei_records": len(ncei),
         "raw_swdi_plsr_records": len(plsr),
         "raw_iem_sqw_records": len(cow),
+        "raw_banacos_seed_records": len(seed),
         "merged_candidates": len(merged),
-        "official_documented_candidates": sum(r["verification_class"] in {"official_documented","official_plus_independent_report","official_plus_warning","official_plus_warning_and_report"} for r in merged),
+        "official_documented_candidates": sum(r["verification_class"] in {"official_documented","official_plus_independent_report","official_plus_warning","official_plus_warning_and_report","official_study_warning_verified","official_plus_study"} for r in merged),
+        "study_verified_candidates": sum(r["verification_class"] in {"study_verified","official_plus_study","study_warning_verified","official_study_warning_verified"} for r in merged),
         "ncei_screening_candidates": sum("NCEI_STORM_EVENTS_SCREENING" in str(r.get("source_types", "")) for r in merged),
         "screening_candidates": sum(r["verification_class"] == "official_screening_candidate" for r in merged),
         "warning_verified_candidates": sum(r["verification_class"] == "warning_verified" for r in merged),
