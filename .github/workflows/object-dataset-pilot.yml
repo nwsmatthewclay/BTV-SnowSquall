@@ -282,8 +282,9 @@ jobs:
           import pandas as pd
           d = pd.read_csv("data/derived/object_population_pilot.csv")
           expected = {
-              "BTV20040315", "BTV20050213", "BTV20060207",
-              "BTV20060224", "BTV20101127"
+              "BTV20020323", "BTV20030113", "BTV20030209", "BTV20031202",
+              "BTV20040315", "BTV20041217", "BTV20050213", "BTV20060207",
+              "BTV20060224", "BTV20070205", "BTV20090125", "BTV20101127"
           }
           positive = set(
               d.loc[d["population"] == "verified_case_context", "case_id"]
