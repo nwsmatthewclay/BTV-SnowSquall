@@ -311,8 +311,9 @@ def radar_manifest(candidates: list[dict], cfg: dict) -> list[dict]:
                 available.append((radar, d))
         if not available:
             continue
-        # Keep all plausible BTV-domain radars. The data builder can later
-        # prioritize the nearest radar without losing alternate coverage.
+        # Prefer the nearest plausible radar to control expansion volume.
+        available = sorted(available, key=lambda item: float("inf") if item[1] is None else item[1])
+        available = available[: int(cfg.get("max_radars_per_case", len(available)))]
         for radar, d in available:
             out.append({
                 "candidate_id": case["candidate_id"],
