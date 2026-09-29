@@ -22,7 +22,7 @@ def audit(cases_path: Path, radar_path: Path, start_year: int, end_year: int):
     missing = required - set(cases.columns)
     if missing:
         raise ValueError(f"case ledger missing columns: {sorted(missing)}")
-    parsed = pd.to_datetime(cases["event_start_utc"], utc=True, errors="coerce")
+    parsed = pd.to_datetime(cases["event_start_utc"], utc=True, errors="coerce", format="mixed")
     bad_time = parsed.isna()
     year_bad = parsed.dt.year.notna() & ~parsed.dt.year.between(start_year, end_year)
     bad_id = cases["candidate_id"].astype(str).eq("") | cases["candidate_id"].duplicated()
@@ -31,7 +31,7 @@ def audit(cases_path: Path, radar_path: Path, start_year: int, end_year: int):
     lat = pd.to_numeric(cases["lat"], errors="coerce")
     lon = pd.to_numeric(cases["lon"], errors="coerce")
     bad_geo = lat.isna() | lon.isna() | ~lat.between(40, 48) | ~lon.between(-80, -67)
-    end = pd.to_datetime(cases.get("event_end_utc"), utc=True, errors="coerce") if "event_end_utc" in cases.columns else pd.Series(pd.NaT, index=cases.index)
+    end = pd.to_datetime(cases.get("event_end_utc"), utc=True, errors="coerce", format="mixed") if "event_end_utc" in cases.columns else pd.Series(pd.NaT, index=cases.index)
     bad_interval = end.notna() & (end < parsed)
     if not radar.empty:
         if not set(radar["candidate_id"].astype(str)).issubset(set(cases["candidate_id"].astype(str))):
