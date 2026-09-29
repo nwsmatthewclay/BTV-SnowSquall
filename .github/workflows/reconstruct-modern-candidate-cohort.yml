@@ -40,6 +40,10 @@ jobs:
           pip install -r requirements.txt
           pip install -r requirements-science.txt
 
+      - name: Audit modern training separation
+        run: |
+          python scripts/audit_modern_training_separation.py             --modern data/derived/modern_reconstruction_cohort.csv             --development-root data/manifests             --report data/derived/modern_training_separation_audit.json
+
       - name: Discover warning candidates
         run: |
           python scripts/discover_modern_sqw_candidates.py             --start-year 2019             --end-year 2026             --output data/derived/modern_sqw_candidate_review.csv
