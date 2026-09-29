@@ -46,6 +46,16 @@ class ModelRuntime:
         features = metadata.get("predictor_columns") or []
         return cls(model=model, feature_columns=features, metadata=metadata)
 
+    def score_candidate(self, frame: pd.DataFrame):
+        """Score an explicitly research-only candidate bundle for replay or shadow use."""
+        if self.model is None:
+            return None
+        working = frame.copy()
+        for column in self.feature_columns:
+            if column not in working.columns:
+                working[column] = float('nan')
+        return self.model.predict_proba(working[self.feature_columns])[:, 1].tolist()
+
     def score(self, frame: pd.DataFrame):
         if not self.enabled:
             return None
