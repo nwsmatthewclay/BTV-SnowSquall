@@ -22,7 +22,7 @@ def ordered_inputs(input_dir: Path) -> list[Path]:
     files=[p for p in input_dir.rglob("*") if p.is_file() and not p.name.endswith((".part",".tmp"))]
     return sorted(files, key=scan_time)
 
-def replay_case(input_dir: Path, output_dir: Path, state_path: Path, case_id: str, max_scans: int|None=None, resume: bool=False, continue_on_error: bool=False, window_start: datetime|None=None, window_end: datetime|None=None) -> dict:
+def replay_case(input_dir: Path, output_dir: Path, state_path: Path, case_id: str, max_scans: int|None=None, resume: bool=False, continue_on_error: bool=False, window_start: datetime|None=None, window_end: datetime|None=None, model_dir: Path|None=None) -> dict:
     scans=ordered_inputs(input_dir)
     if window_start is not None:
         scans=[p for p in scans if scan_time(p) >= window_start]
@@ -35,11 +35,20 @@ def replay_case(input_dir: Path, output_dir: Path, state_path: Path, case_id: st
         state_path.unlink()
     records=[]
     errors=[]
+    history_jsonl = output_dir / "replay_object_history.jsonl"
+    history_csv = output_dir / "replay_object_history.csv"
     for index,source in enumerate(scans,1):
         output=output_dir/f"{index:04d}_{source.stem}.geojson"
         started=datetime.now(timezone.utc)
         try:
-            process_volume(source,state_path,output)
+            process_volume(
+                source,
+                state_path,
+                output,
+                history_jsonl_path=history_jsonl,
+                history_csv_path=history_csv,
+                model_dir=model_dir,
+            )
         except Exception as exc:
             errors.append({"sequence":index,"source_file":source.name,"error_type":type(exc).__name__,"error_message":str(exc)})
             print(f"REPLAY ERROR {source.name}: {type(exc).__name__}: {exc}")
@@ -59,7 +68,8 @@ def replay_case(input_dir: Path, output_dir: Path, state_path: Path, case_id: st
     manifest={
         "case_id":case_id,
         "mode":"historical_replay_through_live_processor",
-        "probability_status":"not_scored",
+        "probability_status": "research_candidate_scored" if model_dir else "not_scored",
+        "model_directory": str(model_dir) if model_dir else None,
         "future_information_policy":"one_scan_at_a_time",
         "input_directory":str(input_dir),
         "window_start_utc":window_start.isoformat() if window_start else None,
@@ -88,11 +98,12 @@ def main():
     parser.add_argument("--continue-on-error",action="store_true",help="Record unreadable scans and continue replaying later volumes.")
     parser.add_argument("--window-start-utc",default=None)
     parser.add_argument("--window-end-utc",default=None)
+    parser.add_argument("--model-dir",type=Path,default=None,help="Optional learned-model bundle for offline candidate replay; release gating is bypassed only for research replay.")
     args=parser.parse_args()
     state=args.state_path or (args.output_dir/"replay_state.json")
     window_start=datetime.fromisoformat(args.window_start_utc.replace("Z","+00:00")) if args.window_start_utc else None
     window_end=datetime.fromisoformat(args.window_end_utc.replace("Z","+00:00")) if args.window_end_utc else None
-    manifest=replay_case(args.input_dir,args.output_dir,state,args.case_id,args.max_scans,args.resume,args.continue_on_error,window_start,window_end)
+    manifest=replay_case(args.input_dir,args.output_dir,state,args.case_id,args.max_scans,args.resume,args.continue_on_error,window_start,window_end,args.model_dir)
     print(json.dumps({k:manifest[k] for k in ("case_id","scan_count","object_scan_count","first_scan_utc","last_scan_utc")},indent=2))
 
 if __name__=="__main__":
