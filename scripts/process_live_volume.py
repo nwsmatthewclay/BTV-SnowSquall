@@ -21,6 +21,8 @@ from processing.radar_grid import grid_field_2d, grid_latlon, grid_lowest_sweep
 from acquisition.rap_environment import acquire_for_radar_time
 from processing.rap_features import extract_features
 from processing.radar_sites import apply_radar_origin, radar_origin_for_site
+from scripts.live_model_features import build_live_feature_frame
+from scripts.model_runtime import ModelRuntime
 
 
 def object_geometry(mask, lat, lon, spacing_km=1.0):
@@ -120,6 +122,7 @@ def process_volume(
     output_path: Path,
     history_jsonl_path: Path | None = None,
     history_csv_path: Path | None = None,
+    model_dir: Path | None = None,
 ):
     state, tracker = load_state(state_path)
     source_name = path.name
@@ -309,6 +312,43 @@ def process_volume(
             "model_version": "live-object-foundation-v2",
         })
 
+    # Optional learned-model scoring is deliberately opt-in and release-gated.
+    # Candidate bundles return no probability; malformed or incomplete live
+    # feature mappings degrade the product rather than taking down the worker.
+    model_runtime = ModelRuntime.load(model_dir) if model_dir else ModelRuntime()
+    model_scored = False
+    model_errors = {}
+    if model_runtime.enabled and features:
+        prior_rows_by_track = {}
+        prior_path = history_jsonl_path or Path("data/derived/live_object_history.jsonl")
+        if prior_path.exists():
+            try:
+                for line in prior_path.read_text(encoding="utf-8").splitlines():
+                    try:
+                        row = json.loads(line)
+                        prior_rows_by_track.setdefault(str(row.get("track_id")), []).append(row)
+                    except json.JSONDecodeError:
+                        continue
+            except OSError:
+                prior_rows_by_track = {}
+
+        for feature in features:
+            track_id = str(feature.get("track_id"))
+            current_row = dict(feature)
+            env = current_row.get("environment") or {}
+            fields = env.get("fields") or {}
+            current_row.update(fields)
+            history = prior_rows_by_track.get(track_id, [])
+            frame = build_live_feature_frame(history + [current_row], track_id)
+            try:
+                scores = model_runtime.score(frame.tail(1))
+                if scores is not None and scores:
+                    feature["probability_15min"] = float(scores[0])
+                    feature["probability_trend"] = "scored"
+                    model_scored = True
+            except Exception as exc:
+                model_errors[track_id] = f"{type(exc).__name__}: {exc}"
+
     result = {
         "type": "FeatureCollection",
         "features": [
@@ -324,12 +364,14 @@ def process_volume(
             "source_file": source_name,
             "fields": fields,
             "object_count": len(features),
-            "probability_status": "not_scored",
+            "probability_status": ("scored" if model_scored else ("model_error" if model_errors else "not_scored")),
             "environment_status": (
                 "attached" if rap_result is not None else "unavailable"
             ),
             "environment_source": "RAP",
             "radar_origin": list(radar_origin) if radar_origin is not None else None,
+            "model_version": model_runtime.metadata.get("model_version") if model_runtime.enabled else None,
+            "model_errors": model_errors,
         },
     }
 
@@ -370,6 +412,7 @@ def main():
     parser.add_argument("--output", default="data/derived/live_objects.geojson")
     parser.add_argument("--history-jsonl", default=None)
     parser.add_argument("--history-csv", default=None)
+    parser.add_argument("--model-dir", default=None, help="Optional released model bundle directory; candidate bundles remain disabled.")
     args = parser.parse_args()
 
     process_volume(
@@ -378,6 +421,7 @@ def main():
         Path(args.output),
         history_jsonl_path=Path(args.history_jsonl) if args.history_jsonl else None,
         history_csv_path=Path(args.history_csv) if args.history_csv else None,
+        model_dir=Path(args.model_dir) if args.model_dir else None,
     )
 
 
