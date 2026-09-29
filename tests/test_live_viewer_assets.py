@@ -13,6 +13,8 @@ def test_live_viewer_references_operational_feed_assets():
     assert '"history"' in js
     assert '+".json"' in js
     assert "probability scoring disabled" in html.lower()
+    assert "detail-drawer" in html
+    assert "selectedSummary" in html
     assert "raw.githubusercontent.com/nwsmatthewclay/BTV-SnowSquall/" in js
     assert "snow-squall-live-data/viewer/data/live/" in js
 
@@ -43,7 +45,7 @@ def test_live_feed_isolated_from_model_branch():
     root = Path(__file__).resolve().parents[1]
     js = (root / "viewer/live.js").read_text(encoding="utf-8")
     workflow = (
-        root / ".github" / "workflows" / "snow-squall-live-publisher.yml"
+        root / ".github" / "workflows" / "live-object-publisher.yml"
     ).read_text(encoding="utf-8")
 
     assert "snow-squall-live-data/viewer/data/live/" in js
@@ -70,8 +72,8 @@ def test_live_viewer_degrades_per_radar_without_taking_down_other_feed():
 def test_live_viewer_consumes_radar_health_status():
     root = Path(__file__).resolve().parents[1]
     js = (root / "viewer/live.js").read_text(encoding="utf-8")
-    workflow = (root / ".github" / "workflows" / "snow-squall-live-publisher.yml").read_text(encoding="utf-8")
+    workflow = (root / ".github" / "workflows" / "live-object-publisher.yml").read_text(encoding="utf-8")
     assert 'feedUrl(site,"health")' in js
-    assert "Back up prior live products" in workflow
-    assert "retaining prior product" in workflow
-    assert "Validate live products and create health status" in workflow
+    assert "Restore prior live feed history" in workflow
+    assert "Build bounded browser history payloads" in workflow
+    assert "Validate KCXX live product" in workflow
