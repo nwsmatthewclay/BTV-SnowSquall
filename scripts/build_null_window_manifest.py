@@ -10,7 +10,7 @@ import argparse
 import random
 from pathlib import Path
 
-from acquisition.historical_level2 import key_time, list_volume_keys, s3_client
+from acquisition.historical_level2 import key_time, list_volume_keys, s3_listing_client
 
 import pandas as pd
 
@@ -61,7 +61,7 @@ def build_null_windows(
     rng = random.Random(seed)
     availability = None
     if require_level2:
-        client = s3_client()
+        client = s3_listing_client()
         day_cache = {}
 
         def has_archive_volume(timestamp):
