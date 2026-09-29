@@ -67,10 +67,7 @@ def _nearest(ds, latitude, longitude):
     if not ds.data_vars or "x" not in ds.coords or "y" not in ds.coords:
         return None
 
-    cache_key = (
-        tuple(np.asarray(ds["x"].values, dtype=float)),
-        tuple(np.asarray(ds["y"].values, dtype=float)),
-    )
+    cache_key = id(ds)
     cached = _COORD_CACHE.get(cache_key)
     if cached is None:
         x = np.asarray(ds["x"].values, dtype=float)
