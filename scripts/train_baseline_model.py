@@ -174,7 +174,8 @@ def evaluate(frame: pd.DataFrame, predictor_cols: list[str], target: str):
             l2_regularization=1.0,
             random_state=42,
         )
-        model.fit(X.iloc[train_idx], train_y)
+        evidence = pd.to_numeric(frame.iloc[train_idx].get("evidence_weight", pd.Series(1.0, index=frame.iloc[train_idx].index)), errors="coerce").fillna(1.0).to_numpy()
+        model.fit(X.iloc[train_idx], train_y, sample_weight=class_balanced_weights(train_y) * evidence)
         oof[test_idx] = model.predict_proba(X.iloc[test_idx])[:, 1]
         fold_rows.append({
             "fold": fold,
@@ -265,7 +266,8 @@ def main():
         l2_regularization=1.0,
         random_state=42,
     )
-    final_model.fit(data[predictors], data[args.target].astype(int))
+    evidence = pd.to_numeric(data.get("evidence_weight", pd.Series(1.0, index=data.index)), errors="coerce").fillna(1.0).to_numpy()
+    final_model.fit(data[predictors], data[args.target].astype(int), sample_weight=class_balanced_weights(data[args.target].astype(int)) * evidence)
     joblib.dump(final_model, output_dir / "baseline_model.joblib")
 
     positive_case_groups = sorted(
