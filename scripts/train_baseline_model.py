@@ -62,11 +62,19 @@ def prepare_dataset(frame: pd.DataFrame, schema: dict, target: str):
         & pre_onset_case
         & d[target].eq(0)
     )
-    # Null-window rows are provisional negative context by design. They do not
-    # have a future outcome label, so their target columns are NaN in the
-    # unified table. Treat the null population as class 0 only after selecting
-    # it here, rather than filtering on target==0.
-    null_negative_rows = null_population
+    # Null-window rows are provisional negative context by design. Prefer
+    # quiet/light null windows for the baseline negative class. Moderate/high
+    # activity windows are retained for hard-negative diagnostics but are not
+    # treated as clean negatives without independent surface verification.
+    if "activity_class" in d.columns:
+        clean_null_classes = {"quiet", "light_activity"}
+        null_negative_rows = (
+            null_population
+            & d["activity_class"].fillna("").isin(clean_null_classes)
+        )
+    else:
+        null_negative_rows = null_population
+
     usable = positive_rows | associated_negative_rows | null_negative_rows
     d = d.loc[usable].copy()
 
@@ -214,12 +222,28 @@ def main():
     parser.add_argument("features_csv")
     parser.add_argument("--schema", required=True)
     parser.add_argument("--target", default="squall_onset_within_15m")
+    parser.add_argument(
+        "--null-activity-policy",
+        choices=["clean_quiet_light", "all_candidates"],
+        default="clean_quiet_light",
+        help="Which provisional null windows may enter baseline training.",
+    )
     parser.add_argument("--output-dir", default="data/derived/baseline_model")
     args = parser.parse_args()
 
     source = pd.read_csv(args.features_csv)
     schema = load_schema(Path(args.schema))
     data, predictors = prepare_dataset(source, schema, args.target)
+    if args.null_activity_policy == "clean_quiet_light" and "activity_class" in data.columns:
+        excluded = data["population"].eq("winter_null_candidate") & ~data["activity_class"].isin(
+            {"quiet", "light_activity"}
+        )
+        if excluded.any():
+            print(
+                "Excluded ambiguous null-window rows:",
+                int(excluded.sum()),
+            )
+            data = data.loc[~excluded].copy()
 
     oof, metrics, folds = evaluate(data, predictors, args.target)
     output_dir = Path(args.output_dir)
