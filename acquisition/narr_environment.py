@@ -9,6 +9,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+import random
+import time
 import requests
 
 BASE = "https://www.ncei.noaa.gov/thredds/fileServer"
@@ -39,17 +41,25 @@ def narr_analysis_url(valid_time: datetime) -> str:
 def _exists(url: str) -> bool:
     """Use a short GET probe because some NOAA file-server endpoints do not
     reliably implement HEAD for historical files."""
-    try:
-        with requests.get(
-            url,
-            stream=True,
-            timeout=(8, 12),
-            allow_redirects=True,
-            headers={"Range": "bytes=0-0"},
-        ) as response:
-            return response.status_code in (200, 206)
-    except requests.RequestException:
-        return False
+    for attempt, delay in enumerate((0, 2, 5, 10), start=1):
+        if delay:
+            time.sleep(delay + random.uniform(0.0, 0.8))
+        try:
+            with requests.get(
+                url,
+                stream=True,
+                timeout=(8, 12),
+                allow_redirects=True,
+                headers={"Range": "bytes=0-0"},
+            ) as response:
+                if response.status_code in (200, 206):
+                    return True
+                if response.status_code not in (429, 500, 502, 503, 504):
+                    return False
+        except requests.RequestException:
+            if attempt == 4:
+                return False
+    return False
 
 
 def find_latest_analysis(radar_time: datetime, max_age_minutes: int = 360):
