@@ -343,9 +343,13 @@ def process_volume(
             try:
                 scores = model_runtime.score(frame.tail(1))
                 if scores is not None and scores:
-                    feature["probability_15min"] = float(scores[0])
-                    feature["probability_trend"] = "scored"
-                    model_scored = True
+                    horizon = model_runtime.horizon_minutes
+                    if horizon in {15, 30, 45, 60}:
+                        feature[f"probability_{horizon}min"] = float(scores[0])
+                        feature["probability_trend"] = "scored"
+                        model_scored = True
+                    else:
+                        model_errors[track_id] = "model_target_horizon_unrecognized"
             except Exception as exc:
                 model_errors[track_id] = f"{type(exc).__name__}: {exc}"
 
@@ -371,6 +375,8 @@ def process_volume(
             "environment_source": "RAP",
             "radar_origin": list(radar_origin) if radar_origin is not None else None,
             "model_version": model_runtime.metadata.get("model_version") if model_runtime.enabled else None,
+            "model_target": model_runtime.metadata.get("target") if model_runtime.enabled else None,
+            "model_horizon_minutes": model_runtime.horizon_minutes if model_runtime.enabled else None,
             "model_errors": model_errors,
         },
     }
