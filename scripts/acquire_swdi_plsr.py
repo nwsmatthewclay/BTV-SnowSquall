@@ -55,7 +55,7 @@ def _find_column(frame: pd.DataFrame, names: tuple[str, ...]) -> str | None:
     return None
 
 
-def _bulk_year(year: int, start: pd.Timestamp, end: pd.Timestamp, state: str) -> pd.DataFrame:
+def _bulk_year(year: int, start: pd.Timestamp, end: pd.Timestamp, state: str, columns: list[str] | None = None) -> pd.DataFrame:
     if year < BULK_START_YEAR:
         return pd.DataFrame()
     url = f"{BULK_BASE_URL}/plsr-{year}.csv.gz"
@@ -66,6 +66,14 @@ def _bulk_year(year: int, start: pd.Timestamp, end: pd.Timestamp, state: str) ->
     if time_col is None:
         raise RuntimeError(f"PLSR bulk file {year} has no recognized time column")
     usecols = list(header.columns)
+    if columns:
+        normalized = {str(col).strip().upper(): col for col in header.columns}
+        resolved = [normalized[name.strip().upper()] for name in columns if name.strip().upper() in normalized]
+        if time_col and time_col not in resolved:
+            resolved.append(time_col)
+        if state_col and state_col not in resolved:
+            resolved.append(state_col)
+        usecols = list(dict.fromkeys(resolved))
     frame = pd.read_csv(io.BytesIO(response.content), compression="gzip", usecols=usecols, low_memory=False)
     times = pd.to_datetime(frame[time_col], utc=True, errors="coerce")
     mask = times.between(start, end, inclusive="both")
