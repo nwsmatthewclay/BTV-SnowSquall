@@ -71,7 +71,9 @@ def main():
     parser.add_argument("--radar-manifest", required=True)
     parser.add_argument("--output-dir", required=True)
     parser.add_argument("--max-official", type=int, default=50)
-    parser.add_argument("--max-unverified", type=int, default=25)
+    parser.add_argument("--max-unverified", type=int, default=50)
+    parser.add_argument("--offset-official", type=int, default=0)
+    parser.add_argument("--offset-unverified", type=int, default=0)
     args = parser.parse_args()
 
     out = Path(args.output_dir)
@@ -84,7 +86,7 @@ def main():
 
     official = candidates[
         candidates["verification_class"].isin(
-            ["official_documented", "official_plus_independent_report"]
+            ["official_documented", "official_plus_independent_report", "official_plus_warning", "official_plus_warning_and_report"]
         )
     ].copy()
     unverified = candidates[
@@ -96,8 +98,8 @@ def main():
         ])
     ].copy()
 
-    official = choose_diverse(official, args.max_official)
-    unverified = choose_diverse(unverified, args.max_unverified)
+    official = choose_diverse(official, args.offset_official + args.max_official).iloc[args.offset_official:].copy()
+    unverified = choose_diverse(unverified, args.offset_unverified + args.max_unverified).iloc[args.offset_unverified:].copy()
 
     selected = pd.concat([official, unverified], ignore_index=True)
     selected["case_id"] = selected["candidate_id"]
@@ -128,7 +130,7 @@ def main():
         "radar_manifest_rows": int(len(selected_radar)),
         "official_case_ids": sorted(official["candidate_id"].astype(str).tolist()),
         "unverified_case_ids": sorted(unverified["candidate_id"].astype(str).tolist()),
-        "training_policy": "Only official_documented and official_plus_independent_report cases may enter the first expanded positive-label training pass. Unverified cases remain a review/feature-population pool.",
+        "training_policy": "Only official_documented and official-plus-independent-evidence cases may enter the first expanded positive-label training pass. Warning-only, warning-plus-report, and screening candidates remain a review/feature-population pool.",
     }
     import json
     (out / "snow_squall_expansion_selection.json").write_text(
