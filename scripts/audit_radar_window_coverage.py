@@ -24,7 +24,7 @@ def volume_time(path: Path):
         return None
 
 
-def audit(manifest_path: Path, raw_root: Path, min_fraction: float, required_priority: str | None = None) -> dict:
+def audit(manifest_path: Path, raw_root: Path, min_fraction: float, required_priority: str | None = None, allow_incomplete: bool = False) -> dict:
     manifest = pd.read_csv(manifest_path)
     required = {"window_start_utc", "window_end_utc", "radar_site"}
     if required_priority is not None:
@@ -87,6 +87,7 @@ def audit(manifest_path: Path, raw_root: Path, min_fraction: float, required_pri
         "evaluated_coverage_fraction": evaluated_fraction,
         "minimum_coverage_fraction": min_fraction,
         "passed": evaluated_fraction >= min_fraction,
+        "gate_mode": "advisory_incomplete_allowed" if allow_incomplete else "blocking",
         "no_level2_identifiers": no_data,
         "evaluated_no_level2_identifiers": evaluated_no_data,
         "by_radar": (
@@ -100,7 +101,7 @@ def audit(manifest_path: Path, raw_root: Path, min_fraction: float, required_pri
         "rows": details.to_dict(orient="records"),
     }
 
-    if evaluated_fraction < min_fraction:
+    if evaluated_fraction < min_fraction and not allow_incomplete:
         scope_name = required_priority or "all_manifest_rows"
         raise ValueError(
             f"Only {evaluated_populated}/{evaluated} evaluated manifest rows have Level-II volumes "
@@ -119,6 +120,7 @@ def main():
     parser.add_argument("--report", required=True)
     parser.add_argument("--min-fraction", type=float, default=0.75)
     parser.add_argument("--required-priority")
+    parser.add_argument("--allow-incomplete", action="store_true", help="Write a failed coverage report without raising.")
     args = parser.parse_args()
 
     summary = audit(
@@ -126,6 +128,7 @@ def main():
         Path(args.raw_root),
         args.min_fraction,
         required_priority=args.required_priority,
+        allow_incomplete=args.allow_incomplete,
     )
     out = Path(args.report)
     out.parent.mkdir(parents=True, exist_ok=True)
