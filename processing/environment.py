@@ -24,6 +24,22 @@ def provider_for_time(radar_time: datetime) -> str:
     return "RAP"
 
 
+def environment_cache_key(radar_time):
+    """Return the historical analysis cadence bucket for a radar time.
+
+    NARR analyses are 3-hourly; RUC and RAP analyses are hourly. Using the
+    native cadence prevents repeated remote existence probes for the same
+    analysis when many objects share one scan window.
+    """
+    radar_time = radar_time.astimezone(timezone.utc).replace(
+        minute=0, second=0, microsecond=0
+    )
+    provider = provider_for_time(radar_time)
+    if provider == "NARR":
+        radar_time = radar_time.replace(hour=(radar_time.hour // 3) * 3)
+    return provider, radar_time.isoformat()
+
+
 def acquire_for_radar_time(
     radar_time, rap_dir, ruc_dir, narr_dir=None, max_age_minutes=180
 ):
