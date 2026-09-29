@@ -62,6 +62,7 @@ def build_live_feature_row(
         "area_km2",
         "length_km",
         "width_km",
+        "aspect_ratio",
         "orientation_deg",
         "motion_dir_deg",
         "motion_direction_deg",
@@ -93,6 +94,14 @@ def build_live_feature_row(
     ):
         if key in current:
             row[key] = _number(current.get(key))
+
+    # Preserve legacy aliases used by replay/tests.
+    row["reflectivity_max_dbz"] = row.get("max_reflectivity_dbz")
+    row["reflectivity_mean_dbz"] = row.get("mean_reflectivity_dbz")
+    row["wind_gust_kt"] = _kt_from_ms(current.get("gust_ms"))
+    row["visibility_sm"] = _mi_from_m(current.get("visibility_m"))
+    row["sbcape_jkg"] = _number(current.get("cape_jkg"))
+    row["sbcin_jkg"] = _number(current.get("cin_jkg"))
 
     # Canonical motion naming used by the historical feature builder.
     if row.get("motion_dir_deg") is None:
