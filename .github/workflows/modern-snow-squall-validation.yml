@@ -79,6 +79,24 @@ jobs:
         run: |
           python scripts/build_model_features.py data/derived/modern_validation_environment.csv --output data/derived/modern_validation_features.csv --schema-output data/derived/modern_validation_features.schema.json
 
+      - name: Find latest expanded model bundle
+        id: model
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          run_id="$(gh run list --workflow "Snow Squall Expansion Dataset" --branch snow-squall-model-foundation --status success --limit 10 --json databaseId --jq '.[0].databaseId')"
+          if [ -z "$run_id" ] || [ "$run_id" = "null" ]; then
+            echo "No expanded model bundle is available yet."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          gh run download "$run_id" --name snow-squall-live-model-bundles --dir validation_models
+
+      - name: Score independent holdout
+        if: steps.model.outputs.skip != 'true'
+        run: |
+          python scripts/score_independent_validation.py data/derived/modern_validation_features.csv --model-root validation_models --output-dir data/derived/modern_validation_model_verification
       - name: Upload independent validation package
         uses: actions/upload-artifact@v4
         with:
