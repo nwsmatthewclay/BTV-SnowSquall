@@ -57,13 +57,26 @@ jobs:
         run: |
           mkdir -p viewer/data/live data/derived
 
+      - name: Back up prior live products
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/live-backup
+          for site in KCXX KTYX; do
+            for suffix in state.json objects.geojson history.jsonl history.csv; do
+              src="viewer/data/live/${site}_${suffix}"
+              if [ -f "$src" ]; then
+                cp "$src" "/tmp/live-backup/${site}_${suffix}"
+              fi
+            done
+          done
+
       - name: Process latest KCXX volume
         run: |
-          python scripts/live_object_worker.py             --radar KCXX             --poll-seconds 2             --max-polls 1             --state viewer/data/live/KCXX_state.json             --output viewer/data/live/KCXX_objects.geojson             --history-jsonl viewer/data/live/KCXX_history.jsonl             --history-csv viewer/data/live/KCXX_history.csv
+          python scripts/live_object_worker.py             --radar KCXX --poll-seconds 2 --max-polls 1             --state viewer/data/live/KCXX_state.json             --output viewer/data/live/KCXX_objects.geojson             --history-jsonl viewer/data/live/KCXX_history.jsonl             --history-csv viewer/data/live/KCXX_history.csv
 
       - name: Process latest KTYX volume
         run: |
-          python scripts/live_object_worker.py             --radar KTYX             --poll-seconds 2             --max-polls 1             --state viewer/data/live/KTYX_state.json             --output viewer/data/live/KTYX_objects.geojson             --history-jsonl viewer/data/live/KTYX_history.jsonl             --history-csv viewer/data/live/KTYX_history.csv
+          python scripts/live_object_worker.py             --radar KTYX --poll-seconds 2 --max-polls 1             --state viewer/data/live/KTYX_state.json             --output viewer/data/live/KTYX_objects.geojson             --history-jsonl viewer/data/live/KTYX_history.jsonl             --history-csv viewer/data/live/KTYX_history.csv
 
       - name: Normalize persisted live timestamps
         run: |
@@ -103,15 +116,53 @@ jobs:
               print(site, "history rows:", len(rows))
           PY
 
-      - name: Validate KCXX live product
+      - name: Validate live products and create health status
         run: |
-          python scripts/audit_operational_readiness.py             --state viewer/data/live/KCXX_state.json             --geojson viewer/data/live/KCXX_objects.geojson             --max-age-minutes 30
-          python scripts/live_healthcheck.py             --state viewer/data/live/KCXX_state.json             --geojson viewer/data/live/KCXX_objects.geojson             --max-age-minutes 30
-
-      - name: Validate KTYX live product
-        run: |
-          python scripts/audit_operational_readiness.py             --state viewer/data/live/KTYX_state.json             --geojson viewer/data/live/KTYX_objects.geojson             --max-age-minutes 30
-          python scripts/live_healthcheck.py             --state viewer/data/live/KTYX_state.json             --geojson viewer/data/live/KTYX_objects.geojson             --max-age-minutes 30
+          set +e
+          for site in KCXX KTYX; do
+            state="viewer/data/live/${site}_state.json"
+            geo="viewer/data/live/${site}_objects.geojson"
+            health="viewer/data/live/${site}_health.json"
+            audit_log="/tmp/${site}_audit.log"
+            if [ ! -f "$state" ] || [ ! -f "$geo" ]; then
+              python - <<PY
+import json
+from pathlib import Path
+Path("$health").write_text(json.dumps({"status":"unavailable","site":"$site","reason":"live product files are missing"}, indent=2)+"\n")
+PY
+              continue
+            fi
+            python scripts/audit_operational_readiness.py --state "$state" --geojson "$geo" --max-age-minutes 30 > "$audit_log" 2>&1
+            audit_rc=$?
+            python scripts/live_healthcheck.py --state "$state" --geojson "$geo" --max-age-minutes 30 > "/tmp/${site}_health.log" 2>&1
+            health_rc=$?
+            if [ "$audit_rc" -eq 0 ] && [ "$health_rc" -eq 0 ]; then
+              cp "/tmp/${site}_health.log" "$health"
+              echo "$site validated successfully."
+            else
+              echo "WARNING: $site validation failed; retaining prior known-good product."
+              backup_prefix="/tmp/live-backup/${site}_"
+              for suffix in state.json objects.geojson history.jsonl history.csv; do
+                if [ -f "${backup_prefix}${suffix}" ]; then
+                  cp "${backup_prefix}${suffix}" "viewer/data/live/${site}_${suffix}"
+                fi
+              done
+              python - <<PY
+import json
+from pathlib import Path
+audit = Path("$audit_log").read_text(encoding="utf-8", errors="replace")
+health = Path("/tmp/${site}_health.log").read_text(encoding="utf-8", errors="replace")
+Path("$health").write_text(json.dumps({
+    "status":"degraded",
+    "site":"$site",
+    "audit_exit_code":$audit_rc,
+    "healthcheck_exit_code":$health_rc,
+    "audit_output":audit[-4000:],
+    "health_output":health[-4000:],
+}, indent=2)+"\n")
+PY
+            fi
+          done
 
       - name: Publish isolated live-data branch
         env:
