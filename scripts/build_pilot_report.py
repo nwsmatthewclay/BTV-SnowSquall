@@ -185,7 +185,8 @@ def main():
         association_section = table_html(pd.DataFrame(rows), ["case_id","object_timesteps","associated_timesteps","associated_fraction","radars","status"])
         missing_cases = assoc.get("cases_without_association", [])
         if missing_cases:
-            association_section += "<div class=\"note\"><strong>Association QC:</strong> " + f"{len(missing_cases)} expected case(s) currently have no track-level association: {\", \".join(missing_cases)}. This is diagnostic only.</div>"
+            missing_case_text = ", ".join(missing_cases)
+            association_section += "<div class=\"note\"><strong>Association QC:</strong> " + f"{len(missing_cases)} expected case(s) currently have no track-level association: {missing_case_text}. This is diagnostic only.</div>"
     environment_attachment_section = "<p><em>Environment attachment audits not supplied.</em></p>"
     environment_rows = []
     for label, path in [
