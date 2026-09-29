@@ -217,7 +217,7 @@ def gather_cow_sqw(cfg: dict) -> list[dict]:
                 report_ids = str(props.get("stormreports_all") or "").strip()
                 lsr_count = len([item for item in report_ids.split(",") if item.strip()])
                 rows.append({
-                    "candidate_id": case_key("SQW", issue.to_pydatetime(), lat, lon, f"{wfo}|{props.get("eventid", "")}"),
+                    "candidate_id": case_key("SQW", issue.to_pydatetime(), lat, lon, f"{wfo}|{props.get('eventid', '')}"),
                     "candidate_source": "IEM_COW_SQW",
                     "verification_class": "warning_only",
                     "verification_status": "warning_issued",
