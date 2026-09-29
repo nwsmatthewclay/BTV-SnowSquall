@@ -43,7 +43,7 @@ def parse_valid(value):
     if digits.isdigit() and len(digits) in (12, 14):
         try:
             fmt = '%Y%m%d%H%M%S' if len(digits) == 14 else '%Y%m%d%H%M'
-            ts = pd.Timestamp.strptime(digits, fmt).tz_localize('UTC')
+            ts = pd.Timestamp(datetime.strptime(digits, fmt), tz='UTC')
             if 1900 <= ts.year <= 2100:
                 return ts
         except (TypeError, ValueError):
