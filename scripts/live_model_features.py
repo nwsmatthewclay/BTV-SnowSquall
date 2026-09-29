@@ -19,6 +19,11 @@ LIVE_TO_MODEL = {
     "visibility_sm": "visibility_m",
     "sbcape_jkg": "cape_jkg",
     "sbcin_jkg": "cin_jkg",
+        "echo_top_km", "top_minus_base_km", "vertical_reflectivity_gradient",
+        "vertical_valid_points", "zdr_mean_db", "zdr_p90_db", "zdr_gradient_dbkm",
+        "rhohv_mean", "rhohv_max", "rhohv_p90", "rhohv_min",
+        "kdp_mean_degkm", "kdp_p90_degkm", "velocity_mean_kt", "velocity_std_kt",
+        "velocity_p90_abs_kt", "velocity_gradient_ktkm",
 }
 
 
