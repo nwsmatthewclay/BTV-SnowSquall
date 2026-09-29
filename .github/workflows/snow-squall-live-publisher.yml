@@ -57,6 +57,10 @@ jobs:
         run: |
           python scripts/live_object_worker.py             --radar KTYX             --poll-seconds 2             --max-polls 1             --state viewer/data/live/KTYX_state.json             --output viewer/data/live/KTYX_objects.geojson             --history-jsonl viewer/data/live/KTYX_history.jsonl             --history-csv viewer/data/live/KTYX_history.csv
 
+      - name: Normalize persisted live timestamps
+        run: |
+          python scripts/normalize_live_products.py --root viewer/data/live
+
       - name: Build browser history payloads
         run: |
           python - <<'PY'
