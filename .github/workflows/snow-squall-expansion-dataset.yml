@@ -1,0 +1,264 @@
+name: Snow Squall Expansion Dataset
+
+on:
+  workflow_run:
+    workflows:
+      - Snow Squall Case Discovery
+    types:
+      - completed
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: read
+
+concurrency:
+  group: snow-squall-expansion-dataset
+  cancel-in-progress: true
+
+jobs:
+  expand:
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    env:
+      PYTHONPATH: ${{ github.workspace }}
+      PYTHONUNBUFFERED: '1'
+
+    steps:
+      - name: Checkout model foundation
+        uses: actions/checkout@v4
+        with:
+          ref: snow-squall-model-foundation
+
+      - name: Download discovery artifact
+        if: github.event_name == 'workflow_run'
+        uses: actions/download-artifact@v4
+        with:
+          name: snow-squall-case-discovery
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          repository: ${{ github.repository }}
+          run-id: ${{ github.event.workflow_run.id }}
+          path: discovery_artifact
+
+      - name: Discover directly for manual runs
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          set -euo pipefail
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          python scripts/discover_snow_squall_cases.py --config config/snow_squall_discovery.json --output-dir discovery_artifact
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install science dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt -r requirements-science.txt
+
+      - name: Select expanded documented and unverified case pool
+        run: |
+          set -euo pipefail
+          rm -rf data/manifests/snow_squall_expansion
+          python scripts/select_snow_squall_case_pool.py \
+            --input discovery_artifact/snow_squall_candidates.csv \
+            --radar-manifest discovery_artifact/snow_squall_radar_manifest.csv \
+            --output-dir data/manifests/snow_squall_expansion \
+            --max-official 50 \
+            --max-unverified 25
+          python - <<'PY'
+          import pandas as pd
+          from pathlib import Path
+          root=Path('data/manifests/snow_squall_expansion')
+          cases=pd.read_csv(root/'snow_squall_expansion_cases.csv')
+          verified=cases[cases.verification_class.isin(['official_documented','official_plus_independent_report'])].copy()
+          unverified=cases[cases.verification_class.eq('unverified_report_only')].copy()
+          verified.to_csv(root/'snow_squall_verified_cases.csv',index=False)
+          unverified.to_csv(root/'snow_squall_unverified_cases.csv',index=False)
+          print('Verified cases:',len(verified))
+          print('Unverified cases:',len(unverified))
+          PY
+
+      - name: Acquire ASOS/METAR observations
+        run: |
+          python acquisition/asos_iem.py \
+            --cases data/manifests/snow_squall_expansion/snow_squall_expansion_cases.csv \
+            --output data/raw/ASOS_IEM_expansion \
+            --buffer-before 120 \
+            --buffer-after 150
+
+      - name: Acquire expanded SWDI PLSR evidence
+        run: |
+          python scripts/acquire_swdi_plsr.py \
+            --cases data/manifests/snow_squall_expansion/snow_squall_expansion_cases.csv \
+            --output data/derived/snow_squall_expansion_plsr.csv \
+            --status data/derived/snow_squall_expansion_plsr_status.json
+
+      - name: Download expanded Level-II radar
+        run: |
+          python acquisition/historical_level2.py \
+            --manifest data/manifests/snow_squall_expansion/snow_squall_expansion_radar_manifest.csv \
+            --output data/raw/snow_squall_expansion_level2
+
+      - name: Reconstruct documented and unverified radar objects
+        run: |
+          python scripts/reconstruct_pilot.py \
+            --input data/raw/snow_squall_expansion_level2 \
+            --output data/derived/snow_squall_expansion_objects.csv \
+            --error-log data/derived/snow_squall_expansion_objects_errors.csv
+
+      - name: Annotate reconstructed objects to candidate cases
+        run: |
+          python scripts/annotate_object_population.py \
+            data/derived/snow_squall_expansion_objects.csv \
+            --manifest data/manifests/snow_squall_expansion/snow_squall_expansion_radar_manifest.csv \
+            --output data/derived/snow_squall_expansion_objects_annotated.csv
+
+      - name: Attach discovery verification class
+        run: |
+          python - <<'PY'
+          import pandas as pd
+          objects=pd.read_csv('data/derived/snow_squall_expansion_objects_annotated.csv')
+          cases=pd.read_csv('data/manifests/snow_squall_expansion/snow_squall_expansion_cases.csv')
+          keep=['case_id','candidate_source','verification_class','verification_status','event_start_utc','lat','lon','ncei_explicit_snow_squall','lsr_count','source_records','source_types']
+          objects=objects.drop(columns=[c for c in keep[1:] if c in objects.columns],errors='ignore').merge(cases[keep],on='case_id',how='left',validate='many_to_one')
+          objects.to_csv('data/derived/snow_squall_expansion_objects_tagged.csv',index=False)
+          print(objects['verification_class'].value_counts(dropna=False).to_string())
+          PY
+
+      - name: Build documented historical environment and labels
+        run: |
+          python scripts/build_historical_dataset.py \
+            data/derived/snow_squall_expansion_objects_tagged.csv \
+            --cases data/manifests/snow_squall_expansion/snow_squall_verified_cases.csv \
+            --output data/derived/snow_squall_verified_environment.csv \
+            --rap-dir data/raw/RAP_expansion \
+            --ruc-dir data/raw/RUC_expansion
+          python scripts/label_historical_outcomes.py \
+            data/derived/snow_squall_verified_environment.csv \
+            --cases data/manifests/snow_squall_expansion/snow_squall_verified_cases.csv \
+            --output data/derived/snow_squall_verified_labeled.csv \
+            --diagnostics-output data/derived/snow_squall_verified_label_diagnostics.json
+
+      - name: Build unverified research population with environment
+        run: |
+          python - <<'PY'
+          import pandas as pd
+          d=pd.read_csv('data/derived/snow_squall_expansion_objects_tagged.csv')
+          u=d[d.verification_class.eq('unverified_report_only')].copy()
+          v=d[d.verification_class.isin(['official_documented','official_plus_independent_report'])].copy()
+          u.to_csv('data/derived/snow_squall_unverified_objects.csv',index=False)
+          v.to_csv('data/derived/snow_squall_verified_objects.csv',index=False)
+          print('Unverified object scans:',len(u))
+          print('Verified object scans:',len(v))
+          PY
+          python scripts/enrich_object_environment.py \
+            data/derived/snow_squall_unverified_objects.csv \
+            --output data/derived/snow_squall_unverified_environment.csv \
+            --rap-dir data/raw/RAP_expansion \
+            --ruc-dir data/raw/RUC_expansion
+
+      - name: Build larger null population
+        run: |
+          mkdir -p data/manifests/snow_squall_expansion
+          python scripts/build_null_window_manifest.py \
+            --cases data/manifests/snow_squall_expansion/snow_squall_verified_cases.csv \
+            --start 2008-10-01T00:00:00Z \
+            --end 2026-06-30T21:00:00Z \
+            --sample-count 100 \
+            --seed 20260929 \
+            --radars KCXX KTYX \
+            --output data/manifests/snow_squall_expansion/snow_squall_null_windows.csv
+          python acquisition/historical_level2.py \
+            --manifest data/manifests/snow_squall_expansion/snow_squall_null_windows.csv \
+            --output data/raw/snow_squall_expansion_null_level2
+          python scripts/reconstruct_pilot.py \
+            --input data/raw/snow_squall_expansion_null_level2 \
+            --output data/derived/snow_squall_expansion_null_objects.csv \
+            --error-log data/derived/snow_squall_expansion_null_objects_errors.csv
+          python scripts/annotate_object_population.py \
+            data/derived/snow_squall_expansion_null_objects.csv \
+            --manifest data/manifests/snow_squall_expansion/snow_squall_null_windows.csv \
+            --output data/derived/snow_squall_expansion_null_objects_annotated.csv
+          python scripts/enrich_object_environment.py \
+            data/derived/snow_squall_expansion_null_objects_annotated.csv \
+            --output data/derived/snow_squall_expansion_null_environment.csv \
+            --rap-dir data/raw/RAP_expansion \
+            --ruc-dir data/raw/RUC_expansion
+          python scripts/classify_null_windows.py \
+            data/derived/snow_squall_expansion_null_objects_annotated.csv \
+            --manifest data/manifests/snow_squall_expansion/snow_squall_null_windows.csv \
+            --output data/derived/snow_squall_expansion_null_activity.csv
+
+      - name: Build unified expanded training dataset
+        run: |
+          python scripts/build_unified_object_dataset.py \
+            data/derived/snow_squall_verified_labeled.csv \
+            data/derived/snow_squall_expansion_null_environment.csv \
+            --null-activity data/derived/snow_squall_expansion_null_activity.csv \
+            --output data/derived/snow_squall_object_population_expanded.csv
+          python scripts/build_model_features.py \
+            data/derived/snow_squall_object_population_expanded.csv \
+            --output data/derived/snow_squall_model_features_expanded.csv \
+            --schema-output data/derived/snow_squall_model_features_expanded.schema.json
+
+      - name: Audit expanded model feature policy
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          s=json.loads(Path('data/derived/snow_squall_model_features_expanded.schema.json').read_text())
+          assert s['future_information_policy']=='current_and_past_only'
+          assert s['operational_predictor_columns']
+          print('Predictors:',len(s['predictor_columns']))
+          print('Operational/live-compatible:',len(s['operational_predictor_columns']))
+          PY
+
+      - name: Train expanded four-horizon candidate models
+        run: |
+          for h in 15 30 45 60; do
+            python scripts/train_baseline_model.py \
+              data/derived/snow_squall_model_features_expanded.csv \
+              --schema data/derived/snow_squall_model_features_expanded.schema.json \
+              --target squall_onset_within_${h}m \
+              --output-dir data/derived/snow_squall_baseline_model_${h}m
+          done
+          python scripts/summarize_baseline_horizons.py \
+            --root data/derived \
+            --output data/derived/snow_squall_expanded_horizon_summary.json
+
+      - name: Write expansion summary
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          out=Path('data/derived/snow_squall_expansion_summary.json')
+          cases=json.loads(Path('data/manifests/snow_squall_expansion/snow_squall_expansion_selection.json').read_text())
+          summary={'selection':cases}
+          for p in Path('data/derived').glob('snow_squall_baseline_model_*m/metrics.json'):
+              m=json.loads(p.read_text())
+              summary[p.parent.name]={'evaluation_status':m.get('evaluation_status'),'training_rows':m.get('training_rows'),'training_groups':m.get('training_groups'),'positive_case_groups':m.get('positive_case_group_count'),'metrics':m.get('metrics',{})}
+          out.write_text(json.dumps(summary,indent=2)+'\n',encoding='utf-8')
+          print(json.dumps(summary,indent=2))
+          PY
+
+      - name: Upload expanded research package
+        uses: actions/upload-artifact@v4
+        with:
+          name: snow-squall-expansion-research-package
+          path: |
+            data/manifests/snow_squall_expansion
+            data/derived/snow_squall_expansion_*
+            data/derived/snow_squall_verified_*
+            data/derived/snow_squall_unverified_*
+            data/derived/snow_squall_object_population_expanded.csv
+            data/derived/snow_squall_model_features_expanded.csv
+            data/derived/snow_squall_model_features_expanded.schema.json
+            data/derived/snow_squall_baseline_model_*m
+            data/derived/snow_squall_expanded_horizon_summary.json
+            data/raw/ASOS_IEM_expansion
+            data/raw/RAP_expansion
+            data/raw/RUC_expansion
