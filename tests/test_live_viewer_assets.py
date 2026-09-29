@@ -49,3 +49,11 @@ def test_live_feed_isolated_from_model_branch():
     assert "snow-squall-live-data/viewer/data/live/" in js
     assert "snow-squall-live-data" in workflow
     assert "HEAD:snow-squall-model-foundation" not in workflow
+
+
+def test_object_dataset_pilot_does_not_cancel_active_science_run():
+    root = Path(__file__).resolve().parents[1]
+    workflow = (
+        root / ".github" / "workflows" / "object-dataset-pilot.yml"
+    ).read_text(encoding="utf-8")
+    assert "cancel-in-progress: false" in workflow
