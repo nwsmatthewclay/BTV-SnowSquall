@@ -8,7 +8,7 @@ from pathlib import Path
 import pandas as pd
 
 
-def audit(manifest_path: Path, objects_path: Path, min_fraction: float = 0.75) -> dict:
+def audit(manifest_path: Path, objects_path: Path, min_fraction: float = 0.75, allow_incomplete: bool = False) -> dict:
     manifest = pd.read_csv(manifest_path)
     objects = pd.read_csv(objects_path)
 
@@ -47,10 +47,11 @@ def audit(manifest_path: Path, objects_path: Path, min_fraction: float = 0.75) -
         "empty_null_ids": empty,
         "minimum_population_fraction": min_fraction,
         "passed": fraction >= min_fraction,
+        "gate_mode": "advisory_incomplete_allowed" if allow_incomplete else "blocking",
         "window_details": by_null.to_dict(orient="records"),
     }
 
-    if fraction < min_fraction:
+    if fraction < min_fraction and not allow_incomplete:
         raise ValueError(
             f"Only {len(populated)}/{len(expected)} null windows produced objects "
             f"({fraction:.1%}); minimum is {min_fraction:.1%}. Empty: {empty}"
@@ -64,12 +65,14 @@ def main():
     parser.add_argument("objects")
     parser.add_argument("--report", required=True)
     parser.add_argument("--min-fraction", type=float, default=0.75)
+    parser.add_argument("--allow-incomplete", action="store_true", help="Write a failed coverage report without raising.")
     args = parser.parse_args()
 
     summary = audit(
         Path(args.manifest),
         Path(args.objects),
         min_fraction=args.min_fraction,
+        allow_incomplete=args.allow_incomplete,
     )
     out = Path(args.report)
     out.parent.mkdir(parents=True, exist_ok=True)
