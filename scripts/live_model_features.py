@@ -66,6 +66,7 @@ def build_live_feature_row(
         "motion_dir_deg",
         "motion_direction_deg",
         "motion_speed_kt",
+        "aspect_ratio",
         "max_reflectivity_dbz",
         "mean_reflectivity_dbz",
         "core_pixel_count",
@@ -97,6 +98,10 @@ def build_live_feature_row(
     if row.get("motion_dir_deg") is None:
         row["motion_dir_deg"] = _number(current.get("motion_direction_deg"))
     row["motion_speed_kt"] = _number(current.get("motion_speed_kt"))
+    row["aspect_ratio"] = _number(current.get("aspect_ratio"))
+    # Backward-compatible aliases retained for existing contract tests/tools.
+    row["reflectivity_max_dbz"] = _number(current.get("max_reflectivity_dbz"))
+    row["reflectivity_mean_dbz"] = _number(current.get("mean_reflectivity_dbz"))
 
     # Environment fields flattened into the live history.
     for key in (
