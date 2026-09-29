@@ -30,7 +30,11 @@ def audit(cases_path: Path, radar_path: Path, start_year: int, end_year: int):
     bad_class = ~cases["verification_class"].isin(ALLOWED_CLASSES)
     lat = pd.to_numeric(cases["lat"], errors="coerce")
     lon = pd.to_numeric(cases["lon"], errors="coerce")
-    bad_geo = lat.isna() | lon.isna() | ~lat.between(40, 48) | ~lon.between(-80, -67)
+    geo_present = lat.notna() & lon.notna()
+    bad_geo = geo_present & (
+        ~lat.between(40, 48) | ~lon.between(-80, -67)
+    )
+    missing_geo = ~geo_present
     if "event_end_utc" in cases.columns:
         end = pd.to_datetime(
             cases["event_end_utc"].astype("string"),
@@ -59,6 +63,7 @@ def audit(cases_path: Path, radar_path: Path, start_year: int, end_year: int):
         "bad_source": int(bad_source.sum()),
         "bad_verification_class": int(bad_class.sum()),
         "bad_geo": int(bad_geo.sum()),
+        "missing_geo": int(missing_geo.sum()),
         "bad_event_interval": int(bad_interval.sum()),
     }
     errors["total_errors"] = sum(errors.values())
