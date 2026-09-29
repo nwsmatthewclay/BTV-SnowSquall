@@ -65,3 +65,13 @@ def test_live_viewer_degrades_per_radar_without_taking_down_other_feed():
     assert 'return {site,error:String(err.message||err)' in js
     assert 'summary.filter(x=>!x.error)' in js
     assert 'degraded.map(x=>x.site' in js
+
+
+def test_live_viewer_consumes_radar_health_status():
+    root = Path(__file__).resolve().parents[1]
+    js = (root / "viewer/live.js").read_text(encoding="utf-8")
+    workflow = (root / ".github" / "workflows" / "snow-squall-live-publisher.yml").read_text(encoding="utf-8")
+    assert 'feedUrl(site,"health")' in js
+    assert "Back up prior live products" in workflow
+    assert "retaining prior product" in workflow
+    assert "Validate live products and create health status" in workflow
