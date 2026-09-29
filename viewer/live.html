@@ -50,6 +50,7 @@
 .live-env-grid .env-item{background:#16212b;padding:7px 8px;border-radius:5px;border:1px solid #223342}
 .live-env-grid .env-item span{display:block;color:var(--muted);font-size:10px}
 .live-env-grid .env-item b{display:block;font-size:12px;margin-top:2px}
+.shadow-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-top:8px}.shadow-cell{background:#172633;border:1px solid #2a4558;border-radius:5px;padding:7px 5px;text-align:center}.shadow-cell span{display:block;color:#8ea1b4;font-size:9px}.shadow-cell b{display:block;color:#fff;font-size:14px;margin-top:2px}.shadow-note{margin-top:7px;color:#8ea1b4;font-size:10px;line-height:1.35}
 @media(max-width:900px){
   .live-main{grid-template-rows:minmax(0,1fr) 380px}
   .live-top{grid-template-columns:1fr}
@@ -85,17 +86,22 @@
       <div class="section-head"><h2>Current objects</h2><span id="objectCount">0</span></div>
       <div class="live-object-list" id="objectList"></div>
 
-      <div class="section-head compact"><h3>Model gate</h3></div>
+      <div class="section-head compact"><h3>Model status</h3></div>
       <div class="live-status degraded">
-        <strong>Learned model staged — scoring gated</strong>
-        <span>Probability scoring disabled: the viewer is ready to consume learned probabilities, but no probability is exposed until independent training and verification supports a release.</span>
+        <strong>Operational probability: gated</strong>
+        <span>The candidate model is not exposed in the operational object feed.</span>
+      </div>
+      <div class="live-card" id="shadowCard">
+        <h3>Live research shadow</h3>
+        <div id="shadowCardBody">Waiting for the expanded candidate model bundle.</div>
+        <div class="shadow-note">Research-only live scoring. This feed is isolated from operational products and does not constitute a warning recommendation.</div>
       </div>
     </aside>
   </div>
 
   <section class="detail-drawer" aria-label="Selected object details">
     <div class="detail-summary" id="selectedSummary">
-      <div class="detail-placeholder">Select a live storm object to load its evolving diagnostics below the map.</div>
+      <div class="detail-placeholder">Select a live storm object to load its evolving diagnostics and live research shadow score below the map.</div>
     </div>
     <div class="detail-history">
       <div class="section-head compact"><h3>Scan-to-scan object evolution</h3><span id="selectionState">None</span><span id="liveTrackCount">—</span></div>
