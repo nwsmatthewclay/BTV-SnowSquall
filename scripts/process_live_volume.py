@@ -162,12 +162,15 @@ def process_volume(
     detections = detect_reflectivity_objects(data)
     metadata = volume_metadata(radar, path)
     metadata["radar_origin"] = list(radar_origin) if radar_origin is not None else None
-    timestamp = metadata["scan_time_utc"]
+    raw_timestamp = metadata["scan_time_utc"]
 
-    if not timestamp:
+    if not raw_timestamp:
         raise RuntimeError("Unable to determine radar scan time")
 
-    radar_dt = datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
+    radar_dt = datetime.fromisoformat(
+        str(raw_timestamp).replace("Z", "+00:00")
+    ).astimezone(timezone.utc)
+    timestamp = radar_dt.isoformat().replace("+00:00", "Z")
     rap_result = None
     try:
         rap_result = acquire_for_radar_time(radar_dt)
