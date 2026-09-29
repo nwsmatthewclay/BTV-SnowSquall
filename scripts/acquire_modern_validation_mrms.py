@@ -21,8 +21,12 @@ def acquire(replay_root: Path, output_root: Path) -> dict:
         scan_time = payload.get("metadata", {}).get("scan_time_utc")
         radar_site = payload.get("metadata", {}).get("radar_id") or geo_path.parent.name
         rel_parts = geo_path.relative_to(replay_root).parts
-        case_id = rel_parts[-2] if len(rel_parts) >= 3 else geo_path.parent.name
-        radar_site = rel_parts[-2] if len(rel_parts) == 2 else (rel_parts[-2] if len(rel_parts) >= 3 else geo_path.parent.name)
+        if len(rel_parts) >= 3:
+            case_id = rel_parts[-3]
+            radar_site = rel_parts[-2]
+        else:
+            case_id = geo_path.parent.name
+            radar_site = case_id
         if not scan_time:
             rows.append({
                 "case_id": case_id,
