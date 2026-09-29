@@ -6,6 +6,11 @@ on:
       - Snow Squall Case Discovery
     types:
       - completed
+  push:
+    branches:
+      - snow-squall-model-foundation
+    paths:
+      - .github/expansion-trigger
   workflow_dispatch:
     inputs:
       official_offset:
@@ -60,7 +65,7 @@ concurrency:
 
 jobs:
   expand:
-    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 360
     env:
@@ -83,8 +88,8 @@ jobs:
           run-id: ${{ github.event.workflow_run.id }}
           path: discovery_artifact
 
-      - name: Discover directly for manual runs
-        if: github.event_name == 'workflow_dispatch'
+      - name: Discover directly when no workflow artifact is provided
+        if: github.event_name != 'workflow_run'
         run: |
           set -euo pipefail
           python -m pip install --upgrade pip
