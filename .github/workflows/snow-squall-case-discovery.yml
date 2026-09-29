@@ -9,6 +9,8 @@ on:
       - scripts/discover_snow_squall_cases.py
       - config/snow_squall_discovery.json
       - tests/test_snow_squall_discovery.py
+      - scripts/audit_snow_squall_case_ledger.py
+      - data/manifests/banacos_historical_36.csv
       - .github/workflows/snow-squall-case-discovery.yml
 
 permissions:
