@@ -198,12 +198,12 @@ function renderSelectedHistory(p){
 
 function selectObject(p){
   selected=p;
-  document.getElementById("selectionState").textContent=p.radar_site+" track "+p.track_id;
+  document.getElementById("selectionState").textContent="Selected: "+p.radar_site+" track "+p.track_id;
   const env=p.environment||{};
   const envFields=env.fields||{};
   const envSource=env.source||p.environment_source||"—";
   const envStatus=p.environment_status||env.status||"—";
-  document.getElementById("selectedObject").innerHTML=
+  document.getElementById("selectedSummary").innerHTML=
     "<div class='live-stat'><span>Radar</span><b>"+esc(p.radar_site)+"</b></div>"+
     "<div class='live-stat'><span>Track</span><b>"+esc(p.track_id)+"</b></div>"+
     "<div class='live-stat'><span>Time</span><b>"+esc(fmt(p.timestamp))+"</b></div>"+
@@ -264,4 +264,4 @@ async function refresh(){
 addRadarMarkers();
 document.getElementById("refreshBtn").onclick=refresh;
 refresh();
-refreshTimer=setInterval(refresh,60000);
+refreshTimer=setInterval(refresh,120000);
