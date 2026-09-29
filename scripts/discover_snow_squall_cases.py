@@ -60,7 +60,7 @@ def request(url: str, **kwargs) -> requests.Response:
 def ncei_url(year: int) -> str:
     index = request(NCEI_BASE + "/").text
     pattern = re.compile(
-        rf'href="(StormEvents_details-ftp_v1\\.0_d{year}_c\\d{{8}}\\.csv\\.gz)"'
+        rf'href="(StormEvents_details-ftp_v1\.0_d{year}_c\d{{8}}\.csv\.gz)"'
     )
     match = pattern.search(index)
     if not match:
@@ -75,8 +75,8 @@ def ncei_year(year: int) -> pd.DataFrame:
 def norm_county(value) -> str:
     text = str(value or "").upper().strip()
     text = re.sub(r"[^A-Z0-9 ]+", " ", text)
-    text = re.sub(r"\\b(COUNTY|PARISH|BOROUGH|CENSUS AREA)\\b", "", text)
-    return re.sub(r"\\s+", " ", text).strip()
+    text = re.sub(r"\b(COUNTY|PARISH|BOROUGH|CENSUS AREA)\b", "", text)
+    return re.sub(r"\s+", " ", text).strip()
 
 def in_primary_cwa(row: pd.Series, cfg: dict) -> bool:
     state = str(row.get("STATE", "")).upper().strip()
