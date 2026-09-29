@@ -66,7 +66,7 @@ def evaluate(data, predictors, target):
         if len(np.unique(train_y)) < 2:
             folds.append({"fold":fold,"held_out_group":groups[test_idx][0],"status":"skipped_single_class_training"})
             continue
-        weights = class_balanced_weights(train_y)
+        weights = class_balanced_weights(train_y) * pd.to_numeric(data.iloc[train_idx].get("evidence_weight", pd.Series(1.0, index=data.iloc[train_idx].index)), errors="coerce").fillna(1.0).to_numpy()
         model.fit(X.iloc[train_idx], train_y, model__sample_weight=weights)
         oof[test_idx] = model.predict_proba(X.iloc[test_idx])[:, 1]
         folds.append({"fold":fold,"held_out_group":groups[test_idx][0],"test_rows":int(len(test_idx)),"test_positives":int(y[test_idx].sum()),"status":"ok"})
