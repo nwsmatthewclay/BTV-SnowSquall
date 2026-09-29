@@ -3,7 +3,7 @@ name: Snow Squall Expansion Dataset
 on:
   workflow_run:
     workflows:
-      - Snow Squall Case Discovery
+      - Snow Squall Unified Case Ledger
     types:
       - completed
   push:
@@ -58,11 +58,11 @@ jobs:
         with:
           ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
 
-      - name: Download discovery artifact
+      - name: Download unified case ledger artifact
         if: github.event_name == 'workflow_run'
         uses: actions/download-artifact@v4
         with:
-          name: snow-squall-case-discovery
+          name: snow-squall-unified-case-ledger
           github-token: ${{ secrets.GITHUB_TOKEN }}
           repository: ${{ github.repository }}
           run-id: ${{ github.event.workflow_run.id }}
@@ -75,6 +75,8 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
           python scripts/discover_snow_squall_cases.py --config config/snow_squall_discovery.json --output-dir discovery_artifact
+          python scripts/discover_iem_lsr_candidates.py --start-year 2002 --end-year 2026 --output-dir lsr_artifact
+          python scripts/merge_snow_squall_case_sources.py --discovery discovery_artifact/snow_squall_candidates.csv --iem-lsr lsr_artifact/iem_lsr_case_clusters.csv --output-dir discovery_artifact/unified
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -91,8 +93,8 @@ jobs:
           set -euo pipefail
           rm -rf data/manifests/snow_squall_expansion
           python scripts/select_snow_squall_case_pool.py \
-            --input discovery_artifact/snow_squall_candidates.csv \
-            --radar-manifest discovery_artifact/snow_squall_radar_manifest.csv \
+            --input discovery_artifact/unified/snow_squall_case_ledger.csv \
+            --radar-manifest discovery_artifact/unified/snow_squall_case_radar_manifest.csv \
             --output-dir data/manifests/snow_squall_expansion \
             --max-official "${{ inputs.max_official || '50' }}" \
             --max-unverified "${{ inputs.max_unverified || '25' }}" \
