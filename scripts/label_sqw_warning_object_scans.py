@@ -7,6 +7,7 @@ object-to-warning proximity are retained as separate evidence dimensions.
 from __future__ import annotations
 
 import argparse
+import json
 from math import asin, cos, radians, sin, sqrt
 from pathlib import Path
 
@@ -116,5 +117,4 @@ def main():
 
 
 if __name__ == "__main__":
-    import json
     main()
