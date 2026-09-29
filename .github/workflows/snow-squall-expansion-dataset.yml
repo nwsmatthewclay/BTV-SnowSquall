@@ -7,6 +7,27 @@ on:
     types:
       - completed
   workflow_dispatch:
+    inputs:
+      official_offset:
+        description: "Number of documented candidates to skip for this batch"
+        required: false
+        default: "0"
+        type: string
+      unverified_offset:
+        description: "Number of review candidates to skip for this batch"
+        required: false
+        default: "0"
+        type: string
+      max_official:
+        description: "Documented cases in this batch"
+        required: false
+        default: "50"
+        type: string
+      max_unverified:
+        description: "Review candidates in this batch"
+        required: false
+        default: "25"
+        type: string
 
 permissions:
   actions: read
@@ -67,8 +88,10 @@ jobs:
             --input discovery_artifact/snow_squall_candidates.csv \
             --radar-manifest discovery_artifact/snow_squall_radar_manifest.csv \
             --output-dir data/manifests/snow_squall_expansion \
-            --max-official 50 \
-            --max-unverified 25
+            --max-official "${{ inputs.max_official || '50' }}" \
+            --max-unverified "${{ inputs.max_unverified || '25' }}" \
+            --offset-official "${{ inputs.official_offset || '0' }}" \
+            --offset-unverified "${{ inputs.unverified_offset || '0' }}"
           python - <<'PY'
           import pandas as pd
           from pathlib import Path
@@ -247,6 +270,15 @@ jobs:
           print(json.dumps(summary,indent=2))
           PY
 
+      - name: Upload lightweight live-model bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: snow-squall-live-model-bundles
+          path: |
+            data/derived/baseline_expansion_*m/metrics.json
+            data/derived/baseline_expansion_*m/baseline_model.joblib
+            data/derived/baseline_expansion_*m
+            data/derived/snow_squall_expanded_horizon_summary.json
       - name: Upload expanded research package
         uses: actions/upload-artifact@v4
         with:
