@@ -93,3 +93,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+# trigger: allow missing geolocation as a coverage gap
