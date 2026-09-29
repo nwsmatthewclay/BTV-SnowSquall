@@ -60,6 +60,12 @@ function summarize(site,item){
 
 function renderRadarCards(summary){
   document.getElementById("radarCards").innerHTML=summary.map(x=>{
+    if(x.error){
+      return "<div class='live-card'><h3>"+esc(x.site)+" <span class='chip'>ERROR</span></h3>"+
+        "<div class='live-stat'><span>Feed</span><b>Unavailable</b></div>"+
+        "<div class='live-stat'><span>Reason</span><b>"+esc(x.error)+"</b></div>"+
+        "<div class='live-stat'><span>Probability</span><b>Disabled</b></div></div>";
+    }
     const quality=x.good?"LIVE":"STALE";
     return "<div class='live-card'><h3>"+x.site+" <span class='chip'>"+quality+"</span></h3>"+
       "<div class='live-stat'><span>Last scan</span><b>"+esc(fmt(x.last))+"</b></div>"+
@@ -80,7 +86,7 @@ function objectColor(p){
 function renderMap(summary){
   Object.values(layers).forEach(l=>l.clearLayers());
   const bounds=[];
-  summary.forEach(x=>{
+  summary.filter(x=>!x.error).forEach(x=>{
     (x.features||[]).forEach(f=>{
       const p=f.properties||{};
       const isSelected=selected&&selected.track_id===p.track_id&&selected.radar_site===p.radar_site;
@@ -111,7 +117,7 @@ function renderMap(summary){
 
 function renderObjectList(summary){
   const all=[];
-  summary.forEach(x=>(x.features||[]).forEach(f=>all.push({...f.properties,radar_site:x.site})));
+  summary.filter(x=>!x.error).forEach(x=>(x.features||[]).forEach(f=>all.push({...f.properties,radar_site:x.site})));
   all.sort((a,b)=>Number(b.max_reflectivity_dbz||0)-Number(a.max_reflectivity_dbz||0));
   document.getElementById("objectCount").textContent=all.length;
   if(!all.length){
@@ -216,7 +222,15 @@ async function refresh(){
   document.getElementById("overallTitle").textContent="Refreshing live feeds…";
   document.getElementById("overallText").textContent="Fetching latest persisted KCXX/KTYX objects and histories.";
   try{
-    const summary=(await Promise.all(["KCXX","KTYX"].map(s=>getFeed(s)))).map((item,i)=>summarize(i?"KTYX":"KCXX",item));
+    const sites=["KCXX","KTYX"];
+    const results=await Promise.all(sites.map(async site=>{
+      try{
+        return summarize(site,await getFeed(site));
+      }catch(err){
+        return {site,error:String(err.message||err),features:[],history:[],state:{},geo:{},good:false};
+      }
+    }));
+    const summary=results;
     datasets=Object.fromEntries(summary.map(x=>[x.site,x]));
     renderRadarCards(summary);
     renderMap(summary);
@@ -230,13 +244,13 @@ async function refresh(){
       else renderSelectedHistory(selected);
     }
 
-    const stale=summary.filter(x=>!x.good);
+    const degraded=summary.filter(x=>x.error||!x.good);
     const allObjects=summary.reduce((n,x)=>n+x.features.length,0);
-    document.getElementById("overallTitle").textContent=stale.length?"Live feed degraded":"Live feeds healthy";
-    document.getElementById("overallText").textContent=stale.length?
-      stale.map(x=>x.site+" stale").join(", ")+" • "+allObjects+" current objects":
+    document.getElementById("overallTitle").textContent=degraded.length?"Live feed degraded":"Live feeds healthy";
+    document.getElementById("overallText").textContent=degraded.length?
+      degraded.map(x=>x.site+" "+(x.error?"unavailable":"stale")).join(", ")+" • "+allObjects+" current objects":
       "KCXX/KTYX current object feeds • "+allObjects+" candidate objects • probability scoring disabled";
-    document.getElementById("overallStatus").classList.toggle("degraded",stale.length>0);
+    document.getElementById("overallStatus").classList.toggle("degraded",degraded.length>0);
     document.getElementById("subtitle").textContent="Last successful refresh: "+fmt(new Date().toISOString());
   }catch(err){
     document.getElementById("overallTitle").textContent="Live feed unavailable";
