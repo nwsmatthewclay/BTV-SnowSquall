@@ -138,20 +138,39 @@ function renderMap(summary){
 }
 
 function renderObjectList(summary){
-  const all=[];
-  summary.filter(x=>!x.error).forEach(x=>(x.features||[]).forEach(f=>all.push({...f.properties,radar_site:x.site})));
+  let all=[];
+  summary.filter(x=>!x.error).forEach(x=>(x.features||[]).forEach(f=>all.push({...f.properties,radar_site:x.site,source_kind:"current"})));
   all.sort((a,b)=>Number(b.max_reflectivity_dbz||0)-Number(a.max_reflectivity_dbz||0));
-  document.getElementById("objectCount").textContent=all.length;
+
+  let usingHistory=false;
   if(!all.length){
-    document.getElementById("objectList").innerHTML="<div class='live-card'>No candidate objects on the latest available scans.</div>";
+    usingHistory=true;
+    summary.filter(x=>!x.error).forEach(x=>{
+      const latestByTrack=new Map();
+      (x.history||[]).forEach(r=>{
+        if(r.track_id==null)return;
+        const id=String(r.track_id);
+        const prior=latestByTrack.get(id);
+        if(!prior || String(r.timestamp)>String(prior.timestamp)) latestByTrack.set(id,r);
+      });
+      latestByTrack.forEach(r=>all.push({...r,radar_site:x.site,source_kind:"recent"}));
+    });
+    all.sort((a,b)=>String(b.timestamp||"").localeCompare(String(a.timestamp||"")));
+  }
+
+  document.getElementById("objectCount").textContent=String(all.length)+(usingHistory?" recent":"");
+  if(!all.length){
+    document.getElementById("objectList").innerHTML="<div class='live-card'>No current or recent tracked objects are available.</div>";
     return;
   }
+
   document.getElementById("objectList").innerHTML=all.slice(0,20).map(p=>
     "<div class='live-object "+(selected&&selected.track_id===p.track_id&&selected.radar_site===p.radar_site?"selected":"")+"' data-id='"+esc(p.radar_site+"|"+p.track_id)+"'>"+
-    "<div class='title'>"+esc(p.radar_site)+" • Track "+esc(p.track_id)+"</div>"+
-    "<div class='sub'>"+esc(fmt(p.timestamp))+"</div>"+
+    "<div class='title'>"+esc(p.radar_site)+" • Track "+esc(p.track_id)+" <span class='chip'>"+(p.source_kind==="recent"?"RECENT":"ACTIVE")+"</span></div>"+
+    "<div class='sub'>"+esc(fmt(p.timestamp))+(p.source_kind==="recent"?" • latest retained track sample":"")+"</div>"+
     "<div class='chips'><span class='chip'>"+num(p.max_reflectivity_dbz)+" dBZ</span><span class='chip'>"+num(p.motion_speed_kt)+" kt</span><span class='chip'>"+num(p.area_km2)+" km²</span><span class='chip'>"+esc(p.data_quality||"—")+"</span></div></div>"
   ).join("");
+
   document.querySelectorAll(".live-object").forEach(el=>el.onclick=()=>{
     const [site,id]=el.dataset.id.split("|");
     const item=all.find(p=>p.radar_site===site&&String(p.track_id)===String(id));
