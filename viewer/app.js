@@ -10,6 +10,27 @@ const setText=(id,v)=>document.getElementById(id).textContent=v??"—";
 const envValue=(e,key)=>e&&e[key]?e[key].value:null;
 const formatEnv=(e,key)=>{const v=envValue(e,key);if(v==null)return"—";const u=e[key].units||"";return num(v,1)+(u?" "+u:"")};
 function renderCaseInfo(){const c=current;setText("caseTitle",c?c.case_id+" • "+c.radar_site:"No case");setText("caseMeta",c?(c.source_study||"Historical study")+" • "+c.first_scan_utc?.slice(0,16)+" to "+c.last_scan_utc?.slice(0,16):"—");document.getElementById("caseGrid").innerHTML=[["Event onset",fmtUtc(c?.event_start_utc)],["Station",c?.observing_station||"—"],["Peak wind",c?.peak_wind_kt==null?"—":num(c.peak_wind_kt)+" kt"],["Min visibility",c?.min_visibility_km==null?"—":num(c.min_visibility_km)+" km"],["Tracks",c?.track_count??"—"],["Scans",c?.scan_count??"—"],["Radar frames",c?.radar_frames?.length??0]].map(x=>"<div><span>"+x[0]+"</span><b>"+x[1]+"</b></div>").join("");setText("subtitle",c?c.case_id+" • "+c.radar_site+" • "+c.status:"Loading historical pilot data…")}
+function renderModelSummary(){
+  const box=document.getElementById("modelSummary");
+  const badge=document.getElementById("modelStatusBadge");
+  const summary=catalog?.model_summary;
+  if(!summary?.horizons?.length){
+    badge.textContent="NOT AVAILABLE";
+    box.textContent="No trained candidate metrics are embedded in this viewer build yet.";
+    return;
+  }
+  badge.textContent="RESEARCH ONLY";
+  const rows=summary.horizons;
+  box.innerHTML="<div class='model-summary-grid'>"+rows.map(r=>{
+    const auc=r.roc_auc==null?"—":Number(r.roc_auc).toFixed(2);
+    const pr=r.pr_auc==null?"—":Number(r.pr_auc).toFixed(2);
+    const brier=r.brier_score==null?"—":Number(r.brier_score).toFixed(3);
+    const groups=r.positive_case_group_count==null?"—":r.positive_case_group_count;
+    return "<div class='model-summary-cell'><span>"+r.horizon_minutes+" min</span><b>ROC "+auc+" • PR "+pr+"</b><b>Brier "+brier+" • "+groups+" positive groups</b></div>";
+  }).join("")+"</div>"+
+  "<div class='model-note'>These are exploratory case-held-out diagnostics from the research candidate. They are not an operational probability, threshold, warning recommendation, or release decision.</div>";
+}
+
 function populateCases(){const sel=document.getElementById("caseSelect");sel.innerHTML=catalog.cases.map((c,i)=>"<option value="+i+">"+c.case_id+" • "+c.radar_site+"</option>").join("");sel.onchange=()=>loadCase(Number(sel.value))}
 async function loadCase(index){current=catalog.cases[index];selectedKey=null;const analogButton=document.getElementById("analogsBtn");analogButton.disabled=true;analogButton.onclick=null;const geo=await fetch("data/"+current.file).then(r=>r.json());features=geo.features||[];times=[...new Set(features.map(f=>f.properties.timestamp))].sort();currentIndex=0;document.getElementById("slider").max=Math.max(0,times.length-1);document.getElementById("slider").value=0;renderCaseInfo();addRadarMarker();fitToData();render()}
 function addRadarMarker(){map.eachLayer(layer=>{if(layer.options?.className==="radar-station")map.removeLayer(layer)});const loc=radarLocations[current?.radar_site];if(loc)L.marker(loc,{icon:L.divIcon({className:"radar-station",iconSize:[12,12],iconAnchor:[6,6],html:""}),interactive:false,title:current.radar_site}).addTo(map)}
@@ -78,4 +99,4 @@ document.getElementById("radarOpacity").addEventListener("input",e=>{setText("ra
 document.getElementById("prevBtn").onclick=()=>advance(-1);document.getElementById("nextBtn").onclick=()=>advance(1);document.getElementById("playBtn").onclick=togglePlay;
 document.getElementById("detailsBtn").onclick=()=>{setText("statusText",catalog?.truth_note||"—");document.getElementById("statusList").innerHTML=[["Package",catalog?.version],["Data status",catalog?.data_status],["QC posture",catalog?.source_dataset_status],["Case/radar datasets",catalog?.cases?.length],["Source object rows",catalog?.source_object_rows],["Probability",catalog?.probability_status],["Build commit",catalog?.build_commit?catalog.build_commit.slice(0,12):"—"],["Build time",catalog?.build_time_utc?fmtUtc(catalog.build_time_utc):"—"],["Policy",catalog?.future_information_policy]].map(x=>"<div class='status-row'><span>"+x[0]+"</span><b>"+(x[1]??"—")+"</b></div>").join("");document.getElementById("modal").classList.remove("hidden")};
 document.getElementById("closeModal").onclick=()=>document.getElementById("modal").classList.add("hidden");
-Promise.all([fetch("data/catalog.json").then(r=>r.json())]).then(([c])=>{catalog=c;populateCases();loadCase(0)}).catch(err=>setText("subtitle","Viewer data unavailable: "+err));
+Promise.all([fetch("data/catalog.json").then(r=>r.json())]).then(([c])=>{catalog=c;renderModelSummary();populateCases();loadCase(0)}).catch(err=>setText("subtitle","Viewer data unavailable: "+err));
