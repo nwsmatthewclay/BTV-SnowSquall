@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 from datetime import datetime, timedelta, timezone
 from math import asin, cos, radians, sin, sqrt
 from pathlib import Path
@@ -76,8 +77,6 @@ def build_labels(df: pd.DataFrame, cases_csv: Path):
         if start is None:
             continue
         verified_end = event_end(case)
-        # Association may use a bounded search corridor when end time is
-        # missing, but target labels must never invent an event duration.
         corridor_end_time = verified_end or (start + timedelta(minutes=60))
         corridor_start = start - timedelta(minutes=PRE_EVENT_ASSOCIATION_MIN)
         corridor_end = corridor_end_time + timedelta(minutes=POST_EVENT_ASSOCIATION_MIN)
@@ -93,10 +92,7 @@ def build_labels(df: pd.DataFrame, cases_csv: Path):
         group_cols = [c for c in ("radar_site", "object_id") if c in candidate.columns]
         if not group_cols:
             continue
-        # Select only the single radar track that comes closest to the
-        # observing station during the onset-centered corridor for each radar.
-        # This prevents multiple unrelated cells from inheriting the same event
-        # label merely because they passed through a broad association radius.
+
         track_candidates = []
         for key_values, track in candidate.groupby(group_cols, dropna=False):
             if not isinstance(key_values, tuple):
@@ -118,9 +114,6 @@ def build_labels(df: pd.DataFrame, cases_csv: Path):
                 axis=1,
             )
 
-            # Prefer tracks that are actually observed near the documented
-            # onset time. A closest approach 30–90 minutes away can belong to
-            # an unrelated cell that merely crosses the same station corridor.
             onset_window = track[
                 track["_abs_minutes_from_onset"] <= ASSOCIATION_ONSET_WINDOW_MIN
             ]
@@ -234,15 +227,68 @@ def build_labels(df: pd.DataFrame, cases_csv: Path):
     return out
 
 
+def association_diagnostics(result: pd.DataFrame, cases_csv: Path) -> dict:
+    cases = pd.read_csv(cases_csv)
+    expected = [str(x) for x in cases["case_id"].dropna().unique()]
+    associated = result.loc[result["track_event_associated"].fillna(False)]
+    by_case = {}
+    for case_id in expected:
+        subset = result[result["case_id"].astype("string") == case_id]
+        assoc = subset[subset["track_event_associated"].fillna(False)]
+        positives = {
+            str(h): int(assoc[f"squall_onset_within_{h}m"].sum())
+            for h in HORIZONS
+        }
+        by_case[case_id] = {
+            "object_timesteps": int(len(subset)),
+            "associated_timesteps": int(len(assoc)),
+            "associated_fraction": float(len(assoc) / len(subset)) if len(subset) else 0.0,
+            "radars_with_association": sorted(assoc["radar_site"].dropna().astype(str).unique()),
+            "prospective_positive_counts": positives,
+            "association_status": (
+                "associated"
+                if len(assoc)
+                else "no_track_association"
+            ),
+        }
+
+    return {
+        "cases_expected": len(expected),
+        "cases_with_association": sum(
+            v["association_status"] == "associated" for v in by_case.values()
+        ),
+        "cases_without_association": [
+            case_id for case_id, v in by_case.items()
+            if v["association_status"] != "associated"
+        ],
+        "associated_object_timesteps_total": int(len(associated)),
+        "diagnostic_note": (
+            "Association diagnostics are QC only. They do not create event truth "
+            "and do not change training eligibility."
+        ),
+        "by_case": by_case,
+    }
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("input_csv")
     parser.add_argument("--output", required=True)
     parser.add_argument("--cases", default="data/manifests/banacos_2014_cases.csv")
+    parser.add_argument("--diagnostics-output")
     args = parser.parse_args()
     df = pd.read_csv(args.input_csv)
     result = build_labels(df, Path(args.cases))
     result.to_csv(args.output, index=False)
+
+    if args.diagnostics_output:
+        diagnostics = association_diagnostics(result, Path(args.cases))
+        output = Path(args.diagnostics_output)
+        output.parent.mkdir(parents=True, exist_ok=True)
+        output.write_text(json.dumps(diagnostics, indent=2) + "\n", encoding="utf-8")
+        print("Association diagnostics:")
+        print(json.dumps(diagnostics, indent=2))
+
     print(f"Wrote {len(result)} labeled object-timestep records to {args.output}")
     for horizon in HORIZONS:
         print(f"{horizon}m prospective positives:", int(result[f"squall_onset_within_{horizon}m"].sum()))
