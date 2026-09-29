@@ -274,7 +274,7 @@ jobs:
 
       - name: Build unified object dataset
         run: |
-          python scripts/build_unified_object_dataset.py data/derived/positive_object_labeled.csv data/derived/null_object_environment.csv --output data/derived/object_population_pilot.csv
+          python scripts/build_unified_object_dataset.py             data/derived/positive_object_labeled.csv             data/derived/null_object_environment.csv             --null-activity data/derived/null_window_activity.csv             --output data/derived/object_population_pilot.csv
 
       - name: Audit unified 12-case dataset
         run: |
