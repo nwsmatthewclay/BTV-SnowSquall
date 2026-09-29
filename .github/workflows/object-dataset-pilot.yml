@@ -141,19 +141,11 @@ jobs:
 
       - name: Audit positive Level-II window coverage
         run: |
-          python scripts/audit_radar_window_coverage.py \\
-            data/manifests/banacos_positive_pilot.csv \\
-            data/raw/positive_level2 \\
-            --report data/derived/positive_level2_window_coverage.json \\
-            --min-fraction 0.90
+          python scripts/audit_radar_window_coverage.py data/manifests/banacos_positive_pilot.csv data/raw/positive_level2 --report data/derived/positive_level2_window_coverage.json --min-fraction 0.90
 
       - name: Audit null Level-II window coverage
         run: |
-          python scripts/audit_radar_window_coverage.py \\
-            data/manifests/banacos_null_windows_pilot.csv \\
-            data/raw/null_level2 \\
-            --report data/derived/null_level2_window_coverage.json \\
-            --min-fraction 0.75
+          python scripts/audit_radar_window_coverage.py data/manifests/banacos_null_windows_pilot.csv data/raw/null_level2 --report data/derived/null_level2_window_coverage.json --min-fraction 0.75
 
       - name: Audit native Level-II fields
         run: |
