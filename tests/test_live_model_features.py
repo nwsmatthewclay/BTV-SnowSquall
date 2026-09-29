@@ -1,6 +1,7 @@
 import pandas as pd
 
 from scripts.live_model_features import build_live_feature_frame, build_live_feature_row, feature_coverage
+import pytest
 
 
 def test_live_row_maps_environment_and_units():
@@ -148,5 +149,5 @@ def test_live_rich_radar_features_propagate_and_evolve():
     assert frame.iloc[-1]["echo_top_km_delta"] == 1.5
     assert frame.iloc[-1]["zdr_mean_db_delta"] == 0.3
     assert frame.iloc[-1]["velocity_mean_kt_delta"] == 8.0
-    assert frame.iloc[-1]["echo_top_km_rate_per_min"] == 0.3
+    assert frame.iloc[-1]["echo_top_km_rate_per_min"] == pytest.approx(0.3)
     assert frame.iloc[-1]["max_reflectivity_dbz_running_max"] == 35.0
