@@ -371,7 +371,7 @@ def gather_banacos_seed(cfg: dict) -> list[dict]:
         })
     return rows
 
-ef distance_km(lat1, lon1, lat2, lon2):
+def distance_km(lat1, lon1, lat2, lon2):
     from math import asin, cos, radians, sin, sqrt
     if None in (lat1, lon1, lat2, lon2):
         return None
