@@ -267,6 +267,14 @@ jobs:
           python scripts/summarize_baseline_horizons.py \
             --root data/derived \
             --output data/derived/snow_squall_expanded_horizon_summary.json
+          for h in 15 30 45 60; do
+            python scripts/train_candidate_ensemble.py \
+              data/derived/snow_squall_model_features_expanded.csv \
+              --schema data/derived/snow_squall_model_features_expanded.schema.json \
+              --target squall_onset_within_${h}m \
+              --output-dir data/derived/candidate_expansion_${h}m
+          done
+
 
       - name: Write expansion summary
         run: |
@@ -288,7 +296,8 @@ jobs:
         with:
           name: snow-squall-live-model-bundles
           path: |
-            data/derived/baseline_expansion_*m/metrics.json
+            data/derived/baseline_expansion_*m
+            data/derived/candidate_expansion_*m/metrics.json
             data/derived/baseline_expansion_*m/baseline_model.joblib
             data/derived/baseline_expansion_*m
             data/derived/snow_squall_expanded_horizon_summary.json
