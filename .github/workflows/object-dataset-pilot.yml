@@ -129,15 +129,70 @@ jobs:
           python scripts/audit_level2_fields.py --input data/raw/positive_level2 --output data/derived/positive_level2_field_audit.json --limit 40
           python scripts/audit_level2_fields.py --input data/raw/null_level2 --output data/derived/null_level2_field_audit.json --limit 40
 
-      - name: Reconstruct positive objects
+      - name: Reconstruct positive objects in parallel by radar
         run: |
-          python scripts/reconstruct_pilot.py --input data/raw/positive_level2 --output data/derived/positive_object_scans.csv
+          set -euo pipefail
+          rm -f data/derived/positive_object_scans_KCXX.csv                 data/derived/positive_object_scans_KTYX.csv                 data/derived/positive_object_scans_KCXX_errors.csv                 data/derived/positive_object_scans_KTYX_errors.csv
+          python scripts/reconstruct_pilot.py             --input data/raw/positive_level2/KCXX             --output data/derived/positive_object_scans_KCXX.csv             --error-log data/derived/positive_object_scans_KCXX_errors.csv > /tmp/reconstruct_positive_KCXX.log 2>&1 &
+          p1=$!
+          python scripts/reconstruct_pilot.py             --input data/raw/positive_level2/KTYX             --output data/derived/positive_object_scans_KTYX.csv             --error-log data/derived/positive_object_scans_KTYX_errors.csv > /tmp/reconstruct_positive_KTYX.log 2>&1 &
+          p2=$!
+          wait $p1
+          wait $p2
+          cat /tmp/reconstruct_positive_KCXX.log
+          cat /tmp/reconstruct_positive_KTYX.log
+          python - <<'PY'
+          import pandas as pd
+          from pathlib import Path
+          frames = []
+          errors = []
+          for radar in ("KCXX", "KTYX"):
+              frames.append(pd.read_csv(f"data/derived/positive_object_scans_{radar}.csv"))
+              errors.append(pd.read_csv(
+                  f"data/derived/positive_object_scans_{radar}_errors.csv"
+              ))
+          pd.concat(frames, ignore_index=True).to_csv(
+              "data/derived/positive_object_scans.csv", index=False
+          )
+          pd.concat(errors, ignore_index=True).to_csv(
+              "data/derived/positive_object_scans_errors.csv", index=False
+          )
+          print("Merged positive object rows:", sum(len(x) for x in frames))
+          print("Merged positive reconstruction errors:", sum(len(x) for x in errors))
+          PY
 
 
 
-      - name: Reconstruct null objects
+      - name: Reconstruct null objects in parallel by radar
         run: |
-          python scripts/reconstruct_pilot.py --input data/raw/null_level2 --output data/derived/null_object_scans.csv
+          set -euo pipefail
+          rm -f data/derived/null_object_scans_KCXX.csv                 data/derived/null_object_scans_KTYX.csv                 data/derived/null_object_scans_KCXX_errors.csv                 data/derived/null_object_scans_KTYX_errors.csv
+          python scripts/reconstruct_pilot.py             --input data/raw/null_level2/KCXX             --output data/derived/null_object_scans_KCXX.csv             --error-log data/derived/null_object_scans_KCXX_errors.csv > /tmp/reconstruct_null_KCXX.log 2>&1 &
+          p1=$!
+          python scripts/reconstruct_pilot.py             --input data/raw/null_level2/KTYX             --output data/derived/null_object_scans_KTYX.csv             --error-log data/derived/null_object_scans_KTYX_errors.csv > /tmp/reconstruct_null_KTYX.log 2>&1 &
+          p2=$!
+          wait $p1
+          wait $p2
+          cat /tmp/reconstruct_null_KCXX.log
+          cat /tmp/reconstruct_null_KTYX.log
+          python - <<'PY'
+          import pandas as pd
+          frames = []
+          errors = []
+          for radar in ("KCXX", "KTYX"):
+              frames.append(pd.read_csv(f"data/derived/null_object_scans_{radar}.csv"))
+              errors.append(pd.read_csv(
+                  f"data/derived/null_object_scans_{radar}_errors.csv"
+              ))
+          pd.concat(frames, ignore_index=True).to_csv(
+              "data/derived/null_object_scans.csv", index=False
+          )
+          pd.concat(errors, ignore_index=True).to_csv(
+              "data/derived/null_object_scans_errors.csv", index=False
+          )
+          print("Merged null object rows:", sum(len(x) for x in frames))
+          print("Merged null reconstruction errors:", sum(len(x) for x in errors))
+          PY
 
       - name: Validate radar object geolocation
         run: |
