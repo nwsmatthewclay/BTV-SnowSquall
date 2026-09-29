@@ -108,3 +108,45 @@ def test_operational_predictor_set_is_live_covered():
     coverage = feature_coverage(frame.tail(1), OPERATIONAL_LIVE_PREDICTORS)
     assert coverage["fraction"] == 1.0
     assert coverage["missing"] == []
+
+
+def test_live_rich_radar_features_propagate_and_evolve():
+    history = [
+        {
+            "timestamp": "2026-01-01T12:00:00Z",
+            "track_id": "9",
+            "max_reflectivity_dbz": 25.0,
+            "mean_reflectivity_dbz": 18.0,
+            "area_km2": 10.0,
+            "echo_top_km": 2.0,
+            "top_minus_base_km": 1.5,
+            "zdr_mean_db": 0.5,
+            "rhohv_mean": 0.98,
+            "kdp_mean_degkm": 0.1,
+            "velocity_mean_kt": 20.0,
+            "core_pixel_count": 3,
+            "pixel_count": 10,
+        },
+        {
+            "timestamp": "2026-01-01T12:05:00Z",
+            "track_id": "9",
+            "max_reflectivity_dbz": 35.0,
+            "mean_reflectivity_dbz": 22.0,
+            "area_km2": 16.0,
+            "echo_top_km": 3.5,
+            "top_minus_base_km": 2.5,
+            "zdr_mean_db": 0.8,
+            "rhohv_mean": 0.96,
+            "kdp_mean_degkm": 0.3,
+            "velocity_mean_kt": 28.0,
+            "core_pixel_count": 5,
+            "pixel_count": 14,
+        },
+    ]
+    frame = build_live_feature_frame(history, "9")
+    assert frame.iloc[-1]["echo_top_km"] == 3.5
+    assert frame.iloc[-1]["echo_top_km_delta"] == 1.5
+    assert frame.iloc[-1]["zdr_mean_db_delta"] == 0.3
+    assert frame.iloc[-1]["velocity_mean_kt_delta"] == 8.0
+    assert frame.iloc[-1]["echo_top_km_rate_per_min"] == 0.3
+    assert frame.iloc[-1]["max_reflectivity_dbz_running_max"] == 35.0
