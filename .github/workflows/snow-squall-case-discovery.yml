@@ -1,0 +1,77 @@
+name: Snow Squall Case Discovery
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - snow-squall-model-foundation
+    paths:
+      - scripts/discover_snow_squall_cases.py
+      - config/snow_squall_discovery.json
+      - tests/test_snow_squall_discovery.py
+      - .github/workflows/snow-squall-case-discovery.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: snow-squall-case-discovery
+  cancel-in-progress: true
+
+jobs:
+  discover:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    env:
+      PYTHONPATH: ${{ github.workspace }}
+      PYTHONUNBUFFERED: "1"
+
+    steps:
+      - name: Checkout model foundation
+        uses: actions/checkout@v4
+        with:
+          ref: snow-squall-model-foundation
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install discovery dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run discovery unit tests
+        run: |
+          pytest -q tests/test_snow_squall_discovery.py
+
+      - name: Discover BTV-domain snow squall cases
+        run: |
+          set -euo pipefail
+          rm -rf data/discovery/snow_squall
+          python scripts/discover_snow_squall_cases.py \
+            --config config/snow_squall_discovery.json \
+            --output-dir data/discovery/snow_squall
+
+      - name: Validate discovery outputs
+        run: |
+          set -euo pipefail
+          test -s data/discovery/snow_squall/snow_squall_candidates.csv
+          test -s data/discovery/snow_squall/snow_squall_radar_manifest.csv
+          test -s data/discovery/snow_squall/snow_squall_discovery_summary.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          s=json.loads(Path("data/discovery/snow_squall/snow_squall_discovery_summary.json").read_text())
+          print(json.dumps(s, indent=2))
+          assert s["merged_candidates"] > 0, "No snow-squall candidates discovered"
+          assert s["radar_manifest_rows"] > 0, "No radar-reconstructable candidates discovered"
+          PY
+
+      - name: Upload discovery package
+        uses: actions/upload-artifact@v4
+        with:
+          name: snow-squall-case-discovery
+          path: data/discovery/snow_squall
+          if-no-files-found: error
