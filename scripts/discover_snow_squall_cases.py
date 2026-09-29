@@ -445,6 +445,9 @@ def main():
         "raw_iem_sqw_records": len(cow),
         "merged_candidates": len(merged),
         "official_documented_candidates": sum(r["verification_class"] in {"official_documented","official_plus_independent_report","official_plus_warning","official_plus_warning_and_report"} for r in merged),
+        "screening_candidates": sum(r["verification_class"] == "official_screening_candidate" for r in merged),
+        "warning_only_candidates": sum(r["verification_class"] == "warning_only" for r in merged),
+        "warning_plus_report_candidates": sum(r["verification_class"] == "warning_plus_report" for r in merged),
         "unverified_report_only_candidates": sum(r["verification_class"] == "unverified_report_only" for r in merged),
         "radar_manifest_rows": len(radar),
         "policy": (
