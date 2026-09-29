@@ -85,8 +85,9 @@ def prepare_dataset(frame: pd.DataFrame, schema: dict, target: str):
     # receives a complete binary y vector.
     d.loc[d["population"].eq("winter_null_candidate"), target] = 0
 
+    source_predictors = schema.get("operational_predictor_columns") or schema["predictor_columns"]
     predictor_cols = [
-        c for c in schema["predictor_columns"]
+        c for c in source_predictors
         if c in d.columns and pd.api.types.is_numeric_dtype(d[c])
     ]
     if not predictor_cols:
@@ -282,6 +283,7 @@ def main():
         "target": args.target,
         "future_information_policy": schema["future_information_policy"],
         "predictor_columns": predictors,
+        "operational_predictor_policy": "live_compatible_subset_from_feature_schema",
         "training_rows": int(len(data)),
         "training_groups": int(data["split_group"].nunique()),
         "location_predictor_policy": schema.get("location_predictor_policy", "unspecified"),
