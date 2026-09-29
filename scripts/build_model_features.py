@@ -81,7 +81,7 @@ NON_PREDICTOR_COLUMNS = TARGET_COLUMNS | {
     "wind_gust_kt",
     "scan_time_utc", "source_file", "radar_site", "object_id",
     "population", "population_id", "population_source", "truth_status", "activity_class",
-    "case_id", "null_id", "window_id", "source_study", "dataset_version",
+    "case_id", "null_id", "window_id", "episode_id", "source_study", "dataset_version",
     "future_information_policy", "population_track_key", "geometry_wkt",
     "centroid_lat", "centroid_lon", "radar_lat", "radar_lon",
     "station_lat", "station_lon", "grid_x_km", "grid_y_km", "touches_grid_edge",
@@ -101,7 +101,7 @@ def build_features(frame: pd.DataFrame) -> pd.DataFrame:
     df["scan_dt"] = pd.to_datetime(df["scan_time_utc"], utc=True, errors="coerce")
     df = df.dropna(subset=["scan_dt", "object_id"]).copy()
 
-    group_cols = [c for c in ("population", "case_id", "null_id", "radar_site", "object_id") if c in df.columns]
+    group_cols = [c for c in ("population", "episode_id", "case_id", "null_id", "radar_site", "object_id") if c in df.columns]
     if not group_cols:
         group_cols = ["object_id"]
     df = df.sort_values(group_cols + ["scan_dt"]).reset_index(drop=True)
