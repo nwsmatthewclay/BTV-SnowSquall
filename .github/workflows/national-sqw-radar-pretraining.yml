@@ -1,0 +1,136 @@
+name: National SQW Radar Pretraining Pool
+
+on:
+  workflow_run:
+    workflows:
+      - National SQW Radar Sample
+    types:
+      - completed
+  workflow_dispatch:
+    inputs:
+      max_manifest_rows:
+        description: "Maximum covered warning/radar combinations to process"
+        required: false
+        default: "40"
+        type: string
+
+permissions:
+  actions: read
+  contents: read
+
+concurrency:
+  group: national-sqw-radar-pretraining
+  cancel-in-progress: true
+
+jobs:
+  pretrain:
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    env:
+      PYTHONPATH: ${{ github.workspace }}
+      PYTHONUNBUFFERED: "1"
+
+    steps:
+      - name: Checkout foundation
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
+
+      - name: Download radar sample
+        if: github.event_name == 'workflow_run'
+        uses: actions/download-artifact@v4
+        with:
+          name: national-sqw-radar-sample
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          repository: ${{ github.repository }}
+          run-id: ${{ github.event.workflow_run.id }}
+          path: radar_sample
+
+      - name: Find latest radar sample for manual run
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          run_id="$(gh run list --workflow "National SQW Radar Sample" --branch snow-squall-model-foundation --status success --limit 1 --json databaseId --jq '.[0].databaseId')"
+          test -n "${run_id}"
+          gh run download "${run_id}" --name national-sqw-radar-sample --dir radar_sample
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install science dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt -r requirements-science.txt
+
+      - name: Select covered verified warnings
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+          import pandas as pd
+
+          manifest=pd.read_csv("radar_sample/national_sqw_radar_manifest.csv")
+          pre=pd.read_csv("radar_sample/level2_preflight.csv")
+          d=manifest.merge(pre,on=["case_id","radar_site"],how="left",validate="one_to_one")
+          d=d[d["iem_verified"].fillna(False) & d["level2_window_available"].fillna(False)].copy()
+          d=d.sort_values(["verifying_lsr_count","event_start_utc"],ascending=[False,True],kind="stable")
+          d=d.head(int("${{ inputs.max_manifest_rows || '40' }}"))
+          out=Path("data/manifests/national_sqw_pretraining")
+          out.mkdir(parents=True,exist_ok=True)
+          d.to_csv(out/"national_sqw_verified_radar_manifest.csv",index=False)
+          print("Selected covered verified warning/radar rows:",len(d))
+          print(d["radar_site"].value_counts().to_string())
+          assert len(d)>0
+          PY
+
+      - name: Download Level-II volumes
+        run: |
+          python acquisition/historical_level2.py \
+            --manifest data/manifests/national_sqw_pretraining/national_sqw_verified_radar_manifest.csv \
+            --output data/raw/national_sqw_pretraining_level2
+
+      - name: Reconstruct radar objects
+        run: |
+          python scripts/reconstruct_pilot.py \
+            --input data/raw/national_sqw_pretraining_level2 \
+            --output data/derived/national_sqw_pretraining_objects.csv \
+            --error-log data/derived/national_sqw_pretraining_objects_errors.csv
+
+      - name: Annotate object scans
+        run: |
+          python scripts/annotate_object_population.py \
+            data/derived/national_sqw_pretraining_objects.csv \
+            --manifest data/manifests/national_sqw_pretraining/national_sqw_verified_radar_manifest.csv \
+            --output data/derived/national_sqw_pretraining_objects_annotated.csv
+
+      - name: Build weak warning labels
+        run: |
+          python scripts/label_sqw_warning_object_scans.py \
+            --objects data/derived/national_sqw_pretraining_objects_annotated.csv \
+            --warnings data/manifests/national_sqw_pretraining/national_sqw_verified_radar_manifest.csv \
+            --output data/derived/national_sqw_pretraining_weak_labels.csv
+
+      - name: Audit weak-label population
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          s=json.loads(Path("data/derived/national_sqw_pretraining_weak_labels.summary.json").read_text())
+          print(json.dumps(s,indent=2))
+          assert s["weak_positive_rows"] > 0
+          PY
+
+      - name: Upload national pretraining pool
+        uses: actions/upload-artifact@v4
+        with:
+          name: national-sqw-radar-pretraining-pool
+          path: |
+            data/manifests/national_sqw_pretraining
+            data/derived/national_sqw_pretraining_*
+            data/raw/national_sqw_pretraining_level2
+          if-no-files-found: error
