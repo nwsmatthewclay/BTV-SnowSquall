@@ -12,15 +12,15 @@ from typing import Iterable
 import pandas as pd
 
 
-ALIASES = {
+LIVE_TO_MODEL = {
     "reflectivity_max_dbz": "max_reflectivity_dbz",
     "reflectivity_mean_dbz": "mean_reflectivity_dbz",
-    "velocity_delta_0_6km_kt": "shear_0_6km_ms",
     "wind_gust_kt": "gust_ms",
     "visibility_sm": "visibility_m",
     "sbcape_jkg": "cape_jkg",
     "sbcin_jkg": "cin_jkg",
 }
+
 
 
 def _number(value):
@@ -50,7 +50,7 @@ def _kt_from_ms(value):
 def build_live_feature_row(current: dict, previous: dict | None = None, track_count: int | None = None) -> dict:
     row = {}
 
-    for source, target in ALIASES.items():
+    for target, source in LIVE_TO_MODEL.items():
         row[target] = _number(current.get(source))
 
     for key in (
@@ -84,11 +84,6 @@ def build_live_feature_row(current: dict, previous: dict | None = None, track_co
     row["shear_0_6km_kt"] = _kt_from_ms(current.get("shear_0_6km_ms"))
 
     # Common historical names expected by the feature schema.
-    for key in ("sbcape_jkg", "sbcin_jkg"):
-        if row.get(key) is None:
-            source = ALIASES.get(key)
-            if source:
-                row[key] = _number(current.get(source))
 
     max_z = _number(current.get("max_reflectivity_dbz"))
     mean_z = _number(current.get("mean_reflectivity_dbz"))
