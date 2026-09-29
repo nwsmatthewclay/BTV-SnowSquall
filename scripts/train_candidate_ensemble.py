@@ -99,6 +99,11 @@ def main():
     source=pd.read_csv(args.features_csv)
     schema=load_schema(Path(args.schema))
     data,predictors=prepare_dataset(source,schema,args.target)
+    # Enforce the same live-compatible predictor contract as the baseline.
+    operational=set(schema.get("operational_predictor_columns") or predictors)
+    predictors=[c for c in predictors if c in operational]
+    if not predictors:
+        raise ValueError("No live-compatible predictors remain for ensemble training.")
     oof,metrics,folds=evaluate(data,predictors,args.target)
     out=Path(args.output_dir)
     out.mkdir(parents=True,exist_ok=True)
