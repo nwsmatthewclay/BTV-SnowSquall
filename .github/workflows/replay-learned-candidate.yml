@@ -1,0 +1,134 @@
+name: Replay Learned Snow Squall Candidate
+
+on:
+  workflow_dispatch:
+    inputs:
+      case_id:
+        description: "Historical case ID, e.g. BTV20060224"
+        required: true
+        type: string
+      radar_site:
+        description: "Radar site"
+        required: true
+        default: KCXX
+        type: choice
+        options:
+          - KCXX
+          - KTYX
+      max_scans:
+        description: "Optional maximum scans to replay"
+        required: false
+        default: "0"
+        type: string
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  replay:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    env:
+      PYTHONPATH: ${{ github.workspace }}
+      PYTHONUNBUFFERED: "1"
+
+    steps:
+      - name: Checkout model foundation
+        uses: actions/checkout@v4
+        with:
+          ref: snow-squall-model-foundation
+
+      - name: Find latest successful object-dataset pilot
+        id: dataset
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          run_id="$(gh run list --workflow "Object Dataset Pilot" --branch snow-squall-model-foundation --status success --limit 20 --json databaseId --jq '.[0].databaseId')"
+          test -n "$run_id"
+          echo "run_id=$run_id" >> "$GITHUB_OUTPUT"
+          echo "Using dataset run: $run_id"
+
+      - name: Download object-dataset pilot artifact
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          gh run download "${{ steps.dataset.outputs.run_id }}" --name object-population-pilot --dir replay-package
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install science dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt -r requirements-science.txt
+
+      - name: Identify requested case input
+        env:
+          CASE_ID: ${{ inputs.case_id }}
+          RADAR_SITE: ${{ inputs.radar_site }}
+        run: |
+          set -euo pipefail
+          input_dir="replay-package/data/raw/positive_level2/${RADAR_SITE}"
+          test -d "$input_dir"
+          count="$(find "$input_dir" -type f ! -name '*.part' ! -name '*.tmp' | grep "$CASE_ID" | wc -l)"
+          if [ "$count" -eq 0 ]; then
+            echo "No files matched requested case ${CASE_ID} under ${input_dir}."
+            find "$input_dir" -type f | head -20
+            exit 1
+          fi
+          echo "Matched $count files for ${CASE_ID}"
+
+      - name: Replay learned candidate for all horizons
+        env:
+          CASE_ID: ${{ inputs.case_id }}
+          RADAR_SITE: ${{ inputs.radar_site }}
+          MAX_SCANS: ${{ inputs.max_scans }}
+        run: |
+          set -euo pipefail
+          input_dir="replay-package/data/raw/positive_level2/${RADAR_SITE}"
+          max_args=()
+          if [ "$MAX_SCANS" != "0" ] && [ -n "$MAX_SCANS" ]; then
+            max_args=(--max-scans "$MAX_SCANS")
+          fi
+
+          for horizon in 15 30 45 60; do
+            python scripts/historical_operational_replay.py \
+              --case-id "$CASE_ID" \
+              --input-dir "$input_dir" \
+              --output-dir "replay-output/${horizon}m" \
+              --state-path "replay-output/${horizon}m/replay_state.json" \
+              --continue-on-error \
+              --model-dir "replay-package/data/derived/baseline_model_${horizon}m" \
+              "${max_args[@]}"
+          done
+
+      - name: Build replay summary
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          rows=[]
+          for path in sorted(Path("replay-output").glob("*m/replay_manifest.json")):
+              data=json.loads(path.read_text(encoding='utf-8'))
+              rows.append({
+                  "horizon":path.parent.name,
+                  "probability_status":data.get("probability_status"),
+                  "scan_count":data.get("scan_count"),
+                  "object_scan_count":data.get("object_scan_count"),
+                  "failed_scans":data.get("failed_scan_count"),
+              })
+          Path("replay-output/summary.json").write_text(json.dumps(rows,indent=2)+"\n",encoding="utf-8")
+          print(json.dumps(rows,indent=2))
+          PY
+
+      - name: Upload learned candidate replay package
+        uses: actions/upload-artifact@v4
+        with:
+          name: learned-candidate-replay-${{ inputs.case_id }}-${{ inputs.radar_site }}
+          path: |
+            replay-output
