@@ -129,10 +129,22 @@ jobs:
           print(objects['verification_class'].value_counts(dropna=False).to_string())
           PY
 
+      - name: Split documented and unverified populations
+        run: |
+          python - <<'PY'
+          import pandas as pd
+          d=pd.read_csv('data/derived/snow_squall_expansion_objects_tagged.csv')
+          verified=d[d.verification_class.isin(['official_documented','official_plus_independent_report'])].copy()
+          unverified=d[d.verification_class.eq('unverified_report_only')].copy()
+          verified.to_csv('data/derived/snow_squall_verified_objects.csv',index=False)
+          unverified.to_csv('data/derived/snow_squall_unverified_objects.csv',index=False)
+          print('Verified object scans:',len(verified))
+          print('Unverified object scans:',len(unverified))
+          PY
       - name: Build documented historical environment and labels
         run: |
           python scripts/build_historical_dataset.py \
-            data/derived/snow_squall_expansion_objects_tagged.csv \
+            data/derived/snow_squall_verified_objects.csv \
             --cases data/manifests/snow_squall_expansion/snow_squall_verified_cases.csv \
             --output data/derived/snow_squall_verified_environment.csv \
             --rap-dir data/raw/RAP_expansion \
@@ -145,16 +157,6 @@ jobs:
 
       - name: Build unverified research population with environment
         run: |
-          python - <<'PY'
-          import pandas as pd
-          d=pd.read_csv('data/derived/snow_squall_expansion_objects_tagged.csv')
-          u=d[d.verification_class.eq('unverified_report_only')].copy()
-          v=d[d.verification_class.isin(['official_documented','official_plus_independent_report'])].copy()
-          u.to_csv('data/derived/snow_squall_unverified_objects.csv',index=False)
-          v.to_csv('data/derived/snow_squall_verified_objects.csv',index=False)
-          print('Unverified object scans:',len(u))
-          print('Verified object scans:',len(v))
-          PY
           python scripts/enrich_object_environment.py \
             data/derived/snow_squall_unverified_objects.csv \
             --output data/derived/snow_squall_unverified_environment.csv \
@@ -224,7 +226,7 @@ jobs:
               data/derived/snow_squall_model_features_expanded.csv \
               --schema data/derived/snow_squall_model_features_expanded.schema.json \
               --target squall_onset_within_${h}m \
-              --output-dir data/derived/snow_squall_baseline_model_${h}m
+              --output-dir data/derived/baseline_expansion_${h}m
           done
           python scripts/summarize_baseline_horizons.py \
             --root data/derived \
@@ -238,7 +240,7 @@ jobs:
           out=Path('data/derived/snow_squall_expansion_summary.json')
           cases=json.loads(Path('data/manifests/snow_squall_expansion/snow_squall_expansion_selection.json').read_text())
           summary={'selection':cases}
-          for p in Path('data/derived').glob('snow_squall_baseline_model_*m/metrics.json'):
+          for p in Path('data/derived').glob('baseline_expansion_*m/metrics.json'):
               m=json.loads(p.read_text())
               summary[p.parent.name]={'evaluation_status':m.get('evaluation_status'),'training_rows':m.get('training_rows'),'training_groups':m.get('training_groups'),'positive_case_groups':m.get('positive_case_group_count'),'metrics':m.get('metrics',{})}
           out.write_text(json.dumps(summary,indent=2)+'\n',encoding='utf-8')
@@ -257,7 +259,7 @@ jobs:
             data/derived/snow_squall_object_population_expanded.csv
             data/derived/snow_squall_model_features_expanded.csv
             data/derived/snow_squall_model_features_expanded.schema.json
-            data/derived/snow_squall_baseline_model_*m
+            data/derived/baseline_expansion_*m
             data/derived/snow_squall_expanded_horizon_summary.json
             data/raw/ASOS_IEM_expansion
             data/raw/RAP_expansion
