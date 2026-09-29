@@ -69,17 +69,19 @@ def build_null_windows(
             end_time = timestamp + pd.Timedelta(minutes=90)
             day = start_time.normalize()
             while day <= end_time.normalize():
+                availability = {}
                 for radar in radars:
                     cache_key = (radar, day.date())
                     if cache_key not in day_cache:
                         keys = list_volume_keys(client, radar, day.to_pydatetime())
                         day_cache[cache_key] = [key_time(key) for key in keys]
-                    if any(
+                    availability[radar] = any(
                         t is not None
                         and start_time.to_pydatetime() <= t <= end_time.to_pydatetime()
                         for t in day_cache[cache_key]
-                    ):
-                        return True
+                    )
+                if all(availability.values()):
+                    return True
                 day += pd.Timedelta(days=1)
             return False
 
@@ -127,7 +129,7 @@ def main():
     parser.add_argument("--sample-count", type=int, default=100)
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--radars", nargs="+", default=["KCXX", "KTYX"])
-    parser.add_argument("--require-level2", action="store_true", help="Only select windows with at least one requested radar archive volume in the ±90-minute window.")
+    parser.add_argument("--require-level2", action="store_true", help="Only select windows with archive volumes for every requested radar in the ±90-minute window.")
     parser.add_argument("--output", default="data/manifests/banacos_null_windows.csv")
     args = parser.parse_args()
 
