@@ -18,8 +18,14 @@ def test_environment_cache_key_uses_hourly_ruc_and_rap_cadence():
     assert provider_for_time(ruc) == "RUC"
     assert provider_for_time(rap) == "RAP"
 
-    assert environment_cache_key(ruc) != environment_cache_key(
+    assert environment_cache_key(ruc) == environment_cache_key(
         ruc.replace(minute=59)
+    )
+    assert environment_cache_key(ruc) != environment_cache_key(
+        ruc.replace(hour=2)
+    )
+    assert environment_cache_key(rap) == environment_cache_key(
+        rap.replace(minute=59)
     )
     assert environment_cache_key(rap) != environment_cache_key(
         rap.replace(hour=2)
