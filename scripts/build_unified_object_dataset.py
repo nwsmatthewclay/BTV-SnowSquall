@@ -70,7 +70,7 @@ def build(
 
     combined = pd.concat([positive, nulls], ignore_index=True)
     combined["dataset_version"] = "object_population_pilot_v1"
-    combined["future_information_policy"] = "past_and_current_only"
+    combined["future_information_policy"] = "current_and_past_only"
     radar_series = (
         combined["radar_site"].astype(str)
         if "radar_site" in combined.columns
