@@ -3,38 +3,72 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>BTV Snow Squall Live Object Viewer</title>
+<title>BTV Snow Squall Operational Object Viewer</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <link rel="stylesheet" href="style.css">
 <style>
-.live-main{display:grid;grid-template-columns:minmax(0,1fr) 360px;height:calc(100vh - 68px)}
-#liveMap{min-width:0;height:100%;background:#14202a}
-.live-panel{padding:14px;background:var(--panel);border-left:1px solid var(--line);overflow:auto}
-.live-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}
-.live-card{background:#121e29;border:1px solid #2b4051;border-radius:7px;padding:10px}
+.live-main{display:grid;grid-template-rows:minmax(0,1fr) 300px;height:calc(100vh - 68px);min-height:0}
+.live-top{display:grid;grid-template-columns:minmax(0,1fr) 350px;min-height:0}
+#liveMap{min-width:0;min-height:0;height:100%;background:#14202a}
+.live-sidebar{padding:12px;background:var(--panel);border-left:1px solid var(--line);overflow:auto;min-height:0}
+.live-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:9px}
+.live-card{background:#121e29;border:1px solid #2b4051;border-radius:7px;padding:9px}
 .live-card h3{margin:0 0 6px;font-size:13px}
-.live-stat{display:flex;justify-content:space-between;padding:4px 0;color:#b9c7d4}
-.live-stat b{color:#fff}
-.live-status{padding:9px 10px;background:#141f28;border-left:3px solid var(--green);border-radius:5px;margin-top:9px}
+.live-stat{display:flex;justify-content:space-between;gap:12px;padding:4px 0;color:#b9c7d4}
+.live-stat b{color:#fff;text-align:right}
+.live-status{padding:9px 10px;background:#141f28;border-left:3px solid var(--green);border-radius:5px;margin-top:8px}
 .live-status.degraded{border-left-color:var(--amber)}
 .live-status strong{display:block;color:#fff}
-.live-object-list{display:grid;gap:8px;margin-top:8px}
-.live-object{background:#16212b;border:1px solid #243847;border-radius:7px;padding:9px;cursor:pointer}
+.live-object-list{display:grid;gap:7px;margin-top:8px}
+.live-object{background:#16212b;border:1px solid #243847;border-radius:7px;padding:8px;cursor:pointer}
 .live-object:hover{border-color:#4f7591}
-.live-object.selected{border-color:#fff}
+.live-object.selected{border-color:#fff;box-shadow:inset 3px 0 0 var(--accent)}
 .live-object .title{font-weight:750;color:#9dd4ff}
 .live-object .sub{font-size:11px;color:var(--muted);margin-top:2px}
-.live-object .chips{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}
+.live-object .chips{display:flex;gap:5px;flex-wrap:wrap;margin-top:6px}
 .chip{padding:3px 6px;border-radius:4px;background:#243746;color:#c8d7e5;font-size:10px}
 .nav-link{color:#9dd4ff;text-decoration:none;border:1px solid #405468;border-radius:6px;padding:6px 9px}
-@media(max-width:900px){.live-main{grid-template-columns:1fr}.live-panel{position:absolute;right:0;top:68px;bottom:0;width:min(360px,92vw);z-index:1000;box-shadow:-8px 0 25px rgba(0,0,0,.35)}}
+.detail-drawer{background:var(--panel);border-top:1px solid var(--line);display:grid;grid-template-columns:320px minmax(0,1fr);min-height:0}
+.detail-summary{padding:11px 13px;border-right:1px solid var(--line);overflow:auto}
+.detail-history{padding:11px 13px;min-width:0;overflow:hidden}
+.detail-title{font-size:18px;font-weight:800;color:#dcecff}
+.detail-sub{font-size:11px;color:var(--muted);margin-top:2px}
+.detail-placeholder{height:100%;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:12px}
+.detail-metrics{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:9px}
+.detail-model{margin-top:9px}
+.detail-model .live-status{margin-top:0}
+.history-scroll{max-height:225px;overflow:auto}
+.history-table{border-collapse:collapse;width:100%;min-width:720px;font-size:10px}
+.history-table th,.history-table td{padding:6px 7px;border-bottom:1px solid #263847;text-align:left;white-space:nowrap}
+.history-table th{position:sticky;top:0;background:#162431;color:#8ea1b4;font-size:9px;text-transform:uppercase;letter-spacing:.04em;z-index:1}
+.history-table tbody tr{cursor:pointer}
+.history-table tbody tr:hover{background:#192a38}
+.history-table tbody tr.current{background:#21394a;box-shadow:inset 3px 0 0 var(--accent)}
+.history-table td:nth-child(2){font-weight:700;color:#fff}
+.history-empty{padding:9px 10px;color:var(--muted);font-size:10px}
+.live-env-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:8px}
+.live-env-grid .env-item{background:#16212b;padding:7px 8px;border-radius:5px;border:1px solid #223342}
+.live-env-grid .env-item span{display:block;color:var(--muted);font-size:10px}
+.live-env-grid .env-item b{display:block;font-size:12px;margin-top:2px}
+.leaflet-control-attribution{font-size:9px}
+@media(max-width:1000px){
+  .live-top{grid-template-columns:minmax(0,1fr) 310px}
+  .detail-drawer{grid-template-columns:280px minmax(0,1fr)}
+}
+@media(max-width:800px){
+  .live-main{grid-template-rows:minmax(0,1fr) 360px}
+  .live-top{grid-template-columns:1fr}
+  .live-sidebar{position:absolute;right:0;top:68px;bottom:360px;width:min(340px,92vw);z-index:1000;box-shadow:-8px 0 25px rgba(0,0,0,.35)}
+  .detail-drawer{grid-template-columns:1fr}
+  .detail-history{border-top:1px solid var(--line)}
+}
 </style>
 </head>
 <body>
 <header>
   <div>
     <div class="eyebrow">BTV SNOW SQUALL PROJECT</div>
-    <h1>Live Object Viewer</h1>
+    <h1>Operational Object Viewer</h1>
     <div id="subtitle">Loading live KCXX/KTYX radar objects…</div>
   </div>
   <div class="header-actions">
@@ -43,30 +77,41 @@
     <button id="refreshBtn">Refresh</button>
   </div>
 </header>
+
 <main class="live-main">
-  <section id="liveMap"></section>
-  <aside class="live-panel">
-    <div class="live-status" id="overallStatus">
-      <strong id="overallTitle">Loading live feeds…</strong>
-      <span id="overallText">Checking KCXX and KTYX.</span>
+  <div class="live-top">
+    <section id="liveMap" aria-label="Live radar object map"></section>
+    <aside class="live-sidebar">
+      <div class="live-status" id="overallStatus">
+        <strong id="overallTitle">Loading live feeds…</strong>
+        <span id="overallText">Checking KCXX and KTYX.</span>
+      </div>
+      <div class="live-grid" id="radarCards"></div>
+
+      <div class="section-head"><h2>Current objects</h2><span id="objectCount">0</span></div>
+      <div class="live-object-list" id="objectList"></div>
+
+      <div class="section-head compact"><h3>Model gate</h3></div>
+      <div class="live-status degraded">
+        <strong id="modelStatusTitle">Learned model staged — scoring gated</strong>
+        <span id="modelStatusText">The viewer is ready to consume learned probabilities, but no probability is exposed until the independent training/verification release gate passes.</span>
+      </div>
+    </aside>
+  </div>
+
+  <section class="detail-drawer" aria-label="Selected object details">
+    <div class="detail-summary" id="selectedSummary">
+      <div class="detail-placeholder">Select a live storm object to load its evolving diagnostics below the map.</div>
     </div>
-    <div class="live-grid" id="radarCards"></div>
-
-    <div class="section-head"><h2>Current objects</h2><span id="objectCount">0</span></div>
-    <div class="live-object-list" id="objectList"></div>
-
-    <div class="section-head compact"><h3>Selected object</h3><span id="selectionState">None</span></div>
-    <div class="live-card" id="selectedObject">Click a radar object to inspect it.</div>
-    <div class="section-head compact"><h3>Track evolution</h3><span id="liveTrackCount">—</span></div>
-    <div id="liveHistory" class="track-history"><div class="history-empty">Select a current object to see its scan-to-scan history.</div></div>
-
-    <div class="section-head compact"><h3>Model status</h3></div>
-    <div class="live-status degraded">
-      <strong>Probability scoring disabled</strong>
-      <span>The live worker is producing track/object/environment diagnostics only. No forecast probability is exposed until the independent training and verification gates are complete.</span>
+    <div class="detail-history">
+      <div class="section-head compact"><h3>Scan-to-scan object evolution</h3><span id="liveTrackCount">—</span></div>
+      <div id="liveHistory" class="track-history">
+        <div class="history-empty">Select a current object to see its scan-by-scan history.</div>
+      </div>
     </div>
-  </aside>
+  </section>
 </main>
+
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="live.js"></script>
 </body>
