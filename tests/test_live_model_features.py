@@ -147,7 +147,7 @@ def test_live_rich_radar_features_propagate_and_evolve():
     frame = build_live_feature_frame(history, "9")
     assert frame.iloc[-1]["echo_top_km"] == 3.5
     assert frame.iloc[-1]["echo_top_km_delta"] == 1.5
-    assert frame.iloc[-1]["zdr_mean_db_delta"] == 0.3
+    assert frame.iloc[-1]["zdr_mean_db_delta"] == pytest.approx(0.3)
     assert frame.iloc[-1]["velocity_mean_kt_delta"] == 8.0
     assert frame.iloc[-1]["echo_top_km_rate_per_min"] == pytest.approx(0.3)
     assert frame.iloc[-1]["max_reflectivity_dbz_running_max"] == 35.0
