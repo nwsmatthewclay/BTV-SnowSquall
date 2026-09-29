@@ -491,6 +491,8 @@ jobs:
             --null-level2-coverage data/derived/null_level2_window_coverage.json \
             --positive-association data/derived/positive_event_association_diagnostics.json \
             --null-coverage data/derived/null_window_coverage.json \
+            --positive-environment-audit data/derived/positive_environment_audit.json \
+            --null-environment-audit data/derived/null_environment_audit.json \
             --output data/derived/pilot_report.html
 
       - name: Run tests
