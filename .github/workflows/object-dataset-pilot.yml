@@ -447,6 +447,8 @@ jobs:
             --path data/derived/object_model_features_pilot.schema.json \
             --path data/derived/object_model_features_pilot.coverage.json \
             --path data/derived/positive_level2_window_coverage.json \
+            --path data/derived/ncei_storm_events_candidates.csv \
+            --path data/derived/ncei_storm_event_timing_audit.json \
             --path data/derived/null_level2_window_coverage.json \
             --path data/derived/positive_event_association_diagnostics.json \
             --path data/derived/null_window_coverage.json \
@@ -547,6 +549,9 @@ jobs:
             data/derived/viewer
             data/derived/positive_level2_field_audit.json
             data/derived/positive_level2_window_coverage.json
+            data/derived/ncei_storm_events_candidates.csv
+            data/derived/ncei_storm_event_timing_audit.csv
+            data/derived/ncei_storm_event_timing_audit.json
             data/derived/null_level2_field_audit.json
             data/derived/null_level2_window_coverage.json
             data/raw/ASOS_IEM
