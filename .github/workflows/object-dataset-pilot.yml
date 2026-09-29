@@ -289,7 +289,7 @@ jobs:
 
       - name: Apply leakage-safe positive outcome labels
         run: |
-          python scripts/label_historical_outcomes.py data/derived/positive_object_environment.csv --output data/derived/positive_object_labeled.csv
+          python scripts/label_historical_outcomes.py             data/derived/positive_object_environment.csv             --output data/derived/positive_object_labeled.csv             --diagnostics-output data/derived/positive_event_association_diagnostics.json
 
       - name: Audit outcome label integrity
         run: |
@@ -315,6 +315,10 @@ jobs:
       - name: Audit null environment attachment
         run: |
           python scripts/audit_environment_attachment.py data/derived/null_object_environment.csv --report data/derived/null_environment_audit.json
+
+      - name: Audit null-window radar coverage
+        run: |
+          python scripts/audit_null_window_coverage.py             data/manifests/banacos_null_windows_pilot.csv             data/derived/null_object_scans_annotated.csv             --report data/derived/null_window_coverage.json             --min-fraction 0.75
 
       - name: Classify null-window activity
         run: |
@@ -489,6 +493,7 @@ jobs:
             data/derived/positive_object_environment.csv
             data/derived/positive_object_labeled.csv
             data/derived/positive_object_tracks.csv
+            data/derived/positive_event_association_diagnostics.json
             data/derived/null_object_scans.csv
             data/derived/null_object_scans_errors.csv
             data/derived/null_radar_reconstruction_audit.json
@@ -496,6 +501,7 @@ jobs:
             data/derived/null_object_environment.csv
             data/derived/null_object_tracks.csv
             data/derived/null_window_activity.csv
+            data/derived/null_window_coverage.json
             data/derived/object_population_pilot.csv
             data/derived/object_model_features_pilot.csv
             data/derived/object_model_features_pilot.schema.json
