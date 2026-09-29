@@ -29,6 +29,13 @@ on:
         default: "15"
         type: string
 
+  push:
+    branches:
+      - snow-squall-model-foundation
+    paths:
+      - scripts/select_national_sqw_radar_cases.py
+      - tests/test_select_national_sqw_radar_cases.py
+      - .github/workflows/national-sqw-radar-sample.yml
 permissions:
   actions: read
   contents: read
@@ -39,7 +46,7 @@ concurrency:
 
 jobs:
   sample:
-    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 180
     env:
@@ -62,13 +69,15 @@ jobs:
           run-id: ${{ github.event.workflow_run.id }}
           path: inventory
 
-      - name: Generate inventory for manual run
-        if: github.event_name == 'workflow_dispatch'
+      - name: Download latest successful inventory for push/manual runs
+        if: github.event_name != 'workflow_run'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
-          python scripts/discover_national_sqw_cases.py             --start-year 2018             --end-year 2026             --output-dir inventory
+          run_id="$(gh run list --workflow "National Snow Squall Warning Inventory" --branch snow-squall-model-foundation --status success --limit 1 --json databaseId --jq '.[0].databaseId')"
+          test -n "${run_id}"
+          gh run download "${run_id}" --name national-snow-squall-warning-inventory --dir inventory
 
       - name: Set up Python
         uses: actions/setup-python@v5
