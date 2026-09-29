@@ -1,0 +1,84 @@
+name: National Snow Squall Warning Inventory
+
+on:
+  workflow_dispatch:
+    inputs:
+      start_year:
+        description: "First warning year"
+        required: false
+        default: "2018"
+        type: string
+      end_year:
+        description: "Last warning year"
+        required: false
+        default: "2026"
+        type: string
+  push:
+    branches:
+      - snow-squall-model-foundation
+    paths:
+      - scripts/discover_national_sqw_cases.py
+      - tests/test_national_sqw_discovery.py
+      - .github/workflows/national-sqw-inventory.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: national-sqw-inventory
+  cancel-in-progress: true
+
+jobs:
+  harvest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      PYTHONPATH: ${{ github.workspace }}
+      PYTHONUNBUFFERED: "1"
+
+    steps:
+      - name: Checkout foundation
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run unit tests
+        run: pytest -q tests/test_national_sqw_discovery.py
+
+      - name: Harvest national SQW inventory
+        run: |
+          set -euo pipefail
+          mkdir -p data/discovery/national_sqw
+          python scripts/discover_national_sqw_cases.py \
+            --start-year "${{ inputs.start_year || '2018' }}" \
+            --end-year "${{ inputs.end_year || '2026' }}" \
+            --output-dir data/discovery/national_sqw
+
+      - name: Audit national inventory
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          s=json.loads(Path('data/discovery/national_sqw/national_sqw_summary.json').read_text())
+          print(json.dumps(s,indent=2))
+          assert s['warnings'] > 0
+          assert s['episodes'] > 0
+          assert s['verified_warnings'] >= 0
+          PY
+
+      - name: Upload national research inventory
+        uses: actions/upload-artifact@v4
+        with:
+          name: national-snow-squall-warning-inventory
+          path: data/discovery/national_sqw
+          if-no-files-found: error
