@@ -35,6 +35,14 @@ jobs:
           ref: snow-squall-model-foundation
           fetch-depth: 2
 
+      - name: Restore prior live feed history
+        run: |
+          set -euo pipefail
+          if git ls-remote --exit-code --heads origin snow-squall-live-data >/dev/null 2>&1; then
+            git fetch --no-tags origin snow-squall-live-data
+            git checkout origin/snow-squall-live-data -- viewer/data/live || true
+          fi
+
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
@@ -105,20 +113,26 @@ jobs:
           python scripts/audit_operational_readiness.py             --state viewer/data/live/KTYX_state.json             --geojson viewer/data/live/KTYX_objects.geojson             --max-age-minutes 30
           python scripts/live_healthcheck.py             --state viewer/data/live/KTYX_state.json             --geojson viewer/data/live/KTYX_objects.geojson             --max-age-minutes 30
 
-      - name: Commit updated live data
+      - name: Publish isolated live-data branch
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          mkdir -p /tmp/snow-squall-live-payload
+          cp -R viewer/data/live/. /tmp/snow-squall-live-payload/
+
+          git checkout --orphan snow-squall-live-data
+          git rm -rf . >/dev/null 2>&1 || true
+          mkdir -p viewer/data/live
+          cp -R /tmp/snow-squall-live-payload/. viewer/data/live/
           git add viewer/data/live
+
           if git diff --cached --quiet; then
-            echo "No new live volume; nothing to publish."
+            echo "No live data changes; nothing to publish."
             exit 0
           fi
 
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git commit -m "Update live snow squall object feeds"
-          git fetch origin snow-squall-model-foundation
-          git rebase origin/snow-squall-model-foundation
-          git push origin HEAD:snow-squall-model-foundation
+          git push --force origin HEAD:snow-squall-live-data
