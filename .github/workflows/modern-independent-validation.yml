@@ -47,7 +47,7 @@ jobs:
 
       - name: Audit modern training separation
         run: |
-          python scripts/audit_modern_training_separation.py             --modern data/derived/modern_independent_validation_cases.csv             --development-root data/manifests             --report data/derived/modern_training_separation_audit.json
+          python scripts/audit_modern_training_separation.py             --modern data/manifests/modern_independent_validation_cases.csv             --development-root data/manifests             --report data/derived/modern_training_separation_audit.json
 
       - name: Audit modern validation manifest
         run: |
