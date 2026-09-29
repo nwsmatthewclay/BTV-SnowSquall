@@ -297,6 +297,8 @@ def main():
             if positive_case_group_count < 3
             else "case_held_out_exploratory"
         ),
+        "operational_release_status": "candidate_only",
+        "operational_release_note": "Training produces a research candidate; live probability exposure requires a separate explicit release decision after independent verification.",
         "evaluation_note": (
             "Fewer than three independent historical case groups contain positive "
             "forecast labels; holdout metrics must not be interpreted as model skill."
