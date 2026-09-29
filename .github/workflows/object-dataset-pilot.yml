@@ -122,7 +122,7 @@ jobs:
 
       - name: Audit NCEI Storm Events timing and site consistency
         run: |
-          python scripts/audit_storm_event_timing.py --events data/derived/ncei_storm_events_candidates.csv --cases data/manifests/banacos_positive_pilot.csv --output data/derived/ncei_storm_event_timing_audit.csv --summary data/derived/ncei_storm_event_timing_audit.json
+          python scripts/audit_storm_event_timing.py --events data/derived/ncei_storm_events_candidates.csv --cases data/manifests/banacos_positive_pilot.csv --stations data/manifests/observing_stations.csv --output data/derived/ncei_storm_event_timing_audit.csv --summary data/derived/ncei_storm_event_timing_audit.json
 
       - name: Download positive radar windows
         run: |
