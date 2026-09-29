@@ -66,3 +66,12 @@ def test_distinct_ncei_events_are_not_collapsed():
         rec(2, "2024-01-01T15:20:00+00:00"),
     ], cfg)
     assert len(merged) == 2
+def test_ncei_screening_is_not_verified():
+    from scripts.discover_snow_squall_cases import merged_verification_class
+    assert merged_verification_class({"NCEI_STORM_EVENTS_SCREENING"}) == "unverified_report_only"
+    assert merged_verification_class({"NCEI_STORM_EVENTS_SCREENING", "IEM_COW_SQW"}) == "warning_only"
+
+
+def test_warning_plus_ncei_explicit_is_official_evidence():
+    from scripts.discover_snow_squall_cases import merged_verification_class
+    assert merged_verification_class({"NCEI_STORM_EVENTS", "IEM_COW_SQW"}) == "official_plus_warning"
