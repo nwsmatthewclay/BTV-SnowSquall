@@ -345,7 +345,7 @@ jobs:
 
       - name: Classify null-window activity
         run: |
-          python scripts/classify_null_windows.py data/derived/null_object_scans_annotated.csv --output data/derived/null_window_activity.csv
+          python scripts/classify_null_windows.py data/derived/null_object_scans_annotated.csv --manifest data/manifests/banacos_null_windows_pilot.csv --output data/derived/null_window_activity.csv
 
       - name: Build track catalogs
         run: |
