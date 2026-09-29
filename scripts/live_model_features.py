@@ -19,14 +19,6 @@ LIVE_TO_MODEL = {
     "visibility_sm": "visibility_m",
     "sbcape_jkg": "cape_jkg",
     "sbcin_jkg": "cin_jkg",
-        "surface_wind_speed_kt", "shear_0_6km_kt", "temperature_dewpoint_spread_k",
-        "cape_shear_product", "gust_excess_kt", "reflectivity_core_excess",
-        "area_per_length", "shear_motion_ratio",
-
-}
-
-
-
 def _number(value):
     try:
         if value is None or pd.isna(value):
@@ -86,6 +78,14 @@ def build_live_feature_row(current: dict, previous: dict | None = None, track_co
         "shear_0_6km_ms", "u10_ms", "v10_ms", "temperature_2m_k",
         "dewpoint_2m_k", "rh_2m_pct", "gust_ms", "visibility_m", "cape_jkg",
         "cin_jkg",
+    "echo_top_km", "top_minus_base_km", "vertical_reflectivity_gradient",
+    "vertical_valid_points", "zdr_mean_db", "zdr_p90_db", "zdr_gradient_dbkm",
+    "rhohv_mean", "rhohv_max", "rhohv_p90", "rhohv_min",
+    "kdp_mean_degkm", "kdp_p90_degkm", "velocity_mean_kt", "velocity_std_kt",
+    "velocity_p90_abs_kt", "velocity_gradient_ktkm",
+    "surface_wind_speed_kt", "shear_0_6km_kt", "temperature_dewpoint_spread_k",
+    "cape_shear_product", "gust_excess_kt", "reflectivity_core_excess",
+    "area_per_length", "shear_motion_ratio",
         "echo_top_km", "top_minus_base_km", "vertical_reflectivity_gradient",
         "vertical_valid_points", "zdr_mean_db", "zdr_p90_db", "zdr_gradient_dbkm",
         "rhohv_mean", "rhohv_max", "rhohv_p90", "rhohv_min",
