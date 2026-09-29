@@ -6,12 +6,19 @@ import json
 from pathlib import Path
 
 import pandas as pd
+from pandas.errors import EmptyDataError
 
 
 def build(inventory_csv: Path, mrms_csv: Path, surface_csv: Path, output_json: Path, output_csv: Path):
     inv = pd.read_csv(inventory_csv)
-    mrms = pd.read_csv(mrms_csv) if mrms_csv.exists() else pd.DataFrame()
-    surface = pd.read_csv(surface_csv) if surface_csv.exists() else pd.DataFrame()
+    try:
+        mrms = pd.read_csv(mrms_csv) if mrms_csv.exists() else pd.DataFrame()
+    except EmptyDataError:
+        mrms = pd.DataFrame()
+    try:
+        surface = pd.read_csv(surface_csv) if surface_csv.exists() else pd.DataFrame()
+    except EmptyDataError:
+        surface = pd.DataFrame()
 
     rows = []
     for row in inv.itertuples(index=False):
