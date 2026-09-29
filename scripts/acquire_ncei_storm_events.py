@@ -4,10 +4,9 @@ Storm Events is treated as an authoritative validated event source, but NOT as
 the sole verification source. Raw LSR evidence, radar/object timing, and
 surface observations remain separate evidence streams.
 
-The NCEI bulk archive publishes annual detail CSVs. We download only requested
-years, filter to VT/NY, and retain candidate high-wind/heavy-snow/snow-squall
-records plus provenance. This intentionally does not convert every record into
-a positive label.
+The NCEI bulk archive publishes annual detail CSVs whose creation-date suffix
+can change by year. We discover the exact annual URL from the public directory
+listing rather than assuming one suffix.
 """
 
 from __future__ import annotations
@@ -15,6 +14,7 @@ from __future__ import annotations
 import argparse
 import gzip
 import io
+import re
 from pathlib import Path
 
 import pandas as pd
@@ -31,15 +31,28 @@ EVENT_TYPES = {
     "Winter Storm",
     "Winter Weather",
 }
-STATES = {"VT", "NY"}
+STATE_NAMES = {"VERMONT", "NEW YORK"}
 
 
-def url_for_year(year: int) -> str:
-    return f"{BASE}/StormEvents_details-ftp_v1.0_d{year}_c20260323.csv.gz"
+def url_for_year(year: int, timeout: int = 60) -> str:
+    index_url = BASE + "/"
+    response = requests.get(index_url, timeout=timeout)
+    response.raise_for_status()
+    pattern = re.compile(
+        rf'href="(StormEvents_details-ftp_v1\.0_d{year}_c\d{{8}}\.csv\.gz)"'
+    )
+    match = pattern.search(response.text)
+    if not match:
+        raise FileNotFoundError(
+            f"No NCEI Storm Events detail archive found for {year}"
+        )
+    return f"{BASE}/{match.group(1)}"
 
 
-def load_year(year: int, timeout: int = 120) -> pd.DataFrame:
-    response = requests.get(url_for_year(year), timeout=timeout)
+def load_year(year: int, timeout: int = 180) -> pd.DataFrame:
+    url = url_for_year(year)
+    print(f"  archive: {url}")
+    response = requests.get(url, timeout=timeout)
     response.raise_for_status()
     with gzip.GzipFile(fileobj=io.BytesIO(response.content)) as fh:
         return pd.read_csv(fh, low_memory=False)
@@ -47,9 +60,10 @@ def load_year(year: int, timeout: int = 120) -> pd.DataFrame:
 
 def filter_candidates(df: pd.DataFrame) -> pd.DataFrame:
     out = df.copy()
-    state = out.get("STATE", pd.Series("", index=out.index)).astype(str).str.upper()
+    state = out.get("STATE", pd.Series("", index=out.index)).astype(str).str.upper().str.strip()
     event = out.get("EVENT_TYPE", pd.Series("", index=out.index)).astype(str).str.strip()
-    out = out[state.isin(STATES) & event.isin(EVENT_TYPES)].copy()
+    out = out[state.isin(STATE_NAMES) & event.isin(EVENT_TYPES)].copy()
+
     keep = [
         "BEGIN_YEARMONTH", "BEGIN_DAY", "BEGIN_TIME", "END_YEARMONTH",
         "END_DAY", "END_TIME", "EVENT_ID", "STATE", "CZ_TYPE", "CZ_FIPS",
@@ -81,9 +95,9 @@ def main() -> None:
         try:
             frame = filter_candidates(load_year(year))
         except requests.HTTPError as exc:
-            # Preserve an explicit acquisition failure rather than silently
-            # treating a missing archive year as zero events.
-            raise RuntimeError(f"NCEI Storm Events acquisition failed for {year}: {exc}") from exc
+            raise RuntimeError(
+                f"NCEI Storm Events acquisition failed for {year}: {exc}"
+            ) from exc
         print(f"  candidate records: {len(frame)}")
         frames.append(frame)
 
