@@ -37,6 +37,9 @@ OPERATIONAL_LIVE_PREDICTORS = {
     "zdr_mean_db_delta", "zdr_mean_db_rate_per_min", "rhohv_mean_delta", "rhohv_mean_rate_per_min",
     "kdp_mean_degkm_delta", "kdp_mean_degkm_rate_per_min", "velocity_mean_kt_delta", "velocity_mean_kt_rate_per_min",
     "visibility_m", "gust_ms", "surface_temperature_k", "cape_jkg", "cin_jkg",
+    "surface_wind_speed_kt", "shear_0_6km_kt", "temperature_dewpoint_spread_k",
+    "cape_shear_product", "gust_excess_kt", "reflectivity_core_excess",
+    "area_per_length", "shear_motion_ratio",
     "pwat_mm", "mlcape_jkg", "mlcin_jkg", "mucape_jkg", "mucin_jkg",
     "srh01_m2s2", "srh03_m2s2", "shear_u_0_6km_ms", "shear_v_0_6km_ms",
     "shear_0_6km_ms", "u10_ms", "v10_ms", "temperature_2m_k",
@@ -144,6 +147,27 @@ def build_features(frame: pd.DataFrame) -> pd.DataFrame:
         df["motion_speed_kmh"] = (
             displacement / dt_min.replace(0, np.nan) * 60.0
         ).where(continuity_ok)
+
+    if {"u10_ms", "v10_ms"}.issubset(df.columns):
+        wind = np.hypot(pd.to_numeric(df["u10_ms"], errors="coerce"), pd.to_numeric(df["v10_ms"], errors="coerce"))
+        df["surface_wind_speed_kt"] = wind * 1.94384449244
+    if {"shear_u_0_6km_ms", "shear_v_0_6km_ms"}.issubset(df.columns):
+        shear = np.hypot(pd.to_numeric(df["shear_u_0_6km_ms"], errors="coerce"), pd.to_numeric(df["shear_v_0_6km_ms"], errors="coerce"))
+        df["shear_0_6km_kt"] = shear * 1.94384449244
+    if {"temperature_2m_k", "dewpoint_2m_k"}.issubset(df.columns):
+        df["temperature_dewpoint_spread_k"] = pd.to_numeric(df["temperature_2m_k"], errors="coerce") - pd.to_numeric(df["dewpoint_2m_k"], errors="coerce")
+    if {"cape_jkg", "shear_0_6km_kt"}.issubset(df.columns):
+        df["cape_shear_product"] = pd.to_numeric(df["cape_jkg"], errors="coerce") * pd.to_numeric(df["shear_0_6km_kt"], errors="coerce")
+    if {"gust_ms", "surface_wind_speed_kt"}.issubset(df.columns):
+        df["gust_excess_kt"] = pd.to_numeric(df["gust_ms"], errors="coerce") * 1.94384449244 - pd.to_numeric(df["surface_wind_speed_kt"], errors="coerce")
+    if {"max_reflectivity_dbz", "mean_reflectivity_dbz"}.issubset(df.columns):
+        df["reflectivity_core_excess"] = pd.to_numeric(df["max_reflectivity_dbz"], errors="coerce") - pd.to_numeric(df["mean_reflectivity_dbz"], errors="coerce")
+    if {"area_km2", "length_km"}.issubset(df.columns):
+        length = pd.to_numeric(df["length_km"], errors="coerce").replace(0, np.nan)
+        df["area_per_length"] = pd.to_numeric(df["area_km2"], errors="coerce") / length
+    if {"shear_0_6km_kt", "motion_speed_kt"}.issubset(df.columns):
+        motion = pd.to_numeric(df["motion_speed_kt"], errors="coerce").abs().replace(0, np.nan)
+        df["shear_motion_ratio"] = pd.to_numeric(df["shear_0_6km_kt"], errors="coerce") / motion
 
     for col in [
         "max_reflectivity_dbz", "mean_reflectivity_dbz", "area_km2",
