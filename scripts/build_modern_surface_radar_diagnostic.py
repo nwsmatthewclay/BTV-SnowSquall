@@ -21,20 +21,36 @@ def load_radar_objects(replay_case: Path) -> pd.DataFrame:
         if path.name == "replay_manifest.json":
             continue
         payload = json.loads(path.read_text(encoding="utf-8"))
+        scan_time = pd.to_datetime(
+            payload.get("metadata", {}).get("scan_time_utc"),
+            utc=True,
+            errors="coerce",
+        )
+        if pd.isna(scan_time):
+            continue
         for feature in payload.get("features", []):
-            p = feature.get("properties", {})
-            if p.get("centroid_lat") is None or p.get("centroid_lon") is None:
+            props = feature.get("properties", {})
+            if props.get("centroid_lat") is None or props.get("centroid_lon") is None:
                 continue
             rows.append({
-                "radar_time": pd.to_datetime(payload.get("metadata", {}).get("scan_time_utc"), utc=True),
-                "track_id": p.get("track_id"),
-                "lat": float(p["centroid_lat"]),
-                "lon": float(p["centroid_lon"]),
-                "max_reflectivity_dbz": p.get("max_reflectivity_dbz"),
-                "area_km2": p.get("area_km2"),
-                "motion_speed_kt": p.get("motion_speed_kt"),
+                "radar_time": scan_time,
+                "track_id": props.get("track_id"),
+                "lat": float(props["centroid_lat"]),
+                "lon": float(props["centroid_lon"]),
+                "max_reflectivity_dbz": props.get("max_reflectivity_dbz"),
+                "area_km2": props.get("area_km2"),
+                "motion_speed_kt": props.get("motion_speed_kt"),
             })
     return pd.DataFrame(rows)
+
+
+def _base_surface_row(obs) -> dict:
+    return {
+        "observation_time_utc": obs.valid.isoformat(),
+        "visibility_mi": getattr(obs, "visibility_mi", None),
+        "wind_gust_kt": getattr(obs, "wind_gust_kt", None),
+        "wxcodes": getattr(obs, "wxcodes", None),
+    }
 
 
 def build(surface_file: Path, replay_case: Path, output_csv: Path) -> dict:
@@ -55,61 +71,51 @@ def build(surface_file: Path, replay_case: Path, output_csv: Path) -> dict:
                 (radar["radar_time"] - obs.valid).abs() <= pd.Timedelta(minutes=60)
             ].copy()
             if nearby.empty:
-                rows.append({
-                    "observation_time_utc": obs.valid.isoformat(),
-                    "visibility_mi": getattr(obs, "visibility_mi", None),
-                    "wind_gust_kt": getattr(obs, "wind_gust_kt", None),
-                    "wxcodes": getattr(obs, "wxcodes", None),
-                    "radar_match_status": "no_radar_object_within_60min",
-                })
-            else:
-                nearby["distance_km"] = nearby.apply(
-                    lambda r: distance_km(obs.lat, obs.lon, r.lat, r.lon), axis=1
-                )
-                fallback = nearby.sort_values(["distance_km", "radar_time"]).iloc[0]
-                rows.append({
-                    "observation_time_utc": obs.valid.isoformat(),
-                    "visibility_mi": getattr(obs, "visibility_mi", None),
-                    "wind_gust_kt": getattr(obs, "wind_gust_kt", None),
-                    "wxcodes": getattr(obs, "wxcodes", None),
-                    "radar_match_status": "nearby_but_not_local_within_60min",
-                    "radar_time_utc": fallback.radar_time.isoformat(),
-                    "radar_time_offset_minutes": (fallback.radar_time - obs.valid).total_seconds() / 60.0,
-                    "radar_track_id": fallback.track_id,
-                    "radar_distance_km": float(fallback.distance_km),
-                    "radar_max_reflectivity_dbz": fallback.max_reflectivity_dbz,
-                    "radar_area_km2": fallback.area_km2,
-                    "radar_motion_speed_kt": fallback.motion_speed_kt,
-                })
-            continue
+                row = _base_surface_row(obs)
+                row["radar_match_status"] = "no_radar_object_within_60min"
+                rows.append(row)
+                continue
 
-        rows.append({
-                "observation_time_utc": obs.valid.isoformat(),
-                "visibility_mi": getattr(obs, "visibility_mi", None),
-                "wind_gust_kt": getattr(obs, "wind_gust_kt", None),
-                "wxcodes": getattr(obs, "wxcodes", None),
-                "radar_match_status": "no_radar_object_within_10min",
+            nearby["distance_km"] = nearby.apply(
+                lambda r: distance_km(obs.lat, obs.lon, r.lat, r.lon),
+                axis=1,
+            )
+            match = nearby.sort_values(["distance_km", "radar_time"]).iloc[0]
+            row = _base_surface_row(obs)
+            row.update({
+                "radar_match_status": "nearby_but_not_local_within_60min",
+                "radar_time_utc": match.radar_time.isoformat(),
+                "radar_time_offset_minutes": (
+                    (match.radar_time - obs.valid).total_seconds() / 60.0
+                ),
+                "radar_track_id": match.track_id,
+                "radar_distance_km": float(match.distance_km),
+                "radar_max_reflectivity_dbz": match.max_reflectivity_dbz,
+                "radar_area_km2": match.area_km2,
+                "radar_motion_speed_kt": match.motion_speed_kt,
             })
+            rows.append(row)
             continue
 
         candidates["distance_km"] = candidates.apply(
-            lambda r: distance_km(obs.lat, obs.lon, r.lat, r.lon), axis=1
+            lambda r: distance_km(obs.lat, obs.lon, r.lat, r.lon),
+            axis=1,
         )
         match = candidates.sort_values(["distance_km", "radar_time"]).iloc[0]
-        rows.append({
-            "observation_time_utc": obs.valid.isoformat(),
-            "visibility_mi": getattr(obs, "visibility_mi", None),
-            "wind_gust_kt": getattr(obs, "wind_gust_kt", None),
-            "wxcodes": getattr(obs, "wxcodes", None),
+        row = _base_surface_row(obs)
+        row.update({
             "radar_match_status": "matched",
             "radar_time_utc": match.radar_time.isoformat(),
-            "radar_time_offset_minutes": (match.radar_time - obs.valid).total_seconds() / 60.0,
+            "radar_time_offset_minutes": (
+                (match.radar_time - obs.valid).total_seconds() / 60.0
+            ),
             "radar_track_id": match.track_id,
             "radar_distance_km": float(match.distance_km),
             "radar_max_reflectivity_dbz": match.max_reflectivity_dbz,
             "radar_area_km2": match.area_km2,
             "radar_motion_speed_kt": match.motion_speed_kt,
         })
+        rows.append(row)
 
     result = pd.DataFrame(rows)
     output_csv.parent.mkdir(parents=True, exist_ok=True)
@@ -118,32 +124,61 @@ def build(surface_file: Path, replay_case: Path, output_csv: Path) -> dict:
     valid_vis = result.dropna(subset=["visibility_mi"]).copy()
     summary = {
         "surface_observations": int(len(result)),
-        "matched_surface_observations": int((result["radar_match_status"] == "matched").sum()),
+        "matched_surface_observations": int(
+            (result["radar_match_status"] == "matched").sum()
+        ),
+        "nearby_nonlocal_matches": int(
+            (result["radar_match_status"] == "nearby_but_not_local_within_60min").sum()
+        ),
+        "no_radar_match": int(
+            result["radar_match_status"].eq("no_radar_object_within_60min").sum()
+        ),
         "scoring_status": "not_scored",
     }
+
     if not valid_vis.empty:
         ordered = valid_vis.sort_values("observation_time_utc")
-        for threshold, label in [(0.5, "0p5"), (0.25, "0p25"), (0.125, "0p125")]:
+        for threshold, label in [
+            (0.5, "0p5"),
+            (0.25, "0p25"),
+            (0.125, "0p125"),
+        ]:
             hit = ordered[ordered["visibility_mi"] <= threshold]
             if not hit.empty:
                 row = hit.iloc[0]
-                summary[f"first_visibility_le_{label}_utc"] = str(row["observation_time_utc"])
+                summary[f"first_visibility_le_{label}_utc"] = str(
+                    row["observation_time_utc"]
+                )
                 summary[f"radar_distance_km_at_first_visibility_le_{label}"] = (
-                    float(row["radar_distance_km"]) if pd.notna(row.get("radar_distance_km")) else None
+                    float(row["radar_distance_km"])
+                    if pd.notna(row.get("radar_distance_km"))
+                    else None
                 )
                 summary[f"radar_max_reflectivity_at_first_visibility_le_{label}_dbz"] = (
                     float(row["radar_max_reflectivity_dbz"])
-                    if pd.notna(row.get("radar_max_reflectivity_dbz")) else None
+                    if pd.notna(row.get("radar_max_reflectivity_dbz"))
+                    else None
                 )
+
         min_row = valid_vis.sort_values("visibility_mi").iloc[0]
         summary.update({
             "minimum_visibility_mi": float(min_row["visibility_mi"]),
             "minimum_visibility_time_utc": str(min_row["observation_time_utc"]),
-            "radar_distance_km_at_min_visibility": float(min_row["radar_distance_km"]) if pd.notna(min_row.get("radar_distance_km")) else None,
-            "radar_max_reflectivity_at_min_visibility_dbz": float(min_row["radar_max_reflectivity_dbz"]) if pd.notna(min_row.get("radar_max_reflectivity_dbz")) else None,
+            "radar_distance_km_at_min_visibility": (
+                float(min_row["radar_distance_km"])
+                if pd.notna(min_row.get("radar_distance_km"))
+                else None
+            ),
+            "radar_max_reflectivity_at_min_visibility_dbz": (
+                float(min_row["radar_max_reflectivity_dbz"])
+                if pd.notna(min_row.get("radar_max_reflectivity_dbz"))
+                else None
+            ),
         })
+
     output_csv.with_suffix(".json").write_text(
-        json.dumps(summary, indent=2) + "\n", encoding="utf-8"
+        json.dumps(summary, indent=2) + "\n",
+        encoding="utf-8",
     )
     print(json.dumps(summary, indent=2))
     return summary
