@@ -22,6 +22,16 @@ from sklearn.metrics import (
 from sklearn.model_selection import LeaveOneGroupOut
 
 
+def class_balanced_weights(y):
+    y = np.asarray(y, dtype=int)
+    counts = np.bincount(y, minlength=2).astype(float)
+    total = float(len(y))
+    weights = np.ones_like(y, dtype=float)
+    for cls in (0, 1):
+        if counts[cls] > 0:
+            weights[y == cls] = total / (2.0 * counts[cls])
+    return weights
+
 def load_schema(path: Path) -> dict:
     return json.loads(path.read_text(encoding="utf-8"))
 
