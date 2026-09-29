@@ -54,12 +54,21 @@ jobs:
             --config config/snow_squall_discovery.json \
             --output-dir data/discovery/snow_squall
 
+      - name: Audit case ledger before acquisition
+        run: |
+          python scripts/audit_snow_squall_case_ledger.py \
+            --cases data/discovery/snow_squall/snow_squall_candidates.csv \
+            --radar data/discovery/snow_squall/snow_squall_radar_manifest.csv \
+            --start-year 2002 \
+            --end-year 2026 \
+            --output data/discovery/snow_squall/snow_squall_case_ledger_audit.json
       - name: Validate discovery outputs
         run: |
           set -euo pipefail
           test -s data/discovery/snow_squall/snow_squall_candidates.csv
           test -s data/discovery/snow_squall/snow_squall_radar_manifest.csv
           test -s data/discovery/snow_squall/snow_squall_discovery_summary.json
+          test -s data/discovery/snow_squall/snow_squall_case_ledger_audit.json
           python - <<'PY'
           import json
           from pathlib import Path
