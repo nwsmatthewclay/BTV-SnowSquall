@@ -18,6 +18,8 @@ from acquisition.level2_reader import read_level2, resolve_fields, volume_metada
 from processing.object_detector import detect_reflectivity_objects
 from processing.object_tracker import CentroidTracker
 from processing.radar_grid import grid_field_2d, grid_latlon, grid_lowest_sweep
+from processing.radar_features import object_field_summary, velocity_object_summary
+from processing.vertical_structure import summarize_vertical_structure
 from acquisition.rap_environment import acquire_for_radar_time
 from processing.rap_features import extract_features
 from processing.radar_sites import apply_radar_origin, radar_origin_for_site
@@ -153,14 +155,28 @@ def process_volume(
     if reflectivity is None:
         raise RuntimeError("No reflectivity field found in Level-II volume")
 
+    available_fields = [name for name in fields.values() if name]
     grid = grid_lowest_sweep(
         radar,
-        reflectivity,
+        available_fields,
         grid_size_km=180.0,
         spacing_km=1.0,
     )
     data = grid_field_2d(grid, reflectivity)
     lat, lon = grid_latlon(grid)
+    gridded = {
+        canonical: grid_field_2d(grid, actual)
+        for canonical, actual in fields.items()
+        if actual and actual in grid.fields
+    }
+    field_gradients = {}
+    for canonical in ("zdr", "velocity"):
+        field = gridded.get(canonical)
+        if field is None:
+            continue
+        field_gradients[canonical] = np.hypot(
+            *np.gradient(field, 1.0, edge_order=1)
+        )
 
     detections = detect_reflectivity_objects(data)
     metadata = volume_metadata(radar, path)
@@ -257,6 +273,51 @@ def process_volume(
             "area_km2": area_km2,
         }
 
+        rich_radar = {}
+        for canonical in ("zdr", "rhohv", "kdp", "velocity"):
+            field = gridded.get(canonical)
+            if field is None:
+                continue
+            values = field[footprint]
+            finite = values[np.isfinite(values)]
+            if canonical == "zdr":
+                gradient = field_gradients.get("zdr")
+                stats = object_field_summary(
+                    finite, "zdr", gradient[footprint] if gradient is not None else None, "_dbkm"
+                )
+                rich_radar["zdr_mean_db"] = stats["zdr_mean"]
+                rich_radar["zdr_p90_db"] = stats["zdr_p90"]
+                rich_radar["zdr_gradient_dbkm"] = stats["zdr_gradient_dbkm"]
+            elif canonical == "rhohv":
+                stats = object_field_summary(finite, "rhohv")
+                rich_radar["rhohv_mean"] = stats["rhohv_mean"]
+                rich_radar["rhohv_max"] = stats["rhohv_max"]
+                rich_radar["rhohv_p90"] = stats["rhohv_p90"]
+                rich_radar["rhohv_min"] = float(np.nanmin(finite)) if finite.size else np.nan
+            elif canonical == "kdp":
+                stats = object_field_summary(finite, "kdp")
+                rich_radar["kdp_mean_degkm"] = stats["kdp_mean"]
+                rich_radar["kdp_p90_degkm"] = stats["kdp_p90"]
+            elif canonical == "velocity":
+                gradient = field_gradients.get("velocity")
+                rich_radar.update(
+                    velocity_object_summary(
+                        finite, gradient[footprint] if gradient is not None else None
+                    )
+                )
+        if centroid_lat is not None and centroid_lon is not None:
+            try:
+                rich_radar.update(
+                    summarize_vertical_structure(
+                        radar,
+                        centroid_lat,
+                        centroid_lon,
+                        reflectivity,
+                        radar_origin=radar_origin,
+                    )
+                )
+            except Exception as exc:
+                print(f"Vertical radar diagnostic warning: {type(exc).__name__}: {exc}")
         environment = {"status": "unavailable", "source": "RAP", "fields": {}}
         if rap_result is not None and centroid_lat is not None and centroid_lon is not None:
             rap_match, rap_path = rap_result
@@ -294,6 +355,23 @@ def process_volume(
             "core_pixel_count": int(obj["core_pixel_count"]),
             "touches_grid_edge": bool(obj.get("touches_grid_edge", False)),
             "core_fraction": float(obj["core_pixel_count"]) / max(1, int(obj["pixel_count"])),
+            "echo_top_km": rich_radar.get("echo_top_km"),
+            "top_minus_base_km": rich_radar.get("top_minus_base_km"),
+            "vertical_reflectivity_gradient": rich_radar.get("vertical_reflectivity_gradient"),
+            "vertical_valid_points": rich_radar.get("vertical_valid_points"),
+            "zdr_mean_db": rich_radar.get("zdr_mean_db"),
+            "zdr_p90_db": rich_radar.get("zdr_p90_db"),
+            "zdr_gradient_dbkm": rich_radar.get("zdr_gradient_dbkm"),
+            "rhohv_mean": rich_radar.get("rhohv_mean"),
+            "rhohv_max": rich_radar.get("rhohv_max"),
+            "rhohv_p90": rich_radar.get("rhohv_p90"),
+            "rhohv_min": rich_radar.get("rhohv_min"),
+            "kdp_mean_degkm": rich_radar.get("kdp_mean_degkm"),
+            "kdp_p90_degkm": rich_radar.get("kdp_p90_degkm"),
+            "velocity_mean_kt": rich_radar.get("velocity_mean_kt"),
+            "velocity_std_kt": rich_radar.get("velocity_std_kt"),
+            "velocity_p90_abs_kt": rich_radar.get("velocity_p90_abs_kt"),
+            "velocity_gradient_ktkm": rich_radar.get("velocity_gradient_ktkm"),
             "motion_speed_kt": speed_kt,
             "motion_dir_deg": direction_deg,
             "motion_direction_deg": direction_deg,
