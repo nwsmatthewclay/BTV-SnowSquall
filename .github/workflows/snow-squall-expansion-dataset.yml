@@ -33,27 +33,7 @@ on:
         required: false
         default: "25"
         type: string
-    inputs:
-      official_offset:
-        description: "Number of documented candidates to skip for this batch"
-        required: false
-        default: "0"
-        type: string
-      unverified_offset:
-        description: "Number of review candidates to skip for this batch"
-        required: false
-        default: "0"
-        type: string
-      max_official:
-        description: "Documented cases in this batch"
-        required: false
-        default: "50"
-        type: string
-      max_unverified:
-        description: "Review candidates in this batch"
-        required: false
-        default: "15"
-        type: string
+
 
 permissions:
   actions: read
@@ -190,7 +170,7 @@ jobs:
           python - <<'PY'
           import pandas as pd
           d=pd.read_csv('data/derived/snow_squall_expansion_objects_tagged.csv')
-          verified=d[d.verification_class.isin(['official_documented','official_plus_independent_report'])].copy()
+          verified=d[d.verification_class.isin(['official_documented','official_plus_independent_report','official_plus_warning','official_plus_warning_and_report'])].copy()
           unverified=d[d.verification_class.eq('unverified_report_only')].copy()
           verified.to_csv('data/derived/snow_squall_verified_objects.csv',index=False)
           unverified.to_csv('data/derived/snow_squall_unverified_objects.csv',index=False)
