@@ -6,6 +6,12 @@ on:
       - National SQW Radar Sample
     types:
       - completed
+  push:
+    branches:
+      - snow-squall-model-foundation
+    paths:
+      - scripts/label_sqw_warning_object_scans.py
+      - .github/workflows/national-sqw-radar-pretraining.yml
   workflow_dispatch:
     inputs:
       max_manifest_rows:
@@ -24,7 +30,7 @@ concurrency:
 
 jobs:
   pretrain:
-    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 360
     env:
@@ -49,6 +55,16 @@ jobs:
 
       - name: Find latest radar sample for manual run
         if: github.event_name == 'workflow_dispatch'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          run_id="$(gh run list --workflow "National SQW Radar Sample" --branch snow-squall-model-foundation --status success --limit 1 --json databaseId --jq '.[0].databaseId')"
+          test -n "${run_id}"
+          gh run download "${run_id}" --name national-sqw-radar-sample --dir radar_sample
+
+      - name: Find latest radar sample for push runs
+        if: github.event_name == 'push'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
