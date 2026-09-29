@@ -86,7 +86,7 @@ def main():
 
     official = candidates[
         candidates["verification_class"].isin(
-            ["official_documented", "official_plus_independent_report", "official_plus_warning", "official_plus_warning_and_report"]
+            ["official_documented", "official_plus_independent_report", "official_plus_warning", "official_plus_warning_and_report", "official_plus_warning_verified", "warning_verified"]
         )
     ].copy()
     unverified = candidates[
@@ -130,7 +130,7 @@ def main():
         "radar_manifest_rows": int(len(selected_radar)),
         "official_case_ids": sorted(official["candidate_id"].astype(str).tolist()),
         "unverified_case_ids": sorted(unverified["candidate_id"].astype(str).tolist()),
-        "training_policy": "Only official_documented and official-plus-independent-evidence cases may enter the first expanded positive-label training pass. Warning-only, warning-plus-report, and screening candidates remain a review/feature-population pool.",
+        "training_policy": "Official NCEI cases and IEM warning_verified cases may enter the first expanded positive-label research training pass. warning_only, warning_plus_report, screening, and report-only candidates remain a review/feature-population pool.",
     }
     import json
     (out / "snow_squall_expansion_selection.json").write_text(
