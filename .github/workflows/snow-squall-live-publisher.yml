@@ -140,7 +140,7 @@ PY
               cp "/tmp/${site}_health.log" "$health"
               echo "$site validated successfully."
             else
-              echo "WARNING: $site validation failed; retaining prior known-good product."
+              echo "WARNING: $site validation failed; retaining prior product (known-good product)."
               backup_prefix="/tmp/live-backup/${site}_"
               for suffix in state.json objects.geojson history.jsonl history.csv; do
                 if [ -f "${backup_prefix}${suffix}" ]; then
