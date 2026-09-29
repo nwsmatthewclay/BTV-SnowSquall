@@ -56,3 +56,19 @@ def test_model_horizon_is_read_from_target():
 def test_unknown_model_horizon_is_none():
     runtime = ModelRuntime(metadata={"target": "snow_squall_probability"})
     assert runtime.horizon_minutes is None
+
+
+def test_candidate_score_method_can_score_without_release(tmp_path):
+    (tmp_path / "metrics.json").write_text(
+        json.dumps({
+            "operational_release_status": "candidate_only",
+            "target": "squall_onset_within_15m",
+            "predictor_columns": ["x"],
+        }),
+        encoding="utf-8",
+    )
+    joblib.dump(FakeModel(), tmp_path / "baseline_model.joblib")
+    runtime = ModelRuntime.load(tmp_path)
+    result = runtime.score_candidate(pd.DataFrame({"x": [1.0]}))
+    assert result == [0.4]
+    assert runtime.enabled is False
