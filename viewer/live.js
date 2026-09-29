@@ -41,21 +41,22 @@ async function fetchOptionalJson(target,fallback){
 }
 
 async function getFeed(site){
-  const [geo,state,history]=await Promise.all([
+  const [geo,state,history,health]=await Promise.all([
     fetch(feedUrl(site,"objects")).then(r=>r.ok?r.json():Promise.reject(new Error(site+" objects HTTP "+r.status))),
     fetch(feedUrl(site,"state")).then(r=>r.ok?r.json():Promise.reject(new Error(site+" state HTTP "+r.status))),
-    fetchOptionalJson(feedUrl(site,"history"),[])
+    fetchOptionalJson(feedUrl(site,"history"),[]),
+    fetchOptionalJson(feedUrl(site,"health"),null)
   ]);
-  return {geo,state,history};
+  return {geo,state,history,health};
 }
 
 function summarize(site,item){
-  const {geo,state,history}=item;
+  const {geo,state,history,health}=item;
   const features=geo.features||[];
   const last=state.last_scan_time_utc||geo.metadata?.scan_time_utc||geo.metadata?.last_scan_utc;
   const age=ageMinutes(last);
   const good=age<=30;
-  return {site,features,state,geo,history,last,age,good};
+  return {site,features,state,geo,history,health,last,age,good};
 }
 
 function renderRadarCards(summary){
@@ -72,6 +73,7 @@ function renderRadarCards(summary){
       "<div class='live-stat'><span>Age</span><b>"+(Number.isFinite(x.age)?num(x.age,1)+" min":"—")+"</b></div>"+
       "<div class='live-stat'><span>Objects</span><b>"+x.features.length+"</b></div>"+
       "<div class='live-stat'><span>History</span><b>"+x.history.length.toLocaleString()+" records</b></div>"+
+      "<div class='live-stat'><span>Publish state</span><b>"+esc(x.health?.status||"unknown")+"</b></div>"+
       "<div class='live-stat'><span>Probability</span><b>Disabled</b></div></div>";
   }).join("");
 }
