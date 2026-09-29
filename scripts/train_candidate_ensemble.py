@@ -127,7 +127,7 @@ def main():
         "training_groups":int(data["split_group"].nunique()),
         "positive_case_groups":positive_groups,
         "positive_case_group_count":len(positive_groups),
-        "evaluation_unit":"case_or_null_group",
+        "evaluation_unit":"episode_or_case_or_null_group",
         "evaluation_status":"case_held_out_exploratory" if len(positive_groups)>=3 else "case_held_out_not_interpretable",
         "operational_release_status":"candidate_only",
         "operational_release_note":"Research candidate only; independent modern verification and calibration are required before operational release.",
