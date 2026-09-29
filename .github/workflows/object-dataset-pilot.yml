@@ -437,7 +437,13 @@ jobs:
             --path data/manifests \
             --path data/derived/baseline_horizon_summary.json \
             --path data/derived/object_model_features_pilot.schema.json \
-            --path data/derived/object_model_features_pilot.coverage.json
+            --path data/derived/object_model_features_pilot.coverage.json \
+            --path data/derived/positive_level2_window_coverage.json \
+            --path data/derived/null_level2_window_coverage.json \
+            --path data/derived/positive_event_association_diagnostics.json \
+            --path data/derived/null_window_coverage.json \
+            --path data/derived/positive_environment_audit.json \
+            --path data/derived/null_environment_audit.json
 
       - name: Build event-level verification diagnostics
         run: |
