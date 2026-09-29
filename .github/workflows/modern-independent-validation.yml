@@ -45,6 +45,10 @@ jobs:
           python -c "import acquisition, processing, scripts; print('Repository imports OK')"
           git rev-parse HEAD
 
+      - name: Audit modern training separation
+        run: |
+          python scripts/audit_modern_training_separation.py             --modern data/derived/modern_independent_validation_cases.csv             --development-root data/manifests             --report data/derived/modern_training_separation_audit.json
+
       - name: Audit modern validation manifest
         run: |
           python scripts/audit_modern_validation_manifest.py             data/manifests/modern_independent_validation_cases.csv             --report data/derived/modern_validation_manifest_audit.json
