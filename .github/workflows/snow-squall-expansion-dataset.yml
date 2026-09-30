@@ -287,6 +287,9 @@ jobs:
             root="$(find national_pretrain_artifact -type d -name 'national_sqw_weak_model_15m' -print -quit | xargs -r dirname)"
           fi
           echo "root=$root" >> "$GITHUB_OUTPUT"
+          if [ -n "$root" ]; then
+            cp -R "$root"/national_sqw_weak_model_*m data/derived/
+          fi
           echo "National pretraining root: ${root:-none}"
 
       - name: Add national BTV-excluded radar prior features
