@@ -7,9 +7,64 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 
+SHADOW_HORIZONS = ("15", "30", "45", "60")
+SHADOW_SITES = ("KCXX", "KTYX")
+
+
 def parse_time(value):
     return datetime.fromisoformat(str(value).replace("Z", "+00:00")).astimezone(timezone.utc)
 
+
+
+def audit_shadow_payload(path: Path) -> dict:
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    if payload.get("mode") != "live_shadow_research":
+        raise ValueError(f"{path}: unexpected shadow mode")
+    if payload.get("operational_release_status") != "candidate_only_not_operational":
+        raise ValueError(f"{path}: shadow feed is not marked candidate-only")
+    records = payload.get("records") or []
+    probability_count = 0
+    monotone_failures = 0
+    out_of_range = 0
+    for record in records:
+        probs = record.get("research_probabilities") or {}
+        values = []
+        for horizon in SHADOW_HORIZONS:
+            value = probs.get(horizon)
+            if value is None:
+                continue
+            try:
+                value = float(value)
+            except (TypeError, ValueError):
+                out_of_range += 1
+                continue
+            if not 0.0 <= value <= 1.0:
+                out_of_range += 1
+            values.append(value)
+            probability_count += 1
+        if any(values[i] > values[i + 1] + 1e-12 for i in range(len(values) - 1)):
+            monotone_failures += 1
+    if out_of_range:
+        raise ValueError(f"{path}: {out_of_range} invalid probabilities")
+    if monotone_failures:
+        raise ValueError(f"{path}: non-monotone cumulative horizons")
+    return {
+        "site": payload.get("site"),
+        "record_count": len(records),
+        "probability_count": probability_count,
+        "scored_object_count": int(payload.get("scored_object_count", 0)),
+        "status": "pass",
+    }
+
+
+def audit_shadow_root(root: Path) -> dict:
+    rows = []
+    for site in SHADOW_SITES:
+        path = root / f"{site}_shadow.json"
+        if not path.exists():
+            raise ValueError(f"Missing shadow feed: {path}")
+        rows.append(audit_shadow_payload(path))
+    return {"status": "pass", "sites": rows}
 
 def healthcheck(state_path: Path, geojson_path: Path, max_age_minutes: float = 15.0) -> dict:
     now = datetime.now(timezone.utc)
@@ -48,6 +103,7 @@ def main():
     parser.add_argument("--state", default="data/derived/live_tracker_state.json")
     parser.add_argument("--geojson", default="data/derived/live_objects.geojson")
     parser.add_argument("--max-age-minutes", type=float, default=15.0)
+    parser.add_argument("--shadow-root", default=None, help="Optional directory containing KCXX_shadow.json and KTYX_shadow.json.")
     args = parser.parse_args()
 
     report = healthcheck(
@@ -55,6 +111,12 @@ def main():
         Path(args.geojson),
         max_age_minutes=args.max_age_minutes,
     )
+    if args.shadow_root:
+        try:
+            report["shadow"] = audit_shadow_root(Path(args.shadow_root))
+        except Exception as exc:
+            report["shadow"] = {"status": "failed", "error": f"{type(exc).__name__}: {exc}"}
+            report["status"] = "degraded"
     print(json.dumps(report, indent=2))
     if report["status"] != "healthy":
         raise SystemExit(2)
