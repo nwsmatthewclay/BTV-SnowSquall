@@ -138,16 +138,71 @@ jobs:
             --output data/derived/national_sqw_pretraining_features.csv \
             --schema-output data/derived/national_sqw_pretraining_features.schema.json
 
+      - name: Restore prior cumulative pretraining features
+        id: prior_features
+        if: github.event_name != 'workflow_dispatch' || true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          run_id="$(gh run list --workflow "National SQW Radar Pretraining Pool" --branch snow-squall-model-foundation --status success --limit 1 --json databaseId --jq '.[0].databaseId')"
+          prior=""
+          if [ -n "$run_id" ] && [ "$run_id" != "null" ]; then
+            gh run download "$run_id" --name national-sqw-radar-pretraining-pool --dir prior_pretraining || true
+            prior="$(find prior_pretraining -name 'national_sqw_pretraining_features_cumulative.csv' -type f -print -quit)"
+          fi
+          echo "path=$prior" >> "$GITHUB_OUTPUT"
+          echo "Prior cumulative feature batch: ${prior:-none}"
+
+      - name: Merge cumulative pretraining feature population
+        run: |
+          set -euo pipefail
+          current=data/derived/national_sqw_pretraining_features.csv
+          cumulative=data/derived/national_sqw_pretraining_features_cumulative.csv
+          if [ -n "${{ steps.prior_features.outputs.path }}" ]; then
+            python scripts/merge_expansion_feature_batches.py \
+              --current "$current" \
+              --prior "${{ steps.prior_features.outputs.path }}" \
+              --output "$cumulative"
+          else
+            cp "$current" "$cumulative"
+          fi
+          python - <<'PY'
+          import pandas as pd
+          d=pd.read_csv('data/derived/national_sqw_pretraining_features_cumulative.csv')
+          print('Cumulative national pretraining rows:',len(d))
+          if 'case_id' in d: print('Unique warning cases:',d['case_id'].nunique())
+          if 'episode_id' in d: print('Unique warning episodes:',d['episode_id'].nunique())
+          PY
       - name: Train national weak pretraining models
         run: |
           for h in 15 30 45 60; do
             python scripts/train_sqw_weak_pretrain.py \
-              --features data/derived/national_sqw_pretraining_features.csv \
+              --features data/derived/national_sqw_pretraining_features_cumulative.csv \
               --target weak_onset_within_${h}m \
               --output-dir data/derived/national_sqw_weak_model_${h}m \
               --exclude-wfo BTV
           done
 
+      - name: Write next national pretraining batch state
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          import pandas as pd
+          d=pd.read_csv('data/manifests/national_sqw_pretraining/national_sqw_verified_radar_manifest.csv')
+          state={
+              'batch_rows': int(len(d)),
+              'batch_case_count': int(d['case_id'].nunique()) if 'case_id' in d else 0,
+              'current_offset': int('${{ inputs.verified_offset || '0' }}'),
+              'batch_size': int('${{ inputs.max_manifest_rows || '40' }}'),
+              'next_verified_offset': int('${{ inputs.verified_offset || '0' }}') + int('${{ inputs.max_manifest_rows || '40' }}'),
+              'max_automatic_verified': 300,
+              'auto_continue': True,
+          }
+          Path('data/derived/next_national_pretraining_batch.json').write_text(json.dumps(state,indent=2)+'\n',encoding='utf-8')
+          print(json.dumps(state,indent=2))
+          PY
       - name: Audit weak-label population
         run: |
           python - <<'PY'
@@ -166,4 +221,5 @@ jobs:
             data/manifests/national_sqw_pretraining
             data/derived/national_sqw_pretraining_*
             data/raw/national_sqw_pretraining_level2
+            data/derived/next_national_pretraining_batch.json
           if-no-files-found: error
