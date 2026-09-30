@@ -169,7 +169,7 @@ def build_labels(df: pd.DataFrame, cases_csv: Path):
 
         for radar_site, (_, min_distance, object_id) in by_radar.items():
             if min_distance <= association_radius:
-                association[_track_key(case_id, radar_site, object_id)] = min_distance
+                association[_track_key(case_id, radar_site, object_id)] = (min_distance, association_radius)
 
     for idx, row in out.iterrows():
         case_id = row.get("case_id")
@@ -200,7 +200,9 @@ def build_labels(df: pd.DataFrame, cases_csv: Path):
         )
         out.at[idx, "case_station_distance_km"] = distance
 
-        track_distance = association.get(_track_key(case_id, radar_site, object_id))
+        association_value = association.get(_track_key(case_id, radar_site, object_id))
+        track_distance = association_value[0] if association_value is not None else None
+        track_radius = association_value[1] if association_value is not None else ASSOCIATION_RADIUS_KM
         if track_distance is None:
             out.at[idx, "label_status"] = "unassociated_object"
             out.at[idx, "label_reason"] = "track_never_entered_event_association_corridor"
@@ -209,7 +211,7 @@ def build_labels(df: pd.DataFrame, cases_csv: Path):
         out.at[idx, "track_event_distance_km"] = track_distance
         out.at[idx, "track_event_associated"] = True
 
-        if track_distance > ASSOCIATION_RADIUS_KM:
+        if track_distance > track_radius:
             out.at[idx, "label_status"] = "unassociated_object"
             out.at[idx, "label_reason"] = "track_outside_event_association_radius"
             continue
