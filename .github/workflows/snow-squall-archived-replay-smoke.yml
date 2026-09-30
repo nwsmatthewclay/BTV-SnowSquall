@@ -14,7 +14,7 @@ on:
       case_id:
         description: "Replay case/episode identifier."
         required: true
-        default: "modern-validation"
+        default: "BTV20181121"
 
 permissions:
   actions: read
@@ -29,7 +29,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 240
     env:
-      PYTHONPATH: ${{github.workspace }}
+      PYTHONPATH: ${{ github.workspace }}
       PYTHONUNBUFFERED: "1"
 
     steps:
@@ -214,3 +214,4 @@ jobs:
           retention-days: 14
           path: |
             replay
+            replay_input_case.json
