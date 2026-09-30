@@ -1,0 +1,300 @@
+name: Snow Squall Benchmark Replay
+
+on:
+  push:
+    branches:
+      - snow-squall-model-foundation
+    paths:
+      - .github/workflows/snow-squall-benchmark-replay.yml
+  workflow_run:
+    workflows:
+      - Snow Squall Expansion Dataset
+    types:
+      - completed
+  workflow_dispatch:
+    inputs:
+      case_id:
+        description: "Historical benchmark case"
+        required: true
+        default: "BTV20181121"
+        type: string
+      radar_site:
+        description: "Benchmark radar"
+        required: true
+        default: "KCXX"
+        type: choice
+        options:
+          - KCXX
+          - KTYX
+
+permissions:
+  actions: read
+  contents: read
+
+concurrency:
+  group: snow-squall-benchmark-replay
+  cancel-in-progress: true
+
+jobs:
+  replay:
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    env:
+      PYTHONPATH: ${{ github.workspace }}
+      PYTHONUNBUFFERED: "1"
+
+    steps:
+      - name: Checkout model foundation
+        uses: actions/checkout@v4
+        with:
+          ref: snow-squall-model-foundation
+
+      - name: Resolve latest candidate model bundle
+        id: model
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          selected=""
+          while IFS= read -r run; do
+            run_id=$(printf '%s' "${run}" | jq -r '.id')
+            artifacts=$(gh api "/repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}/artifacts?per_page=100")
+            count=$(printf '%s' "${artifacts}" | jq '[.artifacts[] | select(.name=="snow-squall-live-model-bundles" and .expired==false)] | length')
+            if [ "${count}" -gt 0 ]; then
+              selected="${run}"
+              break
+            fi
+          done < <(
+            gh api "/repos/${GITHUB_REPOSITORY}/actions/runs?branch=snow-squall-model-foundation&per_page=100" |
+            jq -c '[.workflow_runs[]
+              | select(.name=="Snow Squall Expansion Dataset" or .name=="Object Dataset Full Expansion" or .name=="Object Dataset Pilot")
+              | select(.status=="completed" and .conclusion=="success")]
+              | sort_by(.id) | reverse | .[]
+            ]'
+          )
+
+          test -n "${selected}"
+          run_id=$(printf '%s' "${selected}" | jq -r '.id')
+          echo "Selected model run: ${run_id}"
+          echo "run_id=${run_id}" >> "${GITHUB_OUTPUT}"
+
+      - name: Download candidate model bundle
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          gh run download "${{ steps.model.outputs.run_id }}"             --name snow-squall-live-model-bundles             --dir model_bundle
+
+      - name: Resolve modern independent validation archive
+        id: validation
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          selected=""
+          while IFS= read -r run; do
+            run_id=$(printf '%s' "${run}" | jq -r '.id')
+            artifacts=$(gh api "/repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}/artifacts?per_page=100")
+            count=$(printf '%s' "${artifacts}" | jq '[.artifacts[] | select(.name=="modern-independent-validation" and .expired==false)] | length')
+            if [ "${count}" -gt 0 ]; then
+              selected="${run}"
+              break
+            fi
+          done < <(
+            gh api "/repos/${GITHUB_REPOSITORY}/actions/runs?branch=snow-squall-model-foundation&per_page=100" |
+            jq -c '[.workflow_runs[]
+              | select(.name=="Modern Independent Validation")
+              | select(.status=="completed" and .conclusion=="success")]
+              | sort_by(.id) | reverse | .[]
+            ]'
+          )
+          test -n "${selected}"
+          run_id=$(printf '%s' "${selected}" | jq -r '.id')
+          echo "Selected validation run: ${run_id}"
+          echo "run_id=${run_id}" >> "${GITHUB_OUTPUT}"
+
+      - name: Download validation archive
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          gh run download "${{ steps.validation.outputs.run_id }}"             --name modern-independent-validation             --dir validation_artifact
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install science dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt -r requirements-science.txt
+
+      - name: Resolve benchmark case inputs
+        id: inputs
+        env:
+          CASE_ID: ${{ inputs.case_id || 'BTV20181121' }}
+          RADAR_SITE: ${{ inputs.radar_site || 'KCXX' }}
+        run: |
+          set -euo pipefail
+          cases_csv="validation_artifact/manifests/modern_independent_validation_cases.csv"
+          source_root="validation_artifact/raw/modern_level2"
+          test -f "${cases_csv}"
+          test -d "${source_root}"
+
+          python - "${cases_csv}" "${source_root}" replay_input "${CASE_ID}" "${RADAR_SITE}" <<'PY'
+          import shutil
+          import sys
+          from pathlib import Path
+          import pandas as pd
+          from scripts.historical_operational_replay import scan_time
+
+          cases_csv, source_root, output_root, case_id, radar = sys.argv[1:]
+          cases = pd.read_csv(cases_csv)
+          row = cases[cases["case_id"].astype(str) == case_id]
+          if row.empty:
+              raise SystemExit(f"Benchmark case not found: {case_id}")
+          row = row.iloc[0]
+          expected_radar = str(row["radar_site"]).strip().upper()
+          if expected_radar != radar.upper():
+              raise SystemExit(f"Case {case_id} is paired with {expected_radar}, not {radar}")
+
+          start = pd.to_datetime(row["analysis_window_start_utc"], utc=True)
+          end = pd.to_datetime(row["analysis_window_end_utc"], utc=True)
+          dest = Path(output_root)
+          dest.mkdir(parents=True, exist_ok=True)
+          selected = 0
+          for path in Path(source_root).rglob("*"):
+              if not path.is_file() or path.name.endswith((".part", ".tmp")):
+                  continue
+              if not path.name.upper().startswith(expected_radar):
+                  continue
+              try:
+                  when = pd.Timestamp(scan_time(path))
+              except ValueError:
+                  continue
+              if start <= when <= end:
+                  shutil.copy2(path, dest / path.name)
+                  selected += 1
+          if selected == 0:
+              raise SystemExit(f"No Level-II volumes matched {case_id} / {radar}")
+          pd.DataFrame([{
+              "case_id": case_id,
+              "radar_site": expected_radar,
+              "window_start_utc": start.isoformat().replace("+00:00","Z"),
+              "window_end_utc": end.isoformat().replace("+00:00","Z"),
+              "level2_volume_count": selected,
+          }]).to_json("benchmark_case.json", orient="records", indent=2)
+          print(f"Benchmark {case_id}/{expected_radar}: {selected} Level-II volumes")
+          PY
+
+          echo "case_id=${CASE_ID}" >> "${GITHUB_OUTPUT}"
+          echo "radar_site=${RADAR_SITE}" >> "${GITHUB_OUTPUT}"
+
+      - name: Validate candidate model layout
+        run: |
+          set -euo pipefail
+          for h in 15 30 45 60; do
+            test -f "model_bundle/candidate_ensemble_expansion_${h}m/metrics.json"
+            test -f "model_bundle/candidate_ensemble_expansion_${h}m/baseline_model.joblib"
+          done
+
+      - name: Replay benchmark through every horizon
+        run: |
+          set -euo pipefail
+          rm -rf benchmark_replay
+          for h in 15 30 45 60; do
+            python scripts/historical_operational_replay.py               --case-id "${{ steps.inputs.outputs.case_id }}"               --input-dir replay_input               --output-dir "benchmark_replay/${h}m"               --state-path "benchmark_replay/${h}m/replay_state.json"               --model-dir "model_bundle/candidate_ensemble_expansion_${h}m"               --continue-on-error
+          done
+
+      - name: Audit benchmark replay
+        run: |
+          python scripts/audit_candidate_replay.py benchmark_replay
+
+      - name: Merge benchmark score timeline
+        run: |
+          python scripts/merge_replay_horizon_scores.py             benchmark_replay             --output benchmark_replay/score_timeline.json
+
+      - name: Build training-viewer case
+        run: |
+          python scripts/build_replay_viewer_case.py             --base-dir benchmark_replay/15m             --timeline benchmark_replay/score_timeline.json             --output benchmark_replay/viewer_case.geojson
+
+      - name: Export benchmark radar frames
+        run: |
+          python - <<'PY'
+          import json
+          import pandas as pd
+          info=json.loads(open("benchmark_case.json").read())[0]
+          pd.DataFrame([info])[["case_id","radar_site","window_start_utc","window_end_utc"]].to_csv("benchmark_viewer_manifest.csv",index=False)
+          PY
+          rm -rf benchmark_viewer
+          python scripts/export_viewer_radar_frames.py             --manifest benchmark_viewer_manifest.csv             --input replay_input             --output-dir benchmark_viewer
+
+      - name: Assemble benchmark static viewer
+        run: |
+          python scripts/build_replay_static_viewer.py             --case-id "${{ steps.inputs.outputs.case_id }}"             --radar-site "${{ steps.inputs.outputs.radar_site }}"             --replay-case benchmark_replay/viewer_case.geojson             --timeline benchmark_replay/score_timeline.json             --frames-root benchmark_viewer             --output-dir benchmark_viewer
+          cp viewer/training.html viewer/index.html viewer/app.js viewer/style.css benchmark_viewer/
+
+      - name: Build benchmark evolution summary
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          rows=[]
+          for path in sorted(Path("benchmark_replay").glob("*m/replay_manifest.json")):
+              d=json.loads(path.read_text())
+              rows.append({
+                "horizon":path.parent.name,
+                "probability_status":d.get("probability_status"),
+                "scan_count":d.get("scan_count"),
+                "object_scan_count":d.get("object_scan_count"),
+                "failed_scan_count":d.get("failed_scan_count"),
+              })
+          out={
+            "purpose":"research benchmark replay",
+            "case_id":json.loads(Path("benchmark_case.json").read_text())[0]["case_id"],
+            "radar_site":json.loads(Path("benchmark_case.json").read_text())[0]["radar_site"],
+            "future_information_policy":"one_scan_at_a_time",
+            "truth_note":"Use this replay to inspect score evolution over time. Historical probabilities are research diagnostics, not operational guidance or verified object-level truth.",
+            "horizons":rows,
+          }
+          Path("benchmark_replay/training_summary.json").write_text(json.dumps(out,indent=2)+"\n")
+          print(json.dumps(out,indent=2))
+          PY
+
+      - name: Validate benchmark viewer
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          root=Path("benchmark_viewer")
+          catalog=json.loads((root/"data/catalog.json").read_text())
+          assert catalog["research_probability_status"]=="candidate_only_not_operational"
+          assert catalog["cases"]
+          geo=json.loads((root/"data"/catalog["cases"][0]["file"]).read_text())
+          rows=[f for f in geo["features"] if (f.get("properties") or {}).get("research_probabilities")]
+          assert rows
+          assert (root/"training.html").exists()
+          print("Benchmark training viewer: PASS")
+          print("Scored object scans:",len(rows))
+          print("Radar frames:",len(catalog["cases"][0]["radar_frames"]))
+          PY
+
+      - name: Upload benchmark replay package
+        uses: actions/upload-artifact@v4
+        with:
+          name: snow-squall-benchmark-replay-${{ steps.inputs.outputs.case_id }}-${{ steps.inputs.outputs.radar_site }}
+          retention-days: 14
+          path: |
+            benchmark_replay
+            benchmark_case.json
+
+      - name: Upload benchmark training viewer
+        uses: actions/upload-artifact@v4
+        with:
+          name: snow-squall-benchmark-training-viewer
+          retention-days: 14
+          path: benchmark_viewer
