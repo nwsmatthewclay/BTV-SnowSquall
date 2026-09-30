@@ -188,6 +188,7 @@ jobs:
 
           echo "level2_root=$PWD/replay_input" >> "$GITHUB_OUTPUT"
           echo "case_id=$requested_case" >> "$GITHUB_OUTPUT"
+          echo "radar_site=$radar" >> "$GITHUB_OUTPUT"
 
       - name: Validate candidate bundle layout
         run: |
