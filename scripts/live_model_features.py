@@ -92,7 +92,14 @@ def build_live_feature_row(
         "velocity_mean_kt",
         "velocity_std_kt",
         "velocity_p90_abs_kt",
-        "velocity_gradient_ktkm",
+        "velocity_gradient_ktkm",        "snsq",
+        "mean_rh_0_2km_pct",
+        "thetae_delta_0_2km_k",
+        "mean_wind_0_2km_ms",
+        "wetbulb_2m_c",
+        "snsq_moisture_factor",
+        "snsq_instability_factor",
+        "snsq_wind_factor",
     ):
         if key in current:
             row[key] = _number(current.get(key))
