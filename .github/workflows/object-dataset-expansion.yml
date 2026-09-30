@@ -292,6 +292,23 @@ jobs:
         run: |
           python scripts/summarize_baseline_horizons.py --root data/derived --output data/derived/baseline_horizon_summary.json
 
+      - name: Train candidate ensemble models
+        run: |
+          for horizon in 15 30 45 60; do
+            python scripts/train_candidate_ensemble.py \
+              data/derived/object_model_features_expansion.csv \
+              --schema data/derived/object_model_features_expansion.schema.json \
+              --target squall_onset_within_${horizon}m \
+              --output-dir data/derived/candidate_ensemble_expansion_${horizon}m
+          done
+
+      - name: Compare baseline and ensemble candidates
+        run: |
+          python scripts/compare_candidate_models.py \
+            --root data/derived \
+            --output data/derived/candidate_model_comparison.json
+
+
       - name: Build release reproducibility manifest
         run: |
           python scripts/build_release_manifest.py --output data/derived/release_manifest.json --path data/manifests --path data/derived/baseline_horizon_summary.json --path data/derived/object_model_features_expansion.schema.json --path data/derived/object_model_features_expansion.coverage.json
