@@ -122,6 +122,89 @@ def find_match(records, timestamp, lat, lon):
             best = (score, index)
     return best[1] if best else None
 
+def _text_candidate_record(row, index):
+    timestamp = pd.to_datetime(row.get("issued_utc"), utc=True, errors="coerce", format="mixed")
+    if pd.isna(timestamp):
+        return None
+    text = str(row.get("text", "") or "")
+    county_hits = [
+        name for name in COUNTY_ROUTING_POINTS
+        if name.replace("ST ", "SAINT ") in text.upper() or name in text.upper()
+    ]
+    county_hits = sorted(set(county_hits))
+    lat = lon = None
+    county = county_hits[0] if len(county_hits) == 1 else None
+    if county is not None:
+        lat, lon = COUNTY_ROUTING_POINTS[county]
+    digest = hashlib.sha1(f"NWS_TEXT|{timestamp.isoformat()}|{row.get('pil')}|{index}".encode("utf-8")).hexdigest()[:10]
+    return {
+        "candidate_id": f"SSQ{timestamp:%Y%m%d%H%M}_{digest}",
+        "candidate_source": "REGIONAL_NWS_TEXT",
+        "verification_class": "unverified_report_only",
+        "verification_status": "text_review_candidate",
+        "event_start_utc": timestamp.isoformat(),
+        "event_end_utc": None,
+        "state": "VT" if county else None,
+        "county": county,
+        "lat": lat,
+        "lon": lon,
+        "event_type": "NWS text snow-impact narrative",
+        "event_id": "",
+        "source": "IEM archived NWS BTV text",
+        "narrative": text,
+        "evidence": "regional_nws_text",
+        "ncei_explicit_snow_squall": False,
+        "lsr_count": 0,
+        "source_records": 1,
+        "source_types": {"REGIONAL_NWS_TEXT"},
+        "evidence_sources": {"REGIONAL_NWS_TEXT"},
+        "warning_verified_by_iem": False,
+        "warning_status": "",
+        "warning_wfo": "BTV",
+        "text_pil": str(row.get("pil", "")),
+        "text_matched_terms": str(row.get("matched_terms", "")),
+        "coordinate_source": "county_routing_centroid" if county else None,
+        "coordinate_precision": "routing_only" if county else None,
+    }
+
+def attach_nws_text_records(records, text_path):
+    if text_path is None or not Path(text_path).exists():
+        return records, 0, 0
+    text = pd.read_csv(text_path)
+    added = matched = 0
+    for idx, row in text.iterrows():
+        rec = _text_candidate_record(row, idx)
+        if rec is None:
+            continue
+        dt = pd.to_datetime(rec["event_start_utc"], utc=True)
+        match = None
+        for existing_index, existing in enumerate(records):
+            if existing.get("lat") is None or rec.get("lat") is None:
+                continue
+            previous = pd.to_datetime(existing["event_start_utc"], utc=True)
+            gap = abs((dt - previous).total_seconds()) / 60.0
+            if gap > 90:
+                continue
+            dist = distance_km(rec["lat"], rec["lon"], existing.get("lat"), existing.get("lon"))
+            if dist is not None and dist <= 100:
+                match = existing_index
+                break
+        if match is not None:
+            existing = records[match]
+            existing["source_types"].add("REGIONAL_NWS_TEXT")
+            existing["evidence_sources"].add("REGIONAL_NWS_TEXT")
+            existing["source_records"] += 1
+            existing["nws_text_evidence_count"] = int(existing.get("nws_text_evidence_count", 0)) + 1
+            existing["verification_class"] = canonical_class(
+                existing["source_types"], bool(existing.get("warning_verified_by_iem"))
+            )
+            if not existing.get("narrative"):
+                existing["narrative"] = rec["narrative"]
+            matched += 1
+        else:
+            records.append(rec)
+            added += 1
+    return records, matched, added
 def assign_episode_ids(ledger: pd.DataFrame) -> pd.DataFrame:
     if ledger.empty:
         ledger["episode_id"] = pd.Series(dtype="object")
@@ -181,7 +264,7 @@ def assign_episode_ids(ledger: pd.DataFrame) -> pd.DataFrame:
     work = work.drop(columns=["event_dt", "index"], errors="ignore")
     return work.sort_values("event_start_utc", kind="stable").reset_index(drop=True)
 
-def build(discovery_path: Path, lsr_path: Path, output_dir: Path):
+def build(discovery_path: Path, lsr_path: Path, output_dir: Path, nws_text_path: Path | None = None):
     discovery = pd.read_csv(discovery_path)
     lsr = pd.read_csv(lsr_path)
     discovery["event_dt"] = pd.to_datetime(
@@ -217,6 +300,7 @@ def build(discovery_path: Path, lsr_path: Path, output_dir: Path):
         records.append(record)
 
     matched_reports = 0
+    records, matched_text, added_text = attach_nws_text_records(records, nws_text_path)
     for _, row in lsr.iterrows():
         index = find_match(records, row["event_dt"], row.get("lat"), row.get("lon"))
         report_count = int(pd.to_numeric(row.get("report_count", 1), errors="coerce") or 1)
@@ -317,6 +401,8 @@ def build(discovery_path: Path, lsr_path: Path, output_dir: Path):
         "iem_lsr_clusters": int(len(lsr)),
         "iem_lsr_matches_to_existing": int(matched_reports),
         "unmatched_iem_lsr_cases": int(len(lsr) - matched_reports),
+        "iem_nws_text_matches_to_existing": int(matched_text),
+        "unmatched_iem_nws_text_candidates": int(added_text),
         "unified_cases": int(len(ledger)),
         "radar_manifest_rows": int(len(radar_rows)),
         "radar_reconstruction_start_year": RADAR_RECONSTRUCTION_START_YEAR,
@@ -335,8 +421,9 @@ def main():
     parser.add_argument("--discovery", required=True)
     parser.add_argument("--iem-lsr", required=True)
     parser.add_argument("--output-dir", required=True)
+    parser.add_argument("--nws-text", default=None)
     args = parser.parse_args()
-    build(Path(args.discovery), Path(args.iem_lsr), Path(args.output_dir))
+    build(Path(args.discovery), Path(args.iem_lsr), Path(args.output_dir), Path(args.nws_text) if args.nws_text else None)
 
 if __name__ == "__main__":
     main()
