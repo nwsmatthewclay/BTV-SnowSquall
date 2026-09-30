@@ -43,6 +43,10 @@ def prepare_dataset(frame: pd.DataFrame, schema: dict, target: str):
 
     d = frame.copy()
     positive_population = d["population"].eq("verified_case_context")
+    supervised_provenance = d.get(
+        "supervision_class",
+        pd.Series("", index=d.index, dtype="object"),
+    ).eq("supervised_positive")
     null_population = d["population"].eq("winter_null_candidate")
 
     # Conservative labels for the first baseline:
@@ -66,9 +70,10 @@ def prepare_dataset(frame: pd.DataFrame, schema: dict, target: str):
         pre_onset_case = pre_onset_case & (
             ~positive_population | onset_dt.isna() | (scan_dt < onset_dt)
         )
-    positive_rows = positive_population & pre_onset_case & d[target].eq(1)
+    positive_rows = positive_population & supervised_provenance & pre_onset_case & d[target].eq(1)
     associated_negative_rows = (
         positive_population
+        & supervised_provenance
         & d["track_event_associated"].fillna(False)
         & pre_onset_case
         & d[target].eq(0)
