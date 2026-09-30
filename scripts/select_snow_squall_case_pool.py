@@ -147,7 +147,8 @@ def main():
     selected = pd.concat([official, unverified], ignore_index=True)
     selected = assign_truth_tier(selected)
     selected["case_id"] = selected.get("case_id", pd.Series(pd.NA, index=selected.index)).fillna(selected["candidate_id"]).astype(str)
-    selected["source_study"] = "expanded_ncei_iem_case_discovery"
+    selected["source_study"] = selected.get("source_study", pd.Series(pd.NA, index=selected.index)).fillna("expanded_ncei_iem_case_discovery")
+    selected["source_study"] = selected["source_study"].where(~selected["verification_class"].isin(["study_verified", "study_warning_verified", "official_plus_study", "official_study_warning_verified"]), "banacos_2014")
     tier_map = {
         "official_documented": ("B", 0.70),
         "official_plus_independent_report": ("A-", 0.90),
@@ -175,9 +176,13 @@ def main():
     selected["case_lon"] = pd.to_numeric(selected["lon"], errors="coerce")
     selected["case_coordinate_precision"] = selected.get("coordinate_precision", pd.Series("", index=selected.index)).fillna("")
     selected["case_event_end_utc"] = selected.get("event_end_utc", pd.Series(pd.NA, index=selected.index))
-    selected["hybrid_case"] = False
-    selected["peak_wind_kt"] = pd.NA
-    selected["min_visibility_km"] = pd.NA
+    selected["hybrid_case"] = selected.get("hybrid_case", pd.Series(pd.NA, index=selected.index)).fillna(False)
+    study_wind = pd.to_numeric(selected.get("study_peak_wind_kt", pd.Series(pd.NA, index=selected.index)), errors="coerce")
+    ncei_wind = pd.to_numeric(selected.get("peak_wind_kt", pd.Series(pd.NA, index=selected.index)), errors="coerce")
+    selected["peak_wind_kt"] = study_wind.combine_first(ncei_wind)
+    study_vis = pd.to_numeric(selected.get("study_min_visibility_km", pd.Series(pd.NA, index=selected.index)), errors="coerce")
+    ncei_vis = pd.to_numeric(selected.get("min_visibility_km", pd.Series(pd.NA, index=selected.index)), errors="coerce")
+    selected["min_visibility_km"] = study_vis.combine_first(ncei_vis)
 
     selected.to_csv(out / "snow_squall_expansion_cases.csv", index=False)
 
