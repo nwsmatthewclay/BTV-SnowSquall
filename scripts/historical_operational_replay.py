@@ -195,7 +195,7 @@ def replay_case(input_dir: Path, output_dir: Path, state_path: Path, case_id: st
     continuity_broken = bool(failed_sequences)
     if successful_sequences:
         expected_successful_prefix = list(range(1, max(successful_sequences) + 1))
-        if successful_sequences != [n for n in expected_successful_prefix if n in successful_sequences]:
+        if successful_sequences != expected_successful_prefix:
             continuity_broken = True
 
     manifest={
