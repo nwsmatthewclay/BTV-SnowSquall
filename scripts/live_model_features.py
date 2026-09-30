@@ -287,6 +287,7 @@ def build_live_feature_frame(history: Iterable[dict], track_id: str | int) -> pd
             prev2_time = _utc(prev2.get("timestamp"))
             if current_time is not None and prev2_time is not None:
                 dt2 = (current_time - prev2_time).total_seconds() / 60.0
+                previous_time = _utc(previous.get("timestamp")) if previous is not None else None
                 prev_dt = (previous_time - prev2_time).total_seconds() / 60.0 if previous_time is not None else None
                 if 0 < dt2 <= 20 and prev_dt is not None and 0 < prev_dt <= 10:
                     for source in ("max_reflectivity_dbz", "area_km2", "echo_top_km", "motion_speed_kt"):
