@@ -16,6 +16,7 @@ TIER_MAP = {
     "study_verified": ("A", 1.00),
     "official_plus_independent_report": ("A-", 0.90),
     "official_plus_warning_and_report": ("A-", 0.90),
+    "official_plus_warning_verified": ("A-", 0.90),
     "official_plus_warning": ("B+", 0.85),
     "warning_verified": ("B+", 0.85),
     "official_documented": ("B", 0.70),
