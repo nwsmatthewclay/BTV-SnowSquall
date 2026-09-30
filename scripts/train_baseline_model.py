@@ -1,8 +1,9 @@
-""""Train and evaluate a case-held-out baseline snow-squall onset model.
+"""Train and evaluate a case/episode-held-out baseline snow-squall onset model.
 
 The evaluator uses Leave-One-Group-Out cross-validation where the group is the
-historical case or null window, never an individual row. This prevents
-consecutive observations from the same event from being split across train/test.
+physical episode when available, otherwise the historical case or null window;
+never an individual row. This prevents consecutive observations from the same
+event from being split across train/test.
 """
 from __future__ import annotations
 
