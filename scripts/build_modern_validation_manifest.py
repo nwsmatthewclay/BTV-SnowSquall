@@ -23,8 +23,8 @@ def build(source: Path, output: Path, radar_output: Path):
     d['event_start_utc']=anchor.dt.strftime('%Y-%m-%dT%H:%M:%SZ')
     d['anchor_source']=anchor_source
     d['source_study']=d['evidence_source'].astype(str)
-    d['peak_wind_kt']=pd.to_numeric(d.get('wind_gust_kt'),errors='coerce')
-    d['min_visibility_km']=pd.to_numeric(d.get('visibility_miles'),errors='coerce')*1.609344
+    d['peak_wind_kt']=pd.to_numeric(d.get('wind_gust_kt', pd.Series(pd.NA,index=d.index)),errors='coerce')
+    d['min_visibility_km']=pd.to_numeric(d.get('visibility_miles', pd.Series(pd.NA,index=d.index)),errors='coerce')*1.609344
     d['hybrid_case']=False
     d['observing_station']=d['observing_station'].astype(str)
     case_cols=['case_id','event_start_utc','event_anchor_utc','source_study','observing_station','peak_wind_kt','min_visibility_km','hybrid_case','analysis_window_start_utc','analysis_window_end_utc']
