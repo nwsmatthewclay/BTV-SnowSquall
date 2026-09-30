@@ -102,3 +102,42 @@ def test_candidate_runtime_is_blocked_outside_replay():
     scored, mode = score_with_runtime(frame, runtime, research_replay=True)
     assert scored == [0.42]
     assert mode == "research_replay"
+
+
+def test_replay_audit_requires_research_mode_for_scored_records(tmp_path):
+    import json
+    from scripts.audit_candidate_replay import audit_horizon
+
+    horizon_dir = tmp_path / "15m"
+    horizon_dir.mkdir()
+    payload = {
+        "type": "FeatureCollection",
+        "features": [{
+            "type": "Feature",
+            "geometry": None,
+            "properties": {
+                "track_id": "1",
+                "probability_15min": 0.4,
+            },
+        }],
+        "metadata": {
+            "probability_status": "scored",
+            "probability_mode": "released",
+            "model_horizon_minutes": 15,
+            "future_information_policy": "one_scan_at_a_time",
+        },
+    }
+    (horizon_dir / "0001.geojson").write_text(json.dumps(payload), encoding="utf-8")
+    (horizon_dir / "replay_manifest.json").write_text(
+        json.dumps({
+            "scan_count": 1,
+            "failed_scan_count": 0,
+            "object_scan_count": 1,
+            "probability_status": "research_candidate_scored",
+        }),
+        encoding="utf-8",
+    )
+
+    import pytest
+    with pytest.raises(ValueError, match="research_replay"):
+        audit_horizon(tmp_path, 15)
