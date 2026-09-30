@@ -111,6 +111,7 @@ def test_baseline_excludes_case_rows_at_or_after_onset_even_if_nonimpact(tmp_pat
             "max_reflectivity_dbz": [30.0, 45.0, 10.0, 12.0],
         }
     )
+    frame = pd.concat([frame, frame.iloc[[3]].assign(null_id="NULL0003")], ignore_index=True)
     schema = {
         "future_information_policy": "current_and_past_only",
         "predictor_columns": ["max_reflectivity_dbz"],
