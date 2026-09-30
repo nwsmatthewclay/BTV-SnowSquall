@@ -67,6 +67,12 @@ def choose_diverse(df: pd.DataFrame, limit: int) -> pd.DataFrame:
             break
     return pd.DataFrame(selected)
 
+def exclude_protected_candidates(candidates: pd.DataFrame, protected_path: str | None) -> pd.DataFrame:
+    if not protected_path:
+        return candidates
+    protected = pd.read_csv(protected_path)
+    protected_ids = set(protected.get("case_id", pd.Series(dtype="string")).dropna().astype(str))
+    return candidates[~candidates["candidate_id"].astype(str).isin(protected_ids)].copy()
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--input", required=True)
@@ -85,10 +91,8 @@ def main():
 
     candidates = pd.read_csv(args.input)
     if args.exclude_modern_validation:
-        protected = pd.read_csv(args.exclude_modern_validation)
-        protected_ids = set(protected.get("case_id", pd.Series(dtype="string")).dropna().astype(str))
         before = len(candidates)
-        candidates = candidates[~candidates["candidate_id"].astype(str).isin(protected_ids)].copy()
+        candidates = exclude_protected_candidates(candidates, args.exclude_modern_validation)
         print(f"Excluded protected modern validation cases: {before - len(candidates)}")
     radar = pd.read_csv(args.radar_manifest)
     if candidates.empty:
