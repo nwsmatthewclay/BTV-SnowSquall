@@ -91,11 +91,47 @@ def normalize_state(value) -> str:
     state = str(value or "").upper().strip()
     return {"VERMONT": "VT", "NEW YORK": "NY"}.get(state, state)
 
+COUNTY_ROUTING_POINTS = {
+    "ADDISON": (44.00, -73.10),
+    "CALEDONIA": (44.46, -72.03),
+    "CHITTENDEN": (44.46, -73.07),
+    "ESSEX": (44.75, -71.72),
+    "FRANKLIN": (44.84, -72.92),
+    "GRAND ISLE": (44.79, -73.30),
+    "LAMOILLE": (44.62, -72.63),
+    "ORANGE": (44.01, -72.30),
+    "ORLEANS": (44.81, -72.27),
+    "RUTLAND": (43.58, -73.05),
+    "WASHINGTON": (44.28, -72.55),
+    "WINDSOR": (43.58, -72.46),
+    "CLINTON": (44.69, -73.58),
+    "ST LAWRENCE": (44.50, -75.08),
+}
+
+def routing_point(state: str, county: str):
+    state = normalize_state(state)
+    county = norm_county(county)
+    if state == "VT":
+        if any(excluded in county for excluded in cfg_excluded_counties_for_routing):
+            return None
+        for name, point in COUNTY_ROUTING_POINTS.items():
+            if name in county:
+                return point
+    if state == "NY":
+        if "ST LAWRENCE" in county or "SAINT LAWRENCE" in county:
+            return COUNTY_ROUTING_POINTS["ST LAWRENCE"]
+        for name in ("CLINTON", "ESSEX", "FRANKLIN"):
+            if name in county:
+                return COUNTY_ROUTING_POINTS.get(name)
+    return None
+
+cfg_excluded_counties_for_routing = ("BENNINGTON", "WINDHAM")
+
 def in_primary_cwa(row: pd.Series, cfg: dict) -> bool:
     state = normalize_state(row.get("STATE", ""))
     county = norm_county(row.get("CZ_NAME", ""))
     if state == "VT":
-        return county not in set(cfg["vt_excluded_counties"])
+        return not any(excluded in county for excluded in cfg["vt_excluded_counties"])
     if state == "NY":
         return county in set(cfg["ny_cwa_counties"])
     return False
@@ -163,6 +199,14 @@ def gather_ncei(cfg: dict) -> list[dict]:
                 continue
             lat = finite_float(row.get("BEGIN_LAT"))
             lon = finite_float(row.get("BEGIN_LON"))
+            coordinate_source = "ncei_event_point" if lat is not None and lon is not None else None
+            coordinate_precision = "event" if coordinate_source else None
+            if lat is None or lon is None:
+                coarse = routing_point(normalize_state(row.get("STATE", "")), norm_county(row.get("CZ_NAME", "")))
+                if coarse is not None:
+                    lat, lon = coarse
+                    coordinate_source = "county_routing_centroid"
+                    coordinate_precision = "routing_only"
             end = event_end_utc(row)
             narrative = narratives.loc[row.name]
             explicit = bool(SNOW_RE.search(str(narrative))) or str(row.get("EVENT_TYPE", "")).strip() == "Snow Squall"
@@ -170,7 +214,7 @@ def gather_ncei(cfg: dict) -> list[dict]:
             rows.append({
                 "candidate_id": case_key("NCEI", start, lat, lon, str(row.get("EVENT_ID", ""))),
                 "candidate_source": source_name,
-                "verification_class": "official_documented",
+                "verification_class": "official_documented" if explicit else "official_screening_candidate",
                 "verification_status": "documented_candidate",
                 "event_start_utc": start.isoformat(),
                 "event_end_utc": end.isoformat() if end else None,
@@ -184,6 +228,8 @@ def gather_ncei(cfg: dict) -> list[dict]:
                 "narrative": str(narrative).strip(),
                 "evidence": ("event_type:snow_squall" if str(row.get("EVENT_TYPE", "")).strip() == "Snow Squall" else ("narrative:snow_squall" if bool(SNOW_RE.search(str(narrative))) else "screening:snow-impact-language")),
                 "ncei_explicit_snow_squall": explicit,
+                "coordinate_source": coordinate_source,
+                "coordinate_precision": coordinate_precision,
                 "lsr_count": 0,
             })
     return rows
@@ -198,10 +244,10 @@ def iem_lsr_year(year: int, state: str) -> pd.DataFrame:
     return pd.read_csv(io.StringIO(response.text))
 
 def in_primary_lsr(row: pd.Series, cfg: dict) -> bool:
-    state = str(row.get("STATE", "")).upper().strip()
+    state = normalize_state(row.get("STATE", ""))
     county = norm_county(row.get("COUNTY", ""))
     if state == "VT":
-        return county not in set(cfg["vt_excluded_counties"])
+        return not any(excluded in county for excluded in cfg["vt_excluded_counties"])
     if state == "NY":
         return county in set(cfg["ny_cwa_counties"])
     return False
@@ -260,6 +306,10 @@ def gather_cow_sqw(cfg: dict) -> list[dict]:
                     "warning_issue_utc": issue.isoformat(),
                     "warning_leadtime_to_first_verifying_lsr_min": lead_min,
                     "ncei_explicit_snow_squall": False,
+                    "coordinate_source": "iem_warning_point",
+                    "coordinate_precision": "warning_reference",
+                    "coordinate_source": "iem_lsr_point",
+                    "coordinate_precision": "event",
                     "lsr_count": lsr_count,
                     "warning_verified_by_iem": bool(props.get("verify")),
                     "warning_status": str(props.get("status") or ""),
@@ -539,7 +589,7 @@ def main():
         "candidate_id","candidate_source","verification_class","verification_status",
         "event_start_utc","window_start_utc","window_end_utc","state","county",
         "lat","lon","event_type","event_id","source","narrative","evidence",
-        "ncei_explicit_snow_squall","lsr_count","source_records","source_types","evidence_sources","warning_verified_by_iem","warning_status","warning_wfo",
+        "ncei_explicit_snow_squall","coordinate_source","coordinate_precision","lsr_count","source_records","source_types","evidence_sources","warning_verified_by_iem","warning_status","warning_wfo",
     ]
     pd.DataFrame(merged).reindex(columns=columns).to_csv(out / "snow_squall_candidates.csv", index=False)
     pd.DataFrame(radar).to_csv(out / "snow_squall_radar_manifest.csv", index=False)
