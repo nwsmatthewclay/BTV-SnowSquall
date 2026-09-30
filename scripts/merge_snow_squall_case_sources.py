@@ -87,6 +87,65 @@ def find_match(records, timestamp, lat, lon):
             best = (score, index)
     return best[1] if best else None
 
+def assign_episode_ids(ledger: pd.DataFrame) -> pd.DataFrame:
+    if ledger.empty:
+        ledger["episode_id"] = pd.Series(dtype="object")
+        return ledger
+    work = ledger.copy()
+    work["event_dt"] = pd.to_datetime(work["event_start_utc"], utc=True, errors="coerce", format="mixed")
+    work = work.sort_values(["event_dt", "candidate_id"], kind="stable").reset_index()
+    parent = list(range(len(work)))
+
+    def find(x):
+        while parent[x] != x:
+            parent[x] = parent[parent[x]]
+            x = parent[x]
+        return x
+
+    def union(a, b):
+        ra, rb = find(a), find(b)
+        if ra != rb:
+            parent[rb] = ra
+
+    for i in range(len(work)):
+        left_time = work.loc[i, "event_dt"]
+        if pd.isna(left_time):
+            continue
+        for j in range(i - 1, max(-1, i - 80), -1):
+            right_time = work.loc[j, "event_dt"]
+            if pd.isna(right_time):
+                continue
+            gap = (left_time - right_time).total_seconds() / 60.0
+            if gap > 180:
+                break
+            same_source = str(work.loc[i, "candidate_source"]) == str(work.loc[j, "candidate_source"])
+            time_limit = 180 if same_source else 90
+            radius_limit = 125 if same_source else 100
+            if gap > time_limit:
+                continue
+            distance = distance_km(work.loc[i, "lat"], work.loc[i, "lon"], work.loc[j, "lat"], work.loc[j, "lon"])
+            if distance is None or distance > radius_limit:
+                continue
+            union(i, j)
+
+    roots = {}
+    for i in range(len(work)):
+        roots.setdefault(find(i), []).append(i)
+
+    episode_lookup = {}
+    for members in roots.values():
+        member_times = [work.loc[i, "event_dt"] for i in members if pd.notna(work.loc[i, "event_dt"])]
+        anchor = min(member_times) if member_times else pd.Timestamp("1900-01-01", tz="UTC")
+        digest_input = "|".join(sorted(str(work.loc[i, "candidate_id"]) for i in members))
+        digest = hashlib.sha1(digest_input.encode("utf-8")).hexdigest()[:10]
+        episode_id = f"EP{anchor:%Y%m%d%H%M}_{digest}"
+        for i in members:
+            episode_lookup[i] = episode_id
+
+    work["episode_id"] = [episode_lookup[i] for i in range(len(work))]
+    work = work.drop(columns=["event_dt", "index"], errors="ignore")
+    return work.sort_values("event_start_utc", kind="stable").reset_index(drop=True)
+
 def build(discovery_path: Path, lsr_path: Path, output_dir: Path):
     discovery = pd.read_csv(discovery_path)
     lsr = pd.read_csv(lsr_path)
@@ -172,6 +231,7 @@ def build(discovery_path: Path, lsr_path: Path, output_dir: Path):
         rows.append(record)
 
     ledger = pd.DataFrame(rows).sort_values("event_start_utc").reset_index(drop=True)
+    ledger = assign_episode_ids(ledger)
     radar_rows = []
     for _, record in ledger.iterrows():
         options = []
@@ -211,6 +271,8 @@ def build(discovery_path: Path, lsr_path: Path, output_dir: Path):
         "radar_manifest_rows": int(len(radar_rows)),
         "verification_classes": ledger["verification_class"].value_counts().to_dict()
         if not ledger.empty else {},
+        "physical_episode_count": int(ledger["episode_id"].nunique()) if not ledger.empty else 0,
+        "episodes_with_multiple_case_records": int((ledger.groupby("episode_id").size() > 1).sum()) if not ledger.empty else 0,
     }
     (output_dir / "snow_squall_case_ledger_summary.json").write_text(
         json.dumps(summary, indent=2) + "\n", encoding="utf-8"
