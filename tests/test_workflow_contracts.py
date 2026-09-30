@@ -14,6 +14,7 @@ WORKFLOWS = [
     '.github/workflows/snow-squall-live-shadow.yml',
     '.github/workflows/national-sqw-radar-pretraining.yml',
     '.github/workflows/snow-squall-modern-validation.yml',
+    '.github/workflows/snow-squall-archived-replay-smoke.yml',
 ]
 
 
@@ -41,3 +42,15 @@ def test_expansion_workflow_has_supervised_training_gate():
     assert 'snow_squall_training_cases.csv' in text
     assert 'audit_expansion_dataset.py' in text
     assert 'audit_live_model_compatibility.py' in text
+
+
+def test_replay_and_shadow_contracts_keep_candidate_scoring_research_only():
+    replay = Path('scripts/historical_operational_replay.py').read_text(encoding='utf-8')
+    process = Path('scripts/process_live_volume.py').read_text(encoding='utf-8')
+    parity = Path('scripts/audit_live_feature_parity.py').read_text(encoding='utf-8')
+    shadow = Path('.github/workflows/snow-squall-live-shadow.yml').read_text(encoding='utf-8')
+    assert 'research_replay=(model_dir is not None)' in replay
+    assert 'score_candidate' in process
+    assert 'candidate_blocked' in process
+    assert 'audit_live_feature_parity.py' in parity
+    assert 'ref: snow-squall-model-foundation' in shadow
