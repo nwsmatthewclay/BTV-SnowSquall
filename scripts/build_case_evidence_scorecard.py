@@ -98,7 +98,7 @@ def training_eligibility(row):
     return False, ';'.join(reasons)
 
 
-def build(cases_path, surface_path, objects_path, radar_path, output_path):
+def build(cases_path, surface_path, objects_path, radar_path, output_path, mping_path=None):
     cases=pd.read_csv(cases_path)
     for path in [surface_path, objects_path, radar_path]:
         if path and not Path(path).exists():
@@ -117,7 +117,25 @@ def build(cases_path, surface_path, objects_path, radar_path, output_path):
         r_cols=[c for c in ['candidate_id','radar_distance_km','coordinate_precision'] if c in r.columns]
         if r_cols and 'candidate_id' in r.columns:
             cases=cases.merge(r[r_cols].drop_duplicates('candidate_id'),left_on='candidate_id',right_on='candidate_id',how='left')
+    if mping_path and Path(mping_path).exists():
+        m=pd.read_csv(mping_path)
+        if 'case_id' in m.columns:
+            counts=m.groupby('case_id').size().rename('mping_report_count')
+            cases=cases.merge(counts,on='case_id',how='left')
+            if 'ptype_bucket' in m.columns:
+                pivot=m.pivot_table(index='case_id',columns='ptype_bucket',values='mping_id' if 'mping_id' in m.columns else 'case_id',aggfunc='count',fill_value=0)
+                rename={
+                    'snow':'mping_snow_report_count',
+                    'mixed':'mping_mixed_report_count',
+                    'freezing_rain':'mping_freezing_rain_report_count',
+                    'rain':'mping_rain_report_count',
+                    'other':'mping_other_report_count',
+                }
+                pivot=pivot.rename(columns=rename).reset_index()
+                cases=cases.merge(pivot,on='case_id',how='left')
     cases['radar_scan_count']=cases.get('radar_scan_count',pd.Series(0,index=cases.index)).fillna(0)
+    for col in ('mping_report_count','mping_snow_report_count','mping_mixed_report_count','mping_freezing_rain_report_count','mping_rain_report_count','mping_other_report_count'):
+        cases[col]=cases.get(col,pd.Series(0,index=cases.index)).fillna(0).astype(int)
     cases['verification_points'],cases['verification_tier'],cases['verification_evidence']=zip(*cases.apply(score_row,axis=1))
     elig = cases.apply(training_eligibility, axis=1, result_type='expand')
     cases['training_eligible'] = elig[0].astype(bool)
@@ -134,8 +152,9 @@ def main():
     p.add_argument('--objects',required=True)
     p.add_argument('--radar',required=True)
     p.add_argument('--output',required=True)
+    p.add_argument('--mping', default=None, help='Optional historical mPING evidence CSV; diagnostics only.')
     a=p.parse_args()
-    build(Path(a.cases),Path(a.surface),Path(a.objects),Path(a.radar),Path(a.output))
+    build(Path(a.cases),Path(a.surface),Path(a.objects),Path(a.radar),Path(a.output),Path(a.mping) if a.mping else None)
 
 if __name__=='__main__':
     main()
