@@ -270,6 +270,20 @@ jobs:
           python scripts/summarize_baseline_horizons.py \
             --root data/derived \
             --output data/derived/snow_squall_expanded_horizon_summary.json
+
+      - name: Train expanded ensemble candidate models
+        run: |
+          for h in 15 30 45 60; do
+            python scripts/train_candidate_ensemble.py \
+              data/derived/snow_squall_model_features_expanded.csv \
+              --schema data/derived/snow_squall_model_features_expanded.schema.json \
+              --target squall_onset_within_${h}m \
+              --output-dir data/derived/candidate_ensemble_expansion_${h}m
+          done
+          python scripts/compare_candidate_models.py \
+            --root data/derived \
+            --output data/derived/snow_squall_candidate_model_comparison.json
+
           for h in 15 30 45 60; do
             python scripts/train_candidate_ensemble.py \
               data/derived/snow_squall_model_features_expanded.csv \
