@@ -311,6 +311,14 @@ jobs:
             --output data/derived/snow_squall_model_features_expanded.csv \
             --schema-output data/derived/snow_squall_model_features_expanded.schema.json
 
+      - name: Audit expanded training dataset integrity
+        run: |
+          python scripts/audit_expansion_dataset.py \
+            data/derived/snow_squall_model_features_expanded.csv \
+            --schema data/derived/snow_squall_model_features_expanded.schema.json \
+            --cases data/manifests/snow_squall_expansion/snow_squall_training_cases.csv \
+            --output data/derived/snow_squall_expansion_dataset_audit.json
+
       - name: Locate latest national radar pretraining pool
         id: national
         env:
@@ -490,6 +498,7 @@ jobs:
             data/derived/snow_squall_model_features_expanded_augmented.csv
             data/derived/snow_squall_model_features_cumulative.csv
             data/derived/snow_squall_model_features_expanded.schema.json
+            data/derived/snow_squall_expansion_dataset_audit.json
             data/derived/snow_squall_national_pretraining_feature_summary.json
             data/derived/next_expansion_batch.json
             data/manifests/snow_squall_expansion/snow_squall_expansion_cases.csv
