@@ -70,3 +70,11 @@ def test_archived_replay_builds_unified_score_timeline():
     text = Path('.github/workflows/snow-squall-archived-replay-smoke.yml').read_text(encoding='utf-8')
     assert 'merge_replay_horizon_scores.py' in text
     assert 'score_timeline.json' in text
+
+
+def test_historical_benchmark_replay_workflow_contract():
+    text = Path('.github/workflows/historical_benchmark_replay.yml').read_text(encoding='utf-8')
+    assert 'historical_download.py' in text
+    assert 'reconstruct_pilot.py' in text
+    assert 'SQCL-2002-03-23-KBTV' in text
+    assert 'KCXX KTYX' in text
