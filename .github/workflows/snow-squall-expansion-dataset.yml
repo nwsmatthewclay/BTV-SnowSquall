@@ -76,7 +76,7 @@ jobs:
           pip install -r requirements.txt
           python scripts/discover_snow_squall_cases.py --config config/snow_squall_discovery.json --output-dir discovery_artifact
           python scripts/discover_iem_lsr_candidates.py --start-year 2002 --end-year 2026 --output-dir lsr_artifact
-          python scripts/merge_snow_squall_case_sources.py --discovery discovery_artifact/snow_squall_candidates.csv --iem-lsr lsr_artifact/iem_lsr_case_clusters.csv --output-dir discovery_artifact/unified
+          python scripts/merge_snow_squall_case_sources.py --discovery discovery_artifact/snow_squall_candidates.csv --iem-lsr lsr_artifact/iem_lsr_case_clusters.csv --study data/manifests/banacos_2014_cases.csv --output-dir discovery_artifact/unified
 
       - name: Set up Python
         uses: actions/setup-python@v5
