@@ -1,0 +1,119 @@
+name: Publish Live Snow Squall Model Shadow
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
+  workflow_run:
+    workflows:
+      - Snow Squall Expansion Dataset
+    types:
+      - completed
+
+permissions:
+  actions: read
+  contents: write
+
+concurrency:
+  group: snow-squall-live-shadow
+  cancel-in-progress: false
+
+jobs:
+  shadow:
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    env:
+      PYTHONPATH: ${{ github.workspace }}
+      PYTHONUNBUFFERED: "1"
+
+    steps:
+      - name: Check out foundation
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+
+      - name: Locate latest expanded model bundle
+        id: model
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "workflow_run" ]; then
+            run_id="${{ github.event.workflow_run.id }}"
+          else
+            run_id="$(gh run list --workflow "Snow Squall Expansion Dataset" --branch snow-squall-model-foundation --status success --limit 20 --json databaseId --jq '.[0].databaseId')"
+          fi
+          if [ -z "$run_id" ] || [ "$run_id" = "null" ]; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          count="$(gh api "/repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}/artifacts?per_page=100" -q '[.artifacts[] | select(.name=="snow-squall-live-model-bundles" and .expired==false)] | length')"
+          if [ "$count" -eq 0 ]; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "run_id=$run_id" >> "$GITHUB_OUTPUT"
+
+      - name: Restore live data
+        if: steps.model.outputs.skip != 'true'
+        run: |
+          set -euo pipefail
+          mkdir -p live_data
+          git fetch --no-tags origin snow-squall-live-data
+          git checkout origin/snow-squall-live-data -- viewer/data/live || true
+          if [ -d viewer/data/live ]; then cp -R viewer/data/live/. live_data/; fi
+
+      - name: Restore prior shadow data
+        if: steps.model.outputs.skip != 'true'
+        run: |
+          set -euo pipefail
+          mkdir -p shadow_data
+          if git ls-remote --exit-code --heads origin snow-squall-shadow-data >/dev/null 2>&1; then
+            git fetch --no-tags origin snow-squall-shadow-data
+            git checkout origin/snow-squall-shadow-data -- viewer/data/shadow || true
+            if [ -d viewer/data/shadow ]; then cp -R viewer/data/shadow/. shadow_data/; fi
+          fi
+
+      - name: Download model bundle
+        if: steps.model.outputs.skip != 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          gh run download "${{ steps.model.outputs.run_id }}" --name snow-squall-live-model-bundles --dir model_bundle
+
+      - name: Set up Python
+        if: steps.model.outputs.skip != 'true'
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        if: steps.model.outputs.skip != 'true'
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Score live research shadow
+        if: steps.model.outputs.skip != 'true'
+        run: |
+          set -euo pipefail
+          python scripts/shadow_live_model_scorer.py \
+            --live-root live_data \
+            --model-root model_bundle \
+            --output-root shadow_data
+
+      - name: Publish isolated shadow branch
+        if: steps.model.outputs.skip != 'true'
+        run: |
+          set -euo pipefail
+          git checkout --orphan snow-squall-shadow-data
+          git rm -rf . >/dev/null 2>&1 || true
+          mkdir -p viewer/data/shadow
+          cp -R shadow_data/. viewer/data/shadow/
+          git add viewer/data/shadow
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "Update live snow squall research shadow" || exit 0
+          git push --force origin HEAD:snow-squall-shadow-data
