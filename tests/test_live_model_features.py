@@ -163,4 +163,4 @@ def test_three_scan_live_state_predictors():
     assert row["max_reflectivity_dbz_change_2scan"] == 15.0
     assert row["max_reflectivity_dbz_rate_2scan_per_min"] == 1.5
     assert row["area_km2_change_2scan"] == 7.0
-    assert row["recent_scan_count_3"] if "recent_scan_count_3" in row else True
+    assert row["recent_scan_count_3"] == 3
