@@ -183,6 +183,57 @@ def _text_candidate_record(row, index):
         "coordinate_precision": "routing_only" if county else None,
     }
 
+def load_study_records(study_path):
+    if study_path is None or not Path(study_path).exists():
+        return []
+    study = pd.read_csv(study_path)
+    records = []
+    for row in study.to_dict('records'):
+        station = str(row.get('observing_station') or '').strip().upper()
+        if station not in STUDY_STATIONS:
+            continue
+        start = pd.to_datetime(row.get('event_start_utc'), utc=True, errors='coerce', format='mixed')
+        if pd.isna(start):
+            continue
+        duration = pd.to_numeric(row.get('vis_below_0p8_min'), errors='coerce')
+        end = start + pd.to_timedelta(float(duration), unit='m') if pd.notna(duration) else pd.NaT
+        case_id = str(row.get('case_id') or '').strip()
+        if not case_id:
+            continue
+        lat, lon = STUDY_STATIONS[station]
+        records.append({
+            'candidate_id': case_id,
+            'case_id': case_id,
+            'candidate_source': 'BANACOS_STUDY_2014',
+            'verification_class': 'study_verified',
+            'verification_status': 'study_verified_case',
+            'event_start_utc': start.isoformat(),
+            'event_end_utc': end.isoformat() if pd.notna(end) else None,
+            'state': 'NY' if station == 'KMSS' else 'VT',
+            'county': None,
+            'lat': lat,
+            'lon': lon,
+            'event_type': 'Study-identified snow squall',
+            'event_id': str(row.get('source_case_id') or ''),
+            'source': 'Banacos et al. 2014',
+            'narrative': str(row.get('notes') or ''),
+            'evidence': 'banacos_2014_manual_radar_surface_review',
+            'ncei_explicit_snow_squall': False,
+            'lsr_count': 0,
+            'source_records': 1,
+            'source_types': {'BANACOS_STUDY_2014'},
+            'evidence_sources': {'BANACOS_STUDY_2014'},
+            'warning_verified_by_iem': False,
+            'warning_status': '',
+            'warning_wfo': 'BTV',
+            'study_case_id': case_id,
+            'study_observing_station': station,
+            'study_hybrid_case': bool(row.get('hybrid_case')),
+            'study_min_visibility_km': pd.to_numeric(row.get('min_visibility_km'), errors='coerce'),
+            'study_peak_wind_kt': pd.to_numeric(row.get('peak_wind_kt'), errors='coerce'),
+        })
+    return records
+
 def attach_nws_text_records(records, text_path):
     if text_path is None or not Path(text_path).exists():
         return records, 0, 0
