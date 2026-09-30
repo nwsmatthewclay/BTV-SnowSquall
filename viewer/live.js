@@ -190,6 +190,28 @@ function shadowGrid(record){
   if(!Object.keys(probs).length) return "<div class='shadow-note'>No live research score is available yet.</div>";
   return "<div class='shadow-grid'>"+[15,30,45,60].map(h=>"<div class='shadow-cell'><span>"+h+" min</span><b>"+(probs[String(h)]==null?"—":(Number(probs[String(h)])*100).toFixed(1)+"%")+"</b></div>").join("")+"</div>";
 }
+
+function renderShadowCard(summary){
+  const box=document.getElementById("shadowCardBody");
+  if(!box)return;
+  const rows=summary.filter(x=>x.shadow).map(x=>({
+    site:x.site,
+    updated:x.shadow.updated_utc,
+    scored:Number(x.shadow.scored_object_count||0),
+    total:Number(x.shadow.current_object_count||0),
+    status:x.shadow.operational_release_status||"unknown"
+  }));
+  if(!rows.length){
+    box.innerHTML="<div class='shadow-note'>No published shadow feed is available yet.</div>";
+    return;
+  }
+  box.innerHTML=rows.map(row=>
+    "<div class='live-stat'><span>"+esc(row.site)+"</span><b>"+row.scored+" / "+row.total+" scored</b></div>"+
+    "<div class='live-stat'><span>Updated</span><b>"+esc(fmt(row.updated))+"</b></div>"+
+    "<div class='live-stat'><span>Status</span><b>"+esc(row.status)+"</b></div>"
+  ).join("")+
+    "<div class='shadow-note'>The operational object feed remains probability-free. Scores shown here come from the isolated research shadow branch.</div>";
+}
 function renderEnvironment(fields){
   const env=fields||{};
   const rows=[
@@ -203,7 +225,7 @@ function renderEnvironment(fields){
     ["0–6 km shear","shear_0_6km_ms",v=>num(ktFromMs(v),1)+" kt"],
     ["2 m temp","temperature_2m_k",v=>num(cFromK(v),1)+" °C"],
     ["2 m dewpoint","dewpoint_2m_k",v=>num(cFromK(v),1)+" °C"],
-    ["Surface gust","gust_ms",v=>num(ktFromMs(v),1)+" kt"]
+    ["Surface gust","gust_ms",v=>num(ktFromMs(v),1)+" kt"],
     ["SNSQ","snsq",v=>num(v,2)],
     ["SNSQ 0–2 km RH","mean_rh_0_2km_pct",v=>num(v,0)+"%"],
     ["SNSQ Δθe 0–2 km","thetae_delta_0_2km_k",v=>num(v,1)+" K"],
@@ -310,6 +332,7 @@ async function refresh(){
     const summary=results;
     datasets=Object.fromEntries(summary.map(x=>[x.site,x]));
     renderRadarCards(summary);
+    renderShadowCard(summary);
     renderMap(summary);
     renderObjectList(summary);
 
