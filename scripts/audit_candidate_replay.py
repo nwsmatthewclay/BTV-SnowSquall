@@ -30,6 +30,10 @@ def audit_horizon(root: Path, horizon: int) -> dict:
             future_policy_ok = False
         if metadata.get("probability_status") == "scored":
             metadata_scored += 1
+            if metadata.get("probability_mode") != "research_replay":
+                raise ValueError(
+                    f"{horizon}m: scored replay record is not marked research_replay in {geojson_path.name}"
+                )
         if metadata.get("model_horizon_minutes") not in (None, horizon):
             raise ValueError(f"{horizon}m: wrong model_horizon_minutes in {geojson_path.name}")
         for feature in payload.get("features") or []:
