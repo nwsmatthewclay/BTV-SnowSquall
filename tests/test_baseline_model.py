@@ -136,3 +136,24 @@ def test_baseline_metrics_include_train_fold_climatology():
     assert np.isfinite(oof).all()
     assert 'climatology' in metrics
     assert metrics['climatology']['brier_score'] >= 0.0
+
+
+def test_baseline_evaluate_handles_fold_constant_predictor():
+    import numpy as np
+    from scripts.train_baseline_model import evaluate
+
+    rows = []
+    for i in range(8):
+        rows.append({
+            "case_id": f"C{i}",
+            "split_group": f"case:C{i}",
+            "variable": float(i),
+            "constant": 1.0,
+            "y": int(i % 2),
+        })
+    frame = pd.DataFrame(rows)
+    oof, metrics, folds = evaluate(frame, ["variable", "constant"], "y")
+
+    assert np.isfinite(oof).all()
+    assert metrics["evaluated_rows"] == len(frame)
+    assert all(f["status"] == "ok" for f in folds)
