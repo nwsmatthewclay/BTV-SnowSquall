@@ -56,7 +56,7 @@ jobs:
           official_next="$(python -c 'import json; print(json.load(open("state_artifact/next_expansion_batch.json"))["next_official_offset"])')"
           review_next="$(python -c 'import json; print(json.load(open("state_artifact/next_expansion_batch.json"))["next_unverified_offset"])')"
           max_official="$(python -c 'import json; print(min(30, json.load(open("state_artifact/next_expansion_batch.json"))["max_automatic_official"]-int(official_next)))')"
-          max_review="$(python -c 'import json; print(min(25, json.load(open("state_artifact/next_expansion_batch.json"))["max_automatic_unverified"]-int(review_next)))')"
+          max_review="$(python -c 'import json; print(min(15, json.load(open("state_artifact/next_expansion_batch.json"))["max_automatic_unverified"]-int(review_next)))')"
           if [ "$max_official" -le 0 ] && [ "$max_review" -le 0 ]; then
             echo 'No remaining automatic capacity.'
             exit 0
