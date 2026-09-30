@@ -37,7 +37,7 @@ def _height_weighted_mean(heights, values):
     order=np.argsort(heights); heights=heights[order]; values=values[order]
     span=float(heights[-1]-heights[0])
     if span<=0: return None
-    return float(np.trapezoid(values,heights)/span)
+    return float(np.trapz(values,heights)/span)
 
 
 def build_snsq_profile(
@@ -61,9 +61,13 @@ def build_snsq_profile(
         rh_pct=np.concatenate([[float(surface_rh_pct)],rh_pct])
         u_ms=np.concatenate([[float(surface_u_ms)],u_ms])
         v_ms=np.concatenate([[float(surface_v_ms)],v_ms])
-    mean_rh=_height_weighted_mean(heights_m,rh_pct)
-    mean_wind=_height_weighted_mean(heights_m,np.hypot(u_ms,v_ms))
-    if mean_rh is None or mean_wind is None: return {"snsq":None,"mean_rh_0_2km_pct":mean_rh,"thetae_delta_0_2km_k":None,"mean_wind_0_2km_ms":mean_wind,"wetbulb_2m_c":wetbulb_2m_c}
+    mean_mask = heights_m <= 2000.0
+    mean_heights = heights_m[mean_mask]
+    mean_rh_values = rh_pct[mean_mask]
+    mean_u = u_ms[mean_mask]
+    mean_v = v_ms[mean_mask]
+    mean_rh = _height_weighted_mean(mean_heights, mean_rh_values)
+    mean_wind = _height_weighted_mean(mean_heights, np.hypot(mean_u, mean_v))
     td2=_interp_at(heights_m,heights_m,dewpoint_k)
     t2=_interp_at(heights_m,heights_m,temperature_k)
     p2=_interp_at(heights_m,heights_m,pressure_hpa)
