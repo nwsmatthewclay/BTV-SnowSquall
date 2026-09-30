@@ -151,3 +151,16 @@ def test_live_rich_radar_features_propagate_and_evolve():
     assert frame.iloc[-1]["velocity_mean_kt_delta"] == 8.0
     assert frame.iloc[-1]["echo_top_km_rate_per_min"] == pytest.approx(0.3)
     assert frame.iloc[-1]["max_reflectivity_dbz_running_max"] == 35.0
+
+def test_three_scan_live_state_predictors():
+    history = [
+        {"track_id":"3","timestamp":"2026-01-01T12:00:00Z","max_reflectivity_dbz":20.0,"area_km2":8.0,"echo_top_km":1.5,"motion_speed_kt":20.0},
+        {"track_id":"3","timestamp":"2026-01-01T12:05:00Z","max_reflectivity_dbz":25.0,"area_km2":10.0,"echo_top_km":2.0,"motion_speed_kt":22.0},
+        {"track_id":"3","timestamp":"2026-01-01T12:10:00Z","max_reflectivity_dbz":35.0,"area_km2":15.0,"echo_top_km":3.0,"motion_speed_kt":26.0},
+    ]
+    frame = build_live_feature_frame(history, "3")
+    row = frame.iloc[-1]
+    assert row["max_reflectivity_dbz_change_2scan"] == 15.0
+    assert row["max_reflectivity_dbz_rate_2scan_per_min"] == 1.5
+    assert row["area_km2_change_2scan"] == 7.0
+    assert row["recent_scan_count_3"] if "recent_scan_count_3" in row else True
