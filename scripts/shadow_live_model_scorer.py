@@ -62,7 +62,6 @@ def score_site(site: str, live_root: Path, model_root: Path) -> tuple[dict, list
             track_history = [dict(props)]
         frame = build_live_feature_frame(track_history, track_id)
         frame, national_pretraining = augment_national_pretraining(frame, model_root)
-        frame, national_prior = augment_national_pretraining(frame, model_root)
         record = {
             "radar_site": site,
             "track_id": str(track_id),
