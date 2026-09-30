@@ -1,0 +1,83 @@
+name: Case-Held-Out Model Gate
+
+on:
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  train-and-evaluate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      PYTHONUNBUFFERED: "1"
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: snow-squall-model-foundation
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install lightweight ML stack
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Locate latest successful object dataset artifact
+        id: source
+        env:
+          GH_TOKEN: \${{ github.token }}
+        run: |
+          RUN_ID="$(gh run list \
+            --workflow object-dataset-pilot.yml \
+            --branch snow-squall-model-foundation \
+            --status success \
+            --limit 1 \
+            --json databaseId \
+            --jq '.[0].databaseId')"
+          test -n "$RUN_ID"
+          echo "run_id=$RUN_ID" >> "$GITHUB_OUTPUT"
+          echo "Using object-dataset-pilot run $RUN_ID"
+
+      - name: Download dataset artifact only
+        env:
+          GH_TOKEN: \${{ github.token }}
+        run: |
+          mkdir -p data/derived/input
+          gh run download "\${{ steps.source.outputs.run_id }}" \
+            --name object-population-pilot \
+            --dir data/derived/input
+          find data/derived/input -maxdepth 4 -type f | sort
+
+      - name: Verify training input
+        run: |
+          test -f data/derived/input/data/derived/object_model_features_pilot.csv
+          python - <<'PY'
+          import pandas as pd
+          p = "data/derived/input/data/derived/object_model_features_pilot.csv"
+          d = pd.read_csv(p)
+          print("TRAINING INPUT RECORDS:", len(d))
+          print("TRAINING INPUT COLUMNS:", len(d.columns))
+          print("CASES:", d["case_id"].nunique() if "case_id" in d else "missing")
+          assert "future_information_policy" in d.columns
+          PY
+
+      - name: Run four-horizon event-held-out gate
+        run: |
+          python scripts/train_case_heldout_models.py \
+            data/derived/input/data/derived/object_model_features_pilot.csv \
+            --output-dir data/derived/model_gate
+
+      - name: Upload model gate
+        uses: actions/upload-artifact@v4
+        with:
+          name: case-held-out-model-gate
+          path: |
+            data/derived/model_gate/metrics.json
+            data/derived/model_gate/metrics.csv
+            data/derived/model_gate/models.joblib
