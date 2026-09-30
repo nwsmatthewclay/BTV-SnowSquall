@@ -57,7 +57,7 @@ jobs:
           discovery_run="$(gh run list --workflow "Snow Squall Case Discovery" --branch snow-squall-model-foundation --status success --limit 1 --json databaseId --jq '.[0].databaseId')"
           lsr_run="$(gh run list --workflow "Snow Squall IEM LSR Harvest" --branch snow-squall-model-foundation --status success --limit 1 --json databaseId --jq '.[0].databaseId')"
           if [ -z "$discovery_run" ] || [ "$discovery_run" = "null" ] || [ -z "$lsr_run" ] || [ "$lsr_run" = "null" ]; then
-            echo "Both source harvests are not ready yet; this ledger pass will exit cleanly."
+            echo "Required source harvests are not ready yet; this ledger pass will exit cleanly."
             echo "skip=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
@@ -83,12 +83,13 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: gh run download "${{ steps.sources.outputs.lsr_run }}" --name snow-squall-iem-lsr-review --dir lsr_artifact
 
-      - name: Build unified case ledger
       - name: Download BTV NWS text review artifact
         if: steps.sources.outputs.skip != 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: gh run download "${{ steps.sources.outputs.nws_text_run }}" --name snow-squall-nws-text-review --dir nws_text_artifact
+
+      - name: Build unified case ledger
         if: steps.sources.outputs.skip != 'true'
         run: |
           python scripts/merge_snow_squall_case_sources.py \
