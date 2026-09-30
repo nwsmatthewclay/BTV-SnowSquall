@@ -561,7 +561,7 @@ jobs:
           official_batch = int('${{ steps.batch.outputs.max_official }}')
           review_batch = int('${{ steps.batch.outputs.max_unverified }}')
           state = {
-              'auto_continue': True,
+              'auto_continue': False,
               'batch_rows': {'official': official_count, 'review': review_count},
               'batch_size': {'official': official_batch, 'review': review_batch},
               'current_offsets': {'official': official_offset, 'review': review_offset},
@@ -650,7 +650,7 @@ jobs:
             data/derived/snow_squall_expansion_provenance.json
             data/derived/national_sqw_weak_model_*m
 
-      - name: Advance automatic expansion batch
+      - name: Preserve archived historical expansion state
         if: success()
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -661,7 +661,7 @@ jobs:
           from pathlib import Path
           s=json.loads(Path('data/derived/next_expansion_batch.json').read_text())
           if not s.get('auto_continue'):
-              print('Automatic continuation disabled.')
+              print('Historical expansion is archived; automatic continuation is disabled.')
               raise SystemExit(0)
           batch=s.get('batch_rows') or {}
           if int(batch.get('official',0)) == 0 and int(batch.get('review',0)) == 0:
