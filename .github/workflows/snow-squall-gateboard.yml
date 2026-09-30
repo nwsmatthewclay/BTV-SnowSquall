@@ -21,7 +21,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:
-      GH_TOKEN: \${{ secrets.GITHUB_TOKEN }}
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       PYTHONUNBUFFERED: "1"
     steps:
       - name: Check out foundation
@@ -38,9 +38,9 @@ jobs:
           from datetime import datetime, timezone
           from pathlib import Path
 
-          REPO = "\${{ github.repository }}"
+          REPO = "${{ github.repository }}"
           BRANCH = "snow-squall-model-foundation"
-          HEAD = "\${{ github.sha }}"
+          HEAD = "${{ github.sha }}"
 
           def run_gh(args):
               return subprocess.check_output(["gh", *args], text=True)
