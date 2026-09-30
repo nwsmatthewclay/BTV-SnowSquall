@@ -10,6 +10,7 @@ from __future__ import annotations
 import argparse
 import csv
 import json
+import math
 from pathlib import Path
 
 CSV_FIELDS = [
@@ -39,8 +40,13 @@ CSV_FIELDS = [
 def _clean(value):
     if value is None:
         return None
-    if isinstance(value, float) and value != value:
-        return None
+    if isinstance(value, (float, int)) and not isinstance(value, bool):
+        try:
+            numeric = float(value)
+            if not math.isfinite(numeric):
+                return None
+        except (TypeError, ValueError):
+            pass
     return value
 
 
@@ -115,7 +121,7 @@ def append_history(geojson_path: Path, jsonl_path: Path, csv_path: Path):
     if new_rows:
         with jsonl_path.open("a", encoding="utf-8") as handle:
             for row in new_rows:
-                handle.write(json.dumps(row, separators=(",", ":")) + "\n")
+                handle.write(json.dumps(row, separators=(",", ":"), allow_nan=False) + "\n")
 
         csv_exists = csv_path.exists() and csv_path.stat().st_size > 0
         with csv_path.open("a", encoding="utf-8", newline="") as handle:
