@@ -64,3 +64,9 @@ def test_archived_replay_workflow_has_four_horizon_qc():
     assert 'candidate_ensemble_expansion_15m' in text
     assert 'candidate_ensemble_expansion_60m' in text
     assert 'BTV20181121' in text
+
+
+def test_archived_replay_builds_unified_score_timeline():
+    text = Path('.github/workflows/snow-squall-archived-replay-smoke.yml').read_text(encoding='utf-8')
+    assert 'merge_replay_horizon_scores.py' in text
+    assert 'score_timeline.json' in text
