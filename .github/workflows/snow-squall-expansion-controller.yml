@@ -42,7 +42,7 @@ jobs:
           from pathlib import Path
           s=json.loads(Path('state_artifact/next_expansion_batch.json').read_text())
           if not s.get('auto_continue'):
-              print('Automatic continuation disabled.')
+              print('Historical expansion is archived; controller will not dispatch another batch.')
               raise SystemExit(0)
           no_new = s.get('batch_rows',{}).get('official',0) == 0 and s.get('batch_rows',{}).get('review',0) == 0
           if no_new:
