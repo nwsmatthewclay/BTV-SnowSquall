@@ -1,6 +1,11 @@
 name: Snow Squall Archived Replay Smoke
 
 on:
+  workflow_run:
+    workflows:
+      - Snow Squall Expansion Dataset
+    types:
+      - completed
   workflow_dispatch:
     inputs:
       validation_run_id:
@@ -26,6 +31,7 @@ concurrency:
 
 jobs:
   replay:
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 240
     env:
@@ -49,6 +55,9 @@ jobs:
             validation_run="$(gh run list --workflow "Snow Squall Modern Independent Validation" --branch snow-squall-model-foundation --status success --limit 1 --json databaseId --jq '.[0].databaseId')"
           fi
           expansion_run="${{inputs.expansion_run_id }}"
+          if [ -z "$expansion_run" ] && [ "${{ github.event_name }}" = "workflow_run" ]; then
+            expansion_run="${{ github.event.workflow_run.id }}"
+          fi
           if [ -z "$expansion_run" ]; then
             expansion_run="$(gh run list --workflow "Snow Squall Expansion Dataset" --branch snow-squall-model-foundation --status success --limit 1 --json databaseId --jq '.[0].databaseId')"
           fi
