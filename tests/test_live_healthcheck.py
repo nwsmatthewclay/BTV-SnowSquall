@@ -79,3 +79,33 @@ def test_live_healthcheck_audits_shadow_probability_sequence(tmp_path):
     report = audit_shadow_root(tmp_path)
     assert report["status"] == "pass"
     assert all(row["probability_count"] == 4 for row in report["sites"])
+
+
+def test_live_healthcheck_detects_state_output_timestamp_mismatch(tmp_path):
+    now = datetime.now(timezone.utc).replace(microsecond=0)
+    state = {
+        "last_source": "KCXX-test",
+        "last_scan_time_utc": now.isoformat().replace("+00:00", "Z"),
+        "last_object_count": 1,
+    }
+    geo = {
+        "type": "FeatureCollection",
+        "features": [{
+            "properties": {
+                "timestamp": (now - __import__("datetime").timedelta(minutes=10)).isoformat().replace("+00:00", "Z")
+            }
+        }],
+        "metadata": {
+            "probability_status": "not_scored",
+            "scan_time_utc": (now - __import__("datetime").timedelta(minutes=10)).isoformat().replace("+00:00", "Z"),
+        },
+    }
+    sp = tmp_path / "state.json"
+    gp = tmp_path / "objects.geojson"
+    sp.write_text(json.dumps(state), encoding="utf-8")
+    gp.write_text(json.dumps(geo), encoding="utf-8")
+
+    report = healthcheck(sp, gp, max_age_minutes=15)
+    assert report["status"] == "degraded"
+    assert report["checks"]["scan_timestamp_coherent"] is False
+    assert report["checks"]["object_timestamps_coherent"] is True
