@@ -21,7 +21,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 360
     env:
-      PYTHONPATH: \${{ github.workspace }}
+      PYTHONPATH: ${{ github.workspace }}
       PYTHONUNBUFFERED: "1"
 
     steps:
@@ -284,8 +284,8 @@ jobs:
             python scripts/train_baseline_model.py \
               data/derived/object_model_features_expansion.csv \
               --schema data/derived/object_model_features_expansion.schema.json \
-              --target squall_onset_within_\${horizon}m \
-              --output-dir data/derived/baseline_expansion_\${horizon}m
+              --target squall_onset_within_${horizon}m \
+              --output-dir data/derived/baseline_expansion_${horizon}m
           done
 
       - name: Summarize baseline horizon verification
