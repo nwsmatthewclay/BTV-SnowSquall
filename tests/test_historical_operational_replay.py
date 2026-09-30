@@ -176,3 +176,67 @@ def test_replay_rejects_output_timestamp_mismatch(tmp_path, monkeypatch):
             tmp_path / "state.json",
             "CASE",
         )
+
+
+def test_resume_uses_only_completed_output_prefix(tmp_path, monkeypatch):
+    from scripts import historical_operational_replay as replay
+    names = [
+        "KCXX20200101_120000_V06",
+        "KCXX20200101_121000_V06",
+        "KCXX20200101_122000_V06",
+    ]
+    for name in names:
+        (tmp_path / name).write_bytes(b"placeholder")
+    out = tmp_path / "out"
+    out.mkdir()
+    state = tmp_path / "state.json"
+
+    def write_output(path, timestamp):
+        path.write_text(
+            json.dumps({"metadata":{"scan_time_utc":timestamp,"object_count":1}}),
+            encoding="utf-8",
+        )
+
+    import json
+    write_output(out / "0001_KCXX20200101_120000_V06.geojson", "2020-01-01T12:00:00Z")
+    state.write_text(json.dumps({
+        "last_source": names[0],
+        "processed_sources": [names[0]],
+    }), encoding="utf-8")
+
+    calls = []
+    def fake_process(source, state_path, output_path, history_jsonl_path=None, history_csv_path=None, model_dir=None, research_replay=False):
+        calls.append(source.name)
+        write_output(output_path, {
+            "KCXX20200101_121000_V06":"2020-01-01T12:10:00Z",
+            "KCXX20200101_122000_V06":"2020-01-01T12:20:00Z",
+        }[source.name])
+        return True
+
+    monkeypatch.setattr(replay, "process_volume", fake_process)
+    result = replay.replay_case(
+        tmp_path, out, state, "CASE", resume=True
+    )
+    assert calls == names[1:]
+    assert result["scan_count"] == 3
+
+
+def test_resume_rejects_noncontiguous_outputs(tmp_path):
+    from scripts import historical_operational_replay as replay
+    names = [
+        "KCXX20200101_120000_V06",
+        "KCXX20200101_121000_V06",
+        "KCXX20200101_122000_V06",
+    ]
+    for name in names:
+        (tmp_path / name).write_bytes(b"placeholder")
+    out = tmp_path / "out"
+    out.mkdir()
+    import json
+    for index, name in ((1, names[0]), (3, names[2])):
+        (out / f"{index:04d}_{name}.geojson").write_text(
+            json.dumps({"metadata":{"scan_time_utc":"2020-01-01T12:00:00Z","object_count":1}}),
+            encoding="utf-8",
+        )
+    with pytest.raises(ValueError, match="contiguous prefix"):
+        replay.replay_case(tmp_path, out, tmp_path/"state.json", "CASE", resume=True)
