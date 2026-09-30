@@ -21,7 +21,10 @@ from pathlib import Path
 import pandas as pd
 import requests
 
-BASE_URL = "https://www.ncei.noaa.gov/swdiws/csv/plsr"
+BASE_URLS = (
+    "https://www.ncei.noaa.gov/swdiws/csv/plsr",
+    "https://www.ncdc.noaa.gov/swdiws/csv/plsr",
+)
 BULK_BASE_URL = "https://www.ncei.noaa.gov/pub/data/swdi/database-csv/v2"
 BTV_BBOX = "-80,40,-67,48"
 STATION_STATE = {
@@ -57,14 +60,22 @@ def _find_column(frame: pd.DataFrame, names: tuple[str, ...]) -> str | None:
 
 
 def _rest_year(year: int, start: pd.Timestamp, end: pd.Timestamp, state: str) -> pd.DataFrame:
-    start_text = pd.Timestamp(start).tz_convert('UTC').strftime('%Y%m%d%H%M')
-    end_text = pd.Timestamp(end).tz_convert('UTC').strftime('%Y%m%d%H%M')
-    url = f'{BASE_URL}/{start_text}:{end_text}/1000000'
-    response = _request(url + f'?bbox={BTV_BBOX}')
-    if not response.text.strip():
-        return pd.DataFrame()
-    return pd.read_csv(io.StringIO(response.text))
-
+    # SWDI's documented service uses calendar dates with an exclusive end.
+    start_text = pd.Timestamp(start).tz_convert('UTC').strftime('%Y%m%d')
+    end_text = pd.Timestamp(end).tz_convert('UTC').strftime('%Y%m%d')
+    for base in BASE_URLS:
+        url = f'{base}/{start_text}:{end_text}/10000000'
+        try:
+            response = _request(url + f'?bbox={BTV_BBOX}')
+            if not response.text.strip():
+                continue
+            frame = pd.read_csv(io.StringIO(response.text), comment='#', low_memory=False)
+            if frame.empty:
+                continue
+            return frame
+        except Exception as exc:
+            print(f'SWDI REST endpoint {base} unavailable for {year}: {type(exc).__name__}: {exc}')
+    return pd.DataFrame()
 
 def _bulk_year(year: int, start: pd.Timestamp, end: pd.Timestamp, state: str, columns: list[str] | None = None) -> pd.DataFrame:
     # Prefer the live SWDI REST service. Keep the annual bulk archive as a
@@ -86,7 +97,7 @@ def _bulk_year(year: int, start: pd.Timestamp, end: pd.Timestamp, state: str, co
 
     if year < BULK_START_YEAR:
         return pd.DataFrame()
-    url = f'{BULK_BASE_URL}/plsr-{year}.csv.gz'
+    url = f"{BULK_BASE_URL}/plsr-{year}.csv.gz"
     response = _request(url)
     header = pd.read_csv(io.BytesIO(response.content), compression='gzip', nrows=0, comment='#')
     time_col = _find_column(header, ('VALID', 'VALID_TIME', 'UTC_TIME', 'DATE_TIME', 'DATETIME', 'ZTIME'))
