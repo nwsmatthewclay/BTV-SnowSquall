@@ -19,7 +19,15 @@ def scan_time(path: Path) -> datetime:
     return datetime.strptime(match.group(1)+match.group(2), "%Y%m%d%H%M%S").replace(tzinfo=timezone.utc)
 
 def ordered_inputs(input_dir: Path) -> list[Path]:
-    files=[p for p in input_dir.rglob("*") if p.is_file() and not p.name.endswith((".part",".tmp"))]
+    files = []
+    for path in input_dir.rglob("*"):
+        if not path.is_file() or path.name.endswith((".part", ".tmp")):
+            continue
+        try:
+            scan_time(path)
+        except ValueError:
+            continue
+        files.append(path)
     return sorted(files, key=scan_time)
 
 
