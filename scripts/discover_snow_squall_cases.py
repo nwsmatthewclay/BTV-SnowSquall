@@ -264,7 +264,6 @@ def gather_cow_sqw(cfg: dict) -> list[dict]:
             "phenomena": "SQ",
             "begints": f"{year}-01-01T00:00Z",
             "endts": f"{year}-12-31T23:59Z",
-,
             "lsrtype": "SQ"
         }
         for wfo in cfg.get("warning_wfos", ["BTV"]):
@@ -289,9 +288,8 @@ def gather_cow_sqw(cfg: dict) -> list[dict]:
                 lead_min = finite_float(props.get("lead0"))
                 anchor = issue
                 anchor_type = "warning_issue"
-                if iem_verified and lead_min is not None and lead_min >= 0:
-                    anchor = issue + pd.Timedelta(minutes=lead_min)
-                    anchor_type = "first_verifying_lsr"
+                iem_verified = bool(props.get("verify"))
+                lead_min = finite_float(props.get("lead0"))
                 rows.append({
                     "candidate_id": case_key("SQW", issue.to_pydatetime(), lat, lon, f"{wfo}|{props.get('eventid', '')}"),
                     "candidate_source": "IEM_COW_SQW",
