@@ -29,6 +29,16 @@ OPERATIONAL_LIVE_PREDICTORS = {
     "max_reflectivity_dbz_running_max", "mean_reflectivity_dbz_running_max",
     "area_km2_running_max", "core_pixel_count_running_max", "pixel_count_running_max",
     "echo_top_km", "top_minus_base_km", "vertical_reflectivity_gradient",
+    "max_reflectivity_dbz_trailing_mean_3", "max_reflectivity_dbz_trailing_std_3",
+    "max_reflectivity_dbz_change_2scan", "max_reflectivity_dbz_rate_2scan_per_min",
+    "max_reflectivity_dbz_acceleration_per_min2",
+    "area_km2_trailing_mean_3", "area_km2_trailing_std_3", "area_km2_change_2scan",
+    "area_km2_rate_2scan_per_min", "area_km2_acceleration_per_min2",
+    "echo_top_km_trailing_mean_3", "echo_top_km_trailing_std_3", "echo_top_km_change_2scan",
+    "echo_top_km_rate_2scan_per_min", "echo_top_km_acceleration_per_min2",
+    "motion_speed_kt_trailing_mean_3", "motion_speed_kt_trailing_std_3", "motion_speed_kt_change_2scan",
+    "motion_speed_kt_rate_2scan_per_min", "motion_speed_kt_acceleration_per_min2",
+    "track_persistence_min", "recent_scan_count_3",
     "vertical_valid_points", "zdr_mean_db", "zdr_p90_db", "zdr_gradient_dbkm",
     "rhohv_mean", "rhohv_max", "rhohv_p90", "rhohv_min",
     "kdp_mean_degkm", "kdp_p90_degkm", "velocity_mean_kt", "velocity_std_kt",
@@ -138,6 +148,30 @@ def build_features(frame: pd.DataFrame) -> pd.DataFrame:
             df[f"{col}_rate_per_min"] = (
                 (numeric - prev) / dt_min.replace(0, np.nan)
             ).where(continuity_ok)
+
+    # Multi-scan state uses only current and prior scans.
+    second_dt_min = (df["scan_dt"] - g["scan_dt"].shift(2)).dt.total_seconds() / 60.0
+    continuity_2 = continuity_ok & second_dt_min.between(0, 20, inclusive="both")
+    for col in ("max_reflectivity_dbz", "area_km2", "echo_top_km", "motion_speed_kt"):
+        if col not in df.columns:
+            continue
+        current = pd.to_numeric(df[col], errors="coerce")
+        prev1 = pd.to_numeric(g[col].shift(1), errors="coerce")
+        prev2 = pd.to_numeric(g[col].shift(2), errors="coerce")
+        triple = pd.concat([current, prev1, prev2], axis=1)
+        df[f"{col}_trailing_mean_3"] = triple.mean(axis=1, skipna=True)
+        df[f"{col}_trailing_std_3"] = triple.std(axis=1, skipna=True)
+        df[f"{col}_change_2scan"] = (current - prev2).where(continuity_2)
+        df[f"{col}_rate_2scan_per_min"] = ((current - prev2) / second_dt_min.replace(0, np.nan)).where(continuity_2)
+        prior_rate = ((prev1 - prev2) / dt_min.replace(0, np.nan)).where(continuity_2)
+        current_rate = ((current - prev1) / dt_min.replace(0, np.nan)).where(continuity_ok)
+        df[f"{col}_acceleration_per_min2"] = (current_rate - prior_rate).where(continuity_2)
+    df["track_persistence_min"] = df["track_age_min"].clip(lower=0)
+    df["recent_scan_count_3"] = pd.concat([
+        pd.Series(1, index=df.index),
+        g["scan_dt"].shift(1).notna().astype(int),
+        g["scan_dt"].shift(2).notna().astype(int),
+    ], axis=1).sum(axis=1)
 
     if {"centroid_lat", "centroid_lon"}.issubset(df.columns):
         prev_lat = g["centroid_lat"].shift(1)
