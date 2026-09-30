@@ -185,7 +185,8 @@ jobs:
 
           echo "level2_root=$PWD/replay_input" >> "$GITHUB_OUTPUT"
           echo "case_id=$requested_case" >> "$GITHUB_OUTPUT"
-          echo "radar_site=$radar" >> "$GITHUB_OUTPUT"
+          radar_site="$(python -c 'import json; print(json.load(open("replay_input_case.json"))["radar_site"])')"
+          echo "radar_site=$radar_site" >> "$GITHUB_OUTPUT"
 
       - name: Validate candidate bundle layout
         run: |
