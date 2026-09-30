@@ -244,6 +244,18 @@ jobs:
           assert len(training_cases) > 0, 'No cases passed the supervised evidence gate'
           PY
 
+      - name: Checkpoint reconstructed expansion data
+        uses: actions/upload-artifact@v4
+        with:
+          name: snow-squall-expansion-reconstruction-checkpoint
+          retention-days: 14
+          path: |
+            data/manifests/snow_squall_expansion
+            data/derived/snow_squall_expansion_*
+            data/derived/snow_squall_verified_objects.csv
+            data/derived/snow_squall_unverified_objects.csv
+            data/derived/snow_squall_training_objects.csv
+
       - name: Build supervised historical environment and labels
         run: |
           python scripts/build_historical_dataset.py \
@@ -363,13 +375,14 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
-          run_id="$(gh run list --workflow "Snow Squall Expansion Dataset" --branch snow-squall-model-foundation --status success --limit 1 --json databaseId --jq '.[0].databaseId')"
           root=""
+          run_id="$(gh run list --workflow "Snow Squall Expansion Dataset" --branch snow-squall-model-foundation --status success --limit 10 --json databaseId --jq '.[].databaseId' | head -n 1 || true)"
           if [ -n "$run_id" ] && [ "$run_id" != "null" ]; then
+            mkdir -p prior_expansion
             gh run download "$run_id" --name snow-squall-expansion-feature-batch --dir prior_expansion || true
           fi
           if [ -d prior_expansion ]; then
-            prior="$(find prior_expansion -name 'snow_squall_model_features_cumulative.csv' -type f -print -quit)"
+            prior="$(find prior_expansion -name 'snow_squall_model_features_cumulative.csv' -type f -print -quit || true)"
             if [ -n "$prior" ]; then root="$prior"; fi
           fi
           echo "path=$root" >> "$GITHUB_OUTPUT"
