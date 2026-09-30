@@ -14,6 +14,40 @@ RADARS = {
     "KTYX": (43.756, -75.680),
 }
 
+COUNTY_ROUTING_POINTS = {
+    "ADDISON": (44.00, -73.10),
+    "CALEDONIA": (44.46, -72.03),
+    "CHITTENDEN": (44.46, -73.07),
+    "ESSEX": (44.75, -71.72),
+    "FRANKLIN": (44.84, -72.92),
+    "GRAND ISLE": (44.79, -73.30),
+    "LAMOILLE": (44.62, -72.63),
+    "ORANGE": (44.01, -72.30),
+    "ORLEANS": (44.81, -72.27),
+    "RUTLAND": (43.58, -73.05),
+    "WASHINGTON": (44.28, -72.55),
+    "WINDSOR": (43.58, -72.46),
+    "CLINTON": (44.69, -73.58),
+    "ST LAWRENCE": (44.50, -75.08),
+}
+
+def routing_point(state, county):
+    state = str(state or '').upper().strip()
+    county = str(county or '').upper().strip()
+    if state == 'VT':
+        if any(x in county for x in ('BENNINGTON', 'WINDHAM')):
+            return None
+        for name, point in COUNTY_ROUTING_POINTS.items():
+            if name in county:
+                return point
+    if state == 'NY':
+        if 'SAINT LAWRENCE' in county:
+            return COUNTY_ROUTING_POINTS['ST LAWRENCE']
+        for name in ('CLINTON', 'ESSEX', 'FRANKLIN', 'ST LAWRENCE'):
+            if name in county:
+                return COUNTY_ROUTING_POINTS[name]
+    return None
+
 STRONG_CLASSES = {
     "official_documented",
     "official_plus_independent_report",
