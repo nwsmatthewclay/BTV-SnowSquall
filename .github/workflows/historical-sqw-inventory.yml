@@ -1,0 +1,37 @@
+name: Historical SQW Inventory
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 3 * * 0"
+
+permissions:
+  contents: write
+
+jobs:
+  harvest:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Harvest BTV Snow Squall Warnings
+        run: |
+          python scripts/harvest_iem_sqw.py             --start-year 2018             --end-year $(date -u +%Y)             --wfo BTV             --output data/historical/sqw_warning_inventory.csv
+
+      - name: Commit inventory changes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/historical/sqw_warning_inventory.csv
+          if git diff --cached --quiet; then
+            echo "No inventory changes."
+            exit 0
+          fi
+          git commit -m "Update BTV historical SQW inventory"
+          git push
