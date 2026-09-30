@@ -211,6 +211,10 @@ jobs:
             --output replay/live_feature_parity.json \
             --max-tracks 20
 
+      - name: Build viewer-ready replay case
+        run: |
+          python scripts/build_replay_viewer_case.py             --base-dir replay/15m             --timeline replay/score_timeline.json             --output replay/viewer_case.geojson
+
       - name: Upload replay smoke package
         uses: actions/upload-artifact@v4
         with:
