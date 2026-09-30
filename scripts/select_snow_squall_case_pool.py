@@ -39,7 +39,7 @@ def choose_diverse(df: pd.DataFrame, limit: int) -> pd.DataFrame:
     work["year"] = work["year"].fillna(0).astype(int)
 
     ranked = []
-    for year, group in work.groupby("year", sort=True):
+    for (year, evidence), group in work.groupby(["year", "verification_class"], sort=True):
         group = group.sort_values(
             ["lsr_count", "ncei_explicit_snow_squall", "event_start_utc"],
             ascending=[False, False, True],
