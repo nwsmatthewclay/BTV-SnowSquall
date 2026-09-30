@@ -1,0 +1,58 @@
+name: Acquire Penn State Schneider 2024 Case Catalog
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - snow-squall-model-foundation
+    paths:
+      - scripts/acquire_psu_schneider_cases.py
+      - data/research/PSU_SCHNEIDER_2024.md
+
+permissions:
+  contents: read
+
+jobs:
+  acquire:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      PYTHONUNBUFFERED: '1'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: snow-squall-model-foundation
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pandas openpyxl requests
+      - name: Acquire public case catalog
+        run: |
+          python scripts/acquire_psu_schneider_cases.py --output-dir data/derived/psu_schneider_2024
+      - name: Audit research cohort
+        run: |
+          python - <<'PY'
+          import pandas as pd
+          from pathlib import Path
+          p=Path('data/derived/psu_schneider_2024/psu_schneider_2024_case_catalog.csv')
+          d=pd.read_csv(p)
+          print('Rows:',len(d))
+          print('Unique source cases:',d['source_case_id'].nunique())
+          print('Modes:')
+          print(d['research_mode'].value_counts(dropna=False).to_string())
+          print('Duplicate candidate IDs:',d['candidate_id'].duplicated().sum())
+          assert len(d) > 0
+          assert d['candidate_id'].is_unique
+          assert d['verification_class'].eq('research_documented_cs').all()
+          PY
+      - name: Upload research catalog
+        uses: actions/upload-artifact@v4
+        with:
+          name: psu-schneider-2024-case-catalog
+          retention-days: 30
+          path: data/derived/psu_schneider_2024/
