@@ -21,8 +21,13 @@ def fetch_product(pil: str, year: int, month: int) -> str:
     params = {
         "pil": pil,
         "center": "KBTV",
-        "sdate": f"{year}{month:02d}01",
-        "edate": f"{year}{month:02d}{pd.Period(f"{year}-{month:02d}").days_in_month:02d}",
+    first = pd.Timestamp(year=int(year), month=int(month), day=1)
+    last_day = int(first.days_in_month)
+    params = {
+        "pil": pil,
+        "center": "KBTV",
+        "sdate": first.strftime("%Y%m%d"),
+        "edate": first.replace(day=last_day).strftime("%Y%m%d"),
         "fmt": "text",
         "limit": 10000,
     }
