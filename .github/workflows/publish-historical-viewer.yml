@@ -13,7 +13,7 @@ on:
       - .github/pilot-trigger
   workflow_run:
     workflows:
-      - Snow Squall Expansion Dataset
+      - .github/workflows/snow-squall-expansion-dataset.yml
     types:
       - completed
   workflow_dispatch:
@@ -52,7 +52,22 @@ jobs:
           # The historical viewer is a research/replay surface. Always publish
           # from the newest completed successful dataset rather than blocking on
           # a newer in-progress expansion batch.
-          CANDIDATE=$(gh run list             --branch snow-squall-model-foundation             --status success             --limit 30             --json databaseId,name,status,conclusion             --jq '[.[] | select(.name == "Snow Squall Expansion Dataset" or .name == "Object Dataset Full Expansion" or .name == "Object Dataset Pilot")] | sort_by(.databaseId) | reverse | .[0]')
+          CANDIDATE=$(gh run list \
+            --workflow ".github/workflows/snow-squall-expansion-dataset.yml" \
+            --branch snow-squall-model-foundation \
+            --status success \
+            --limit 1 \
+            --json databaseId,name,status,conclusion \
+            --jq '.[0]')
+
+          if [ -z "${CANDIDATE}" ] || [ "${CANDIDATE}" = "null" ]; then
+            CANDIDATE=$(gh run list \
+              --branch snow-squall-model-foundation \
+              --status success \
+              --limit 100 \
+              --json databaseId,name,status,conclusion \
+              --jq '[.[] | select(.name == "Object Dataset Full Expansion" or .name == "Object Dataset Pilot")] | sort_by(.databaseId) | reverse | .[0]')
+          fi
 
           if [ -z "${CANDIDATE}" ] || [ "${CANDIDATE}" = "null" ]; then
             echo "No successful historical dataset workflow run is available."
@@ -71,7 +86,7 @@ jobs:
         if: steps.source.outputs.skip != 'true'
         uses: actions/download-artifact@v4
         with:
-          name: ${{ (steps.source.outputs.workflow_name == 'Object Dataset Full Expansion' || steps.source.outputs.workflow_name == 'Snow Squall Expansion Dataset') && 'object-population-expansion' || 'object-population-pilot' }}
+          name: ${{ (steps.source.outputs.workflow_name == 'Object Dataset Full Expansion' || steps.source.outputs.workflow_name == '.github/workflows/snow-squall-expansion-dataset.yml' || steps.source.outputs.workflow_name == 'Snow Squall Expansion Dataset') && 'object-population-expansion' || 'object-population-pilot' }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
           repository: ${{ github.repository }}
           run-id: ${{ steps.source.outputs.run_id }}
