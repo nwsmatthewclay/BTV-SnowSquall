@@ -1,0 +1,97 @@
+"""Build an auditable snow-squall case evidence scorecard."""
+from __future__ import annotations
+
+import argparse
+from pathlib import Path
+import pandas as pd
+
+STRONG = {
+    "official_documented", "official_plus_independent_report", "official_plus_warning",
+    "official_plus_warning_and_report", "official_plus_warning_verified",
+    "official_study_warning_verified", "official_plus_study", "study_verified",
+    "study_warning_verified",
+}
+
+def num(value, default=0.0):
+    try:
+        value=float(value)
+        return value if pd.notna(value) else default
+    except (TypeError, ValueError):
+        return default
+
+def score_row(row):
+    evidence=[]
+    points=0
+    cls=str(row.get('verification_class') or '')
+    if cls in STRONG:
+        points += 4; evidence.append('documented_source')
+    if 'IEM_COW_SQW' in str(row.get('source_types') or ''):
+        points += 1; evidence.append('snow_squall_warning')
+    if bool(row.get('warning_verified_by_iem')):
+        points += 2; evidence.append('iem_warning_verification')
+    if num(row.get('lsr_count')) > 0:
+        points += 1; evidence.append('independent_lsr')
+    if num(row.get('nws_text_evidence_count')) > 0:
+        points += 1; evidence.append('nws_text')
+    if bool(row.get('surface_timing_consistent')):
+        points += 2; evidence.append('surface_timing')
+    if num(row.get('observation_count')) > 0:
+        points += 1; evidence.append('surface_observations')
+    if num(row.get('radar_scan_count')) > 0:
+        points += 2; evidence.append('radar_reconstruction')
+    if num(row.get('radar_coverage_fraction')) >= 0.75:
+        points += 1; evidence.append('radar_coverage_ge_75pct')
+    if pd.notna(row.get('study_case_id')) and str(row.get('study_case_id')).strip():
+        points += 3; evidence.append('study_anchor')
+
+    # Evidence tiers are descriptive promotion queues. They are not truth labels.
+    if cls in {'study_verified','official_plus_study','study_warning_verified','official_study_warning_verified'} and points >= 6:
+        tier='A_anchor_supported'
+    elif points >= 7:
+        tier='A_multi_source'
+    elif points >= 5:
+        tier='B_multi_evidence'
+    elif points >= 3:
+        tier='C_partial_evidence'
+    else:
+        tier='D_review_only'
+    return points,tier,','.join(evidence)
+
+def build(cases_path, surface_path, objects_path, radar_path, output_path):
+    cases=pd.read_csv(cases_path)
+    for path in [surface_path, objects_path, radar_path]:
+        if path and not Path(path).exists():
+            raise FileNotFoundError(path)
+    if surface_path:
+        s=pd.read_csv(surface_path)
+        s_cols=[c for c in ['case_id','surface_timing_consistent','observation_count','minimum_visibility_m','maximum_gust_kt'] if c in s.columns]
+        cases=cases.merge(s[s_cols].drop_duplicates('case_id'),on='case_id',how='left')
+    if objects_path:
+        o=pd.read_csv(objects_path)
+        if 'case_id' in o.columns:
+            counts=o.dropna(subset=['case_id']).groupby('case_id').size().rename('radar_scan_count')
+            cases=cases.merge(counts,on='case_id',how='left')
+    if radar_path:
+        r=pd.read_csv(radar_path)
+        r_cols=[c for c in ['candidate_id','radar_distance_km','coordinate_precision'] if c in r.columns]
+        if r_cols and 'candidate_id' in r.columns:
+            cases=cases.merge(r[r_cols].drop_duplicates('candidate_id'),left_on='candidate_id',right_on='candidate_id',how='left')
+    cases['radar_scan_count']=cases.get('radar_scan_count',pd.Series(0,index=cases.index)).fillna(0)
+    cases['verification_points'],cases['verification_tier'],cases['verification_evidence']=zip(*cases.apply(score_row,axis=1))
+    cases['verification_policy']='descriptive_evidence_promotion_queue_v1'
+    cases.to_csv(output_path,index=False)
+    print('Case evidence scorecard:',len(cases))
+    print(cases['verification_tier'].value_counts(dropna=False).to_string())
+
+def main():
+    p=argparse.ArgumentParser()
+    p.add_argument('--cases',required=True)
+    p.add_argument('--surface',required=True)
+    p.add_argument('--objects',required=True)
+    p.add_argument('--radar',required=True)
+    p.add_argument('--output',required=True)
+    a=p.parse_args()
+    build(Path(a.cases),Path(a.surface),Path(a.objects),Path(a.radar),Path(a.output))
+
+if __name__=='__main__':
+    main()
