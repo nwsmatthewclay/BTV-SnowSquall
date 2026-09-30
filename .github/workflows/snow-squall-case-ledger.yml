@@ -89,6 +89,18 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: gh run download "${{ steps.sources.outputs.nws_text_run }}" --name snow-squall-nws-text-review --dir nws_text_artifact
 
+      - name: Verify Banacos study anchor population
+        if: steps.sources.outputs.skip != 'true'
+        run: |
+          python - <<'PY'
+          import pandas as pd
+          d=pd.read_csv('data/manifests/banacos_2014_cases.csv')
+          assert len(d)==36
+          assert d.case_id.nunique()==36
+          print('Banacos study anchor cases:',len(d))
+          print('Stations:',d.observing_station.value_counts().to_dict())
+          PY
+
       - name: Build unified case ledger
         if: steps.sources.outputs.skip != 'true'
         run: |
@@ -97,11 +109,13 @@ jobs:
               --discovery discovery_artifact/snow_squall_candidates.csv \
               --iem-lsr lsr_artifact/iem_lsr_case_clusters.csv \
               --nws-text nws_text_artifact/iem_nws_text_candidates.csv \
+              --study data/manifests/banacos_2014_cases.csv \
               --output-dir data/discovery/unified
           else
             python scripts/merge_snow_squall_case_sources.py \
               --discovery discovery_artifact/snow_squall_candidates.csv \
               --iem-lsr lsr_artifact/iem_lsr_case_clusters.csv \
+              --study data/manifests/banacos_2014_cases.csv \
               --output-dir data/discovery/unified
           fi
 
