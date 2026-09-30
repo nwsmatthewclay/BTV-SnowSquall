@@ -1,0 +1,40 @@
+group,feature,unit,source_at_replay,derived,leakage_rule
+surface,temperature,C,METAR/ASOS,false,nearest observation at or before valid_time
+surface,dewpoint,C,METAR/ASOS,false,nearest observation at or before valid_time
+surface,visibility_km,km,METAR/ASOS,false,nearest observation at or before valid_time
+surface,wind_speed_kt,kt,METAR/ASOS,false,nearest observation at or before valid_time
+surface,wind_gust_kt,kt,METAR/ASOS,false,nearest observation at or before valid_time
+surface,wind_dir_deg,deg,METAR/ASOS,false,nearest observation at or before valid_time
+surface,present_weather,string,METAR/ASOS,false,nearest observation at or before valid_time
+surface,pressure_hpa,hPa,METAR/ASOS,false,nearest observation at or before valid_time
+ptype,metar_snow_flag,bool,METAR/ASOS,false,no future observation
+ptype,mping_snow_flag,bool,MPING,false,no future observation
+radar,reflectivity_max_dbz,dBZ,KCXX/KTYX Level-II,false,only volumes available by valid_time
+radar,reflectivity_p95_dbz,dBZ,KCXX/KTYX Level-II,false,only volumes available by valid_time
+radar,echo_top_km,km,KCXX/KTYX Level-II,false,only volumes available by valid_time
+radar,reflectivity_gradient_dbz_km,dBZ/km,KCXX/KTYX Level-II,false,only volumes available by valid_time
+radar,object_area_km2,km2,tracked radar object,false,track history only through valid_time
+radar,object_length_km,km,tracked radar object,false,track history only through valid_time
+radar,object_width_km,km,tracked radar object,false,track history only through valid_time
+radar,object_motion_deg,deg,tracked radar object,false,track history only through valid_time
+radar,object_motion_kt,kt,tracked radar object,false,track history only through valid_time
+radar,object_growth_rate,unit/min,tracked radar object,false,track history only through valid_time
+radar,object_intensification_rate,dBZ/min,tracked radar object,false,track history only through valid_time
+mrms,mrms_reflectivity,dBZ,MRMS,false,only products available by valid_time
+mrms,mrms_ptype,string,MRMS,false,only products available by valid_time
+environment,SBCAPE_Jkg,J/kg,RAP/MetPy,false,model cycle valid before replay time
+environment,MUCAPE_Jkg,J/kg,RAP/MetPy,false,model cycle valid before replay time
+environment,MLCAPE_Jkg,J/kg,RAP/MetPy,false,model cycle valid before replay time
+environment,SBCIN_Jkg,J/kg,RAP/MetPy,false,model cycle valid before replay time
+environment,MLCIN_Jkg,J/kg,RAP/MetPy,false,model cycle valid before replay time
+environment,DCAPE_Jkg,J/kg,RAP/MetPy,false,model cycle valid before replay time
+environment,LCL_m,m,RAP/MetPy,false,model cycle valid before replay time
+environment,PWAT_mm,mm,RAP/MetPy,false,model cycle valid before replay time
+environment,LR03_Ckm,C/km,RAP/MetPy,false,model cycle valid before replay time
+environment,LR75_Ckm,C/km,RAP/MetPy,false,model cycle valid before replay time
+environment,BS06_kt,kt,RAP/MetPy,false,model cycle valid before replay time
+environment,SRH01_m2s2,m2/s2,RAP/MetPy,false,model cycle valid before replay time
+environment,SNSQ,dimensionless,RAP/MetPy,false,model cycle valid before replay time
+environment,SCP_snow_squall,dimensionless,derived,false,computed only from valid-time predictors
+target,event_active,bool,event label,true,defined from event onset/verified outcome only
+target,event_lead_time_min,min,event label,true,future-relative outcome; NEVER available as input
