@@ -16,6 +16,7 @@ def test_live_healthcheck_reports_healthy_recent_unscored_product(tmp_path):
         "features": [],
         "metadata": {
             "probability_status": "not_scored",
+            "scan_time_utc": now,
             "object_count": 0,
         },
     }
