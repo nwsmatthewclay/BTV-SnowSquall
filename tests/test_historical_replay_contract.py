@@ -50,7 +50,7 @@ def test_replay_manifest_is_unscored_without_model(tmp_path, monkeypatch):
     source=input_dir/"KTYX20260101_120000_V06"
     source.write_bytes(b"stub")
 
-    def fake_process(source_path, state, output, history_jsonl_path=None, history_csv_path=None, model_dir=None):
+    def fake_process(source_path, state, output, history_jsonl_path=None, history_csv_path=None, model_dir=None, research_replay=False):
         output.write_text(json.dumps({"metadata":{"scan_time_utc":"2026-01-01T12:00:00Z","object_count":0}}), encoding="utf-8")
 
     monkeypatch.setattr(replay, "process_volume", fake_process)
