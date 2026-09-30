@@ -60,6 +60,9 @@ def audit_track(raw: pd.DataFrame, predictor_names: list[str], track_id: str) ->
     lrow = live.iloc[-1]
     comparable = []
     mismatches = []
+    unavailable_both = []
+    historical_available = 0
+    live_available = 0
     for name in predictor_names:
         if name not in historical.columns and name not in live.columns:
             continue
@@ -68,6 +71,11 @@ def audit_track(raw: pd.DataFrame, predictor_names: list[str], track_id: str) ->
         h_available = pd.notna(hv)
         l_available = pd.notna(lv)
         comparable.append(name)
+        historical_available += int(h_available)
+        live_available += int(l_available)
+        if not h_available and not l_available:
+            unavailable_both.append(name)
+            continue
         if h_available != l_available:
             mismatches.append({
                 "feature": name,
@@ -87,6 +95,9 @@ def audit_track(raw: pd.DataFrame, predictor_names: list[str], track_id: str) ->
         "track_id": str(track_id),
         "scan_count": int(len(track)),
         "comparable_predictors": len(comparable),
+        "historical_available_predictors": historical_available,
+        "live_available_predictors": live_available,
+        "both_unavailable_predictors": unavailable_both,
         "mismatch_count": len(mismatches),
         "mismatches": mismatches,
         "status": "pass" if not mismatches else "fail",
