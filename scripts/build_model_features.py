@@ -48,6 +48,8 @@ OPERATIONAL_LIVE_PREDICTORS = {
     "kdp_mean_degkm_delta", "kdp_mean_degkm_rate_per_min", "velocity_mean_kt_delta", "velocity_mean_kt_rate_per_min",
     "cape_jkg", "cin_jkg", "snsq", "mean_rh_0_2km_pct", "thetae_delta_0_2km_k", "mean_wind_0_2km_ms", "wetbulb_2m_c", "snsq_moisture_factor", "snsq_instability_factor", "snsq_wind_factor",
     "shear_0_6km_kt", "temperature_dewpoint_spread_k",
+    "frontogenesis", "dcva", "omega", "epv",
+    "cloud_layer_depth_m", "cloud_layer_rh_pct", "cloud_layer_mean_wind_kt", "cloud_layer_shear_kt",
     "cape_shear_product", "reflectivity_core_excess",
     "area_per_length", "shear_motion_ratio",
     "pwat_mm", "mlcape_jkg", "mlcin_jkg", "mucape_jkg", "mucin_jkg",
