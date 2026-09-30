@@ -85,6 +85,12 @@ def main():
     if candidates.empty:
         raise ValueError("Discovery produced no candidates.")
     radar_ids = set(radar["candidate_id"].astype(str)) if "candidate_id" in radar.columns else set()
+    if args.exclude_modern_validation:
+        holdout = pd.read_csv(args.exclude_modern_validation)
+        holdout_ids = set(holdout.get("case_id", pd.Series(dtype="object")).dropna().astype(str))
+        if "candidate_id" in holdout.columns:
+            holdout_ids.update(holdout["candidate_id"].dropna().astype(str))
+        candidates = candidates[~candidates["candidate_id"].astype(str).isin(holdout_ids)].copy()
     candidates = candidates[candidates["candidate_id"].astype(str).isin(radar_ids)].copy()
     if candidates.empty:
         raise ValueError("No candidates have usable radar coverage.")
