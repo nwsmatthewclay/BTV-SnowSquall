@@ -1,17 +1,13 @@
 name: Snow Squall Expansion Dataset
 
 on:
-  workflow_run:
-    workflows:
-      - Snow Squall Unified Case Ledger
-    types:
-      - completed
-  push:
-    branches:
-      - snow-squall-model-foundation
-    paths:
-      - .github/expansion-trigger
   workflow_dispatch:
+    inputs:
+      archive_override:
+        description: "Explicitly allow a one-off historical archive rerun"
+        required: false
+        default: "false"
+        type: boolean
     inputs:
       official_offset:
         description: "Documented cases to skip for this batch"
@@ -50,7 +46,7 @@ concurrency:
 
 jobs:
   expand:
-    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
+    if: inputs.archive_override == true
     runs-on: ubuntu-latest
     timeout-minutes: 360
     env:
