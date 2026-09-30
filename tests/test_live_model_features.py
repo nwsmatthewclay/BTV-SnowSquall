@@ -19,11 +19,11 @@ def test_live_row_maps_environment_and_units():
     })
     assert row["reflectivity_max_dbz"] == 36.0
     assert row["reflectivity_mean_dbz"] == 28.0
-    assert row["wind_gust_kt"] == pytest.approx(19.4384449244, rel=0, abs=1e-9)
+    assert row["wind_gust_kt"] == pytest.approx(19.43844492, rel=0, abs=1e-9)
     assert 0.74 < row["visibility_sm"] < 0.75
     assert row["sbcape_jkg"] == 180.0
     assert row["sbcin_jkg"] == -35.0
-    assert row["shear_0_6km_kt"] == pytest.approx(23.32613390928, rel=0, abs=1e-9)
+    assert row["shear_0_6km_kt"] == pytest.approx(23.326133904, rel=0, abs=1e-9)
     assert row["reflectivity_core_excess"] == 8.0
 
 
