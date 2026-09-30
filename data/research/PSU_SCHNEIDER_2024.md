@@ -42,7 +42,7 @@ This methodology is useful as an external benchmark for our object detector and 
 
 Penn State Data Commons provides the associated files, including snsq.nc, null.nc, reduced 100-km datasets, and a sample CSV. The Data Commons directory lists three ZIP archives totaling roughly 25.7 GB on disk, containing roughly 98 GB of uncompressed NetCDF data. The repository should acquire only the small case catalog and selectively reconstruct Level-II data rather than commit the bulk archive.
 
-Penn State also provides a public case-list spreadsheet linked by the paper's Data Availability Statement. The acquisition script in this repository is designed to retrieve that public catalog without requiring private Google credentials.
+Penn State also provides a public case-list spreadsheet linked by the paper's Data Availability Statement. The article's current Data Availability Statement identifies the public workbook at the Google Sheets URL for the Schneider et al. 2024 case list. The acquisition script in this repository retrieves that public catalog without requiring private Google credentials.
 
 ## Provenance and labeling policy
 
@@ -65,3 +65,7 @@ The BTV model should treat these as candidate physical predictors, not assumed c
 - Penn State Data Commons dataset DOI: https://doi.org/10.26208/9xj2-g003
 - AMS article DOI: https://doi.org/10.1175/WAF-D-23-0187.1
 - Public case-list spreadsheet is linked from the article's Data Availability Statement.
+
+## Acquisition verification
+
+The public case-list workbook is explicitly identified by the article's Data Availability Statement. The repository acquisition script uses the workbook export endpoint and now leaves case latitude/longitude unset until the actual case viewer or radar reconstruction establishes a defensible location; this avoids treating the KUNV study-domain reference point as event truth.
