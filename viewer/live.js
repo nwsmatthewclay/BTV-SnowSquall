@@ -204,6 +204,11 @@ function renderEnvironment(fields){
     ["2 m temp","temperature_2m_k",v=>num(cFromK(v),1)+" °C"],
     ["2 m dewpoint","dewpoint_2m_k",v=>num(cFromK(v),1)+" °C"],
     ["Surface gust","gust_ms",v=>num(ktFromMs(v),1)+" kt"]
+    ["SNSQ","snsq",v=>num(v,2)],
+    ["SNSQ 0–2 km RH","mean_rh_0_2km_pct",v=>num(v,0)+"%"],
+    ["SNSQ Δθe 0–2 km","thetae_delta_0_2km_k",v=>num(v,1)+" K"],
+    ["SNSQ 0–2 km wind","mean_wind_0_2km_ms",v=>num(ktFromMs(v),1)+" kt"],
+    ["2 m wet-bulb","wetbulb_2m_c",v=>num(v,1)+" °C"],
   ];
   return "<div class='live-env-grid'>"+rows.map(([label,key,format])=>{
     const value=env[key];
