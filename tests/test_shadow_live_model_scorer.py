@@ -93,3 +93,59 @@ def test_shadow_score_is_withheld_when_feature_coverage_is_low(tmp_path, monkeyp
     assert rows[0]["research_probabilities"] == {}
     assert "low_feature_coverage" in rows[0]["score_errors"]["15"]
     assert payload["scored_object_count"] == 0
+
+def test_shadow_scoring_excludes_future_history(tmp_path, monkeypatch):
+    live = tmp_path / "live"
+    models = tmp_path / "models"
+    live.mkdir()
+    models.mkdir()
+    for horizon in (15, 30, 45, 60):
+        bundle = models / ("candidate_ensemble_expansion_" + str(horizon) + "m")
+        bundle.mkdir()
+        (bundle / "metrics.json").write_text("{}", encoding="utf-8")
+
+    (live / "KCXX_objects.geojson").write_text(json.dumps({
+        "metadata": {"scan_time_utc": "2026-01-01T12:05:00Z"},
+        "features": [{
+            "type": "Feature",
+            "geometry": None,
+            "properties": {
+                "track_id": "7",
+                "timestamp": "2026-01-01T12:05:00Z",
+                "max_reflectivity_dbz": 30.0,
+            },
+        }],
+    }), encoding="utf-8")
+    (live / "KCXX_history.json").write_text(json.dumps([
+        {"track_id":"7","timestamp":"2026-01-01T12:00:00Z","max_reflectivity_dbz":25.0},
+        {"track_id":"7","timestamp":"2026-01-01T12:05:00Z","max_reflectivity_dbz":30.0},
+        {"track_id":"7","timestamp":"2026-01-01T12:10:00Z","max_reflectivity_dbz":99.0},
+    ]), encoding="utf-8")
+    for site in ("KTYX",):
+        (live / f"{site}_objects.geojson").write_text(
+            json.dumps({"features":[],"metadata":{}}), encoding="utf-8"
+        )
+        (live / f"{site}_history.json").write_text("[]", encoding="utf-8")
+
+    captured = {}
+
+    class StubRuntime:
+        def __init__(self):
+            self.model = object()
+            self.metadata = {"model_version":"test","operational_release_status":"candidate_only"}
+            self.feature_columns = ["max_reflectivity_dbz"]
+
+        def score_candidate(self, frame):
+            captured.setdefault("rows", []).append(
+                frame[["timestamp","max_reflectivity_dbz"]].iloc[0].to_dict()
+            )
+            return [float(frame["max_reflectivity_dbz"].iloc[0]) / 100.0]
+
+    monkeypatch.setattr(
+        "scripts.shadow_live_model_scorer.ModelRuntime.load",
+        lambda directory: StubRuntime(),
+    )
+    payload, rows = score_site("KCXX", live, models)
+    assert payload["scored_object_count"] == 1
+    assert rows[0]["research_probabilities"]["15"] == 0.3
+    assert all(row["max_reflectivity_dbz"] == 30.0 for row in captured["rows"])
