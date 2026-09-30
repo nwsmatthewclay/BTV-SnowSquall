@@ -1,3 +1,4 @@
+import pytest
 from datetime import timezone
 from pathlib import Path
 from scripts.historical_operational_replay import ordered_inputs, scan_time
