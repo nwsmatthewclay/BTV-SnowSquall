@@ -1,0 +1,123 @@
+name: Snow Squall Modern Independent Validation
+
+on:
+  workflow_run:
+    workflows:
+      - Snow Squall Expansion Dataset
+    types:
+      - completed
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: read
+
+concurrency:
+  group: snow-squall-modern-validation
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    env:
+      PYTHONPATH: ${{ github.workspace }}
+      PYTHONUNBUFFERED: '1'
+
+    steps:
+      - name: Checkout model foundation
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install science dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt -r requirements-science.txt
+
+      - name: Locate model bundle
+        id: models
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "workflow_run" ]; then
+            run_id="${{ github.event.workflow_run.id }}"
+          else
+            run_id="$(gh run list --workflow "Snow Squall Expansion Dataset" --branch snow-squall-model-foundation --status success --limit 1 --json databaseId --jq '.[0].databaseId')"
+          fi
+          test -n "$run_id" && test "$run_id" != "null"
+          gh run download "$run_id" --name snow-squall-live-model-bundles --dir model_bundle
+          echo "run_id=$run_id" >> "$GITHUB_OUTPUT"
+
+      - name: Normalize protected modern validation cases
+        run: |
+          python scripts/build_modern_validation_manifest.py \
+            --input data/manifests/modern_independent_validation_cases.csv \
+            --output data/manifests/modern_validation/modern_validation_cases.csv \
+            --radar-output data/manifests/modern_validation/modern_validation_radar_manifest.csv
+
+      - name: Acquire modern validation Level-II
+        run: |
+          python acquisition/historical_level2.py \
+            --manifest data/manifests/modern_validation/modern_validation_radar_manifest.csv \
+            --output data/raw/modern_validation_level2
+
+      - name: Reconstruct modern validation objects
+        run: |
+          python scripts/reconstruct_pilot.py \
+            --input data/raw/modern_validation_level2 \
+            --output data/derived/modern_validation_objects.csv \
+            --error-log data/derived/modern_validation_objects_errors.csv
+
+      - name: Annotate validation objects
+        run: |
+          python scripts/annotate_object_population.py \
+            data/derived/modern_validation_objects.csv \
+            --manifest data/manifests/modern_validation/modern_validation_radar_manifest.csv \
+            --output data/derived/modern_validation_objects_annotated.csv
+
+      - name: Build time-matched historical environment
+        run: |
+          python scripts/build_historical_dataset.py \
+            data/derived/modern_validation_objects_annotated.csv \
+            --cases data/manifests/modern_validation/modern_validation_cases.csv \
+            --output data/derived/modern_validation_environment.csv \
+            --rap-dir data/raw/RAP_modern_validation \
+            --ruc-dir data/raw/RUC_modern_validation
+
+      - name: Build leakage-safe validation features
+        run: |
+          python scripts/build_model_features.py \
+            data/derived/modern_validation_environment.csv \
+            --output data/derived/modern_validation_features.csv \
+            --schema-output data/derived/modern_validation.schema.json
+
+      - name: Score protected modern validation anchors
+        run: |
+          python scripts/score_modern_validation.py \
+            --cases data/manifests/modern_validation/modern_validation_cases.csv \
+            --objects data/derived/modern_validation_features.csv \
+            --model-root model_bundle \
+            --output data/derived/modern_validation_anchor_report.json
+
+      - name: Validate training separation
+        run: |
+          python scripts/audit_validation_training_separation.py
+
+      - name: Upload modern validation package
+        uses: actions/upload-artifact@v4
+        with:
+          name: snow-squall-modern-validation
+          path: |
+            data/manifests/modern_validation
+            data/derived/modern_validation_*
+            data/raw/modern_validation_level2
+            data/raw/RAP_modern_validation
+            data/raw/RUC_modern_validation
