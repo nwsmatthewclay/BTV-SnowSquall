@@ -140,9 +140,44 @@ jobs:
           print("Rows:",len(out))
           PY
 
+      - name: Write next national radar-sample batch state
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          import pandas as pd
+          root=Path('data/discovery/national_sqw_radar')
+          verified=pd.read_csv(root/'national_sqw_verified_selection.csv')
+          review=pd.read_csv(root/'national_sqw_review_selection.csv')
+          state={
+              'batch_rows': {'verified': int(len(verified)), 'review': int(len(review))},
+              'current_offsets': {
+                  'verified': int('${{ inputs.verified_offset || '0' }}'),
+                  'review': int('${{ inputs.review_offset || '0' }}'),
+              },
+              'batch_sizes': {
+                  'verified': int('${{ inputs.max_verified || '30' }}'),
+                  'review': int('${{ inputs.max_review || '15' }}'),
+              },
+              'next_verified_offset': int('${{ inputs.verified_offset || '0' }}') + int('${{ inputs.max_verified || '30' }}'),
+              'next_review_offset': int('${{ inputs.review_offset || '0' }}') + int('${{ inputs.max_review || '15' }}'),
+              'max_automatic_verified': 300,
+              'max_automatic_review': 150,
+              'auto_continue': True,
+          }
+          (root/'next_national_radar_sample_batch.json').write_text(json.dumps(state,indent=2)+'\n',encoding='utf-8')
+          print(json.dumps(state,indent=2))
+          PY
       - name: Upload radar-ready case sample
         uses: actions/upload-artifact@v4
         with:
           name: national-sqw-radar-sample
           path: data/discovery/national_sqw_radar
+          if-no-files-found: error
+
+      - name: Upload national radar-sample batch state
+        uses: actions/upload-artifact@v4
+        with:
+          name: national-sqw-radar-sample-state
+          path: data/discovery/national_sqw_radar/next_national_radar_sample_batch.json
           if-no-files-found: error
