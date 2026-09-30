@@ -173,10 +173,12 @@ def main():
     selected["truth_tier"] = selected["verification_class"].map(lambda x: tier_map.get(x, ("D", 0.10))[0])
     selected["evidence_weight"] = selected["verification_class"].map(lambda x: tier_map.get(x, ("D", 0.10))[1])
 
-    selected["observing_station"] = [
-        nearest_station(lat, lon)
-        for lat, lon in zip(selected["lat"], selected["lon"])
-    ]
+    study_station = selected.get("study_observing_station", pd.Series(pd.NA, index=selected.index))
+    inferred_station = pd.Series(
+        [nearest_station(lat, lon) for lat, lon in zip(selected["lat"], selected["lon"])],
+        index=selected.index,
+    )
+    selected["observing_station"] = study_station.fillna(inferred_station)
     selected["case_lat"] = pd.to_numeric(selected["lat"], errors="coerce")
     selected["case_lon"] = pd.to_numeric(selected["lon"], errors="coerce")
     selected["case_coordinate_precision"] = selected.get("coordinate_precision", pd.Series("", index=selected.index)).fillna("")
