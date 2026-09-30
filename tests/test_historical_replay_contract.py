@@ -13,7 +13,7 @@ def test_replay_uses_case_local_history(tmp_path, monkeypatch):
     state_path=output_dir/"state.json"
     calls=[]
 
-    def fake_process(source_path, state, output, history_jsonl_path=None, history_csv_path=None, model_dir=None):
+    def fake_process(source_path, state, output, history_jsonl_path=None, history_csv_path=None, model_dir=None, research_replay=False):
         calls.append({
             "history_jsonl": str(history_jsonl_path),
             "history_csv": str(history_csv_path),
