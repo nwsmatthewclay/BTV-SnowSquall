@@ -131,3 +131,15 @@ def test_swdi_ztime_column_is_accepted_by_discovery(monkeypatch):
     assert len(rows) == 1
     assert rows[0]["candidate_source"] == "SWDI_PLSR"
     assert rows[0]["state"] == "VT"
+
+def test_selected_case_evidence_weight_mapping():
+    import pandas as pd
+    from scripts.select_snow_squall_case_pool import assign_truth_tier
+    frame = pd.DataFrame([
+        {"verification_class": "official_documented"},
+        {"verification_class": "warning_verified"},
+    ])
+    out = assign_truth_tier(frame)
+    assert list(out["truth_tier"]) == ["B", "B+"]
+    assert float(out.loc[0, "evidence_weight"]) == 0.70
+    assert float(out.loc[1, "evidence_weight"]) == 0.85
