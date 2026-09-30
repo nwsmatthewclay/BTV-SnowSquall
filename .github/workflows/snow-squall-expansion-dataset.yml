@@ -53,6 +53,24 @@ jobs:
       PYTHONUNBUFFERED: '1'
 
     steps:
+      - name: Expansion runner heartbeat
+        run: |
+          set -euo pipefail
+          mkdir -p data/derived
+          cat > data/derived/expansion_runner_heartbeat.json <<EOF
+          {
+            "status": "started",
+            "workflow": "Snow Squall Expansion Dataset",
+            "run_id": "${{ github.run_id }}",
+            "run_attempt": "${{ github.run_attempt }}",
+            "ref": "${{ github.ref }}",
+            "sha": "${{ github.sha }}",
+            "event": "${{ github.event_name }}",
+            "started_at": "${{ github.run_started_at }}"
+          }
+          EOF
+          cat data/derived/expansion_runner_heartbeat.json
+
       - name: Checkout model foundation
         uses: actions/checkout@v4
         with:
