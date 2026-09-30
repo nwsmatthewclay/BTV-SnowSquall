@@ -23,6 +23,10 @@ def test_shadow_scoring_keeps_candidate_non_operational(tmp_path, monkeypatch):
     models = tmp_path / "models"
     live.mkdir()
     models.mkdir()
+    for horizon in (15, 30, 45, 60):
+        bundle = models / ('candidate_ensemble_expansion_' + str(horizon) + 'm')
+        bundle.mkdir()
+        (bundle / 'metrics.json').write_text('{}')
     (live / "KCXX_objects.geojson").write_text(json.dumps({
         "metadata": {"scan_time_utc": "2026-01-01T12:05:00Z"},
         "features": [{"type":"Feature","geometry":None,"properties":{"track_id":"7","timestamp":"2026-01-01T12:05:00Z","max_reflectivity_dbz":30.0}}]
@@ -37,7 +41,9 @@ def test_shadow_scoring_keeps_candidate_non_operational(tmp_path, monkeypatch):
 
     class Stub:
         def __call__(self, directory):
-            horizon=int(directory.name.replace("candidate_ensemble_expansion_", "").replace("m", ""))
+            name=directory.name
+            prefix="candidate_ensemble_expansion_" if name.startswith("candidate_ensemble_expansion_") else "baseline_expansion_"
+            horizon=int(name.replace(prefix, "").replace("m", ""))
             return FakeRuntime(horizon)
 
     monkeypatch.setattr("scripts.shadow_live_model_scorer.ModelRuntime.load", Stub())
