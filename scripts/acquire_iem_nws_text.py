@@ -46,25 +46,49 @@ def extract_candidates(raw: str, pil: str, year: int) -> list[dict]:
     rows = []
     current = []
     for line in lines:
-        if current and line.strip().startswith("$$") and TERMS.search("\n".join(current)):
-            rows.append({
-                "source": "IEM_NWS_TEXT_ARCHIVE",
-                "pil": pil,
-                "year": year,
-                "matched_terms": ",".join(sorted({m.group(0).lower() for m in TERMS.finditer("\n".join(current))})),
-                "text": "\n".join(current)[-20000:],
-            })
-            current = []
+        if current and re.search(r"^\s*[A-Z]{3,5}\d?\s+[A-Z0-9]{4}\s+\d{6}\s*$", line.strip()):
+            block = "\n".join(current)
+            if TERMS.search(block):
+                matches = list(re.finditer(r"(?:^|\n)\s*[A-Z]{3,5}\d?\s+([A-Z0-9]{4})\s+(\d{6})\s*(?:\n|$)", block))
+                issued = None
+                if matches:
+                    m = matches[-1]
+                    day_hhmm = m.group(2)
+                    try:
+                        issued = pd.Timestamp(
+                            f"{year:04d}-{pd.Timestamp(f'{year}-01-01').month:02d}-{int(day_hhmm[:2]):02d}",
+                            tz="UTC",
+                        ) + pd.Timedelta(hours=int(day_hhmm[2:4]), minutes=int(day_hhmm[4:6]))
+                        issued = issued.isoformat().replace("+00:00", "Z")
+                    except Exception:
+                        issued = None
+                rows.append({
+                    "source": "IEM_NWS_TEXT_ARCHIVE",
+                    "pil": pil,
+                    "year": year,
+                    "issued_utc": issued,
+                    "matched_terms": ",".join(sorted({m.group(0).lower() for m in TERMS.finditer(block)})),
+                    "text": block[-20000:],
+                })
+            current = [line]
             continue
         current.append(line)
-    if current and TERMS.search("\n".join(current)):
-        rows.append({
-            "source": "IEM_NWS_TEXT_ARCHIVE",
-            "pil": pil,
-            "year": year,
-            "matched_terms": ",".join(sorted({m.group(0).lower() for m in TERMS.finditer("\n".join(current))})),
-            "text": "\n".join(current)[-20000:],
-        })
+    if current:
+        block = "\n".join(current)
+        if TERMS.search(block):
+            match = re.search(r"(?:^|\n)\s*[A-Z]{3,5}\d?\s+[A-Z0-9]{4}\s+(\d{6})\s*(?:\n|$)", block)
+            issued = None
+            if match:
+                day_hhmm = match.group(1)
+                try:
+                    day = int(day_hhmm[:2])
+                    if 1 <= day <= 31:
+                        issued = pd.Timestamp(f"{year}-{day_hhmm[:2]}", tz="UTC")
+                        issued = issued.replace(hour=int(day_hhmm[2:4]), minute=int(day_hhmm[4:6]))
+                        issued = issued.isoformat().replace("+00:00", "Z")
+                except Exception:
+                    issued = None
+            rows.append({"source":"IEM_NWS_TEXT_ARCHIVE","pil":pil,"year":year,"issued_utc":issued,"matched_terms":",".join(sorted({m.group(0).lower() for m in TERMS.finditer(block)})),"text":block[-20000:]})
     return rows
 
 def main():
