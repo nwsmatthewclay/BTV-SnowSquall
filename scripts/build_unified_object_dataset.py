@@ -15,6 +15,7 @@ POPULATION_FIELDS = [
     "case_id",
     "null_id",
     "source_study",
+    "supervision_class",
 ]
 
 
@@ -22,6 +23,7 @@ def prepare(frame, population, truth_status, source_column):
     out = frame.copy()
     out["population"] = population
     out["truth_status"] = truth_status
+    out["supervision_class"] = "supervised_positive" if population == "verified_case_context" else "null_candidate"
     if source_column not in out:
         out[source_column] = None
     for col in POPULATION_FIELDS:
