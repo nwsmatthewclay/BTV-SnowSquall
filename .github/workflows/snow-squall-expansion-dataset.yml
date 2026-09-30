@@ -122,8 +122,8 @@ jobs:
             --input "${{ steps.ledger.outputs.ledger }}" \
             --radar-manifest "${{ steps.ledger.outputs.radar }}" \
             --output-dir data/manifests/snow_squall_expansion \
-            --max-official "${{ inputs.max_official || '50' }}" \
-            --max-unverified "${{ inputs.max_unverified || '25' }}" \
+            --max-official "${{ inputs.max_official || '30' }}" \
+            --max-unverified "${{ inputs.max_unverified || '15' }}" \
             --offset-official "${{ inputs.official_offset || '0' }}" \
             --offset-unverified "${{ inputs.unverified_offset || '0' }}" \
             --exclude-modern-validation data/manifests/modern_independent_validation_cases.csv
