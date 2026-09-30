@@ -273,6 +273,14 @@ def build_live_feature_frame(history: Iterable[dict], track_id: str | int) -> pd
             track_count=idx + 1,
         )
 
+        current_time = _utc(current.get("timestamp"))
+        first_time = _utc(first_timestamp)
+        row["track_age_min"] = (
+            max(0.0, (current_time - first_time).total_seconds() / 60.0)
+            if current_time is not None and first_time is not None
+            else None
+        )
+
         # Three-scan trailing state mirrors the historical feature builder.
         if idx >= 2:
             prev2 = rows[idx - 2]
@@ -297,14 +305,6 @@ def build_live_feature_frame(history: Iterable[dict], track_id: str | int) -> pd
                         p = _number(previous.get(source))
                         if old is not None and p is not None and cur is not None:
                             row[source + "_acceleration_per_min2"] = ((cur - p) / prev_dt) - ((p - old) / prev_dt)
-
-        current_time = _utc(current.get("timestamp"))
-        first_time = _utc(first_timestamp)
-        row["track_age_min"] = (
-            max(0.0, (current_time - first_time).total_seconds() / 60.0)
-            if current_time is not None and first_time is not None
-            else None
-        )
 
         for source, target in (
             ("max_reflectivity_dbz", "max_reflectivity_dbz_running_max"),
