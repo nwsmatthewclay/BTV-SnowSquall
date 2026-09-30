@@ -110,6 +110,19 @@ def load_state(path: Path):
     return state, tracker
 
 
+
+def _json_safe(value):
+    """Convert non-finite numeric values to JSON null recursively."""
+    if isinstance(value, dict):
+        return {k: _json_safe(v) for k, v in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_json_safe(v) for v in value]
+    if isinstance(value, (float, np.floating)):
+        return float(value) if np.isfinite(value) else None
+    if isinstance(value, np.integer):
+        return int(value)
+    return value
+
 def save_state(path: Path, state: dict, tracker: CentroidTracker):
     path.parent.mkdir(parents=True, exist_ok=True)
     state["tracker"] = tracker.to_state()
@@ -503,7 +516,7 @@ def process_volume(
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
     tmp = output_path.with_suffix(output_path.suffix + ".tmp")
-    tmp.write_text(json.dumps(result, indent=2), encoding="utf-8")
+    tmp.write_text(json.dumps(_json_safe(result), indent=2, allow_nan=False), encoding="utf-8")
     tmp.replace(output_path)
 
     # Persist this scan as an object-timestep training record. The history
