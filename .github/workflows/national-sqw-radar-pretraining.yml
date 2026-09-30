@@ -14,6 +14,7 @@ on:
       - scripts/label_sqw_warning_object_scans.py
       - scripts/select_national_sqw_radar_cases.py
       - .github/workflows/national-sqw-radar-pretraining.yml
+      - .github/workflows/national-sqw-radar-sample.yml
   workflow_dispatch:
     inputs:
       max_manifest_rows:
