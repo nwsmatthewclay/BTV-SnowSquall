@@ -50,6 +50,15 @@ class ModelRuntime:
         calibrator = joblib.load(calibrator_path) if calibrator_path.exists() else None
         return cls(model=model, feature_columns=features, metadata=metadata, calibrator=calibrator)
 
+    def _calibrate(self, probabilities):
+        probabilities = np.asarray(probabilities, dtype=float)
+        if self.calibrator is None:
+            return probabilities
+        eps = 1e-6
+        clipped = np.clip(probabilities, eps, 1.0 - eps)
+        logits = np.log(clipped / (1.0 - clipped))
+        return self.calibrator.predict_proba(logits.reshape(-1, 1))[:, 1]
+
     def score_candidate(self, frame: pd.DataFrame):
         """Score an explicitly research-only candidate bundle for replay or shadow use."""
         if self.model is None:
@@ -59,16 +68,13 @@ class ModelRuntime:
             if column not in working.columns:
                 working[column] = float('nan')
         probabilities = self.model.predict_proba(working[self.feature_columns])[:, 1]
-        if self.calibrator is not None:
-            eps = 1e-6
-            clipped = np.clip(probabilities, eps, 1.0 - eps)
-            logits = np.log(clipped / (1.0 - clipped))
-            probabilities = self.calibrator.predict_proba(logits.reshape(-1, 1))[:, 1]
-        return probabilities.tolist()
+        return self._calibrate(probabilities).tolist()
+
     def score(self, frame: pd.DataFrame):
         if not self.enabled:
             return None
         missing = [c for c in self.feature_columns if c not in frame.columns]
         if missing:
             raise ValueError(f"Live model feature columns missing: {missing}")
-        return self.model.predict_proba(frame[self.feature_columns])[:, 1].tolist()
+        probabilities = self.model.predict_proba(frame[self.feature_columns])[:, 1]
+        return self._calibrate(probabilities).tolist()
