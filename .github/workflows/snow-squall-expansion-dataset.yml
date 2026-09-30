@@ -394,6 +394,13 @@ jobs:
           print('Cumulative feature rows:', len(d))
           print('Unique object-timestep rows:', d['row_identity_key'].nunique() if 'row_identity_key' in d.columns else 'not-present')
           PY
+      - name: Audit cumulative model population
+        run: |
+          python scripts/audit_expansion_dataset.py \
+            data/derived/snow_squall_model_features_cumulative.csv \
+            --schema data/derived/snow_squall_model_features_expanded.schema.json \
+            --output data/derived/snow_squall_cumulative_dataset_audit.json
+
       - name: Audit expanded model feature policy
         run: |
           python - <<'PY'
@@ -499,6 +506,7 @@ jobs:
             data/derived/snow_squall_model_features_cumulative.csv
             data/derived/snow_squall_model_features_expanded.schema.json
             data/derived/snow_squall_expansion_dataset_audit.json
+            data/derived/snow_squall_cumulative_dataset_audit.json
             data/derived/snow_squall_national_pretraining_feature_summary.json
             data/derived/next_expansion_batch.json
             data/manifests/snow_squall_expansion/snow_squall_expansion_cases.csv
