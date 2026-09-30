@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>BTV Snow Squall Training Replay</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"><link rel="stylesheet" href="style.css">
+</head>
+<body data-mode="training">
+<header>
+  <div><div class="eyebrow">BTV SNOW SQUALL PROJECT</div><h1>Training Replay</h1><div id="subtitle">Loading historical training case…</div></div>
+  <div class="header-actions"><span class="badge research">TRAINING / RESEARCH</span><a class="nav-link" href="index.html">Historical Explorer</a><a class="nav-link" href="live.html">Live Objects</a><button id="analogsBtn" disabled>Historical Analogs</button><button id="detailsBtn">Data Status</button></div>
+</header>
+<main>
+<section id="map"></section>
+<aside id="panel">
+  <div class="control-block"><label for="caseSelect">Training case</label><select id="caseSelect"></select></div>
+  <div class="case-card"><div class="case-title" id="caseTitle">Loading…</div><div class="case-meta" id="caseMeta">—</div><div class="case-grid" id="caseGrid"></div><div class="truth-banner">REPLAY / TRAINING ONLY <span>This page replays historical data one scan at a time; research probabilities are not operational guidance.</span></div></div>
+
+  <div class="model-card" style="margin-top:10px">
+    <div class="section-head compact"><h3>How to use this replay</h3><span>TRAINING LOOP</span></div>
+    <div class="model-note" style="font-size:10px">
+      <b>1.</b> Move the timeline or press Play to advance the radar scan-by-scan.<br>
+      <b>2.</b> Click a detected object to follow one track through time.<br>
+      <b>3.</b> Watch radar structure, motion, reflectivity trend, and environmental fields change together.<br>
+      <b>4.</b> Compare the attached 15–60 minute research probabilities with the same-scan inputs.<br>
+      <b>5.</b> Use the historical context only after examining what was available at that point in the replay.
+    </div>
+  </div>
+
+  <div class="radar-control"><div><span>Radar opacity</span><b id="radarOpacityValue">78%</b></div><input id="radarOpacity" type="range" min="0" max="100" value="78"><div class="radar-status" id="radarStatus">No reconstructed radar frame loaded</div></div>
+
+  <div class="model-card" id="modelCard"><div class="section-head compact"><h3>Learned-model verification</h3><span id="modelStatusBadge">NOT AVAILABLE</span></div><div id="modelSummary">No trained candidate metrics are embedded in this viewer build yet.</div></div>
+  <div class="section-head"><h2>Object Diagnostics</h2><span id="selectionState">No object selected</span></div>
+  <div class="selected-card"><div class="selected-title" id="objectTitle">Select a storm object</div><div class="selected-sub" id="objectTime">—</div></div>
+  <div class="metric-grid" id="metrics"></div>
+  <div class="research-probability" id="researchProbability"><div class="section-head compact"><h3>Learned-model replay</h3><span>OOF / RESEARCH</span></div><div id="researchProbabilityBody">No out-of-fold probabilities embedded in this build.</div></div>
+  <div class="section-head compact"><h3>Track evolution</h3><span id="trackCount">—</span></div>
+  <div class="track-history" id="trackHistory"><div class="history-empty">Select a storm object to see its scan-to-scan evolution.</div></div>
+  <div class="section-head compact"><h3>Environment</h3><span id="envSource">—</span></div>
+  <div class="env-grid" id="environment"></div>
+  <div class="section-head compact"><h3>Historical outcome context</h3></div><div class="outcome" id="outcome">Select an object to inspect its historical context.</div>
+  <div class="legend"><span><i class="swatch object"></i>Detected object</span><span><i class="swatch track"></i>Object track</span><span><i class="swatch onset"></i>Published onset context</span></div>
+</aside>
+</main>
+<footer><div class="timeline-head"><span id="timelineTime">—</span><div><button id="prevBtn">◀</button><button id="playBtn">▶ Play</button><button id="nextBtn">▶</button></div></div><input id="slider" type="range" min="0" max="0" value="0"></footer>
+<div id="modal" class="modal hidden"><div class="modal-card"><button id="closeModal" class="modal-close">×</button><h2>Viewer Data Status</h2><p id="statusText">—</p><div class="status-list" id="statusList"></div></div></div>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script><script src="app.js"></script>
+</body></html>
