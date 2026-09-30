@@ -72,3 +72,24 @@ def test_candidate_score_method_can_score_without_release(tmp_path):
     result = runtime.score_candidate(pd.DataFrame({"x": [1.0]}))
     assert result == [0.4]
     assert runtime.enabled is False
+
+
+class FakeCalibrator:
+    def predict_proba(self, frame):
+        n = len(frame)
+        return np.column_stack([np.full(n, 0.25), np.full(n, 0.75)])
+
+
+def test_candidate_score_uses_probability_calibrator(tmp_path):
+    (tmp_path / "metrics.json").write_text(
+        json.dumps({
+            "operational_release_status": "candidate_only",
+            "target": "squall_onset_within_15m",
+            "predictor_columns": ["x"],
+        }),
+        encoding="utf-8",
+    )
+    joblib.dump(FakeModel(), tmp_path / "baseline_model.joblib")
+    joblib.dump(FakeCalibrator(), tmp_path / "probability_calibrator.joblib")
+    runtime = ModelRuntime.load(tmp_path)
+    assert runtime.score_candidate(pd.DataFrame({"x": [1.0]})) == [0.75]
