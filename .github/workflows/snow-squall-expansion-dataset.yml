@@ -206,6 +206,14 @@ jobs:
           print('Verified object scans:',len(verified))
           print('Unverified object scans:',len(unverified))
           PY
+      - name: Build case evidence scorecard
+        run: |
+          python scripts/build_case_evidence_scorecard.py \
+            --cases data/manifests/snow_squall_expansion/snow_squall_expansion_cases.csv \
+            --surface data/derived/snow_squall_expansion_surface_truth.csv \
+            --objects data/derived/snow_squall_expansion_objects_tagged.csv \
+            --radar data/manifests/snow_squall_expansion/snow_squall_expansion_radar_manifest.csv \
+            --output data/derived/snow_squall_case_evidence_scorecard.csv
       - name: Build documented historical environment and labels
         run: |
           python scripts/build_historical_dataset.py \
