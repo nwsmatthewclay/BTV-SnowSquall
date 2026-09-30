@@ -171,3 +171,17 @@ def test_three_scan_live_state_predictors():
     assert row["max_reflectivity_dbz_rate_2scan_per_min"] == 1.5
     assert row["area_km2_change_2scan"] == 7.0
     assert row["recent_scan_count_3"] == 3
+
+
+def test_surface_observation_fields_are_not_operational_predictors():
+    from scripts.build_model_features import OPERATIONAL_LIVE_PREDICTORS
+
+    blocked = {
+        "visibility_m",
+        "gust_ms",
+        "wind_gust_kt",
+        "visibility_sm",
+        "surface_wind_speed_kt",
+        "gust_excess_kt",
+    }
+    assert OPERATIONAL_LIVE_PREDICTORS.isdisjoint(blocked)
