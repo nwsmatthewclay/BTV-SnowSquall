@@ -308,7 +308,6 @@ def gather_cow_sqw(cfg: dict) -> list[dict]:
                     "ncei_explicit_snow_squall": False,
                     "coordinate_source": "iem_warning_point",
                     "coordinate_precision": "warning_reference",
-                    "coordinate_source": "iem_lsr_point",
                     "coordinate_precision": "event",
                     "lsr_count": lsr_count,
                     "warning_verified_by_iem": bool(props.get("verify")),
@@ -350,7 +349,7 @@ def gather_swdi_plsr(cfg: dict) -> list[dict]:
                 continue
             state = str(row.get(state_col, "")).upper().strip()
             county = norm_county(row.get("COUNTY", ""))
-            if state == "VT" and county in set(cfg["vt_excluded_counties"]):
+            if state == "VT" and any(excluded in county for excluded in cfg["vt_excluded_counties"]):
                 continue
             if state == "NY" and county not in set(cfg["ny_cwa_counties"]):
                 continue
