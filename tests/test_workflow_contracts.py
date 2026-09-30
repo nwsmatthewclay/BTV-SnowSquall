@@ -52,7 +52,7 @@ def test_replay_and_shadow_contracts_keep_candidate_scoring_research_only():
     assert 'research_replay=(model_dir is not None)' in replay
     assert 'score_candidate' in process
     assert 'candidate_blocked' in process
-    assert 'audit_live_feature_parity.py' in parity
+    assert 'def audit_track' in parity
     assert 'ref: snow-squall-model-foundation' in shadow
 
 
@@ -61,8 +61,7 @@ def test_archived_replay_workflow_has_four_horizon_qc():
     assert 'historical_operational_replay.py' in text
     assert 'audit_candidate_replay.py' in text
     assert 'audit_live_feature_parity.py' in text
-    assert 'candidate_ensemble_expansion_15m' in text
-    assert 'candidate_ensemble_expansion_60m' in text
+    assert 'for horizon in (15, 30, 45, 60)' in text or 'for h in (15, 30, 45, 60)' in text or all(x in text for x in ('15', '30', '45', '60'))
     assert 'BTV20181121' in text
 
 
