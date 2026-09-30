@@ -154,31 +154,9 @@ def main():
     selected["case_id"] = selected.get("case_id", pd.Series(pd.NA, index=selected.index)).fillna(selected["candidate_id"]).astype(str)
     selected["source_study"] = selected.get("source_study", pd.Series(pd.NA, index=selected.index)).fillna("expanded_ncei_iem_case_discovery")
     selected["source_study"] = selected["source_study"].where(~selected["verification_class"].isin(["study_verified", "study_warning_verified", "official_plus_study", "official_study_warning_verified"]), "banacos_2014")
-    tier_map = {
-        "official_documented": ("B", 0.70),
-        "official_plus_independent_report": ("A-", 0.90),
-        "official_plus_warning": ("B+", 0.85),
-        "official_plus_warning_and_report": ("A-", 0.90),
-        "official_plus_warning_verified": ("B+", 0.85),
-        "official_study_warning_verified": ("A+", 1.00),
-        "official_plus_study": ("A+", 1.00),
-        "study_verified": ("A", 1.00),
-        "study_warning_verified": ("A+", 1.00),
-        "warning_verified": ("B+", 0.85),
-        "warning_only": ("C", 0.45),
-        "warning_plus_report": ("C+", 0.55),
-        "unverified_report_only": ("D", 0.25),
-        "official_screening_candidate": ("D", 0.20),
-    }
-    selected["truth_tier"] = selected["verification_class"].map(lambda x: tier_map.get(x, ("D", 0.10))[0])
-    selected["evidence_weight"] = selected["verification_class"].map(lambda x: tier_map.get(x, ("D", 0.10))[1])
-
-    study_station = selected.get("study_observing_station", pd.Series(pd.NA, index=selected.index))
-    inferred_station = pd.Series(
-        [nearest_station(lat, lon) for lat, lon in zip(selected["lat"], selected["lon"])],
-        index=selected.index,
-    )
-    selected["observing_station"] = study_station.fillna(inferred_station)
+    selected["truth_tier"] = selected["truth_tier"].fillna("D")
+    selected["evidence_weight"] = pd.to_numeric(selected["evidence_weight"], errors="coerce").fillna(0.10)
+        selected["observing_station"] = study_station.fillna(inferred_station)
     selected["case_lat"] = pd.to_numeric(selected["lat"], errors="coerce")
     selected["case_lon"] = pd.to_numeric(selected["lon"], errors="coerce")
     selected["case_coordinate_precision"] = selected.get("coordinate_precision", pd.Series("", index=selected.index)).fillna("")
