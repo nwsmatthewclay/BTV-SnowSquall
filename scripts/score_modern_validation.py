@@ -28,21 +28,13 @@ def score_case(case_row, objects, model_root: Path):
         base={}
         for h in HORIZONS:
             runtime=ModelRuntime.load(model_root/f'candidate_ensemble_expansion_{h}m')
-            coverage=feature_coverage(frame.tail(1),runtime.feature_columns)
-            probs=runtime.score_candidate(frame.tail(1)) if runtime.model is not None and coverage['fraction']>=0.80 else None
-            if probs:
-                base[str(h)]={'probability':float(probs[0]),'coverage':coverage}
-        times=pd.to_datetime(group['scan_time_utc'],utc=True,errors='coerce')
-        max_in_window={}; first_cross={}; max_pre={}
-        for h in HORIZONS:
-            runtime=ModelRuntime.load(model_root/f'candidate_ensemble_expansion_{h}m')
             vals=[]
-            for i, row in frame.iterrows():
-                coverage=feature_coverage(frame.iloc[[i]],runtime.feature_columns)
+            for row_idx, feature_row in frame.iterrows():
+                coverage=feature_coverage(frame.loc[[row_idx]],runtime.feature_columns)
                 if runtime.model is None or coverage['fraction']<0.80: continue
-                p=float(runtime.score_candidate(frame.iloc[[i]])[0])
-                t=pd.to_datetime(group.iloc[i]['scan_time_utc'],utc=True,errors='coerce') if i < len(group) else pd.NaT
-                if pd.notna(t): vals.append((t,p))
+                p=float(runtime.score_candidate(frame.loc[[row_idx]])[0])
+                ts=pd.to_datetime(feature_row.get('timestamp'),utc=True,errors='coerce')
+                if pd.notna(ts): vals.append((ts,p))
             inside=[p for t,p in vals if pd.notna(start) and pd.notna(end) and start<=t<=end]
             pre=[p for t,p in vals if pd.notna(anchor) and t<anchor]
             max_in_window[str(h)]=max(inside) if inside else None
