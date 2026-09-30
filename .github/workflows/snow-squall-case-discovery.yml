@@ -7,6 +7,7 @@ on:
       - snow-squall-model-foundation
     paths:
       - scripts/discover_snow_squall_cases.py
+      - scripts/acquire_swdi_plsr.py
       - config/snow_squall_discovery.json
       - tests/test_snow_squall_discovery.py
       - scripts/audit_snow_squall_case_ledger.py
@@ -90,3 +91,5 @@ jobs:
 # clean rerun after screening-class hygiene fix
 
 # clean rerun after screening audit allowlist fix
+
+# final clean rerun includes current SWDI REST acquisition path
