@@ -47,7 +47,7 @@ def test_replay_respects_explicit_case_window(tmp_path, monkeypatch):
         (tmp_path / name).write_bytes(b"placeholder")
 
     calls=[]
-    def fake_process(source, state_path, output_path, history_jsonl_path=None, history_csv_path=None, model_dir=None):
+    def fake_process(source, state_path, output_path, history_jsonl_path=None, history_csv_path=None, model_dir=None, research_replay=False):
         calls.append(source.name)
         output_path.parent.mkdir(parents=True, exist_ok=True)
         timestamp={
