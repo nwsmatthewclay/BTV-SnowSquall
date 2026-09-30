@@ -73,8 +73,8 @@ def distance_km(lat1, lon1, lat2, lon2):
     a = sin(dp / 2) ** 2 + cos(p1) * cos(p2) * sin(dl / 2) ** 2
     return 6371.0 * 2.0 * asin(min(1.0, sqrt(a)))
 
-def stable_id(timestamp, lat, lon):
-    raw = f"IEMCL|{timestamp.isoformat()}|{lat}|{lon}"
+def stable_id(timestamp, lat, lon, identifier=""):
+    raw = f"IEMCL|{timestamp.isoformat()}|{lat}|{lon}|{identifier}"
     digest = hashlib.sha1(raw.encode("utf-8")).hexdigest()[:10]
     return f"SSQ{timestamp:%Y%m%d%H%M}_{digest}"
 
@@ -83,22 +83,24 @@ def canonical_class(source_types, warning_verified=False):
     has_study = "BANACOS_STUDY_2014" in source_types
     has_report = bool({"IEM_LSR", "SWDI_PLSR"} & source_types)
     has_sqw = "IEM_COW_SQW" in source_types
-    if has_ncei and has_study:
-        return "official_plus_study"
+    if has_ncei and has_study and has_sqw and warning_verified:
+        return "official_study_warning_verified"
     if has_study and has_sqw and warning_verified:
         return "study_warning_verified"
-    if has_study:
-        return "study_verified"
-    if has_ncei and has_sqw and warning_verified:
-        return "official_plus_warning_verified"
+    if has_ncei and has_study:
+        return "official_plus_study"
     if has_ncei and has_report and has_sqw:
         return "official_plus_warning_and_report"
+    if has_ncei and has_sqw and warning_verified:
+        return "official_plus_warning_verified"
     if has_ncei and has_sqw:
         return "official_plus_warning"
     if has_ncei and has_report:
         return "official_plus_independent_report"
     if has_ncei:
         return "official_documented"
+    if has_study:
+        return "study_verified"
     if has_sqw and warning_verified:
         return "warning_verified"
     if has_sqw and has_report:
@@ -106,7 +108,6 @@ def canonical_class(source_types, warning_verified=False):
     if has_sqw:
         return "warning_only"
     return "unverified_report_only"
-
 def find_match(records, timestamp, lat, lon):
     best = None
     for index, record in enumerate(records):
@@ -319,7 +320,7 @@ def build(discovery_path: Path, lsr_path: Path, output_dir: Path, nws_text_path:
         else:
             timestamp = row["event_dt"]
             records.append({
-                "candidate_id": stable_id(timestamp, row.get("lat"), row.get("lon")),
+                "candidate_id": stable_id(timestamp, row.get("lat"), row.get("lon"), row.get("cluster_id")),
                 "candidate_source": "IEM_LSR",
                 "verification_class": "unverified_report_only",
                 "verification_status": "unverified_candidate",
