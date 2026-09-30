@@ -100,6 +100,15 @@ def build_live_feature_row(
         "snsq_moisture_factor",
         "snsq_instability_factor",
         "snsq_wind_factor",
+        # Environmental predictors produced by the historical feature builder.
+        "frontogenesis",
+        "dcva",
+        "omega",
+        "epv",
+        "cloud_layer_depth_m",
+        "cloud_layer_rh_pct",
+        "cloud_layer_mean_wind_kt",
+        "cloud_layer_shear_kt",
     ):
         if key in current:
             row[key] = _number(current.get(key))
