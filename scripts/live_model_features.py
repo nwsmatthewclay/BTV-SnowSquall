@@ -251,12 +251,15 @@ def build_live_feature_row(
         previous_lat = _number(previous.get("centroid_lat"))
         previous_lon = _number(previous.get("centroid_lon"))
         if None not in (current_lat, current_lon, previous_lat, previous_lon):
-            dlat = math.radians(current_lat - previous_lat)
-            dlon = math.radians(current_lon - previous_lon)
-            mean_lat = math.radians((current_lat + previous_lat) / 2.0)
+            lat1 = math.radians(current_lat)
+            lon1 = math.radians(current_lon)
+            lat2 = math.radians(previous_lat)
+            lon2 = math.radians(previous_lon)
+            dlat = lat2 - lat1
+            dlon = lon2 - lon1
             a = (
                 math.sin(dlat / 2.0) ** 2
-                + math.cos(mean_lat) ** 2 * math.sin(dlon / 2.0) ** 2
+                + math.cos(lat1) * math.cos(lat2) * math.sin(dlon / 2.0) ** 2
             )
             displacement = 6371.0 * 2.0 * math.asin(min(1.0, math.sqrt(a)))
             row["centroid_displacement_km"] = displacement
