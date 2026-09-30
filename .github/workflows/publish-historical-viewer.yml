@@ -145,8 +145,10 @@ jobs:
           path: _site
           if-no-files-found: error
 
-      - name: Configure GitHub Pages
+      - name: Configure GitHub Pages (best effort)
+        id: pages_config
         if: steps.source.outputs.skip != 'true'
+        continue-on-error: true
         uses: actions/configure-pages@v5
         with:
           enablement: true
@@ -158,6 +160,6 @@ jobs:
           path: _site
 
       - name: Deploy to GitHub Pages
-        if: steps.source.outputs.skip != 'true'
+        if: steps.source.outputs.skip != 'true' && steps.pages_config.outcome == 'success'
         id: deployment
         uses: actions/deploy-pages@v4
