@@ -74,6 +74,7 @@ def main():
     parser.add_argument("--output-dir", required=True)
     parser.add_argument("--max-official", type=int, default=50)
     parser.add_argument("--max-unverified", type=int, default=50)
+    parser.add_argument("--exclude-modern-validation", default=None, help="CSV manifest of protected validation cases to exclude")
     parser.add_argument("--offset-official", type=int, default=0)
     parser.add_argument("--offset-unverified", type=int, default=0)
     parser.add_argument("--exclude-modern-validation", default=None, help="Modern validation manifest whose analysis windows must remain out of training.")
@@ -83,6 +84,12 @@ def main():
     out.mkdir(parents=True, exist_ok=True)
 
     candidates = pd.read_csv(args.input)
+    if args.exclude_modern_validation:
+        protected = pd.read_csv(args.exclude_modern_validation)
+        protected_ids = set(protected.get("case_id", pd.Series(dtype="string")).dropna().astype(str))
+        before = len(candidates)
+        candidates = candidates[~candidates["candidate_id"].astype(str).isin(protected_ids)].copy()
+        print(f"Excluded protected modern validation cases: {before - len(candidates)}")
     radar = pd.read_csv(args.radar_manifest)
     if candidates.empty:
         raise ValueError("Discovery produced no candidates.")
