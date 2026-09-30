@@ -185,6 +185,10 @@ jobs:
         run: |
           python scripts/audit_candidate_replay.py replay
 
+      - name: Merge four-horizon replay score timeline
+        run: |
+          python scripts/merge_replay_horizon_scores.py             replay             --output replay/score_timeline.json
+
       - name: Build compatibility schema from 15-minute model
         run: |
           python - <<'PY'
