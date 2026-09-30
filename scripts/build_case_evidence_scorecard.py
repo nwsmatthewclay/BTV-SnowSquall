@@ -53,7 +53,9 @@ def score_row(row):
         points += 2; evidence.append('radar_reconstruction')
     if num(row.get('radar_coverage_fraction')) >= 0.75:
         points += 1; evidence.append('radar_coverage_ge_75pct')
-    if pd.notna(row.get('study_case_id')) and str(row.get('study_case_id')).strip():
+    study_id = row.get('study_case_id')
+    study_id_text = '' if study_id is None or pd.isna(study_id) else str(study_id).strip()
+    if study_id_text and study_id_text.lower() not in {'nan','<na>'}:
         points += 3; evidence.append('study_anchor')
 
     # Evidence tiers are descriptive promotion queues. They are not truth labels.
