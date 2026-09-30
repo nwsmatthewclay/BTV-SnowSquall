@@ -14,8 +14,14 @@ def build(source: Path, output: Path, radar_output: Path):
     else:
         anchor=pd.NaT
     event_date=pd.to_datetime(d['event_date_utc'],utc=True,errors='coerce',format='mixed')
+    window_start=pd.to_datetime(d['analysis_window_start_utc'],utc=True,errors='coerce',format='mixed')
+    anchor_source=pd.Series('case_anchor',index=d.index,dtype='object')
+    anchor_source=anchor_source.mask(anchor.isna() & window_start.notna(),'validation_window_start')
+    anchor=anchor.where(anchor.notna(),window_start)
     anchor=anchor.where(anchor.notna(),event_date)
+    anchor_source=anchor_source.mask(anchor.isna() & event_date.notna(),'event_date_fallback')
     d['event_start_utc']=anchor.dt.strftime('%Y-%m-%dT%H:%M:%SZ')
+    d['anchor_source']=anchor_source
     d['source_study']=d['evidence_source'].astype(str)
     d['peak_wind_kt']=pd.to_numeric(d.get('wind_gust_kt'),errors='coerce')
     d['min_visibility_km']=pd.to_numeric(d.get('visibility_miles'),errors='coerce')*1.609344
