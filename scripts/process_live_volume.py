@@ -150,12 +150,12 @@ def process_volume(
     if radar_origin is not None:
         apply_radar_origin(radar, radar_origin)
 
-    fields = resolve_fields(radar)
-    reflectivity = fields.get("reflectivity")
+    radar_fields = resolve_fields(radar)
+    reflectivity = radar_fields.get("reflectivity")
     if reflectivity is None:
         raise RuntimeError("No reflectivity field found in Level-II volume")
 
-    available_fields = [name for name in fields.values() if name]
+    available_fields = [name for name in radar_fields.values() if name]
     grid = grid_lowest_sweep(
         radar,
         available_fields,
@@ -166,7 +166,7 @@ def process_volume(
     lat, lon = grid_latlon(grid)
     gridded = {
         canonical: grid_field_2d(grid, actual)
-        for canonical, actual in fields.items()
+        for canonical, actual in radar_fields.items()
         if actual and actual in (getattr(grid, "fields", {}) or {})
     }
     field_gradients = {}
@@ -414,8 +414,8 @@ def process_volume(
             track_id = str(feature.get("track_id"))
             current_row = dict(feature)
             env = current_row.get("environment") or {}
-            fields = env.get("fields") or {}
-            current_row.update(fields)
+            environment_fields = env.get("fields") or {}
+            current_row.update(environment_fields)
             history = prior_rows_by_track.get(track_id, [])
             frame = build_live_feature_frame(history + [current_row], track_id)
             try:
@@ -444,7 +444,7 @@ def process_volume(
         "metadata": {
             "scan_time_utc": timestamp,
             "source_file": source_name,
-            "fields": fields,
+            "fields": radar_fields,
             "object_count": len(features),
             "probability_status": ("scored" if model_scored else ("model_error" if model_errors else "not_scored")),
             "environment_status": (
