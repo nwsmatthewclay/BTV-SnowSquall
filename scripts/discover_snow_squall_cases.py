@@ -260,6 +260,8 @@ def gather_cow_sqw(cfg: dict) -> list[dict]:
             "phenomena": "SQ",
             "begints": f"{year}-01-01T00:00Z",
             "endts": f"{year}-12-31T23:59Z",
+,
+            "lsrtype": "SQ"
         }
         for wfo in cfg.get("warning_wfos", ["BTV"]):
             params["wfo"] = wfo
@@ -447,6 +449,10 @@ def merged_verification_class(source_types: set[str], warning_verified: bool = F
         return "study_warning_verified"
     if has_ncei and has_study:
         return "official_plus_study"
+    if has_ncei and has_report and has_sqw:
+        return "official_plus_warning_and_report"
+    if has_ncei and has_sqw and warning_verified:
+        return "official_plus_warning_verified"
     if has_ncei and has_sqw:
         return "official_plus_warning"
     if has_ncei and has_report:
@@ -462,6 +468,7 @@ def merged_verification_class(source_types: set[str], warning_verified: bool = F
     if has_sqw:
         return "warning_only"
     return "unverified_report_only"
+
 def merge_candidates(records: list[dict], cfg: dict) -> list[dict]:
     ordered = sorted(records, key=lambda r: r["event_start_utc"])
     merged = []
@@ -473,9 +480,9 @@ def merge_candidates(records: list[dict], cfg: dict) -> list[dict]:
             gap_min = (dt - pdt).total_seconds() / 60.0
             if gap_min > max(int(cfg["ncei_match_minutes"]), int(cfg["lsr_cluster_minutes"])):
                 break
-            # Never merge two independent NCEI records. LSR-only records may
-            # cluster together; cross-source records may reconcile.
-            if rec["candidate_source"] == prior["candidate_source"] == "NCEI_STORM_EVENTS":
+            # Do not collapse independent records produced by the same
+            # authoritative source. Cross-source reconciliation remains allowed.
+            if rec["candidate_source"] == prior["candidate_source"] in {"NCEI_STORM_EVENTS", "IEM_COW_SQW"}:
                 continue
             dist = distance_km(rec.get("lat"), rec.get("lon"), prior.get("lat"), prior.get("lon"))
             radius = (
