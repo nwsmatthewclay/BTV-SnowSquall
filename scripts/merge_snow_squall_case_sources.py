@@ -347,25 +347,46 @@ def build(discovery_path: Path, lsr_path: Path, output_dir: Path, nws_text_path:
     for _, row in discovery.iterrows():
         record = row.to_dict()
         record.setdefault("case_id", None)
-        record["source_types"] = set(
-            x for x in str(record.get("source_types", "")).split(",") if x
-        )
-        record["evidence_sources"] = set(
-            x for x in str(record.get("evidence_sources", "")).split(",") if x
-        )
+        record["source_types"] = set(x for x in str(record.get("source_types", "")).split(",") if x)
+        record["evidence_sources"] = set(x for x in str(record.get("evidence_sources", "")).split(",") if x)
         record["source_records"] = int(pd.to_numeric(record.get("source_records", 1), errors="coerce") or 1)
         record["lsr_count"] = int(pd.to_numeric(record.get("lsr_count", 0), errors="coerce") or 0)
-        # Defense against stale discovery artifacts: screening-language
-        # NCEI records are never allowed to masquerade as official truth.
         if str(record.get("evidence", "")).startswith("screening:") or str(record.get("candidate_source", "")) == "NCEI_STORM_EVENTS_SCREENING":
             record["verification_class"] = "official_screening_candidate"
-        if (pd.isna(record.get("lat")) or pd.isna(record.get("lon"))):
+        if pd.isna(record.get("lat")) or pd.isna(record.get("lon")):
             coarse = routing_point(record.get("state"), record.get("county"))
             if coarse is not None:
                 record["lat"], record["lon"] = coarse
                 record["coordinate_source"] = "county_routing_centroid"
                 record["coordinate_precision"] = "routing_only"
-        records.append(record)
+
+        # Reconcile discovery evidence with a Banacos study anchor when
+        # time/space agree, preserving the study case_id as the canonical ID.
+        match_index = None
+        for index, existing in enumerate(records):
+            if "BANACOS_STUDY_2014" not in existing.get("source_types", set()):
+                continue
+            if find_match([existing], record.get("event_dt"), record.get("lat"), record.get("lon")) is not None:
+                match_index = index
+                break
+        if match_index is None:
+            records.append(record)
+            continue
+
+        existing = records[match_index]
+        existing["source_types"].update(record["source_types"])
+        existing["evidence_sources"].update(record["evidence_sources"])
+        existing["source_records"] = int(existing.get("source_records", 1)) + int(record.get("source_records", 1))
+        existing["lsr_count"] = int(existing.get("lsr_count", 0)) + int(record.get("lsr_count", 0))
+        existing["verification_class"] = canonical_class(existing["source_types"], bool(existing.get("warning_verified_by_iem")))
+        existing["verification_status"] = "study_anchor_with_independent_evidence"
+        if not existing.get("event_id"):
+            existing["event_id"] = record.get("event_id", "")
+        if not existing.get("narrative"):
+            existing["narrative"] = record.get("narrative", "")
+        existing['ncei_explicit_snow_squall'] = bool(existing.get('ncei_explicit_snow_squall')) or bool(record.get('ncei_explicit_snow_squall'))
+        existing['ncei_event_type'] = record.get('event_type')
+        existing['ncei_source'] = record.get('source')
 
     matched_reports = 0
     records, matched_text, added_text = attach_nws_text_records(records, nws_text_path)
