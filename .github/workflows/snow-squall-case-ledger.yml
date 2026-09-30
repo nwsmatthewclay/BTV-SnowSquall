@@ -7,6 +7,11 @@ on:
       - Snow Squall IEM LSR Harvest
     types:
       - completed
+  push:
+    branches:
+      - snow-squall-model-foundation
+    paths:
+      - .github/ledger-trigger
   workflow_dispatch:
 
 permissions:
