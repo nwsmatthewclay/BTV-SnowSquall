@@ -331,7 +331,7 @@ def assign_episode_ids(ledger: pd.DataFrame) -> pd.DataFrame:
     work = work.drop(columns=["event_dt", "index"], errors="ignore")
     return work.sort_values("event_start_utc", kind="stable").reset_index(drop=True)
 
-def build(discovery_path: Path, lsr_path: Path, output_dir: Path, nws_text_path: Path | None = None):
+def build(discovery_path: Path, lsr_path: Path, output_dir: Path, nws_text_path: Path | None = None, study_path: Path | None = None):
     discovery = pd.read_csv(discovery_path)
     lsr = pd.read_csv(lsr_path)
     discovery["event_dt"] = pd.to_datetime(
@@ -343,9 +343,10 @@ def build(discovery_path: Path, lsr_path: Path, output_dir: Path, nws_text_path:
     discovery = discovery[discovery["event_dt"].notna()].copy().reset_index(drop=True)
     lsr = lsr[lsr["event_dt"].notna()].copy().reset_index(drop=True)
 
-    records = []
+    records = load_study_records(study_path)
     for _, row in discovery.iterrows():
         record = row.to_dict()
+        record.setdefault("case_id", None)
         record["source_types"] = set(
             x for x in str(record.get("source_types", "")).split(",") if x
         )
@@ -427,6 +428,7 @@ def build(discovery_path: Path, lsr_path: Path, output_dir: Path, nws_text_path:
         rows.append(record)
 
     ledger = pd.DataFrame(rows).sort_values("event_start_utc").reset_index(drop=True)
+    ledger["case_id"] = ledger["case_id"].fillna(ledger["candidate_id"])
     ledger = assign_episode_ids(ledger)
     radar_rows = []
     for _, record in ledger.iterrows():
@@ -466,6 +468,7 @@ def build(discovery_path: Path, lsr_path: Path, output_dir: Path, nws_text_path:
     summary = {
         "discovery_candidates": int(len(discovery)),
         "iem_lsr_clusters": int(len(lsr)),
+        "banacos_study_cases": int(len(load_study_records(study_path))),
         "iem_lsr_matches_to_existing": int(matched_reports),
         "unmatched_iem_lsr_cases": int(len(lsr) - matched_reports),
         "iem_nws_text_matches_to_existing": int(matched_text),
@@ -489,8 +492,9 @@ def main():
     parser.add_argument("--iem-lsr", required=True)
     parser.add_argument("--output-dir", required=True)
     parser.add_argument("--nws-text", default=None)
+    parser.add_argument("--study", default=None, help="Banacos et al. 2014 verified case table")
     args = parser.parse_args()
-    build(Path(args.discovery), Path(args.iem_lsr), Path(args.output_dir), Path(args.nws_text) if args.nws_text else None)
+    build(Path(args.discovery), Path(args.iem_lsr), Path(args.output_dir), Path(args.nws_text) if args.nws_text else None, Path(args.study) if args.study else None)
 
 if __name__ == "__main__":
     main()
