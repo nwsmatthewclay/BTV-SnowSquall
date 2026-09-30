@@ -187,10 +187,13 @@ jobs:
           print(out.to_string(index=False))
           PY
 
-      - name: Audit multi-event replay
+      - name: Audit each case replay
         run: |
           set -euo pipefail
-          python scripts/audit_candidate_replay.py multi_event_replay
+          while IFS=, read -r case_id radar_site window_start_utc window_end_utc day rest; do
+            [ "${case_id}" = "case_id" ] && continue
+            python scripts/audit_candidate_replay.py "multi_event_replay/${case_id}/${radar_site}"
+          done < replay_case_matrix.csv
 
       - name: Upload multi-event replay package
         uses: actions/upload-artifact@v4
