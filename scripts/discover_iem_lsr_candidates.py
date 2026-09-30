@@ -109,7 +109,7 @@ def harvest(start_year,end_year):
             mask=(remarks+' '+types).str.contains(SNOW_RE,na=False)
             for idx,row in frame[mask].iterrows():
                 county=norm_county(row.get('COUNTY',''))
-                if state=='VT' and county in {'BENNINGTON','WINDHAM'}: continue
+                if state=='VT' and any(x in county for x in ('BENNINGTON','WINDHAM')): continue
                 if state=='NY' and county not in {'CLINTON','ESSEX','FRANKLIN','ST LAWRENCE'}: continue
                 ts=parse_valid(row.get('VALID'))
                 if ts is None: continue
