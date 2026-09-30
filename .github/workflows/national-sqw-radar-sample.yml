@@ -103,43 +103,67 @@ jobs:
         run: |
           set -euo pipefail
           python - <<'PY'
-          import json
+          from concurrent.futures import ThreadPoolExecutor, as_completed
           from pathlib import Path
-          import boto3
-          from botocore import UNSIGNED
-          from botocore.client import Config
           import pandas as pd
-          from acquisition.historical_level2 import list_volume_keys, key_time
 
-          manifest=Path("data/discovery/national_sqw_radar/national_sqw_radar_manifest.csv")
-          d=pd.read_csv(manifest)
-          client=boto3.client("s3",region_name="us-east-1",config=Config(signature_version=UNSIGNED))
-          rows=[]
-          for r in d.to_dict("records"):
-              start=pd.Timestamp(r["window_start_utc"])
-              end=pd.Timestamp(r["window_end_utc"])
-              ok=False
-              day=start.normalize()
-              while day<=end.normalize():
-                  keys=list_volume_keys(client,r["radar_site"],day.to_pydatetime())
+          from acquisition.historical_level2 import (
+              key_time,
+              list_volume_keys,
+              s3_listing_client,
+          )
+
+          manifest = Path("data/discovery/national_sqw_radar/national_sqw_radar_manifest.csv")
+          d = pd.read_csv(manifest)
+
+          listing_keys = set()
+          for row in d.to_dict("records"):
+              start = pd.Timestamp(row["window_start_utc"], tz="UTC").normalize()
+              end = pd.Timestamp(row["window_end_utc"], tz="UTC").normalize()
+              day = start
+              while day <= end:
+                  listing_keys.add((row["radar_site"], day.to_pydatetime()))
+                  day += pd.Timedelta(days=1)
+
+          client = s3_listing_client()
+          listings = {}
+          with ThreadPoolExecutor(max_workers=min(8, max(1, len(listing_keys)))) as pool:
+              futures = {
+                  pool.submit(list_volume_keys, client, radar, day): (radar, day)
+                  for radar, day in sorted(listing_keys, key=lambda x: (x[0], x[1]))
+              }
+              for future in as_completed(futures):
+                  key = futures[future]
+                  listings[key] = future.result()
+
+          rows = []
+          for record in d.to_dict("records"):
+              start = pd.Timestamp(record["window_start_utc"], tz="UTC").to_pydatetime()
+              end = pd.Timestamp(record["window_end_utc"], tz="UTC").to_pydatetime()
+              available = False
+              day = pd.Timestamp(start, tz="UTC").normalize()
+              last = pd.Timestamp(end, tz="UTC").normalize()
+              while day <= last:
+                  keys = listings[(record["radar_site"], day.to_pydatetime())]
                   if any(
-                      (t:=key_time(k)) is not None
-                      and start.to_pydatetime() <= t <= end.to_pydatetime()
-                      for k in keys
+                      (stamp := key_time(key)) is not None
+                      and start <= stamp <= end
+                      for key in keys
                   ):
-                      ok=True
+                      available = True
                       break
                   day += pd.Timedelta(days=1)
               rows.append({
-                  "case_id":r["case_id"],
-                  "radar_site":r["radar_site"],
-                  "level2_window_available":ok,
+                  "case_id": record["case_id"],
+                  "radar_site": record["radar_site"],
+                  "level2_window_available": available,
               })
-          out=pd.DataFrame(rows)
-          out.to_csv("data/discovery/national_sqw_radar/level2_preflight.csv",index=False)
+
+          out = pd.DataFrame(rows)
+          out.to_csv("data/discovery/national_sqw_radar/level2_preflight.csv", index=False)
+          print("Unique radar/day archive listings:", len(listing_keys))
           print(out["level2_window_available"].value_counts(dropna=False).to_string())
-          print("Rows:",len(out))
-          PY
+          print("Rows:", len(out))
 
       - name: Write next national radar-sample batch state
         run: |
