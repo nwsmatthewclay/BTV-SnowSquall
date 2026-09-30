@@ -40,3 +40,4 @@ def test_expansion_workflow_has_supervised_training_gate():
     assert 'snow_squall_training_labeled.csv' in text
     assert 'snow_squall_training_cases.csv' in text
     assert 'audit_expansion_dataset.py' in text
+    assert 'audit_live_model_compatibility.py' in text
