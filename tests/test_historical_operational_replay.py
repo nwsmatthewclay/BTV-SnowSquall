@@ -188,6 +188,10 @@ def test_resume_uses_only_completed_output_prefix(tmp_path, monkeypatch):
     ]
     for name in names:
         (tmp_path / name).write_bytes(b"placeholder")
+    input_dir = tmp_path / "input"
+    input_dir.mkdir()
+    for path in list(tmp_path.glob("KCXX*")):
+        path.rename(input_dir / path.name)
     out = tmp_path / "out"
     out.mkdir()
     state = tmp_path / "state.json"
