@@ -162,7 +162,7 @@ jobs:
           import pandas as pd
           objects=pd.read_csv('data/derived/snow_squall_expansion_objects_annotated.csv')
           cases=pd.read_csv('data/manifests/snow_squall_expansion/snow_squall_expansion_cases.csv')
-          keep=['case_id','candidate_source','verification_class','verification_status','event_start_utc','lat','lon','ncei_explicit_snow_squall','lsr_count','source_records','source_types']
+          keep=['case_id','episode_id','candidate_source','verification_class','verification_status','event_start_utc','lat','lon','ncei_explicit_snow_squall','lsr_count','source_records','source_types']
           objects=objects.drop(columns=[c for c in keep[1:] if c in objects.columns],errors='ignore').merge(cases[keep],on='case_id',how='left',validate='many_to_one')
           objects.to_csv('data/derived/snow_squall_expansion_objects_tagged.csv',index=False)
           print(objects['verification_class'].value_counts(dropna=False).to_string())
