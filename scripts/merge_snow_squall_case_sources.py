@@ -13,6 +13,7 @@ RADARS = {
     "KCXX": (44.511, -73.166),
     "KTYX": (43.756, -75.680),
 }
+RADAR_RECONSTRUCTION_START_YEAR = 2002
 
 COUNTY_ROUTING_POINTS = {
     "ADDISON": (44.00, -73.10),
@@ -278,6 +279,9 @@ def build(discovery_path: Path, lsr_path: Path, output_dir: Path):
     ledger = assign_episode_ids(ledger)
     radar_rows = []
     for _, record in ledger.iterrows():
+        event_dt = pd.to_datetime(record.get("event_start_utc"), utc=True, errors="coerce", format="mixed")
+        if pd.isna(event_dt) or int(event_dt.year) < RADAR_RECONSTRUCTION_START_YEAR:
+            continue
         options = []
         for site, origin in RADARS.items():
             dist = distance_km(
@@ -315,6 +319,7 @@ def build(discovery_path: Path, lsr_path: Path, output_dir: Path):
         "unmatched_iem_lsr_cases": int(len(lsr) - matched_reports),
         "unified_cases": int(len(ledger)),
         "radar_manifest_rows": int(len(radar_rows)),
+        "radar_reconstruction_start_year": RADAR_RECONSTRUCTION_START_YEAR,
         "verification_classes": ledger["verification_class"].value_counts().to_dict()
         if not ledger.empty else {},
         "physical_episode_count": int(ledger["episode_id"].nunique()) if not ledger.empty else 0,
