@@ -71,3 +71,37 @@ def test_string_false_surface_timing_is_not_treated_as_true():
     })
     assert not eligible
     assert 'surface_timing_missing_or_inconsistent' in reason
+
+
+def test_mping_diagnostics_are_recorded_without_changing_evidence_points(tmp_path):
+    from scripts.build_case_evidence_scorecard import build
+
+    cases = tmp_path / "cases.csv"
+    surface = tmp_path / "surface.csv"
+    objects = tmp_path / "objects.csv"
+    radar = tmp_path / "radar.csv"
+    mping = tmp_path / "mping.csv"
+    output = tmp_path / "scorecard.csv"
+
+    pd.DataFrame([{
+        "case_id": "CASE1",
+        "candidate_id": "C1",
+        "verification_class": "study_verified",
+        "source_types": "STUDY",
+        "surface_timing_consistent": True,
+        "observation_count": 8,
+    }]).to_csv(cases, index=False)
+    pd.DataFrame([{"case_id": "CASE1"}]).to_csv(surface, index=False)
+    pd.DataFrame([{"case_id": "CASE1"}]).to_csv(objects, index=False)
+    pd.DataFrame([{"candidate_id": "C1", "radar_distance_km": 20, "coordinate_precision": "case"}]).to_csv(radar, index=False)
+    pd.DataFrame([
+        {"case_id": "CASE1", "mping_id": 1, "ptype_bucket": "snow"},
+        {"case_id": "CASE1", "mping_id": 2, "ptype_bucket": "mixed"},
+    ]).to_csv(mping, index=False)
+
+    build(cases, surface, objects, radar, output, mping)
+    result = pd.read_csv(output).iloc[0]
+
+    assert int(result["mping_report_count"]) == 2
+    assert int(result["mping_snow_report_count"]) == 1
+    assert int(result["mping_mixed_report_count"]) == 1
