@@ -320,10 +320,10 @@ jobs:
           name: snow-squall-live-model-bundles
           path: |
             data/derived/baseline_expansion_*m
-            data/derived/candidate_expansion_*m/metrics.json
-            data/derived/baseline_expansion_*m/baseline_model.joblib
-            data/derived/baseline_expansion_*m
+            data/derived/candidate_ensemble_expansion_*m
             data/derived/snow_squall_expanded_horizon_summary.json
+            data/derived/snow_squall_candidate_model_comparison.json
+
       - name: Upload expanded research package
         uses: actions/upload-artifact@v4
         with:
