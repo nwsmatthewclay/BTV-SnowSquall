@@ -222,6 +222,12 @@ jobs:
             --output replay/live_feature_parity.json \
             --max-tracks 20
 
+      - name: Build replay diagnostics
+        run: |
+          python scripts/replay_diagnostics.py \
+            replay/score_timeline.json \
+            --output replay/replay_diagnostics.json
+
       - name: Build viewer-ready replay case
         run: |
           python scripts/build_replay_viewer_case.py \
