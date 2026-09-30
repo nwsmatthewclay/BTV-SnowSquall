@@ -1,0 +1,53 @@
+name: Snow Squall NWS Text Review
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - snow-squall-model-foundation
+    paths:
+      - scripts/acquire_iem_nws_text.py
+      - .github/workflows/snow-squall-nws-text-review.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: snow-squall-nws-text-review
+  cancel-in-progress: true
+
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      PYTHONUNBUFFERED: '1'
+      PYTHONPATH: ${{ github.workspace }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Acquire BTV text evidence
+        run: |
+          python scripts/acquire_iem_nws_text.py \
+            --start-year 2002 \
+            --end-year 2026 \
+            --output-dir data/discovery/iem_nws_text
+
+      - name: Publish review artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: snow-squall-nws-text-review
+          path: data/discovery/iem_nws_text
+          if-no-files-found: error
