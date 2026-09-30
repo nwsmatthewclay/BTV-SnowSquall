@@ -28,3 +28,12 @@ def test_snow_squall_workflows_parse_and_have_required_keys():
         for job_name, job in data['jobs'].items():
             assert 'runs-on' in job, f'{name}:{job_name}'
             assert 'steps' in job and job['steps'], f'{name}:{job_name}'
+
+
+def test_expansion_workflow_has_supervised_training_gate():
+    path=Path('.github/workflows/snow-squall-expansion-dataset.yml')
+    text=path.read_text(encoding='utf-8')
+    assert 'Freeze supervised positive training cohort' in text
+    assert 'training_eligible' in text
+    assert 'snow_squall_training_cases.csv' in text
+    assert 'snow_squall_training_objects.csv' in text
