@@ -50,6 +50,11 @@ def audit(features_path: Path, schema_path: Path, cases_path: Path | None = None
         positive = df[df["population"].eq("verified_case_context")]
         report["positive_rows"] = int(len(positive))
         report["positive_cases"] = int(positive["case_id"].nunique()) if "case_id" in positive.columns else 0
+        if "supervision_class" in positive.columns:
+            unsupervised = int((positive["supervision_class"] != "supervised_positive").sum())
+            report["positive_rows_without_supervised_provenance"] = unsupervised
+            if unsupervised:
+                report["errors"].append(f"positive_rows_without_supervised_provenance:{unsupervised}")
         nulls = df[df["population"].eq("winter_null_candidate")]
         report["null_rows"] = int(len(nulls))
         report["null_windows"] = int(nulls["null_id"].nunique()) if "null_id" in nulls.columns else 0
