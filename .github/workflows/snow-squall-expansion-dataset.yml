@@ -214,6 +214,36 @@ jobs:
             --objects data/derived/snow_squall_expansion_objects_tagged.csv \
             --radar data/manifests/snow_squall_expansion/snow_squall_expansion_radar_manifest.csv \
             --output data/derived/snow_squall_case_evidence_scorecard.csv
+      - name: Freeze supervised positive training cohort
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import pandas as pd
+          from pathlib import Path
+
+          root=Path('data/manifests/snow_squall_expansion')
+          score=pd.read_csv('data/derived/snow_squall_case_evidence_scorecard.csv')
+          cases=pd.read_csv(root/'snow_squall_expansion_cases.csv')
+          objects=pd.read_csv('data/derived/snow_squall_verified_objects.csv')
+
+          eligible=set(score.loc[score['training_eligible'].fillna(False),'candidate_id'].dropna().astype(str))
+          case_key=cases['candidate_id'].astype(str) if 'candidate_id' in cases.columns else cases['case_id'].astype(str)
+          training_cases=cases[case_key.isin(eligible)].copy()
+          review_cases=cases[~case_key.isin(eligible)].copy()
+          training_object_ids=set(training_cases['case_id'].astype(str))
+          training_objects=objects[objects['case_id'].astype(str).isin(training_object_ids)].copy()
+
+          training_cases.to_csv(root/'snow_squall_training_cases.csv',index=False)
+          review_cases.to_csv(root/'snow_squall_training_review_cases.csv',index=False)
+          training_objects.to_csv('data/derived/snow_squall_training_objects.csv',index=False)
+
+          print('Documented candidate cases:', len(cases))
+          print('Supervised training cases:', len(training_cases))
+          print('Withheld documented/review cases:', len(review_cases))
+          print('Supervised radar object scans:', len(training_objects))
+          assert len(training_cases) > 0, 'No cases passed the supervised evidence gate'
+          PY
+
       - name: Build documented historical environment and labels
         run: |
           python scripts/build_historical_dataset.py \
