@@ -142,11 +142,40 @@ def standardize(frame: pd.DataFrame) -> pd.DataFrame:
     return out[keep].sort_values("valid").reset_index(drop=True)
 
 
+def _surface_job(row, buffer_before_minutes, buffer_after_minutes):
+    event_start = pd.to_datetime(row.event_start_utc, utc=True)
+    start = event_start - pd.Timedelta(minutes=buffer_before_minutes)
+    end = event_start + pd.Timedelta(
+        minutes=float(getattr(row, "vis_below_0p8_min", 60) or 60) + buffer_after_minutes
+    )
+    station = str(row.observing_station)
+    try:
+        data = request_observations(station, start, end)
+        return {
+            "ok": True,
+            "row": row,
+            "start": start,
+            "end": end,
+            "data": data,
+            "error": None,
+        }
+    except Exception as exc:
+        return {
+            "ok": False,
+            "row": row,
+            "start": start,
+            "end": end,
+            "data": pd.DataFrame(),
+            "error": exc,
+        }
+
+
 def download_cases(
     cases_csv: Path,
     output_root: Path,
     buffer_before_minutes: int = 120,
     buffer_after_minutes: int = 150,
+    workers: int = 6,
 ):
     cases = pd.read_csv(cases_csv)
     required = {"case_id", "event_start_utc", "observing_station"}
@@ -157,50 +186,45 @@ def download_cases(
     output_root.mkdir(parents=True, exist_ok=True)
     manifest_rows = []
     error_rows = []
+    rows = list(cases.drop_duplicates("case_id").itertuples(index=False))
+    workers = max(1, min(int(workers), 12))
 
-    for row in cases.drop_duplicates("case_id").itertuples(index=False):
-        event_start = pd.to_datetime(row.event_start_utc, utc=True)
-        start = event_start - pd.Timedelta(minutes=buffer_before_minutes)
-        end = start + pd.Timedelta(minutes=buffer_before_minutes + buffer_after_minutes)
-        # Correct the interval to be relative to the published event start.
-        start = event_start - pd.Timedelta(minutes=buffer_before_minutes)
-        end = event_start + pd.Timedelta(
-            minutes=float(getattr(row, "vis_below_0p8_min", 60) or 60) + buffer_after_minutes
-        )
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        futures = {
+            pool.submit(_surface_job, row, buffer_before_minutes, buffer_after_minutes): row
+            for row in rows
+        }
+        for future in as_completed(futures):
+            result = future.result()
+            row = result["row"]
+            station = str(row.observing_station)
+            if not result["ok"]:
+                exc = result["error"]
+                error_rows.append(
+                    {
+                        "case_id": row.case_id,
+                        "station": station,
+                        "error_type": type(exc).__name__,
+                        "error_message": str(exc),
+                    }
+                )
+                print(f"FAILED {row.case_id} {station}: {type(exc).__name__}: {exc}")
+                continue
 
-        station = str(row.observing_station)
-        try:
-            data = request_observations(station, start, end)
-        except Exception as exc:
-            error_rows.append(
+            path = output_root / station / f"{row.case_id}.csv"
+            path.parent.mkdir(parents=True, exist_ok=True)
+            result["data"].to_csv(path, index=False)
+            manifest_rows.append(
                 {
                     "case_id": row.case_id,
                     "station": station,
-                    "error_type": type(exc).__name__,
-                    "error_message": str(exc),
+                    "start_utc": result["start"].isoformat().replace("+00:00", "Z"),
+                    "end_utc": result["end"].isoformat().replace("+00:00", "Z"),
+                    "row_count": len(result["data"]),
+                    "output": str(path),
                 }
             )
-            print(
-                f"FAILED {row.case_id} {station}: "
-                f"{type(exc).__name__}: {exc}"
-            )
-            continue
-
-        path = output_root / station / f"{row.case_id}.csv"
-        path.parent.mkdir(parents=True, exist_ok=True)
-        data.to_csv(path, index=False)
-
-        manifest_rows.append(
-            {
-                "case_id": row.case_id,
-                "station": station,
-                "start_utc": start.isoformat().replace("+00:00", "Z"),
-                "end_utc": end.isoformat().replace("+00:00", "Z"),
-                "row_count": len(data),
-                "output": str(path),
-            }
-        )
-        print(f"{row.case_id} {station}: {len(data)} surface observations")
+            print(f"{row.case_id} {station}: {len(result['data'])} surface observations")
 
     manifest = pd.DataFrame(manifest_rows)
     manifest.to_csv(output_root / "surface_download_manifest.csv", index=False)
