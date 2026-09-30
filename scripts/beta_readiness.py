@@ -113,7 +113,14 @@ def _synthetic_history() -> list[dict]:
     newer["max_reflectivity_dbz"] = 47.0
     newer["area_km2"] = 110.0
     newer["age_scans"] = 2
-    return [base, newer]
+    latest = dict(newer)
+    latest["scan_time_utc"] = "2026-01-01T00:12:00Z"
+    latest["timestamp"] = "2026-01-01T00:12:00Z"
+    latest["centroid_lon"] = -73.10
+    latest["max_reflectivity_dbz"] = 49.0
+    latest["area_km2"] = 120.0
+    latest["age_scans"] = 3
+    return [base, newer, latest]
 
 
 def main() -> None:
