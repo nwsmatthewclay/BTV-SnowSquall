@@ -17,7 +17,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import boto3
-from botocore import BotoCoreError
+from botocore.exceptions import BotoCoreError
 from botocore import UNSIGNED
 from botocore.client import Config
 
