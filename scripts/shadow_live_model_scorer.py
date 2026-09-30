@@ -9,6 +9,7 @@ from pathlib import Path
 from scripts.live_model_features import build_live_feature_frame, feature_coverage
 from scripts.add_national_pretraining_features import augment as augment_national_pretraining
 from scripts.model_runtime import ModelRuntime
+from scripts.probability_postprocess import monotone_cumulative_probabilities
 
 HORIZONS = (15, 30, 45, 60)
 SITES = ("KCXX", "KTYX")
@@ -88,6 +89,12 @@ def score_site(site: str, live_root: Path, model_root: Path) -> tuple[dict, list
                     record["research_probabilities"][str(horizon)] = float(score[0])
             except Exception as exc:
                 record["score_errors"][str(horizon)] = f"{type(exc).__name__}: {exc}"
+        if record["research_probabilities"]:
+            projected = monotone_cumulative_probabilities(record["research_probabilities"])
+            record["research_probabilities_raw"] = dict(record["research_probabilities"])
+            record["research_probabilities"] = projected.get("cumulative", {})
+            record["research_interval_probabilities"] = projected.get("interval", {})
+            record["probability_projection"] = "isotonic_non_decreasing_horizon"
         rows.append(record)
 
     scored = sum(bool(r["research_probabilities"]) for r in rows)
