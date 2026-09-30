@@ -2,6 +2,11 @@ name: Modern Snow Squall Independent Validation
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - snow-squall-model-foundation
+    paths:
+      - .github/modern-validation-trigger
   workflow_run:
     workflows:
       - Snow Squall Expansion Dataset
