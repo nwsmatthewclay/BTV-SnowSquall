@@ -84,6 +84,10 @@ def main():
     radar = pd.read_csv(args.radar_manifest)
     if candidates.empty:
         raise ValueError("Discovery produced no candidates.")
+    radar_ids = set(radar["candidate_id"].astype(str)) if "candidate_id" in radar.columns else set()
+    candidates = candidates[candidates["candidate_id"].astype(str).isin(radar_ids)].copy()
+    if candidates.empty:
+        raise ValueError("No candidates have usable radar coverage.")
 
     if args.exclude_modern_validation:
         modern = pd.read_csv(args.exclude_modern_validation)
