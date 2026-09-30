@@ -1,6 +1,6 @@
 import pandas as pd
 
-from scripts.build_case_evidence_scorecard import score_row
+from scripts.build_case_evidence_scorecard import score_row, training_eligibility
 
 
 def test_study_anchor_with_independent_evidence_gets_anchor_tier():
@@ -33,3 +33,29 @@ def test_warning_only_without_independent_support_stays_review_class():
     })
     assert points <= 2
     assert tier == 'D_review_only'
+
+
+def test_training_eligibility_requires_surface_and_radar_evidence():
+    row={
+        'verification_class':'study_verified',
+        'surface_timing_consistent':True,
+        'observation_count':5,
+        'radar_scan_count':10,
+        'verification_points':7,
+    }
+    eligible,reason=training_eligibility(row)
+    assert eligible
+    assert 'documented_source' not in reason
+
+
+def test_documented_warning_without_surface_timing_is_not_hard_positive():
+    row={
+        'verification_class':'official_plus_warning_verified',
+        'surface_timing_consistent':False,
+        'observation_count':8,
+        'radar_scan_count':25,
+        'verification_points':9,
+    }
+    eligible,reason=training_eligibility(row)
+    assert not eligible
+    assert 'surface_timing_missing_or_inconsistent' in reason
