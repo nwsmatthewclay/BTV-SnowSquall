@@ -48,6 +48,7 @@ def replay_case(input_dir: Path, output_dir: Path, state_path: Path, case_id: st
                 history_jsonl_path=history_jsonl,
                 history_csv_path=history_csv,
                 model_dir=model_dir,
+                research_replay=(model_dir is not None),
             )
         except Exception as exc:
             errors.append({"sequence":index,"source_file":source.name,"error_type":type(exc).__name__,"error_message":str(exc)})
