@@ -1,4 +1,4 @@
-"""Score candidate snow-squall models on an independent validation population."""
+""""Score candidate snow-squall models on an independent validation population."""
 from __future__ import annotations
 
 import argparse
@@ -35,7 +35,22 @@ def score_one(features: pd.DataFrame, model_dir: Path, target: str):
         "average_precision": float(average_precision_score(y, p)) if y.sum() > 0 else None,
         "brier_score": float(brier_score_loss(y, p)) if len(y) else None,
         "prediction_mean": float(p.mean()) if len(p) else None,
+        "climatology_brier_score": None,
+        "brier_skill_vs_climatology": None,
+        "expected_calibration_error": None,
     }
+    if len(y):
+        climatology = float(y.mean())
+        metrics["climatology_brier_score"] = float(brier_score_loss(y, pd.Series(climatology, index=y.index)))
+        if metrics["climatology_brier_score"] > 0:
+            metrics["brier_skill_vs_climatology"] = 1.0 - metrics["brier_score"] / metrics["climatology_brier_score"]
+        edges = [i / 10.0 for i in range(11)]
+        ece = 0.0
+        for left, right in zip(edges[:-1], edges[1:]):
+            in_bin = (p >= left) & ((p < right) if right < 1 else (p <= right))
+            if in_bin.any():
+                ece += float(in_bin.mean()) * abs(float(p[in_bin].mean()) - float(y[in_bin].mean()))
+        metrics["expected_calibration_error"] = float(ece)
     return probabilities, metrics
 
 
