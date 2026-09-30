@@ -1,0 +1,61 @@
+name: National SQW Radar Sample Controller
+
+on:
+  workflow_run:
+    workflows:
+      - National SQW Radar Sample
+    types:
+      - completed
+
+permissions:
+  actions: write
+  contents: read
+
+concurrency:
+  group: national-sqw-radar-sample-controller
+  cancel-in-progress: true
+
+jobs:
+  advance:
+    if: github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Download sample batch state
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          rm -rf state_artifact
+          gh run download "${{ github.event.workflow_run.id }}" \
+            --name national-sqw-radar-sample-state \
+            --dir state_artifact
+          test -s state_artifact/next_national_radar_sample_batch.json
+
+      - name: Advance bounded national sample series
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          s=json.loads(Path('state_artifact/next_national_radar_sample_batch.json').read_text())
+          no_new=s.get('batch_rows',{}).get('verified',0)==0 and s.get('batch_rows',{}).get('review',0)==0
+          exhausted=(s['next_verified_offset']>=s['max_automatic_verified'] and s['next_review_offset']>=s['max_automatic_review'])
+          print(json.dumps(s,indent=2))
+          if no_new or exhausted or not s.get('auto_continue',False):
+              raise SystemExit(0)
+          PY
+          verified_next="$(python -c 'import json; print(json.load(open("state_artifact/next_national_radar_sample_batch.json"))["next_verified_offset"])')"
+          review_next="$(python -c 'import json; print(json.load(open("state_artifact/next_national_radar_sample_batch.json"))["next_review_offset"])')"
+          max_verified="$(python -c 'import json; s=json.load(open("state_artifact/next_national_radar_sample_batch.json")); print(min(30, s["max_automatic_verified"]-int("'"$verified_next"'")))')"
+          max_review="$(python -c 'import json; s=json.load(open("state_artifact/next_national_radar_sample_batch.json")); print(min(15, s["max_automatic_review"]-int("'"$review_next"'")))')"
+          if [ "$max_verified" -le 0 ] && [ "$max_review" -le 0 ]; then exit 0; fi
+          gh workflow run "National SQW Radar Sample" \
+            --ref snow-squall-model-foundation \
+            -f verified_offset="$verified_next" \
+            -f review_offset="$review_next" \
+            -f max_verified="$max_verified" \
+            -f max_review="$max_review"
+          echo "Dispatched next national SQW radar sample: verified_offset=$verified_next review_offset=$review_next sizes=$max_verified/$max_review"
