@@ -75,6 +75,23 @@ def healthcheck(state_path: Path, geojson_path: Path, max_age_minutes: float = 1
     age_minutes = (now - last_scan).total_seconds() / 60.0
     features = geo.get("features", [])
     metadata = geo.get("metadata", {})
+    output_scan = parse_time(metadata["scan_time_utc"]) if metadata.get("scan_time_utc") else None
+
+    timestamp_coherent = (
+        output_scan is not None
+        and abs((last_scan - output_scan).total_seconds()) <= 120.0
+    )
+    object_timestamps_coherent = True
+    for feature in features:
+        raw = feature.get("properties", {}).get("timestamp")
+        try:
+            object_time = parse_time(raw)
+        except Exception:
+            object_timestamps_coherent = False
+            break
+        if output_scan is None or abs((object_time - output_scan).total_seconds()) > 120.0:
+            object_timestamps_coherent = False
+            break
 
     checks = {
         "state_present": bool(state.get("last_source")),
@@ -82,6 +99,8 @@ def healthcheck(state_path: Path, geojson_path: Path, max_age_minutes: float = 1
         "geojson_contract": geo.get("type") == "FeatureCollection",
         "object_count_matches": int(state.get("last_object_count", -1)) == len(features),
         "probability_disabled": metadata.get("probability_status") == "not_scored",
+        "scan_timestamp_coherent": timestamp_coherent,
+        "object_timestamps_coherent": object_timestamps_coherent,
         "fresh_within_threshold": age_minutes <= max_age_minutes,
     }
     healthy = all(checks.values())
@@ -90,6 +109,7 @@ def healthcheck(state_path: Path, geojson_path: Path, max_age_minutes: float = 1
         "status": "healthy" if healthy else "degraded",
         "checked_utc": now.isoformat(),
         "last_scan_time_utc": last_scan.isoformat(),
+        "output_scan_time_utc": output_scan.isoformat() if output_scan else None,
         "age_minutes": round(age_minutes, 2),
         "source_file": state.get("last_source"),
         "object_count": len(features),
