@@ -190,7 +190,7 @@ def acquire_cases(
             "cases": [],
         }
         output.parent.mkdir(parents=True, exist_ok=True)
-        pd.DataFrame().to_csv(output, index=False)
+        pd.DataFrame(columns=OUTPUT_COLUMNS).to_csv(output, index=False)
         status_output.parent.mkdir(parents=True, exist_ok=True)
         status_output.write_text(json.dumps(summary, indent=2) + "\n", encoding="utf-8")
         print(json.dumps(summary, indent=2))
@@ -219,7 +219,7 @@ def acquire_cases(
                 frames.append(frame)
             print(f"mPING {status['case_id']}: {status['status']} ({status['record_count']} reports)")
 
-    result = pd.concat(frames, ignore_index=True) if frames else pd.DataFrame()
+    result = pd.concat(frames, ignore_index=True) if frames else pd.DataFrame(columns=OUTPUT_COLUMNS)
     if not result.empty:
         result = result.drop_duplicates(["case_id", "mping_id"]).sort_values(["case_id", "obtime"]).reset_index(drop=True)
 
