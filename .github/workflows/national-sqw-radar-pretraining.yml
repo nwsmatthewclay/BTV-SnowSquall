@@ -17,7 +17,7 @@ on:
       max_manifest_rows:
         description: "Maximum covered warning/radar combinations to process"
         required: false
-        default: "40"
+        default: "45"
         type: string
 
 permissions:
@@ -201,5 +201,4 @@ jobs:
             data/manifests/national_sqw_pretraining
             data/derived/national_sqw_pretraining_*
             data/raw/national_sqw_pretraining_level2
-            data/derived/next_national_pretraining_batch.json
           if-no-files-found: error
