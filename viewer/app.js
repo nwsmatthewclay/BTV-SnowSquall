@@ -110,14 +110,17 @@ function renderProbabilityEvolution(){
     box.innerHTML="<div class='history-empty'>This track has no attached research score history.</div>";
     return;
   }
-  const W=330,H=150,P=24, max=1e-0;
+  const W=330,H=150,P=24;
+  const observed=points.flatMap(pt=>pt.values).filter(v=>Number.isFinite(v)&&v>=0);
+  const maxY=Math.min(1,Math.max(0.01,(Math.max(...observed)||0.01)*1.15));
   const xs=points.map((_,i)=>P+(points.length===1?0:i*(W-2*P)/(points.length-1)));
+  const yFor=v=>(H-P)-Math.min(maxY,Math.max(0,v))/maxY*(H-2*P);
   const pathFor=idx=>{
     const valid=points.map((pt,i)=>({v:pt.values[idx],i})).filter(x=>Number.isFinite(x.v));
     if(!valid.length)return "";
     return valid.map((x,n)=>{
-      const xx=xs[x.i], yy=(H-P)-Math.min(1,Math.max(0,x.v))*(H-2*P);
-      return (n?"L":"M")+xx.toFixed(1)+" "+yy.toFixed(1);
+      const yy=yFor(x.v);
+      return (n?"L":"M")+xs[x.i].toFixed(1)+" "+yy.toFixed(1);
     }).join(" ");
   };
   const latest=points[points.length-1]?.values||[];
@@ -125,8 +128,8 @@ function renderProbabilityEvolution(){
   const svg="<svg class='prob-chart' viewBox='0 0 "+W+" "+H+"' role='img' aria-label='Research probability evolution'>"+
     "<line x1='"+P+"' y1='"+(H-P)+"' x2='"+(W-P)+"' y2='"+(H-P)+"' class='chart-axis'/>"+
     "<line x1='"+P+"' y1='"+P+"' x2='"+P+"' y2='"+(H-P)+"' class='chart-axis'/>"+
-    "<text x='"+(P-4)+"' y='"+(P+3)+"' text-anchor='end' class='chart-label'>100%</text>"+
-    "<text x='"+(P-4)+"' y='"+((H/2)+3)+"' text-anchor='end' class='chart-label'>50%</text>"+
+    "<text x='"+(P-4)+"' y='"+(P+3)+"' text-anchor='end' class='chart-label'>"+(maxY*100).toFixed(1)+"%</text>"+
+    "<text x='"+(P-4)+"' y='"+((H/2)+3)+"' text-anchor='end' class='chart-label'>"+(maxY*50).toFixed(1)+"%</text>"+
     "<text x='"+(P-4)+"' y='"+(H- P +3)+"' text-anchor='end' class='chart-label'>0%</text>"+
     [0,1,2,3].map(i=>{
       const path=pathFor(i);
@@ -135,7 +138,7 @@ function renderProbabilityEvolution(){
     (points.map((pt,i)=>{
       return pt.values.map((v,j)=>{
         if(!Number.isFinite(v))return "";
-        const yy=(H-P)-Math.min(1,Math.max(0,v))*(H-2*P);
+        const yy=yFor(v);
         return "<circle cx='"+xs[i].toFixed(1)+"' cy='"+yy.toFixed(1)+"' r='2.5' fill='"+glyphs[j]+"'/>";
       }).join("");
     }).join(""))+
