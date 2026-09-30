@@ -18,6 +18,7 @@ THRESHOLDS=(0.10,0.20,0.30,0.50)
 def score_case(case_row, objects, model_root: Path):
     case_id=str(case_row['case_id'])
     anchor=pd.to_datetime(case_row['event_start_utc'],utc=True,errors='coerce')
+    anchor_source=str(case_row.get('anchor_source','unspecified'))
     start=pd.to_datetime(case_row['analysis_window_start_utc'],utc=True,errors='coerce')
     end=pd.to_datetime(case_row['analysis_window_end_utc'],utc=True,errors='coerce')
     case_objects=objects[objects['case_id'].astype(str).eq(case_id)].copy()
@@ -54,7 +55,7 @@ def score_case(case_row, objects, model_root: Path):
                 hits=[t for t,p in vals if p>=threshold and pd.notna(anchor) and t<=anchor]
                 crosses[str(threshold)]=hits[0].isoformat() if hits else None
             first_cross[str(h)]=crosses
-        results.append({'case_id':case_id,'object_id':str(track_id),'anchor_utc':anchor.isoformat() if pd.notna(anchor) else None,'analysis_window_start_utc':start.isoformat() if pd.notna(start) else None,'analysis_window_end_utc':end.isoformat() if pd.notna(end) else None,'national_pretraining':national_prior_status,'max_probability_in_window':max_in_window,'max_probability_pre_anchor':max_pre,'first_threshold_crossing_before_anchor':first_cross})
+        results.append({'case_id':case_id,'object_id':str(track_id),'anchor_utc':anchor.isoformat() if pd.notna(anchor) else None,'anchor_source':anchor_source,'analysis_window_start_utc':start.isoformat() if pd.notna(start) else None,'analysis_window_end_utc':end.isoformat() if pd.notna(end) else None,'national_pretraining':national_prior_status,'max_probability_in_window':max_in_window,'max_probability_pre_anchor':max_pre,'first_threshold_crossing_before_anchor':first_cross})
     return results
 
 def main():
