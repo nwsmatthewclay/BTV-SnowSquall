@@ -70,10 +70,8 @@ jobs:
             gh api "/repos/${GITHUB_REPOSITORY}/actions/runs?branch=snow-squall-model-foundation&per_page=100" |
             jq -c '[.workflow_runs[]
               | select(.name=="Snow Squall Expansion Dataset" or .name=="Object Dataset Full Expansion" or .name=="Object Dataset Pilot")
-              | select(.status=="completed" and .conclusion=="success")
-              | sort_by(.id) | reverse
-              | .[]
-            ]'
+              | select(.status=="completed" and .conclusion=="success")]
+              | sort_by(.id) | reverse | .[]'
           )
 
           test -n "${selected}"
@@ -109,8 +107,7 @@ jobs:
             jq -c '[.workflow_runs[]
               | select(.name=="Modern Independent Validation")
               | select(.status=="completed" and .conclusion=="success")]
-              | sort_by(.id) | reverse | .[]
-            ]'
+              | sort_by(.id) | reverse | .[]'
           )
           test -n "${selected}"
           run_id=$(printf '%s' "${selected}" | jq -r '.id')
