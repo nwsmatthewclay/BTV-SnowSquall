@@ -1,0 +1,204 @@
+name: Snow Squall Multi-Event Candidate Replay
+
+on:
+  workflow_run:
+    workflows:
+      - Reconstruct Modern Candidate Cohort
+    types:
+      - completed
+
+permissions:
+  actions: read
+  contents: read
+
+concurrency:
+  group: snow-squall-multi-event-candidate-replay
+  cancel-in-progress: false
+
+jobs:
+  replay:
+    if: github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    env:
+      PYTHONPATH: ${{ github.workspace }}
+      PYTHONUNBUFFERED: "1"
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    steps:
+      - name: Checkout model foundation
+        uses: actions/checkout@v4
+        with:
+          ref: snow-squall-model-foundation
+
+      - name: Download modern candidate reconstruction
+        uses: actions/download-artifact@v4
+        with:
+          name: modern-candidate-reconstruction
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          repository: ${{ github.repository }}
+          run-id: ${{ github.event.workflow_run.id }}
+          path: candidate_reconstruction
+
+      - name: Resolve latest successful candidate model bundle
+        id: model
+        shell: bash
+        run: |
+          set -euo pipefail
+          selected=""
+          while IFS= read -r run; do
+            run_id="$(printf '%s' "${run}" | jq -r '.id')"
+            artifacts="$(gh api "/repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}/artifacts?per_page=100")"
+            count="$(printf '%s' "${artifacts}" | jq '[.artifacts[] | select(.name=="snow-squall-live-model-bundles" and .expired==false)] | length')"
+            if [ "${count}" -gt 0 ]; then
+              selected="${run}"
+              break
+            fi
+          done < <(
+            gh api "/repos/${GITHUB_REPOSITORY}/actions/runs?branch=snow-squall-model-foundation&per_page=100" |
+            jq -c '[.workflow_runs[]
+              | select(.name=="Snow Squall Expansion Dataset"
+                  or .name=="Object Dataset Full Expansion"
+                  or .path==".github/workflows/snow-squall-expansion-dataset.yml"
+                  or .path==".github/workflows/object-dataset-full-expansion.yml")
+              | select(.status=="completed" and .conclusion=="success")]
+              | sort_by(.id) | reverse | .[]'
+          )
+          test -n "${selected}"
+          run_id="$(printf '%s' "${selected}" | jq -r '.id')"
+          echo "run_id=${run_id}" >> "${GITHUB_OUTPUT}"
+          echo "Using candidate model bundle run ${run_id}"
+
+      - name: Download candidate model bundle
+        run: |
+          set -euo pipefail
+          rm -rf model_bundle
+          gh run download "${{ steps.model.outputs.run_id }}"             --name snow-squall-live-model-bundles             --dir model_bundle
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install science dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt -r requirements-science.txt
+
+      - name: Build replay case selection
+        run: |
+          set -euo pipefail
+          manifest="candidate_reconstruction/data/derived/modern_candidate_reconstruction_manifest.csv"
+          test -f "${manifest}"
+          python - "${manifest}" <<'PY'
+          import pandas as pd
+          from pathlib import Path
+
+          src = Path(__import__("sys").argv[1])
+          df = pd.read_csv(src)
+          required = {"case_id", "radar_site", "window_start_utc", "window_end_utc"}
+          missing = sorted(required - set(df.columns))
+          if missing:
+              raise SystemExit(f"Manifest missing columns: {missing}")
+
+          df = df.drop_duplicates(["case_id", "radar_site"]).copy()
+          df["window_start_utc"] = pd.to_datetime(df["window_start_utc"], utc=True)
+          df["window_end_utc"] = pd.to_datetime(df["window_end_utc"], utc=True)
+          df["day"] = df["window_start_utc"].dt.strftime("%Y%m%d")
+
+          # Keep a bounded matrix so this is a repeatable laboratory run rather
+          # than an unbounded archive computation. Preserve chronological spread.
+          case_order = (
+              df.groupby("case_id", as_index=False)["window_start_utc"]
+                .min()
+                .sort_values("window_start_utc")
+          )
+          chosen_cases = case_order.head(8)["case_id"].tolist()
+          selected = df[df["case_id"].isin(chosen_cases)].copy()
+          selected = selected.sort_values(["window_start_utc", "case_id", "radar_site"])
+          selected.to_csv("replay_case_matrix.csv", index=False)
+          print("Selected cases:", chosen_cases)
+          print(selected.to_string(index=False))
+          if selected.empty:
+              raise SystemExit("No replay cases selected.")
+          PY
+
+      - name: Replay selected cases through all four horizons
+        run: |
+          set -euo pipefail
+          rm -rf multi_event_replay
+          mkdir -p multi_event_replay
+          while IFS=, read -r case_id radar_site window_start_utc window_end_utc day rest; do
+            [ "${case_id}" = "case_id" ] && continue
+            input_dir="candidate_reconstruction/data/raw/modern_candidate_level2/${radar_site}/${day}"
+            test -d "${input_dir}"
+            for horizon in 15 30 45 60; do
+              output_dir="multi_event_replay/${case_id}/${radar_site}/${horizon}m"
+              mkdir -p "${output_dir}"
+              python scripts/historical_operational_replay.py                 --case-id "${case_id}_${radar_site}"                 --input-dir "${input_dir}"                 --output-dir "${output_dir}"                 --state-path "${output_dir}/replay_state.json"                 --continue-on-error                 --window-start-utc "${window_start_utc}"                 --window-end-utc "${window_end_utc}"                 --model-dir "model_bundle/candidate_ensemble_expansion_${horizon}m"
+            done
+          done < replay_case_matrix.csv
+
+      - name: Aggregate multi-event replay diagnostics
+        run: |
+          python - <<'PY'
+          import json
+          import math
+          from pathlib import Path
+          import pandas as pd
+
+          rows = []
+          for manifest in sorted(Path("multi_event_replay").glob("*/*/*m/replay_manifest.json")):
+              data = json.loads(manifest.read_text(encoding="utf-8"))
+              horizon = manifest.parent.name
+              radar = manifest.parent.parent.name
+              case_id = manifest.parent.parent.parent.name
+              values = []
+              for rec in data.get("records") or data.get("timeline") or []:
+                  if isinstance(rec, dict):
+                      for key in ("probability", "cumulative_probability", "cumulative_prob"):
+                          value = rec.get(key)
+                          if isinstance(value, (int, float)) and math.isfinite(value):
+                              values.append(float(value))
+                              break
+                      for key in ("probability", "cumulative_probability", "cumulative_prob"):
+                          nested = rec.get("probabilities") or rec.get("cumulative_probabilities") or {}
+                          value = nested.get(key) if isinstance(nested, dict) else None
+                          if isinstance(value, (int, float)) and math.isfinite(value):
+                              values.append(float(value))
+                              break
+              rows.append({
+                  "case_id": case_id,
+                  "radar_site": radar,
+                  "horizon": horizon,
+                  "scan_count": data.get("scan_count"),
+                  "object_scan_count": data.get("object_scan_count"),
+                  "failed_scans": data.get("failed_scan_count"),
+                  "probability_status": data.get("probability_status"),
+                  "max_probability_observed": max(values) if values else None,
+                  "finite_probability_records": len(values),
+              })
+
+          out = pd.DataFrame(rows)
+          if out.empty:
+              raise SystemExit("No replay diagnostics were produced.")
+          out.to_csv("multi_event_replay_summary.csv", index=False)
+          out.to_json("multi_event_replay_summary.json", orient="records", indent=2)
+          print(out.to_string(index=False))
+          PY
+
+      - name: Audit multi-event replay
+        run: |
+          set -euo pipefail
+          python scripts/audit_candidate_replay.py multi_event_replay
+
+      - name: Upload multi-event replay package
+        uses: actions/upload-artifact@v4
+        with:
+          name: snow-squall-multi-event-candidate-replay
+          retention-days: 30
+          path: |
+            replay_case_matrix.csv
+            multi_event_replay_summary.csv
+            multi_event_replay_summary.json
+            multi_event_replay
