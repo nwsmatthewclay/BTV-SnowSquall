@@ -247,3 +247,28 @@ def test_resume_rejects_noncontiguous_outputs(tmp_path):
         )
     with pytest.raises(ValueError, match="contiguous prefix"):
         replay.replay_case(input_dir, out, tmp_path/"state.json", "CASE", resume=True)
+
+
+def test_replay_accepts_subsecond_output_timestamp_within_source_precision(tmp_path, monkeypatch):
+    from scripts import historical_operational_replay as replay
+
+    source = tmp_path / "KCXX20191218_224000_V06"
+    source.write_bytes(b"placeholder")
+
+    def fake_process(source, state_path, output_path, history_jsonl_path=None, history_csv_path=None, model_dir=None, research_replay=False):
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path.write_text(
+            '{"metadata":{"scan_time_utc":"2019-12-18T22:40:00.549000Z","object_count":1}}',
+            encoding="utf-8",
+        )
+        return True
+
+    monkeypatch.setattr(replay, "process_volume", fake_process)
+    result = replay.replay_case(
+        tmp_path,
+        tmp_path / "out",
+        tmp_path / "state.json",
+        "CASE",
+    )
+    assert result["successful_scan_count"] == 1
+    assert result["records"][0]["scan_time_utc"] == "2019-12-18T22:40:00Z"
