@@ -47,10 +47,22 @@ jobs:
             -f unverified_offset=0 \
             -f max_official=30 \
             -f max_unverified=15
+          found=""
+          for i in 1 2 3 4 5 6; do
+            sleep 10
+            found="$(gh run list --repo "$REPOSITORY" --workflow snow-squall-expansion-dataset.yml --branch snow-squall-model-foundation --limit 5 --json databaseId,status,conclusion,headBranch,url --jq '.[] | select(.status=="queued" or .status=="in_progress") | [.databaseId,.status,.conclusion,.headBranch,.url] | @tsv' | head -n 1 || true)"
+            if [ -n "$found" ]; then
+              echo "Target workflow observed: $found"
+              break
+            fi
+          done
+          export TARGET_RUN_OBSERVED="$found"
           python - <<'PY'
           import json
           p=json.load(open("bootstrap_launch.json"))
           p["status"]="dispatch_command_succeeded"
+          p["target_run_observed"] = bool(os.environ.get("TARGET_RUN_OBSERVED"))
+          p["target_run_observation"] = os.environ.get("TARGET_RUN_OBSERVED","")
           open("bootstrap_launch.json","w").write(json.dumps(p,indent=2)+"\n")
           PY
       - name: Upload bootstrap heartbeat
