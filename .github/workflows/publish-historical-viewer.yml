@@ -82,15 +82,31 @@ jobs:
           echo "workflow_name=${NAME}" >> "${GITHUB_OUTPUT}"
           echo "skip=false" >> "${GITHUB_OUTPUT}"
 
-      - name: Download dataset artifact
+      - name: Download historical viewer data
         if: steps.source.outputs.skip != 'true'
-        uses: actions/download-artifact@v4
-        with:
-          name: ${{ (steps.source.outputs.workflow_name == 'Object Dataset Full Expansion' || steps.source.outputs.workflow_name == '.github/workflows/snow-squall-expansion-dataset.yml' || steps.source.outputs.workflow_name == 'Snow Squall Expansion Dataset') && 'object-population-expansion' || 'object-population-pilot' }}
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          repository: ${{ github.repository }}
-          run-id: ${{ steps.source.outputs.run_id }}
-          path: dataset_artifact
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SOURCE_RUN_ID: ${{ steps.source.outputs.run_id }}
+          WORKFLOW_NAME: ${{ steps.source.outputs.workflow_name }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf dataset_artifact
+          mkdir -p dataset_artifact
+
+          ARTIFACT_NAME="object-population-pilot"
+          if [ "${WORKFLOW_NAME}" = "Object Dataset Full Expansion" ] || [ "${WORKFLOW_NAME}" = ".github/workflows/snow-squall-expansion-dataset.yml" ] || [ "${WORKFLOW_NAME}" = "Snow Squall Expansion Dataset" ]; then
+            ARTIFACT_NAME="object-population-expansion"
+          fi
+
+          if gh run download "${SOURCE_RUN_ID}" --name "${ARTIFACT_NAME}" --dir dataset_artifact; then
+            echo "Using dataset artifact ${ARTIFACT_NAME} from run ${SOURCE_RUN_ID}."
+          else
+            echo "Dataset artifact ${ARTIFACT_NAME} is unavailable; falling back to the pinned BTV20181121 archived replay package."
+            rm -rf dataset_artifact/*
+            gh run download 36776081094 --name snow-squall-archived-replay-viewer --dir dataset_artifact
+            echo "Using pinned benchmark replay package from archived replay smoke run 9."
+          fi
 
       - name: Assemble viewer site
         if: steps.source.outputs.skip != 'true'
