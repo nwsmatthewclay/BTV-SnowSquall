@@ -1,0 +1,102 @@
+name: Historical Benchmark Replay
+
+on:
+  workflow_dispatch:
+    inputs:
+      case_id:
+        description: "Research-confirmed historical case ID from case_manifest.csv"
+        required: true
+        default: "SQCL-2002-03-23-KBTV"
+      pre_min:
+        description: "Minutes before documented onset"
+        required: true
+        default: "60"
+      post_min:
+        description: "Minutes after documented onset"
+        required: true
+        default: "90"
+
+permissions:
+  contents: read
+
+jobs:
+  replay:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    env:
+      PYTHONPATH: ${{github.workspace }}
+      PYTHONUNBUFFERED: "1"
+
+    steps:
+      - name: Checkout model foundation
+        uses: actions/checkout@v4
+        with:
+          ref: snow-squall-model-foundation
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install science dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt -r requirements-science.txt
+
+      - name: Download historical Level-II volumes
+        run: |
+          python acquisition/historical_download.py \
+            --case-id "${{inputs.case_id }}" \
+            --pre-min "${{inputs.pre_min }}" \
+            --post-min "${{inputs.post_min }}" \
+            --radars KCXX KTYX
+
+      - name: Reconstruct historical radar objects
+        run: |
+          python scripts/reconstruct_pilot.py \
+            --input data/raw \
+            --output "data/derived/${{inputs.case_id }}_object_scans.csv" \
+            --error-log "data/derived/${{inputs.case_id }}_object_errors.csv"
+
+      - name: Summarize replay acquisition
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          import pandas as pd
+
+          case="${{inputs.case_id }}"
+          inventory=Path("data/derived") / f"{case}_radar_inventory.csv"
+          objects=Path("data/derived") / f"{case}_object_scans.csv"
+          errors=Path("data/derived") / f"{case}_object_errors.csv"
+
+          inv=pd.read_csv(inventory) if inventory.exists() else pd.DataFrame()
+          obj=pd.read_csv(objects) if objects.exists() else pd.DataFrame()
+          err=pd.read_csv(errors) if errors.exists() else pd.DataFrame()
+
+          summary={
+              "case_id":case,
+              "level2_volumes":int(len(inv)),
+              "object_scan_records":int(len(obj)),
+              "unique_tracks":int(obj["object_id"].nunique()) if "object_id" in obj else 0,
+              "failed_volumes":int(len(err)),
+              "radars":sorted(inv["radar"].dropna().unique().tolist()) if "radar" in inv else [],
+          }
+          Path("data/derived").joinpath(f"{case}_replay_summary.json").write_text(
+              json.dumps(summary,indent=2)+"\n"
+          )
+          print(summary)
+          PY
+
+      - name: Upload historical replay package
+        uses: actions/upload-artifact@v4
+        with:
+          name: historical-benchmark-replay-${{inputs.case_id }}
+          retention-days: 14
+          path: |
+            data/derived/${{inputs.case_id }}_radar_inventory.csv
+            data/derived/${{inputs.case_id }}_object_scans.csv
+            data/derived/${{inputs.case_id }}_object_errors.csv
+            data/derived/${{inputs.case_id }}_replay_summary.json
+            data/raw/KCXX/${{inputs.case_id }}
+            data/raw/KTYX/${{inputs.case_id }}
