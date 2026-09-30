@@ -68,6 +68,10 @@ def enrich(input_csv: Path, output_csv: Path, cases_csv: Path, rap_dir: Path, ru
             "case_peak_wind_kt": None,
             "case_min_visibility_km": None,
             "case_hybrid": None,
+            "case_lat": None,
+            "case_lon": None,
+            "case_coordinate_source": None,
+            "case_coordinate_precision": None,
             "case_time_relation": "unmatched",
             "case_assignment_method": assignment_method,
         })
@@ -82,6 +86,10 @@ def enrich(input_csv: Path, output_csv: Path, cases_csv: Path, rap_dir: Path, ru
                 "case_peak_wind_kt": case["peak_wind_kt"],
                 "case_min_visibility_km": case["min_visibility_km"],
                 "case_hybrid": bool(case["hybrid_case"]),
+                "case_lat": case.get("lat"),
+                "case_lon": case.get("lon"),
+                "case_coordinate_source": case.get("coordinate_source"),
+                "case_coordinate_precision": case.get("coordinate_precision"),
                 "case_time_relation": (
                     "at_or_near_verified_onset"
                     if abs((scan_time - case["event_start_dt"]).total_seconds()) <= 30 * 60
