@@ -42,8 +42,17 @@ def score_one(features: pd.DataFrame, model_dir: Path, target: str):
         if column not in frame.columns:
             frame[column] = float("nan")
     probabilities = runtime.score_candidate(frame)
-    y = pd.to_numeric(features[target], errors='coerce')
     p = pd.Series(probabilities, index=features.index, dtype='float64')
+    if target not in features.columns:
+        return probabilities, {
+            "status": "unscored_no_observed_target",
+            "evaluated_rows": 0,
+            "positive_rows": 0,
+            "negative_rows": 0,
+            "prediction_mean": float(p.mean()) if len(p) else None,
+            "note": f"Independent validation inventory intentionally contains no future outcome column: {target}",
+        }
+    y = pd.to_numeric(features[target], errors='coerce')
     mask = y.notna() & p.notna()
     y = y.loc[mask].astype(int)
     p = p.loc[mask]
