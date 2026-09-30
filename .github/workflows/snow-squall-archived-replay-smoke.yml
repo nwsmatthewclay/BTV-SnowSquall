@@ -187,7 +187,9 @@ jobs:
 
       - name: Merge four-horizon replay score timeline
         run: |
-          python scripts/merge_replay_horizon_scores.py             replay             --output replay/score_timeline.json
+          python scripts/merge_replay_horizon_scores.py \
+            replay \
+            --output replay/score_timeline.json
 
       - name: Build compatibility schema from 15-minute model
         run: |
@@ -213,7 +215,10 @@ jobs:
 
       - name: Build viewer-ready replay case
         run: |
-          python scripts/build_replay_viewer_case.py             --base-dir replay/15m             --timeline replay/score_timeline.json             --output replay/viewer_case.geojson
+          python scripts/build_replay_viewer_case.py \
+            --base-dir replay/15m \
+            --timeline replay/score_timeline.json \
+            --output replay/viewer_case.geojson
 
       - name: Upload replay smoke package
         uses: actions/upload-artifact@v4
