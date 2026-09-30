@@ -36,7 +36,7 @@ on:
 
 
 permissions:
-  actions: read
+  actions: write
   contents: read
 
 concurrency:
@@ -614,6 +614,44 @@ jobs:
             data/derived/snow_squall_live_model_compatibility.json
             data/derived/snow_squall_expansion_provenance.json
             data/derived/national_sqw_weak_model_*m
+
+      - name: Advance automatic expansion batch
+        if: success()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          s=json.loads(Path('data/derived/next_expansion_batch.json').read_text())
+          if not s.get('auto_continue'):
+              print('Automatic continuation disabled.')
+              raise SystemExit(0)
+          batch=s.get('batch_rows') or {}
+          if int(batch.get('official',0)) == 0 and int(batch.get('review',0)) == 0:
+              print('No new cases in this batch; automatic expansion stops.')
+              raise SystemExit(0)
+          if int(s['next_official_offset']) >= int(s['max_automatic_official']) and int(s['next_unverified_offset']) >= int(s['max_automatic_unverified']):
+              print('Automatic expansion cap reached; stopping.')
+              raise SystemExit(0)
+          print(json.dumps(s, indent=2))
+          PY
+          official_next="$(python -c 'import json; s=json.load(open("data/derived/next_expansion_batch.json")); print(s["next_official_offset"])')"
+          review_next="$(python -c 'import json; s=json.load(open("data/derived/next_expansion_batch.json")); print(s["next_unverified_offset"])')"
+          max_official="$(python -c 'import json; s=json.load(open("data/derived/next_expansion_batch.json")); print(min(30, max(0, int(s["max_automatic_official"])-int(s["next_official_offset"]))))')"
+          max_review="$(python -c 'import json; s=json.load(open("data/derived/next_expansion_batch.json")); print(min(15, max(0, int(s["max_automatic_unverified"])-int(s["next_unverified_offset"]))))')"
+          if [ "$max_official" -le 0 ] && [ "$max_review" -le 0 ]; then
+            echo 'No remaining automatic capacity.'
+            exit 0
+          fi
+          gh workflow run "Snow Squall Expansion Dataset" \
+            --ref snow-squall-model-foundation \
+            -f official_offset="$official_next" \
+            -f unverified_offset="$review_next" \
+            -f max_official="$max_official" \
+            -f max_unverified="$max_review"
+          echo "Dispatched next automatic expansion batch: official=$official_next review=$review_next sizes=$max_official/$max_review"
 
       - name: Upload expanded research package
         uses: actions/upload-artifact@v4
