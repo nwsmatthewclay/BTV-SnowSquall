@@ -102,6 +102,69 @@ def build_snsq_profile(
             delta = float(thetae_2km - thetae_surface)
         except Exception:
             return {"snsq":None,"mean_rh_0_2km_pct":mean_rh,"thetae_delta_0_2km_k":None,"mean_wind_0_2km_ms":mean_wind,"wetbulb_2m_c":wetbulb_2m_c}
+    # Penn State Schneider et al. (2024) cloud-layer diagnostic:
+    # cloud-layer top is the height where theta-e becomes 2 K greater
+    # than the surface value. This is calculated from the same current
+    # RAP profile and therefore remains safe for live use.
+    cloud_layer_depth_m = None
+    cloud_layer_rh_pct = None
+    cloud_layer_mean_wind_ms = None
+    cloud_layer_shear_ms = None
+    try:
+        from metpy.calc import equivalent_potential_temperature
+        from metpy.units import units
+        thetae_profile = equivalent_potential_temperature(
+            pressure_hpa * units.hPa,
+            temperature_k * units.kelvin,
+            dewpoint_k * units.kelvin,
+        ).to('kelvin').magnitude
+        surface_thetae = equivalent_potential_temperature(
+            float(surface_pressure_hpa) * units.hPa,
+            float(surface_temperature_k) * units.kelvin,
+            float(surface_dewpoint_k) * units.kelvin,
+        ).to('kelvin').magnitude
+        target_thetae = float(surface_thetae) + 2.0
+        order = np.argsort(heights_m)
+        h = heights_m[order]
+        th = np.asarray(thetae_profile)[order]
+        rh_sorted = rh_pct[order]
+        u_sorted = u_ms[order]
+        v_sorted = v_ms[order]
+        crossings = np.where((th[:-1] - target_thetae) * (th[1:] - target_thetae) <= 0)[0]
+        if crossings.size:
+            idx = int(crossings[0])
+            h0, h1 = float(h[idx]), float(h[idx + 1])
+            th0, th1 = float(th[idx]), float(th[idx + 1])
+            if h1 > h0 and th1 != th0:
+                top = h0 + (target_thetae - th0) * (h1 - h0) / (th1 - th0)
+            else:
+                top = h1
+            if top > 0:
+                cloud_layer_depth_m = float(top)
+                layer_mask = h <= top
+                layer_h = np.concatenate([h[layer_mask], [top]])
+                layer_rh = np.concatenate([rh_sorted[layer_mask], [np.interp(top, h, rh_sorted)]])
+                layer_u = np.concatenate([u_sorted[layer_mask], [np.interp(top, h, u_sorted)]])
+                layer_v = np.concatenate([v_sorted[layer_mask], [np.interp(top, h, v_sorted)]])
+                cloud_layer_rh_pct = _height_weighted_mean(layer_h, layer_rh)
+                cloud_layer_mean_wind_ms = _height_weighted_mean(layer_h, np.hypot(layer_u, layer_v))
+                top_u = float(layer_u[-1])
+                top_v = float(layer_v[-1])
+                surface_u = float(u_sorted[0])
+                surface_v = float(v_sorted[0])
+                cloud_layer_shear_ms = float(np.hypot(top_u - surface_u, top_v - surface_v))
+    except Exception:
+        pass
+
     result=snow_squall_parameter(mean_rh,delta,mean_wind,wetbulb_2m_c=wetbulb_2m_c)
-    result.update({'mean_rh_0_2km_pct':float(mean_rh),'thetae_delta_0_2km_k':delta,'mean_wind_0_2km_ms':float(mean_wind),'wetbulb_2m_c':wetbulb_2m_c})
+    result.update({
+        'mean_rh_0_2km_pct':float(mean_rh),
+        'thetae_delta_0_2km_k':delta,
+        'mean_wind_0_2km_ms':float(mean_wind),
+        'wetbulb_2m_c':wetbulb_2m_c,
+        'cloud_layer_depth_m':cloud_layer_depth_m,
+        'cloud_layer_rh_pct':cloud_layer_rh_pct,
+        'cloud_layer_mean_wind_ms':cloud_layer_mean_wind_ms,
+        'cloud_layer_shear_ms':cloud_layer_shear_ms,
+    })
     return result
