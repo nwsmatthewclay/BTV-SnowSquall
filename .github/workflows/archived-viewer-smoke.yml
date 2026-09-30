@@ -5,7 +5,7 @@ on:
     branches:
       - snow-squall-model-foundation
     paths:
-      - .github/workflows/archived-viewer-smoke.yml
+      - .github/archived-viewer-trigger
   workflow_dispatch:
     inputs:
       case_id:
