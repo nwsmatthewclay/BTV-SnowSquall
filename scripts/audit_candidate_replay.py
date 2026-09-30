@@ -16,6 +16,11 @@ def audit_horizon(root: Path, horizon: int) -> dict:
         raise ValueError(f"{horizon}m: no successful scans")
     if manifest.get("failed_scan_count", 0) != 0:
         raise ValueError(f"{horizon}m: replay contains failed scans")
+    if manifest.get("continuity_broken"):
+        raise ValueError(f"{horizon}m: replay continuity is broken")
+    causality = manifest.get("causality_audit") or {}
+    if causality.get("continuity_broken"):
+        raise ValueError(f"{horizon}m: causality audit reports broken continuity")
 
     expected_field = f"probability_{horizon}min"
     wrong_fields = {f"probability_{h}min" for h in (15, 30, 45, 60) if h != horizon}
