@@ -272,6 +272,41 @@ jobs:
             --output data/derived/snow_squall_model_features_expanded.csv \
             --schema-output data/derived/snow_squall_model_features_expanded.schema.json
 
+      - name: Locate latest national radar pretraining pool
+        id: national
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          run_id="$(gh run list --workflow "National SQW Radar Pretraining Pool" --branch snow-squall-model-foundation --status success --limit 1 --json databaseId --jq '.[0].databaseId')"
+          if [ -n "$run_id" ] && [ "$run_id" != "null" ]; then
+            gh run download "$run_id" --name national-sqw-radar-pretraining-pool --dir national_pretrain_artifact || true
+          fi
+          root=""
+          if [ -d national_pretrain_artifact ]; then
+            root="$(find national_pretrain_artifact -type d -name 'national_sqw_weak_model_15m' -print -quit | xargs -r dirname)"
+          fi
+          echo "root=$root" >> "$GITHUB_OUTPUT"
+          echo "National pretraining root: ${root:-none}"
+
+      - name: Add national BTV-excluded radar prior features
+        run: |
+          set -euo pipefail
+          input=data/derived/snow_squall_model_features_expanded.csv
+          output=data/derived/snow_squall_model_features_expanded_augmented.csv
+          summary=data/derived/snow_squall_national_pretraining_feature_summary.json
+          if [ -n "${{ steps.national.outputs.root }}" ]; then
+            python scripts/add_national_pretraining_features.py \
+              --features "$input" \
+              --model-root "${{ steps.national.outputs.root }}" \
+              --output "$output" \
+              --summary "$summary" \
+              --schema data/derived/snow_squall_model_features_expanded.schema.json
+          else
+            cp "$input" "$output"
+            printf '%s\n' '{"status":"national_pretraining_not_available"}' > "$summary"
+          fi
+          echo "Augmented feature file: $output"
       - name: Audit expanded model feature policy
         run: |
           python - <<'PY'
@@ -288,7 +323,7 @@ jobs:
         run: |
           for h in 15 30 45 60; do
             python scripts/train_baseline_model.py \
-              data/derived/snow_squall_model_features_expanded.csv \
+              data/derived/snow_squall_model_features_expanded_augmented.csv \
               --schema data/derived/snow_squall_model_features_expanded.schema.json \
               --target squall_onset_within_${h}m \
               --output-dir data/derived/baseline_expansion_${h}m
