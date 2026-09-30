@@ -49,8 +49,12 @@ jobs:
           PY
           verified_next="$(python -c 'import json; print(json.load(open("state_artifact/next_national_radar_sample_batch.json"))["next_verified_offset"])')"
           review_next="$(python -c 'import json; print(json.load(open("state_artifact/next_national_radar_sample_batch.json"))["next_review_offset"])')"
-          max_verified="$(python -c 'import json; s=json.load(open("state_artifact/next_national_radar_sample_batch.json")); print(min(30, s["max_automatic_verified"]-int("'"$verified_next"'")))')"
-          max_review="$(python -c 'import json; s=json.load(open("state_artifact/next_national_radar_sample_batch.json")); print(min(15, s["max_automatic_review"]-int("'"$review_next"'")))')"
+          max_verified_remaining="$(python -c 'import json; print(json.load(open("state_artifact/next_national_radar_sample_batch.json"))["max_automatic_verified"])'")
+          max_review_remaining="$(python -c 'import json; print(json.load(open("state_artifact/next_national_radar_sample_batch.json"))["max_automatic_review"])'")
+          max_verified=$(( max_verified_remaining - verified_next ))
+          max_review=$(( max_review_remaining - review_next ))
+          [ "$max_verified" -gt 30 ] && max_verified=30
+          [ "$max_review" -gt 15 ] && max_review=15
           if [ "$max_verified" -le 0 ] && [ "$max_review" -le 0 ]; then exit 0; fi
           gh workflow run "National SQW Radar Sample" \
             --ref snow-squall-model-foundation \
