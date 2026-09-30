@@ -115,28 +115,35 @@ def replay_case(input_dir: Path, output_dir: Path, state_path: Path, case_id: st
         output=output_dir/f"{index:04d}_{source.stem}.geojson"
         started=datetime.now(timezone.utc)
         expected_scan_time = iso_utc(scan_time(source).isoformat())
+
         if index <= resume_count:
             try:
                 payload=json.loads(output.read_text(encoding="utf-8"))
                 metadata=payload.get("metadata",{})
-            except (OSError, json.JSONDecodeError) as exc:
-                raise ValueError(f"Completed replay output is unreadable: {output}") from exc
-            actual_scan_time=metadata.get("scan_time_utc")
-            if actual_scan_time is None or iso_utc(actual_scan_time) != expected_scan_time:
-                raise ValueError(f"Completed replay output timestamp mismatch: {output}")
+                actual_scan_time=metadata.get("scan_time_utc")
+                if actual_scan_time is None or iso_utc(actual_scan_time) != expected_scan_time:
+                    raise ValueError(f"Completed replay output timestamp mismatch: {output}")
+            except (OSError, json.JSONDecodeError, TypeError, ValueError) as exc:
+                raise ValueError(f"Completed replay output is invalid: {output}") from exc
+            finished=started
         else:
             try:
                 process_volume(
-                source,
-                state_path,
-                output,
-                history_jsonl_path=history_jsonl,
-                history_csv_path=history_csv,
-                model_dir=model_dir,
-                research_replay=(model_dir is not None),
-            )
+                    source,
+                    state_path,
+                    output,
+                    history_jsonl_path=history_jsonl,
+                    history_csv_path=history_csv,
+                    model_dir=model_dir,
+                    research_replay=(model_dir is not None),
+                )
             except Exception as exc:
-                errors.append({"sequence":index,"source_file":source.name,"error_type":type(exc).__name__,"error_message":str(exc)})
+                errors.append({
+                    "sequence":index,
+                    "source_file":source.name,
+                    "error_type":type(exc).__name__,
+                    "error_message":str(exc),
+                })
                 print(f"REPLAY ERROR {source.name}: {type(exc).__name__}: {exc}")
                 if not continue_on_error:
                     raise
@@ -144,8 +151,7 @@ def replay_case(input_dir: Path, output_dir: Path, state_path: Path, case_id: st
             finished=datetime.now(timezone.utc)
             payload=json.loads(output.read_text(encoding="utf-8"))
             metadata=payload.get("metadata",{})
-        else:
-            finished=datetime.now(timezone.utc)
+
         actual_scan_time = metadata.get("scan_time_utc")
         if actual_scan_time is None:
             raise ValueError(f"Replay output has no scan_time_utc: {output}")
@@ -159,7 +165,8 @@ def replay_case(input_dir: Path, output_dir: Path, state_path: Path, case_id: st
                 f"input={expected_scan_time}, output={actual_scan_time}"
             )
         records.append({
-            "sequence":index,"source_file":source.name,
+            "sequence":index,
+            "source_file":source.name,
             "expected_scan_time_utc":expected_scan_time,
             "scan_time_utc":actual_scan_time,
             "object_count":metadata.get("object_count",0),
