@@ -131,10 +131,9 @@ def main() -> None:
 
     # 2) Live/historical derived-unit contracts.
     latest = live_features.iloc[-1].to_dict()
-    if abs(float(latest["surface_wind_speed_kt"]) - (100.0 / 1.0)) > 10.0:
-        # This branch is intentionally broad enough to catch accidental unit
-        # regressions without coupling the gate to one meteorological example.
-        failures.append("surface_wind_speed_kt appears inconsistent with m/s->kt conversion")
+    expected_surface_wind = math.hypot(8.0, 6.0) * 1.943844492
+    if abs(float(latest["surface_wind_speed_kt"]) - expected_surface_wind) > 1e-9:
+        failures.append("surface_wind_speed_kt conversion contract failed")
     expected_gust = 15.0 * 1.943844492
     if abs(float(latest["wind_gust_kt"]) - expected_gust) > 1e-9:
         failures.append("wind_gust_kt conversion contract failed")
@@ -180,6 +179,8 @@ def main() -> None:
     }
     if not _finite_tree(strict_probe):
         failures.append("finite JSON probe unexpectedly failed")
+    if _finite_tree({"bad": float("nan")}):
+        failures.append("non-finite JSON values were not rejected")
 
     # 6) Future-information policy must remain explicit in core model artifacts.
     feature_src = (ROOT / "scripts/build_model_features.py").read_text(encoding="utf-8")
