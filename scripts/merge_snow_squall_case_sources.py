@@ -203,6 +203,16 @@ def build(discovery_path: Path, lsr_path: Path, output_dir: Path):
         )
         record["source_records"] = int(pd.to_numeric(record.get("source_records", 1), errors="coerce") or 1)
         record["lsr_count"] = int(pd.to_numeric(record.get("lsr_count", 0), errors="coerce") or 0)
+        # Defense against stale discovery artifacts: screening-language
+        # NCEI records are never allowed to masquerade as official truth.
+        if str(record.get("evidence", "")).startswith("screening:") or str(record.get("candidate_source", "")) == "NCEI_STORM_EVENTS_SCREENING":
+            record["verification_class"] = "official_screening_candidate"
+        if (pd.isna(record.get("lat")) or pd.isna(record.get("lon"))):
+            coarse = routing_point(record.get("state"), record.get("county"))
+            if coarse is not None:
+                record["lat"], record["lon"] = coarse
+                record["coordinate_source"] = "county_routing_centroid"
+                record["coordinate_precision"] = "routing_only"
         records.append(record)
 
     matched_reports = 0
@@ -290,6 +300,8 @@ def build(discovery_path: Path, lsr_path: Path, output_dir: Path):
             "county": record.get("county"),
             "lat": record.get("lat"),
             "lon": record.get("lon"),
+            "coordinate_source": record.get("coordinate_source"),
+            "coordinate_precision": record.get("coordinate_precision"),
         })
 
     ledger.to_csv(output_dir / "snow_squall_case_ledger.csv", index=False)
