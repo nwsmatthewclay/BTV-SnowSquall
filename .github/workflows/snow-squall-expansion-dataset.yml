@@ -194,6 +194,20 @@ jobs:
             --cases data/manifests/snow_squall_expansion/snow_squall_expansion_cases.csv \
             --output data/raw/ASOS_IEM_expansion \
             --buffer-before 120 \
+            --buffer-after 150 \
+            --workers 6
+
+      - name: Acquire historical mPING precipitation-type evidence
+        env:
+          MPING_API_KEY: ${{ secrets.MPING_API_KEY }}
+        run: |
+          python acquisition/mping.py \
+            --cases data/manifests/snow_squall_expansion/snow_squall_expansion_cases.csv \
+            --output data/derived/snow_squall_expansion_mping.csv \
+            --status data/derived/snow_squall_expansion_mping_status.json \
+            --workers 6 \
+            --radius-km 75 \
+            --buffer-before 120 \
             --buffer-after 150
 
       - name: Audit expanded ASOS/METAR timing and visibility
@@ -203,9 +217,29 @@ jobs:
             --surface-root data/raw/ASOS_IEM_expansion \
             --output data/derived/snow_squall_expansion_surface_truth.csv \
             --summary data/derived/snow_squall_expansion_surface_truth.json
+      - name: Resolve NCEI evidence year range for this batch
+        id: evidence_years
+        run: |
+          set -euo pipefail
+          read -r start_year end_year < <(python - <<'PY'
+          import pandas as pd
+          d = pd.read_csv("data/manifests/snow_squall_expansion/snow_squall_expansion_cases.csv")
+          years = pd.to_datetime(d["event_start_utc"], utc=True, errors="coerce").dt.year.dropna()
+          if years.empty:
+              raise SystemExit("No valid event years in selected batch")
+          print(int(years.min()), int(years.max()))
+          PY
+          )
+          echo "start_year=$start_year" >> "$GITHUB_OUTPUT"
+          echo "end_year=$end_year" >> "$GITHUB_OUTPUT"
+          echo "NCEI evidence years: $start_year-$end_year"
+
       - name: Acquire NCEI Storm Events evidence
         run: |
-          python scripts/acquire_ncei_storm_events.py             --start-year 2002             --end-year 2026             --output data/derived/snow_squall_expansion_ncei_storm_events.csv
+          python scripts/acquire_ncei_storm_events.py \
+            --start-year "${{ steps.evidence_years.outputs.start_year }}" \
+            --end-year "${{ steps.evidence_years.outputs.end_year }}" \
+            --output data/derived/snow_squall_expansion_ncei_storm_events.csv
 
       - name: Acquire expanded SWDI PLSR evidence
         run: |
@@ -265,6 +299,7 @@ jobs:
             --surface data/derived/snow_squall_expansion_surface_truth.csv \
             --objects data/derived/snow_squall_expansion_objects_tagged.csv \
             --radar data/manifests/snow_squall_expansion/snow_squall_expansion_radar_manifest.csv \
+            --mping data/derived/snow_squall_expansion_mping.csv \
             --output data/derived/snow_squall_case_evidence_scorecard.csv
       - name: Freeze supervised positive training cohort
         run: |
