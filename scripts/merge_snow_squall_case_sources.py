@@ -137,9 +137,16 @@ def _text_candidate_record(row, index):
     county = county_hits[0] if len(county_hits) == 1 else None
     if county is not None:
         lat, lon = COUNTY_ROUTING_POINTS[county]
-    vt_counties = {"ADDISON","CALEDONIA","CHITTENDEN","ESSEX","FRANKLIN","GRAND ISLE","LAMOILLE","ORANGE","ORLEANS","RUTLAND","WASHINGTON","WINDSOR"}
-    ny_counties = {"CLINTON","ESSEX","FRANKLIN","ST LAWRENCE"}
-    state = "VT" if county in vt_counties else ("NY" if county in ny_counties else None)
+    vt_counties = {"ADDISON","CALEDONIA","CHITTENDEN","GRAND ISLE","LAMOILLE","ORANGE","ORLEANS","RUTLAND","WASHINGTON","WINDSOR"}
+    ny_counties = {"CLINTON","ST LAWRENCE"}
+    explicit_vt = ("VERMONT" in text.upper() or "[VT" in text.upper())
+    explicit_ny = ("NEW YORK" in text.upper() or "[NY" in text.upper())
+    if county in {"ESSEX", "FRANKLIN"} and not (explicit_vt ^ explicit_ny):
+        state = None
+        county = None
+        lat = lon = None
+    else:
+        state = "VT" if (county in vt_counties or (county in {"ESSEX","FRANKLIN"} and explicit_vt)) else ("NY" if (county in ny_counties or (county in {"ESSEX","FRANKLIN"} and explicit_ny)) else None)
     digest = hashlib.sha1(f"NWS_TEXT|{timestamp.isoformat()}|{row.get('pil')}|{index}".encode("utf-8")).hexdigest()[:10]
     return {
         "candidate_id": f"SSQ{timestamp:%Y%m%d%H%M}_{digest}",
