@@ -16,6 +16,24 @@ from scripts.probability_postprocess import monotone_cumulative_probabilities
 HORIZONS=(15,30,45,60)
 THRESHOLDS=(0.10,0.20,0.30,0.50)
 
+def history_rows_as_of(rows, as_of_timestamp):
+    """Return only observations available at the feature timestamp."""
+    try:
+        cutoff = datetime.fromisoformat(str(as_of_timestamp).replace("Z", "+00:00")).astimezone(timezone.utc)
+    except (TypeError, ValueError):
+        return []
+    filtered = []
+    for row in rows or []:
+        try:
+            timestamp = datetime.fromisoformat(str(row.get("timestamp")).replace("Z", "+00:00")).astimezone(timezone.utc)
+        except (TypeError, ValueError):
+            continue
+        if timestamp <= cutoff:
+            filtered.append(row)
+    filtered.sort(key=lambda row: str(row.get("timestamp", "")))
+    return [] if not filtered else filtered
+
+
 def score_case(case_row, objects, model_root: Path):
     case_id=str(case_row['case_id'])
     anchor=pd.to_datetime(case_row['event_start_utc'],utc=True,errors='coerce')
@@ -31,7 +49,17 @@ def score_case(case_row, objects, model_root: Path):
             item['track_id']=str(track_id)
             item['timestamp']=row.get('scan_time_utc')
             history.append(item)
-        frame=build_live_feature_frame(history,track_id)
+        history.sort(key=lambda row: str(row.get("timestamp", "")))
+        frame_rows=[]
+        for current in history:
+            current_timestamp=current.get("timestamp")
+            as_of_history=history_rows_as_of(history, current_timestamp)
+            current_frame=build_live_feature_frame(as_of_history,track_id)
+            if not current_frame.empty:
+                frame_rows.append(current_frame.iloc[[-1]].copy())
+        if not frame_rows:
+            continue
+        frame=pd.concat(frame_rows,ignore_index=True)
         frame, national_prior=augment_national_pretraining(frame, model_root)
         if frame.empty: continue
         max_in_window={}
