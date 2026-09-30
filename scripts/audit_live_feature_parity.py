@@ -45,7 +45,12 @@ def numeric_close(a, b, atol=1e-8, rtol=1e-6) -> bool:
 
 
 def audit_track(raw: pd.DataFrame, predictor_names: list[str], track_id: str) -> dict:
-    track = raw[raw["object_id"].astype(str) == str(track_id)].copy()
+    normalized = raw.copy()
+    if "object_id" not in normalized.columns and "track_id" in normalized.columns:
+        normalized["object_id"] = normalized["track_id"].astype(str)
+    if "scan_time_utc" not in normalized.columns and "timestamp" in normalized.columns:
+        normalized["scan_time_utc"] = normalized["timestamp"]
+    track = normalized[normalized["object_id"].astype(str) == str(track_id)].copy()
     track = track.sort_values("scan_time_utc")
     if track.empty:
         raise ValueError(f"Track not found: {track_id}")
