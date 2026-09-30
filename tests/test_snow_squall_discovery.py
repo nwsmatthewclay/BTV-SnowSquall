@@ -143,3 +143,13 @@ def test_selected_case_evidence_weight_mapping():
     assert list(out["truth_tier"]) == ["B", "B+"]
     assert float(out.loc[0, "evidence_weight"]) == 0.70
     assert float(out.loc[1, "evidence_weight"]) == 0.85
+
+
+def test_api_boolean_parser_does_not_truthify_false_text():
+    from scripts.discover_snow_squall_cases import as_bool
+    assert as_bool(True) is True
+    assert as_bool("true") is True
+    assert as_bool("1") is True
+    assert as_bool("False") is False
+    assert as_bool("0") is False
+    assert as_bool(None) is False
