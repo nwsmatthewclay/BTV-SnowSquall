@@ -190,6 +190,14 @@ def replay_case(input_dir: Path, output_dir: Path, state_path: Path, case_id: st
     else:
         probability_status = "not_scored"
 
+    successful_sequences = [r["sequence"] for r in records]
+    failed_sequences = [e["sequence"] for e in errors]
+    continuity_broken = bool(failed_sequences)
+    if successful_sequences:
+        expected_successful_prefix = list(range(1, max(successful_sequences) + 1))
+        if successful_sequences != [n for n in expected_successful_prefix if n in successful_sequences]:
+            continuity_broken = True
+
     manifest={
         "case_id":case_id,
         "mode":"historical_replay_through_live_processor",
@@ -203,6 +211,8 @@ def replay_case(input_dir: Path, output_dir: Path, state_path: Path, case_id: st
         "attempted_scan_count":len(scans),
         "successful_scan_count":len(records),
         "failed_scan_count":len(errors),
+        "failed_sequences": failed_sequences,
+        "continuity_broken": continuity_broken,
         "scan_count":len(records),
         "object_scan_count":sum(r["object_count"] for r in records),
         "first_scan_utc":records[0]["scan_time_utc"] if records else None,
@@ -216,6 +226,7 @@ def replay_case(input_dir: Path, output_dir: Path, state_path: Path, case_id: st
                 for r in records
             ),
             "future_information_policy": "one_scan_at_a_time",
+            "continuity_broken": continuity_broken,
         },
     }
     (output_dir/"replay_manifest.json").write_text(json.dumps(manifest,indent=2),encoding="utf-8")
