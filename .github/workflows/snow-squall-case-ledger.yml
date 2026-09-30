@@ -105,6 +105,14 @@ jobs:
               --output-dir data/discovery/unified
           fi
 
+      - name: Build case-review report
+        if: steps.sources.outputs.skip != 'true'
+        run: |
+          python scripts/build_case_review_report.py \
+            --cases data/discovery/unified/snow_squall_case_ledger.csv \
+            --summary data/discovery/unified/snow_squall_case_ledger_summary.json \
+            --output data/discovery/unified/snow_squall_case_review.html
+
       - name: Audit unified ledger
         if: steps.sources.outputs.skip != 'true'
         run: |
