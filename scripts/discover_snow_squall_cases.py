@@ -514,7 +514,10 @@ def merge_candidates(records: list[dict], cfg: dict) -> list[dict]:
         if rec.get("warning_wfo"):
             match["warning_wfo"] = rec.get("warning_wfo")
         match["lsr_count"] = int(match.get("lsr_count", 0)) + int(rec.get("lsr_count", 0))
-        match["verification_class"] = merged_verification_class(set(match["source_types"]))
+        match["verification_class"] = merged_verification_class(
+            set(match["source_types"]),
+            warning_verified=bool(match.get("warning_verified_by_iem")),
+        )
         if match["verification_class"].startswith("official"):
             match["verification_status"] = "documented_with_independent_evidence"
         elif "warning" in match["verification_class"]:
