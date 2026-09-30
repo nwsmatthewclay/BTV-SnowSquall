@@ -37,8 +37,8 @@ def _height_weighted_mean(heights, values):
     order=np.argsort(heights); heights=heights[order]; values=values[order]
     span=float(heights[-1]-heights[0])
     if span<=0: return None
-    integrator = getattr(np, 'trapezoid', np.trapz)
-    return float(integrator(values,heights)/span)
+    integrator = np.trapezoid if hasattr(np, 'trapezoid') else np.trapz
+    return float(integrator(values, heights) / span)
 
 
 def build_snsq_profile(
