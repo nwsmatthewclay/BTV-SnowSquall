@@ -23,8 +23,6 @@ on:
 
 permissions:
   contents: read
-  pages: write
-  id-token: write
 
 concurrency:
   group: archived-snow-squall-viewer-smoke
@@ -34,9 +32,6 @@ jobs:
   build:
     runs-on: ubuntu-latest
     timeout-minutes: 60
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
     env:
       PYTHONPATH: ${{ github.workspace }}
       PYTHONUNBUFFERED: "1"
@@ -126,19 +121,11 @@ jobs:
           cp -R data/derived/viewer/data _site/data
           printf 'BTV Snow Squall Archived Viewer Smoke Test\nCase: %s\nRadar: %s\nResearch/pilot historical reconstruction only.\nProbability scoring is not exposed.\n'             "${{ inputs.case_id || 'BTV20060224' }}" "${{ inputs.radar_site || 'KCXX' }}" > _site/README.txt
 
-      - name: Configure GitHub Pages
-        uses: actions/configure-pages@v5
+      - name: Upload static viewer package
+        uses: actions/upload-artifact@v4
         with:
-          enablement: true
-
-      - name: Upload Pages artifact
-        uses: actions/upload-pages-artifact@v3
-        with:
+          name: archived-snow-squall-viewer-site
           path: _site
-
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
 
       - name: Upload diagnostic bundle
         if: always()
