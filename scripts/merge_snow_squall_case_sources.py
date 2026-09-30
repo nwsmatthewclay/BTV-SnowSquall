@@ -137,6 +137,9 @@ def _text_candidate_record(row, index):
     county = county_hits[0] if len(county_hits) == 1 else None
     if county is not None:
         lat, lon = COUNTY_ROUTING_POINTS[county]
+    vt_counties = {"ADDISON","CALEDONIA","CHITTENDEN","ESSEX","FRANKLIN","GRAND ISLE","LAMOILLE","ORANGE","ORLEANS","RUTLAND","WASHINGTON","WINDSOR"}
+    ny_counties = {"CLINTON","ESSEX","FRANKLIN","ST LAWRENCE"}
+    state = "VT" if county in vt_counties else ("NY" if county in ny_counties else None)
     digest = hashlib.sha1(f"NWS_TEXT|{timestamp.isoformat()}|{row.get('pil')}|{index}".encode("utf-8")).hexdigest()[:10]
     return {
         "candidate_id": f"SSQ{timestamp:%Y%m%d%H%M}_{digest}",
@@ -145,7 +148,7 @@ def _text_candidate_record(row, index):
         "verification_status": "text_review_candidate",
         "event_start_utc": timestamp.isoformat(),
         "event_end_utc": None,
-        "state": "VT" if county else None,
+        "state": state,
         "county": county,
         "lat": lat,
         "lon": lon,
