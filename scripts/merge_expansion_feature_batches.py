@@ -12,8 +12,23 @@ def merge(current_path: Path, prior_path: Path | None, output_path: Path):
     prior_rows=0
     if prior_path is not None and prior_path.exists():
         prior=pd.read_csv(prior_path)
-        frames.insert(0, prior)
         prior_rows=len(prior)
+        # Legacy expansion batches may contain positive rows created before the
+        # supervised-positive gate. Never carry those positives into a new model
+        # population. Null/research rows remain eligible for cumulative analysis.
+        if "population" in prior.columns and "supervision_class" in prior.columns:
+            legacy_positive = prior["population"].eq("verified_case_context") & prior["supervision_class"].ne("supervised_positive")
+            dropped = int(legacy_positive.sum())
+            if dropped:
+                print({"dropped_legacy_positive_rows": dropped})
+            prior = prior.loc[~legacy_positive].copy()
+        elif "population" in prior.columns:
+            legacy_positive = prior["population"].eq("verified_case_context")
+            dropped = int(legacy_positive.sum())
+            if dropped:
+                print({"dropped_legacy_positive_rows": dropped})
+            prior = prior.loc[~legacy_positive].copy()
+        frames.insert(0, prior)
     combined=pd.concat(frames,ignore_index=True,sort=False)
     if 'row_identity_key' in combined.columns:
         combined=combined.drop_duplicates('row_identity_key',keep='last')
