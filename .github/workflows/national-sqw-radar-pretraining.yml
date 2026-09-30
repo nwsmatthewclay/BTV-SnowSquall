@@ -140,7 +140,6 @@ jobs:
 
       - name: Restore prior cumulative pretraining features
         id: prior_features
-        if: github.event_name != 'workflow_dispatch' || true
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -184,25 +183,6 @@ jobs:
               --exclude-wfo BTV
           done
 
-      - name: Write next national pretraining batch state
-        run: |
-          python - <<'PY'
-          import json
-          from pathlib import Path
-          import pandas as pd
-          d=pd.read_csv('data/manifests/national_sqw_pretraining/national_sqw_verified_radar_manifest.csv')
-          state={
-              'batch_rows': int(len(d)),
-              'batch_case_count': int(d['case_id'].nunique()) if 'case_id' in d else 0,
-              'current_offset': int('${{ inputs.verified_offset || '0' }}'),
-              'batch_size': int('${{ inputs.max_manifest_rows || '40' }}'),
-              'next_verified_offset': int('${{ inputs.verified_offset || '0' }}') + int('${{ inputs.max_manifest_rows || '40' }}'),
-              'max_automatic_verified': 300,
-              'auto_continue': True,
-          }
-          Path('data/derived/next_national_pretraining_batch.json').write_text(json.dumps(state,indent=2)+'\n',encoding='utf-8')
-          print(json.dumps(state,indent=2))
-          PY
       - name: Audit weak-label population
         run: |
           python - <<'PY'
