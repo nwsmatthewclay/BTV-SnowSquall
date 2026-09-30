@@ -25,4 +25,4 @@ def test_national_pretraining_feature_is_btv_safe_and_reproducible(tmp_path):
     augmented,summary=augment(frame,tmp_path)
     assert augmented.loc[0,'national_pretrain_probability_15m']==0.2
     assert summary['15m']['excluded_wfo']=='BTV'
-    assert summary['30']['status'] == 'not_available'
+    assert summary['30m']['status'] == 'not_available'
