@@ -173,7 +173,7 @@ jobs:
           python - <<'PY'
           import pandas as pd
           d=pd.read_csv('data/derived/snow_squall_expansion_objects_tagged.csv')
-          verified=d[d.verification_class.isin(['official_documented','official_plus_independent_report','official_plus_warning','official_plus_warning_and_report'])].copy()
+          verified=d[d.verification_class.isin(['official_documented','official_plus_independent_report','official_plus_warning','official_plus_warning_and_report','official_plus_warning_verified','official_study_warning_verified','official_plus_study','study_verified','study_warning_verified','warning_verified'])].copy()
           unverified=d[~d.verification_class.isin(['official_documented','official_plus_independent_report','official_plus_warning','official_plus_warning_and_report','official_plus_warning_verified','official_study_warning_verified','official_plus_study','study_verified','study_warning_verified','warning_verified'])].copy()
           verified.to_csv('data/derived/snow_squall_verified_objects.csv',index=False)
           unverified.to_csv('data/derived/snow_squall_unverified_objects.csv',index=False)
