@@ -17,8 +17,6 @@ import requests
 
 SPREADSHEET_ID = "1ZMndvESyyDkYuklNGZ--DvKjaTRbJK0rVjJjqQtAlU0"
 EXPORT_URL = f"https://docs.google.com/spreadsheets/d/{SPREADSHEET_ID}/export?format=xlsx"
-DEFAULT_LAT = 40.7989
-DEFAULT_LON = -77.8597
 
 def clean_col(name):
     return re.sub(r"[^a-z0-9]+", "_", str(name).strip().lower()).strip("_")
@@ -86,8 +84,8 @@ def main():
     cases["event_type"] = "convective snow research case"
     cases["state"] = "PA"
     cases["county"] = ""
-    cases["lat"] = DEFAULT_LAT
-    cases["lon"] = DEFAULT_LON
+    cases["lat"] = pd.NA
+    cases["lon"] = pd.NA
     cases["source"] = "Schneider et al. 2024 / Penn State Data Commons"
     cases["evidence"] = "PSU_SCHNEIDER_2024_radar_algorithm_manual_review"
     cases["source_types"] = "PSU_SCHNEIDER_2024"
@@ -98,8 +96,8 @@ def main():
     cases["warning_verified_by_iem"] = False
     cases["warning_status"] = ""
     cases["warning_wfo"] = "KCTP"
-    cases["coordinate_source"] = "KUNV_study_domain_reference"
-    cases["coordinate_precision"] = "research_domain_reference"
+    cases["coordinate_source"] = "not_assigned_from_study_catalog"
+    cases["coordinate_precision"] = "case_coordinate_pending"
     output = root / "psu_schneider_2024_case_catalog.csv"
     cases.to_csv(output, index=False)
     summary = root / "psu_schneider_2024_catalog_summary.json"
