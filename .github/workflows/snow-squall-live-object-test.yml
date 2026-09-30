@@ -2,6 +2,11 @@ name: Snow Squall Live Object Worker Test
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - snow-squall-model-foundation
+    paths:
+      - .github/live-object-trigger
   schedule:
     - cron: '17 */6 * * *'
 
