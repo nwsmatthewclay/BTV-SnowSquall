@@ -92,3 +92,42 @@ def test_ncei_state_normalization_accepts_full_names():
 def test_screening_class_is_explicitly_allowed():
     from scripts.audit_snow_squall_case_ledger import ALLOWED_CLASSES
     assert "official_screening_candidate" in ALLOWED_CLASSES
+
+def test_swdi_ztime_column_is_accepted_by_discovery(monkeypatch):
+    import pandas as pd
+    import scripts.discover_snow_squall_cases as mod
+
+    frame = pd.DataFrame([{
+        "ZTIME": "2024-01-02T12:00:00Z",
+        "STATE": "VT",
+        "COUNTY": "CHITTENDEN",
+        "LAT": 44.5,
+        "LON": -73.2,
+        "TYPETEXT": "SNOW SQUALL",
+        "REMARK": "snow squall",
+        "WFO": "BTV",
+        "CITY": "Burlington",
+        "TYPECODE": "SQ",
+        "SOURCE": "NWS",
+    }])
+
+    monkeypatch.setattr(mod, "_bulk_year", lambda *args, **kwargs: frame)
+    cfg = {
+        "start_year": 2024,
+        "end_year": 2024,
+        "primary_states": ["VT", "NY"],
+        "vt_excluded_counties": ["BENNINGTON", "WINDHAM"],
+        "ny_cwa_counties": ["CLINTON", "ESSEX", "FRANKLIN", "ST LAWRENCE"],
+        "ncei_match_minutes": 90,
+        "ncei_match_radius_km": 100,
+        "lsr_cluster_minutes": 60,
+        "lsr_cluster_radius_km": 75,
+        "candidate_buffer_minutes": 90,
+        "radars": {"KCXX": [44.511, -73.166], "KTYX": [43.756, -75.680]},
+        "radar_max_range_km": 220,
+        "max_radars_per_case": 1,
+    }
+    rows = mod.gather_swdi_plsr(cfg)
+    assert len(rows) == 1
+    assert rows[0]["candidate_source"] == "SWDI_PLSR"
+    assert rows[0]["state"] == "VT"
