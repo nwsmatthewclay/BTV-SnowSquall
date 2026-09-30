@@ -308,7 +308,9 @@ def build_live_feature_frame(history: Iterable[dict], track_id: str | int) -> pd
                             row[source + "_rate_2scan_per_min"] = (cur - old) / dt2
                         p = _number(previous.get(source))
                         if old is not None and p is not None and cur is not None:
-                            row[source + "_acceleration_per_min2"] = ((cur - p) / prev_dt) - ((p - old) / prev_dt)
+                            current_dt = (current_time - previous_time).total_seconds() / 60.0
+                            if 0 < current_dt <= 10:
+                                row[source + "_acceleration_per_min2"] = ((cur - p) / current_dt) - ((p - old) / prev_dt)
 
         for source, target in (
             ("max_reflectivity_dbz", "max_reflectivity_dbz_running_max"),
