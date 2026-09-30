@@ -35,6 +35,7 @@ def build(
     null_csv: Path,
     output_csv: Path,
     null_activity_csv: Path | None = None,
+    dataset_version: str = "object_population_v1",
 ):
     positive = prepare(
         pd.read_csv(positive_csv),
@@ -69,7 +70,7 @@ def build(
     nulls = nulls.reindex(columns=columns)
 
     combined = pd.concat([positive, nulls], ignore_index=True)
-    combined["dataset_version"] = "object_population_pilot_v1"
+    combined["dataset_version"] = dataset_version
     combined["future_information_policy"] = "current_and_past_only"
     radar_series = (
         combined["radar_site"].astype(str)
@@ -122,6 +123,7 @@ def main():
         help="Optional null-window activity classification CSV.",
     )
     parser.add_argument("--output", required=True)
+    parser.add_argument("--dataset-version", default="object_population_v1")
     args = parser.parse_args()
     build(
         Path(args.positive_csv),
