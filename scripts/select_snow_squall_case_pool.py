@@ -146,7 +146,7 @@ def main():
 
     selected = pd.concat([official, unverified], ignore_index=True)
     selected = assign_truth_tier(selected)
-    selected["case_id"] = selected["candidate_id"]
+    selected["case_id"] = selected.get("case_id", pd.Series(pd.NA, index=selected.index)).fillna(selected["candidate_id"]).astype(str)
     selected["source_study"] = "expanded_ncei_iem_case_discovery"
     tier_map = {
         "official_documented": ("B", 0.70),
