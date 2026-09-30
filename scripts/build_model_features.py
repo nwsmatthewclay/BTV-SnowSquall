@@ -150,8 +150,9 @@ def build_features(frame: pd.DataFrame) -> pd.DataFrame:
             ).where(continuity_ok)
 
     # Multi-scan state uses only current and prior scans.
+    previous_dt_min = (g["scan_dt"].shift(1) - g["scan_dt"].shift(2)).dt.total_seconds() / 60.0
     second_dt_min = (df["scan_dt"] - g["scan_dt"].shift(2)).dt.total_seconds() / 60.0
-    continuity_2 = continuity_ok & second_dt_min.between(0, 20, inclusive="both")
+    continuity_2 = continuity_ok & previous_dt_min.between(0, 10, inclusive="both") & second_dt_min.between(0, 20, inclusive="both")
     for col in ("max_reflectivity_dbz", "area_km2", "echo_top_km", "motion_speed_kt"):
         if col not in df.columns:
             continue
@@ -163,7 +164,7 @@ def build_features(frame: pd.DataFrame) -> pd.DataFrame:
         df[f"{col}_trailing_std_3"] = triple.std(axis=1, skipna=True)
         df[f"{col}_change_2scan"] = (current - prev2).where(continuity_2)
         df[f"{col}_rate_2scan_per_min"] = ((current - prev2) / second_dt_min.replace(0, np.nan)).where(continuity_2)
-        prior_rate = ((prev1 - prev2) / dt_min.replace(0, np.nan)).where(continuity_2)
+        prior_rate = ((prev1 - prev2) / previous_dt_min.replace(0, np.nan)).where(continuity_2)
         current_rate = ((current - prev1) / dt_min.replace(0, np.nan)).where(continuity_ok)
         df[f"{col}_acceleration_per_min2"] = (current_rate - prior_rate).where(continuity_2)
     df["track_persistence_min"] = df["track_age_min"].clip(lower=0)
