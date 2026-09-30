@@ -41,6 +41,18 @@ def _height_weighted_mean(heights, values):
     return float(integrator(values, heights) / span)
 
 
+def _thetae_fallback(pressure_hpa, temperature_k, dewpoint_k):
+    """Approximate equivalent potential temperature for dependency fallback."""
+    p = float(pressure_hpa)
+    t = float(temperature_k)
+    td = float(dewpoint_k)
+    if min(p, t, td) <= 0:
+        raise ValueError('nonphysical thermodynamic input')
+    epsilon = 0.622
+    e_hpa = 6.112 * np.exp(17.67 * (td - 273.15) / (td - 29.65))
+    mixing_ratio = epsilon * e_hpa / max(1e-6, p - e_hpa)
+    theta = t * (1000.0 / p) ** 0.2854
+    return theta * np.exp((2.5e6 * mixing_ratio) / (1004.0 * t))
 def build_snsq_profile(
     heights_m, pressure_hpa, temperature_k, dewpoint_k, rh_pct, u_ms, v_ms,
     surface_pressure_hpa, surface_temperature_k, surface_dewpoint_k,
@@ -84,7 +96,12 @@ def build_snsq_profile(
         ).to('kelvin').magnitude
         delta=float(thetae_2km-thetae_surface)
     except Exception:
-        return {"snsq":None,"mean_rh_0_2km_pct":mean_rh,"thetae_delta_0_2km_k":None,"mean_wind_0_2km_ms":mean_wind,"wetbulb_2m_c":wetbulb_2m_c}
+        try:
+            thetae_surface = _thetae_fallback(surface_pressure_hpa, surface_temperature_k, surface_dewpoint_k)
+            thetae_2km = _thetae_fallback(p2, t2, td2)
+            delta = float(thetae_2km - thetae_surface)
+        except Exception:
+            return {"snsq":None,"mean_rh_0_2km_pct":mean_rh,"thetae_delta_0_2km_k":None,"mean_wind_0_2km_ms":mean_wind,"wetbulb_2m_c":wetbulb_2m_c}
     result=snow_squall_parameter(mean_rh,delta,mean_wind,wetbulb_2m_c=wetbulb_2m_c)
     result.update({'mean_rh_0_2km_pct':float(mean_rh),'thetae_delta_0_2km_k':delta,'mean_wind_0_2km_ms':float(mean_wind),'wetbulb_2m_c':wetbulb_2m_c})
     return result
