@@ -182,6 +182,7 @@ jobs:
           PY
 
           echo "level2_root=$PWD/replay_input" >> "$GITHUB_OUTPUT"
+          echo "case_id=$requested_case" >> "$GITHUB_OUTPUT"
 
       - name: Validate candidate bundle layout
         run: |
@@ -197,7 +198,7 @@ jobs:
           rm -rf replay
           for h in 15 30 45 60; do
             python scripts/historical_operational_replay.py \
-              --case-id "${{inputs.case_id }}" \
+              --case-id "${{steps.inputs.outputs.case_id }}" \
               --input-dir "${{steps.inputs.outputs.level2_root }}" \
               --output-dir "replay/${h}m" \
               --model-dir "model_bundle/candidate_ensemble_expansion_${h}m" \
