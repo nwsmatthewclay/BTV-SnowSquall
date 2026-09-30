@@ -1,4 +1,4 @@
-"""Train and evaluate a case-held-out baseline snow-squall onset model.
+""""Train and evaluate a case-held-out baseline snow-squall onset model.
 
 The evaluator uses Leave-One-Group-Out cross-validation where the group is the
 historical case or null window, never an individual row. This prevents
