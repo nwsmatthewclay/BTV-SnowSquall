@@ -109,3 +109,9 @@ The Schneider climatology distinguishes broad convective snow from the smaller s
 - four-horizon candidate model bundles
 
 No model is operationally released merely because the historical case count increases.
+
+## Initial model-development batch
+
+The first science test will target approximately 200 reconstructed episodes rather than waiting for the full literature inventory. The 200-case target is a sampling objective, not a quota: supervised positives are limited by evidence quality, while research positives, analogs, hard negatives, and strong nulls are retained separately. The database remains extensible after the first model/replay test.
+
+Null screening uses IEM LSRs plus NCEI Storm Events, NWS warnings/VTEC, surface observations, and radar/object reconstruction. Missing IEM or Storm Events records are never sufficient alone to label a negative.
