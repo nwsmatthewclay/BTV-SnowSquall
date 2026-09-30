@@ -11,14 +11,16 @@ import re
 from pathlib import Path
 
 import joblib
+import numpy as np
 import pandas as pd
 
 
 class ModelRuntime:
-    def __init__(self, model=None, feature_columns=None, metadata=None):
+    def __init__(self, model=None, feature_columns=None, metadata=None, calibrator=None):
         self.model = model
         self.feature_columns = list(feature_columns or [])
         self.metadata = metadata or {}
+        self.calibrator = calibrator
 
     @property
     def horizon_minutes(self):
@@ -44,7 +46,9 @@ class ModelRuntime:
         metadata = json.loads(metrics_path.read_text(encoding="utf-8"))
         model = joblib.load(model_path)
         features = metadata.get("predictor_columns") or []
-        return cls(model=model, feature_columns=features, metadata=metadata)
+        calibrator_path = root / "probability_calibrator.joblib"
+        calibrator = joblib.load(calibrator_path) if calibrator_path.exists() else None
+        return cls(model=model, feature_columns=features, metadata=metadata, calibrator=calibrator)
 
     def score_candidate(self, frame: pd.DataFrame):
         """Score an explicitly research-only candidate bundle for replay or shadow use."""
@@ -54,8 +58,13 @@ class ModelRuntime:
         for column in self.feature_columns:
             if column not in working.columns:
                 working[column] = float('nan')
-        return self.model.predict_proba(working[self.feature_columns])[:, 1].tolist()
-
+        probabilities = self.model.predict_proba(working[self.feature_columns])[:, 1]
+        if self.calibrator is not None:
+            eps = 1e-6
+            clipped = np.clip(probabilities, eps, 1.0 - eps)
+            logits = np.log(clipped / (1.0 - clipped))
+            probabilities = self.calibrator.predict_proba(logits.reshape(-1, 1))[:, 1]
+        return probabilities.tolist()
     def score(self, frame: pd.DataFrame):
         if not self.enabled:
             return None
