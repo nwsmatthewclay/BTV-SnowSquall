@@ -253,6 +253,51 @@ jobs:
           python scripts/build_replay_static_viewer.py             --case-id "${{ steps.inputs.outputs.case_id }}"             --radar-site "${{ steps.inputs.outputs.radar_site }}"             --replay-case benchmark_replay/viewer_case.geojson             --timeline benchmark_replay/score_timeline.json             --frames-root benchmark_viewer             --output-dir benchmark_viewer
           cp viewer/training.html viewer/index.html viewer/app.js viewer/style.css benchmark_viewer/
 
+      - name: Embed candidate model provenance
+        env:
+          MODEL_RUN_ID: ${{ steps.model.outputs.run_id }}
+          VALIDATION_RUN_ID: ${{ steps.validation.outputs.run_id }}
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          catalog_path=Path("benchmark_viewer/data/catalog.json")
+          catalog=json.loads(catalog_path.read_text())
+          horizons=[]
+          for h in (15,30,45,60):
+              metrics=json.loads(Path(f"model_bundle/candidate_ensemble_expansion_{h}m/metrics.json").read_text())
+              scored=metrics.get("metrics") or {}
+              horizons.append({
+                  "horizon_minutes": h,
+                  "target": metrics.get("target"),
+                  "model_version": metrics.get("model_version"),
+                  "roc_auc": scored.get("auc_roc"),
+                  "pr_auc": scored.get("average_precision"),
+                  "brier_score": scored.get("brier_score"),
+                  "positive_case_group_count": metrics.get("positive_case_group_count"),
+                  "training_rows": metrics.get("training_rows"),
+                  "training_groups": metrics.get("training_groups"),
+                  "evaluation_status": metrics.get("evaluation_status"),
+                  "calibration_status": metrics.get("calibration_status"),
+              })
+          catalog["model_summary"]={
+              "status":"research_candidate",
+              "model_run_id":os.environ["MODEL_RUN_ID"],
+              "validation_run_id":os.environ["VALIDATION_RUN_ID"],
+              "horizons":horizons,
+              "future_information_policy":"current_and_past_only",
+              "release_status":"candidate_only_not_operational",
+          }
+          catalog["provenance"]={
+              "candidate_model_run_id":os.environ["MODEL_RUN_ID"],
+              "modern_validation_run_id":os.environ["VALIDATION_RUN_ID"],
+          }
+          catalog_path.write_text(json.dumps(catalog,indent=2)+"\n")
+          print("Embedded candidate model provenance for", len(horizons), "horizons")
+          PY
+
       - name: Build benchmark evolution summary
         run: |
           python - <<'PY'
