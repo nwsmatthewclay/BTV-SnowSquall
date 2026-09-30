@@ -62,7 +62,7 @@ jobs:
           python scripts/audit_snow_squall_case_ledger.py \
             --cases data/discovery/snow_squall/snow_squall_candidates.csv \
             --radar data/discovery/snow_squall/snow_squall_radar_manifest.csv \
-            --start-year 2002 \
+            --start-year 1950 \
             --end-year 2026 \
             --output data/discovery/snow_squall/snow_squall_case_ledger_audit.json
       - name: Validate discovery outputs
