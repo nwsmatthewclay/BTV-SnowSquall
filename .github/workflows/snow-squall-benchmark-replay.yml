@@ -69,10 +69,27 @@ jobs:
           done < <(
             gh api "/repos/${GITHUB_REPOSITORY}/actions/runs?branch=snow-squall-model-foundation&per_page=100" |
             jq -c '[.workflow_runs[]
-              | select(.name=="Snow Squall Expansion Dataset" or .name=="Object Dataset Full Expansion" or .name=="Object Dataset Pilot")
+              | select(
+                  .name=="Snow Squall Expansion Dataset"
+                  or .name=="Object Dataset Full Expansion"
+                  or .name=="Object Dataset Pilot"
+                  or .path==".github/workflows/snow-squall-expansion-dataset.yml"
+                  or .path==".github/workflows/object-dataset-full-expansion.yml"
+                  or .path==".github/workflows/object-dataset-pilot.yml"
+                )
               | select(.status=="completed" and .conclusion=="success")]
               | sort_by(.id) | reverse | .[]'
           )
+
+          if [ -z "${selected}" ]; then
+            fallback_id="36749395461"
+            artifacts=$(gh api "/repos/${GITHUB_REPOSITORY}/actions/runs/${fallback_id}/artifacts?per_page=100")
+            count=$(printf '%s' "${artifacts}" | jq '[.artifacts[] | select(.name=="snow-squall-live-model-bundles" and .expired==false)] | length')
+            if [ "${count}" -gt 0 ]; then
+              selected=$(gh api "/repos/${GITHUB_REPOSITORY}/actions/runs/${fallback_id}")
+              echo "Using verified prior candidate bundle run ${fallback_id}."
+            fi
+          fi
 
           test -n "${selected}"
           run_id=$(printf '%s' "${selected}" | jq -r '.id')
@@ -105,7 +122,7 @@ jobs:
           done < <(
             gh api "/repos/${GITHUB_REPOSITORY}/actions/runs?branch=snow-squall-model-foundation&per_page=100" |
             jq -c '[.workflow_runs[]
-              | select(.name=="Modern Independent Validation")
+              | select(.name=="Modern Independent Validation" or .path==".github/workflows/modern-independent-validation.yml")
               | select(.status=="completed" and .conclusion=="success")]
               | sort_by(.id) | reverse | .[]'
           )
