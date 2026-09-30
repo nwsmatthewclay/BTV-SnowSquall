@@ -1,6 +1,11 @@
 name: Publish Live Snow Squall Model Shadow
 
 on:
+  push:
+    branches:
+      - snow-squall-model-foundation
+    paths:
+      - .github/shadow-trigger
   schedule:
     - cron: "*/5 * * * *"
   workflow_dispatch:
