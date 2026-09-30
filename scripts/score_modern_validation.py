@@ -32,7 +32,10 @@ def score_case(case_row, objects, model_root: Path):
         frame=build_live_feature_frame(history,track_id)
         frame, national_prior=augment_national_pretraining(frame, model_root)
         if frame.empty: continue
-        base={}
+        max_in_window={}
+        max_pre={}
+        first_cross={}
+        national_prior_status=national_prior
         for h in HORIZONS:
             runtime=ModelRuntime.load(model_root/f'candidate_ensemble_expansion_{h}m')
             vals=[]
@@ -51,7 +54,7 @@ def score_case(case_row, objects, model_root: Path):
                 hits=[t for t,p in vals if p>=threshold and pd.notna(anchor) and t<=anchor]
                 crosses[str(threshold)]=hits[0].isoformat() if hits else None
             first_cross[str(h)]=crosses
-        results.append({'case_id':case_id,'object_id':str(track_id),'anchor_utc':anchor.isoformat() if pd.notna(anchor) else None,'analysis_window_start_utc':start.isoformat() if pd.notna(start) else None,'analysis_window_end_utc':end.isoformat() if pd.notna(end) else None,'current_score':base,'max_probability_in_window':max_in_window,'max_probability_pre_anchor':max_pre,'first_threshold_crossing_before_anchor':first_cross})
+        results.append({'case_id':case_id,'object_id':str(track_id),'anchor_utc':anchor.isoformat() if pd.notna(anchor) else None,'analysis_window_start_utc':start.isoformat() if pd.notna(start) else None,'analysis_window_end_utc':end.isoformat() if pd.notna(end) else None,'national_pretraining':national_prior_status,'max_probability_in_window':max_in_window,'max_probability_pre_anchor':max_pre,'first_threshold_crossing_before_anchor':first_cross})
     return results
 
 def main():
