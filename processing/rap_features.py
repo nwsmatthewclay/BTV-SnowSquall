@@ -173,13 +173,27 @@ def _extract_snsq(path: Path, latitude, longitude, values):
         surface_pressure_hpa = float(values["surface_pressure_pa"]) / 100.0 if values.get("surface_pressure_pa") is not None else None
         if surface_pressure_hpa is None:
             return {"snsq": None, "snsq_status": "surface_pressure_missing"}
+        wetbulb_2m_c = None
+        try:
+            if values.get("temperature_2m_k") is not None and values.get("dewpoint_2m_k") is not None:
+                from metpy.calc import wet_bulb_temperature
+                from metpy.units import units
+                wetbulb_2m_c = float(
+                    wet_bulb_temperature(
+                        surface_pressure_hpa * units.hPa,
+                        values["temperature_2m_k"] * units.kelvin,
+                        values["dewpoint_2m_k"] * units.kelvin,
+                    ).to("degC").magnitude
+                )
+        except Exception:
+            wetbulb_2m_c = None
         result = build_snsq_profile(
             np.asarray(gh, dtype=float) - float(orog),
             pressure_hpa, np.asarray(temp, dtype=float), np.asarray(dpt, dtype=float),
             np.asarray(rh, dtype=float), np.asarray(u, dtype=float), np.asarray(v, dtype=float),
             surface_pressure_hpa, values.get("temperature_2m_k"), values.get("dewpoint_2m_k"),
             surface_rh_pct=values.get("rh_2m_pct"), surface_u_ms=values.get("u10_ms"),
-            surface_v_ms=values.get("v10_ms"), wetbulb_2m_c=None,
+            surface_v_ms=values.get("v10_ms"), wetbulb_2m_c=wetbulb_2m_c,
         )
         result["snsq_status"] = "complete" if result.get("snsq") is not None else "profile_insufficient"
         return result
