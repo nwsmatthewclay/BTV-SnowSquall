@@ -1,0 +1,23 @@
+field,type,description
+case_id,string,Stable event identifier
+event_date,date,Event date
+event_time_utc,time,Reference observation time UTC
+site,string,Primary observation site
+classification,string,positive/candidate/negative/unknown
+verification,string,verified/candidate/unverified
+source,string,Primary provenance
+visibility_smiles,float,Minimum observed visibility
+visibility_km,float,Minimum observed visibility in km
+duration_heavy_min,float,Heavy snow duration
+peak_wind_kt,float,Peak sustained wind
+peak_gust_kt,float,Peak gust
+temp_c,float,Surface temperature C
+temp_dewpoint_c,float,Surface dewpoint C
+hybrid,bool,Hybrid lake-effect/front case
+warning_issued,bool,Official SQW issued
+warning_id,string,VTEC or product identifier
+radar_window_start_utc,datetime,Radar extraction start
+radar_window_end_utc,datetime,Radar extraction end
+environment_window_start_utc,datetime,Environmental extraction start
+environment_window_end_utc,datetime,Environmental extraction end
+notes,string,Validation/provenance notes
