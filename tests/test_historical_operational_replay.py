@@ -220,7 +220,7 @@ def test_resume_uses_only_completed_output_prefix(tmp_path, monkeypatch):
 
     monkeypatch.setattr(replay, "process_volume", fake_process)
     result = replay.replay_case(
-        tmp_path, out, state, "CASE", resume=True
+        input_dir, out, state, "CASE", resume=True
     )
     assert calls == names[1:]
     assert result["scan_count"] == 3
