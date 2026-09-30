@@ -58,9 +58,11 @@ def build_live_feature_row(
     previous: dict | None = None,
     track_count: int | None = None,
 ) -> dict:
-    row = {}
+    row = {"timestamp": current.get("timestamp"), "track_id": current.get("track_id")}
 
-    # Direct canonical/radar fields.
+    for target, source in LIVE_TO_MODEL.items():
+        row[target] = _number(current.get(source))
+
     for key in (
         "area_km2",
         "length_km",
