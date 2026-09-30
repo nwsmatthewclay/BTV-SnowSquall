@@ -32,7 +32,8 @@ jobs:
         with:
           ref: snow-squall-model-foundation
 
-      - name: Download modern candidate reconstruction
+      - name: Download modern candidate reconstruction from cohort completion
+        if: github.event.workflow_run.name == 'Reconstruct Modern Candidate Cohort'
         uses: actions/download-artifact@v4
         with:
           name: modern-candidate-reconstruction
@@ -40,6 +41,16 @@ jobs:
           repository: ${{ github.repository }}
           run-id: ${{ github.event.workflow_run.id }}
           path: candidate_reconstruction
+
+      - name: Download latest successful modern candidate reconstruction for model refresh
+        if: github.event.workflow_run.name == 'Snow Squall Candidate Model Refresh'
+        shell: bash
+        run: |
+          set -euo pipefail
+          run_id="$(gh run list --workflow "Reconstruct Modern Candidate Cohort" --branch snow-squall-model-foundation --status success --limit 1 --json databaseId --jq '.[0].databaseId')"
+          test -n "${run_id}" && test "${run_id}" != "null"
+          gh run download "${run_id}" --name modern-candidate-reconstruction --dir candidate_reconstruction
+          echo "Using modern candidate reconstruction run ${run_id}"
 
       - name: Resolve latest successful candidate model bundle
         id: model
@@ -102,7 +113,9 @@ jobs:
         run: |
           set -euo pipefail
           rm -rf model_bundle
-          gh run download "${{ steps.model.outputs.run_id }}"             --name snow-squall-live-model-bundles             --dir model_bundle
+          gh run download "${{ steps.model.outputs.run_id }}" \
+            --name "${{ steps.model.outputs.artifact_name }}" \
+            --dir model_bundle
 
       - name: Set up Python
         uses: actions/setup-python@v5
