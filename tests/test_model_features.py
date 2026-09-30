@@ -142,3 +142,16 @@ def test_model_features_include_radar_evolution_terms():
     assert result.loc[1, "rhohv_mean_delta"] == pytest.approx(-0.02)
     assert result.loc[1, "kdp_mean_degkm_delta"] == pytest.approx(0.3)
     assert result.loc[1, "velocity_mean_kt_delta"] == pytest.approx(4.0)
+
+
+def test_operational_predictors_are_subset_of_declared_live_contract(tmp_path):
+    frame = pd.DataFrame({
+        "population": ["null"], "radar_site": ["KCXX"], "object_id": [1],
+        "scan_time_utc": ["2006-02-07T12:00:00Z"],
+        "max_reflectivity_dbz": [30.0], "area_km2": [10.0],
+        "mystery_future_field": [999.0],
+        "squall_onset_within_15m": [0],
+    })
+    schema = write_schema(build_features(frame), tmp_path / "schema.json")
+    assert set(schema["operational_predictor_columns"]) <= set(schema["predictor_columns"])
+    assert "mystery_future_field" not in schema["operational_predictor_columns"]
