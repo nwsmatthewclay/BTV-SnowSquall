@@ -53,6 +53,11 @@ jobs:
       PYTHONUNBUFFERED: '1'
 
     steps:
+      - name: Checkout model foundation
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
+
       - name: Expansion runner heartbeat
         run: |
           set -euo pipefail
@@ -70,11 +75,6 @@ jobs:
           }
           EOF
           cat data/derived/expansion_runner_heartbeat.json
-
-      - name: Checkout model foundation
-        uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
 
       - name: Download unified case ledger artifact
         if: github.event_name == 'workflow_run'
