@@ -120,6 +120,25 @@ def save_state(path: Path, state: dict, tracker: CentroidTracker):
 
 
 
+def history_rows_as_of(rows, as_of_timestamp: str):
+    """Return only history rows available at the current scan time."""
+    try:
+        cutoff = datetime.fromisoformat(str(as_of_timestamp).replace("Z", "+00:00")).astimezone(timezone.utc)
+    except (TypeError, ValueError):
+        return []
+
+    filtered = []
+    for row in rows or []:
+        try:
+            timestamp = datetime.fromisoformat(str(row.get("timestamp")).replace("Z", "+00:00")).astimezone(timezone.utc)
+        except (TypeError, ValueError):
+            continue
+        if timestamp <= cutoff:
+            filtered.append(row)
+    filtered.sort(key=lambda row: str(row.get("timestamp", "")))
+    return filtered
+
+
 def score_with_runtime(frame, runtime: ModelRuntime, research_replay: bool = False):
     """Score a frame using the live release gate or an explicit replay override.
 
@@ -433,7 +452,10 @@ def process_volume(
             env = current_row.get("environment") or {}
             environment_fields = env.get("fields") or {}
             current_row.update(environment_fields)
-            history = prior_rows_by_track.get(track_id, [])
+            history = history_rows_as_of(
+                prior_rows_by_track.get(track_id, []),
+                current_row.get("timestamp"),
+            )
             frame = build_live_feature_frame(history + [current_row], track_id)
             try:
                 scores, score_mode = score_with_runtime(frame.tail(1), model_runtime, research_replay=research_replay)
