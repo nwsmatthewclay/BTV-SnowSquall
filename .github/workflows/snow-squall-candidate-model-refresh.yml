@@ -143,7 +143,19 @@ jobs:
 
       - name: Audit refreshed live compatibility
         run: |
-          python scripts/audit_live_model_compatibility.py             --schema data/derived/snow_squall_model_features_expanded.schema.json             --model-root data/derived             --output data/derived/snow_squall_live_model_compatibility_refresh.json
+          set -euo pipefail
+          rm -rf refresh_model_root
+          mkdir -p refresh_model_root
+          cp -R data/derived/baseline_refresh_*m refresh_model_root/
+          cp -R data/derived/candidate_ensemble_refresh_*m refresh_model_root/
+          # The auditor's legacy bundle vocabulary is intentionally reused for
+          # a release-package contract; temporarily map refresh names into the
+          # expected paths without changing the actual bundle metadata.
+          for h in 15 30 45 60; do
+            cp -R "data/derived/baseline_refresh_${h}m" "refresh_model_root/baseline_expansion_${h}m"
+            cp -R "data/derived/candidate_ensemble_refresh_${h}m" "refresh_model_root/candidate_ensemble_expansion_${h}m"
+          done
+          python scripts/audit_live_model_compatibility.py             --schema data/derived/snow_squall_model_features_expanded.schema.json             --model-root refresh_model_root             --output data/derived/snow_squall_live_model_compatibility_refresh.json
 
       - name: Write refresh provenance and comparison
         run: |
