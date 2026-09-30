@@ -6,6 +6,8 @@ from pathlib import Path
 
 import pandas as pd
 
+from scripts.assign_truth_tier import assign as assign_truth_tier
+
 STATIONS = {
     "KBTV": (44.471955, -73.153276),
     "KMPV": (44.203489, -72.562096),
@@ -133,6 +135,7 @@ def main():
     unverified = choose_diverse(unverified, args.offset_unverified + args.max_unverified).iloc[args.offset_unverified:].copy()
 
     selected = pd.concat([official, unverified], ignore_index=True)
+    selected = assign_truth_tier(selected)
     selected["case_id"] = selected["candidate_id"]
     selected["source_study"] = "expanded_ncei_iem_case_discovery"
     tier_map = {
