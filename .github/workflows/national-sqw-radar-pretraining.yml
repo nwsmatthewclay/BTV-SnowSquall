@@ -12,6 +12,7 @@ on:
       - snow-squall-model-foundation
     paths:
       - scripts/label_sqw_warning_object_scans.py
+      - scripts/select_national_sqw_radar_cases.py
       - .github/workflows/national-sqw-radar-pretraining.yml
   workflow_dispatch:
     inputs:
