@@ -284,20 +284,18 @@ jobs:
             --root data/derived \
             --output data/derived/snow_squall_candidate_model_comparison.json
 
-          for h in 15 30 45 60; do
-            python scripts/train_candidate_ensemble.py \
-              data/derived/snow_squall_model_features_expanded.csv \
-              --schema data/derived/snow_squall_model_features_expanded.schema.json \
-              --target squall_onset_within_${h}m \
-              --output-dir data/derived/candidate_expansion_${h}m
-          done
-
 
       - name: Compare expanded research candidate models
         run: |
           python scripts/compare_candidate_models.py \
             --root data/derived \
             --output data/derived/snow_squall_candidate_model_comparison.json
+      - name: Calibrate candidate model bundles
+        run: |
+          for h in 15 30 45 60; do
+            python scripts/calibrate_model_bundle.py --model-dir data/derived/baseline_expansion_${h}m
+            python scripts/calibrate_model_bundle.py --model-dir data/derived/candidate_ensemble_expansion_${h}m
+          done
 
       - name: Write expansion summary
         run: |
