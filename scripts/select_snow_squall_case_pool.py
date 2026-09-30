@@ -83,7 +83,6 @@ def main():
     parser.add_argument("--exclude-modern-validation", default=None, help="CSV manifest of protected validation cases to exclude")
     parser.add_argument("--offset-official", type=int, default=0)
     parser.add_argument("--offset-unverified", type=int, default=0)
-    parser.add_argument("--exclude-modern-validation", default=None, help="Modern validation manifest whose analysis windows must remain out of training.")
     args = parser.parse_args()
 
     out = Path(args.output_dir)
