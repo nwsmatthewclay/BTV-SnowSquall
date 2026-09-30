@@ -27,7 +27,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: \${{ github.sha }}
+          ref: ${{ github.sha }}
 
       - uses: actions/setup-python@v5
         with:
@@ -62,8 +62,8 @@ jobs:
         run: |
           python scripts/build_stratified_null_manifest.py \
             --cases data/manifests/banacos_2014_cases.csv \
-            --sample-count \${{ inputs.null_count }} \
-            --seed \${{ inputs.seed }} \
+            --sample-count ${{ inputs.null_count }} \
+            --seed ${{ inputs.seed }} \
             --output data/manifests/banacos_null_full.csv
 
       - name: Audit full manifests
