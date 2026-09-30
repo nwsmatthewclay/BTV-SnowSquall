@@ -12,6 +12,18 @@ STRONG = {
     "study_warning_verified",
 }
 
+def as_bool(value) -> bool:
+    if isinstance(value, bool):
+        return value
+    if value is None or (isinstance(value, float) and pd.isna(value)):
+        return False
+    text = str(value).strip().lower()
+    if text in {'true','1','yes','y','t'}:
+        return True
+    if text in {'false','0','no','n','f',''}:
+        return False
+    return False
+
 def num(value, default=0.0):
     try:
         value=float(value)
@@ -27,13 +39,13 @@ def score_row(row):
         points += 4; evidence.append('documented_source')
     if 'IEM_COW_SQW' in str(row.get('source_types') or ''):
         points += 1; evidence.append('snow_squall_warning')
-    if bool(row.get('warning_verified_by_iem')):
+    if as_bool(row.get('warning_verified_by_iem')):
         points += 2; evidence.append('iem_warning_verification')
     if num(row.get('lsr_count')) > 0:
         points += 1; evidence.append('independent_lsr')
     if num(row.get('nws_text_evidence_count')) > 0:
         points += 1; evidence.append('nws_text')
-    if bool(row.get('surface_timing_consistent')):
+    if as_bool(row.get('surface_timing_consistent')):
         points += 2; evidence.append('surface_timing')
     if num(row.get('observation_count')) > 0:
         points += 1; evidence.append('surface_observations')
@@ -67,7 +79,7 @@ def training_eligibility(row):
     """
     cls=str(row.get('verification_class') or '')
     documented = cls in STRONG
-    surface_ok = bool(row.get('surface_timing_consistent')) and num(row.get('observation_count')) > 0
+    surface_ok = as_bool(row.get('surface_timing_consistent')) and num(row.get('observation_count')) > 0
     radar_ok = num(row.get('radar_scan_count')) > 0
     points = num(row.get('verification_points'))
     if documented and surface_ok and radar_ok and points >= 6:
