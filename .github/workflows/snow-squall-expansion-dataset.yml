@@ -266,7 +266,8 @@ jobs:
             data/derived/snow_squall_verified_labeled.csv \
             data/derived/snow_squall_expansion_null_environment.csv \
             --null-activity data/derived/snow_squall_expansion_null_activity.csv \
-            --output data/derived/snow_squall_object_population_expanded.csv
+            --output data/derived/snow_squall_object_population_expanded.csv \
+            --dataset-version object_population_expanded_v2
           python scripts/build_model_features.py \
             data/derived/snow_squall_object_population_expanded.csv \
             --output data/derived/snow_squall_model_features_expanded.csv \
