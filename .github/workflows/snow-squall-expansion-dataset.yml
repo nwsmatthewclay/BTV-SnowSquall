@@ -33,6 +33,11 @@ on:
         required: false
         default: "15"
         type: string
+      source_expansion_run_id:
+        description: "Prior successful expansion run containing the unified discovery ledger."
+        required: false
+        default: ""
+        type: string
 
 
 permissions:
@@ -86,8 +91,18 @@ jobs:
           run-id: ${{ github.event.workflow_run.id }}
           path: discovery_artifact
 
+      - name: Download prior expansion discovery ledger
+        if: github.event_name == 'workflow_dispatch' && inputs.source_expansion_run_id != ''
+        uses: actions/download-artifact@v4
+        with:
+          name: snow-squall-expansion-discovery-ledger
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          repository: ${{ github.repository }}
+          run-id: ${{ inputs.source_expansion_run_id }}
+          path: discovery_artifact
+
       - name: Discover directly when no workflow artifact is provided
-        if: github.event_name != 'workflow_run'
+        if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.source_expansion_run_id == '')
         run: |
           set -euo pipefail
           python -m pip install --upgrade pip
@@ -670,7 +685,8 @@ jobs:
             -f official_offset="$official_next" \
             -f unverified_offset="$review_next" \
             -f max_official="$max_official" \
-            -f max_unverified="$max_review"
+            -f max_unverified="$max_review" \
+            -f source_expansion_run_id="${{ github.run_id }}"
           echo "Dispatched next automatic expansion batch: official=$official_next review=$review_next sizes=$max_official/$max_review"
 
       - name: Upload expanded research package
