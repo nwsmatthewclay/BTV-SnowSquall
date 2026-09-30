@@ -1,4 +1,5 @@
 name: National SQW Radar Pretraining Pool
+# Parallel gate launch: consume the latest successful national radar sample without waiting on the inventory cadence.
 
 on:
   workflow_run:
