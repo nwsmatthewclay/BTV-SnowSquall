@@ -87,7 +87,7 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt -r requirements-science.txt
 
-      - name: Locate archived Level-II volumes
+      - name: Locate and isolate archived case volumes
         id: inputs
         run: |
           set -euo pipefail
@@ -95,9 +95,70 @@ jobs:
           if [ -z "$level2_root" ]; then
             level2_root="$(find validation_artifact -type d -name modern_validation_level2 -print -quit)"
           fi
+          cases_csv="$(find validation_artifact -type f -path "*/data/manifests/modern_validation/modern_validation_cases.csv" -print -quit)"
           test -n "$level2_root"
+          test -n "$cases_csv"
           test -n "$(find "$level2_root" -type f -print -quit)"
-          echo "level2_root=$level2_root" >> "$GITHUB_OUTPUT"
+
+          python - "$cases_csv" "$level2_root" "replay_input" "${{inputs.case_id }}" <<'PY'
+          import json
+          import shutil
+          import sys
+          from pathlib import Path
+
+          import pandas as pd
+
+          from scripts.historical_operational_replay import scan_time
+
+          cases_csv, source_root, output_root, case_id = sys.argv[1:]
+          cases = pd.read_csv(cases_csv)
+          rows = cases[cases["case_id"].astype(str) == case_id]
+          if rows.empty:
+              raise SystemExit(f"Case not found in protected validation manifest: {case_id}")
+
+          row = rows.iloc[0]
+          radar = str(row["radar_site"]).strip().upper()
+          start = pd.to_datetime(row["analysis_window_start_utc"], utc=True)
+          end = pd.to_datetime(row["analysis_window_end_utc"], utc=True)
+          destination = Path(output_root)
+          destination.mkdir(parents=True, exist_ok=True)
+
+          selected = []
+          for path in Path(source_root).rglob("*"):
+              if not path.is_file() or path.name.endswith((".part", ".tmp")):
+                  continue
+              if not path.name.upper().startswith(radar):
+                  continue
+              try:
+                  when = pd.Timestamp(scan_time(path))
+              except ValueError:
+                  continue
+              if start <= when <= end:
+                  shutil.copy2(path, destination / path.name)
+                  selected.append(path.name)
+
+          if not selected:
+              raise SystemExit(
+                  f"No Level-II files matched {case_id} / {radar} / "
+                  f"{start.isoformat()}..{end.isoformat()}"
+              )
+
+          print(f"Case: {case_id}")
+          print(f"Radar: {radar}")
+          print(f"Window: {start.isoformat()} .. {end.isoformat()}")
+          print(f"Selected volumes: {len(selected)}")
+          Path("replay_input_case.json").write_text(
+              json.dumps({
+                  "case_id": case_id,
+                  "radar_site": radar,
+                  "window_start_utc": start.isoformat(),
+                  "window_end_utc": end.isoformat(),
+                  "level2_volume_count": len(selected),
+              }, indent=2) + "\n"
+          )
+          PY
+
+          echo "level2_root=$PWD/replay_input" >> "$GITHUB_OUTPUT"
 
       - name: Validate candidate bundle layout
         run: |
