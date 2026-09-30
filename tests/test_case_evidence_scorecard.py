@@ -95,8 +95,8 @@ def test_mping_diagnostics_are_recorded_without_changing_evidence_points(tmp_pat
     pd.DataFrame([{"case_id": "CASE1"}]).to_csv(objects, index=False)
     pd.DataFrame([{"candidate_id": "C1", "radar_distance_km": 20, "coordinate_precision": "case"}]).to_csv(radar, index=False)
     pd.DataFrame([
-        {"case_id": "CASE1", "mping_id": 1, "ptype_bucket": "snow"},
-        {"case_id": "CASE1", "mping_id": 2, "ptype_bucket": "mixed"},
+        {"case_id": "CASE1", "ptype_bucket": "snow"},
+        {"case_id": "CASE1", "ptype_bucket": "mixed"},
     ]).to_csv(mping, index=False)
 
     build(cases, surface, objects, radar, output, mping)
