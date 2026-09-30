@@ -132,6 +132,26 @@ jobs:
           print(ledger['verification_class'].value_counts().to_string())
           PY
 
+      - name: Resolve expansion batch controls
+        id: batch
+        run: |
+          set -euo pipefail
+          official_offset="${{ inputs.official_offset || '0' }}"
+          unverified_offset="${{ inputs.unverified_offset || '0' }}"
+          max_official="${{ inputs.max_official || '30' }}"
+          max_unverified="${{ inputs.max_unverified || '15' }}"
+          if [ "${{ github.event_name }}" = "push" ] && [ -f .github/expansion-next-batch.json ]; then
+            official_offset="$(python -c 'import json; print(json.load(open(".github/expansion-next-batch.json"))["official_offset"])')"
+            unverified_offset="$(python -c 'import json; print(json.load(open(".github/expansion-next-batch.json"))["unverified_offset"])')"
+            max_official="$(python -c 'import json; print(json.load(open(".github/expansion-next-batch.json"))["max_official"])')"
+            max_unverified="$(python -c 'import json; print(json.load(open(".github/expansion-next-batch.json"))["max_unverified"])')"
+          fi
+          echo "official_offset=$official_offset" >> "$GITHUB_OUTPUT"
+          echo "unverified_offset=$unverified_offset" >> "$GITHUB_OUTPUT"
+          echo "max_official=$max_official" >> "$GITHUB_OUTPUT"
+          echo "max_unverified=$max_unverified" >> "$GITHUB_OUTPUT"
+          echo "Expansion batch: official=$official_offset+$max_official review=$unverified_offset+$max_unverified"
+
       - name: Select expanded documented and unverified case pool
         run: |
           set -euo pipefail
@@ -140,10 +160,10 @@ jobs:
             --input "${{ steps.ledger.outputs.ledger }}" \
             --radar-manifest "${{ steps.ledger.outputs.radar }}" \
             --output-dir data/manifests/snow_squall_expansion \
-            --max-official "${{ inputs.max_official || '30' }}" \
-            --max-unverified "${{ inputs.max_unverified || '15' }}" \
-            --offset-official "${{ inputs.official_offset || '0' }}" \
-            --offset-unverified "${{ inputs.unverified_offset || '0' }}" \
+            --max-official "${{ steps.batch.outputs.max_official }}" \
+            --max-unverified "${{ steps.batch.outputs.max_unverified }}" \
+            --offset-official "${{ steps.batch.outputs.official_offset }}" \
+            --offset-unverified "${{ steps.batch.outputs.unverified_offset }}" \
             --exclude-modern-validation data/manifests/modern_independent_validation_cases.csv
           python - <<'PY'
           import pandas as pd
@@ -521,10 +541,10 @@ jobs:
           }
           official_count = int(cases['verification_class'].isin(strong).sum())
           review_count = int((~cases['verification_class'].isin(strong)).sum())
-          official_offset = int('${{ inputs.official_offset || '0' }}')
-          review_offset = int('${{ inputs.unverified_offset || '0' }}')
-          official_batch = int('${{ inputs.max_official || '30' }}')
-          review_batch = int('${{ inputs.max_unverified || '15' }}')
+          official_offset = int('${{ steps.batch.outputs.official_offset }}')
+          review_offset = int('${{ steps.batch.outputs.unverified_offset }}')
+          official_batch = int('${{ steps.batch.outputs.max_official }}')
+          review_batch = int('${{ steps.batch.outputs.max_unverified }}')
           state = {
               'auto_continue': True,
               'batch_rows': {'official': official_count, 'review': review_count},
