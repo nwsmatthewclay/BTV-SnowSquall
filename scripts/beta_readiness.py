@@ -34,7 +34,7 @@ def _finite_tree(value):
 
 def _synthetic_history() -> list[dict]:
     base = {
-        "scan_time_utc": "2026-01-01T00:00:00Z",
+        "scan_time_utc": "2026-01-01T00:00:00Z",\n        "timestamp": "2026-01-01T00:00:00Z",
         "track_id": "beta-track-1",
         "radar_site": "KCXX",
         "centroid_lat": 44.5,
@@ -105,7 +105,7 @@ def _synthetic_history() -> list[dict]:
         "cin_jkg": -25.0,
     }
     newer = dict(base)
-    newer["scan_time_utc"] = "2026-01-01T00:06:00Z"
+    newer["scan_time_utc"] = "2026-01-01T00:06:00Z"\n    newer["timestamp"] = "2026-01-01T00:06:00Z"
     newer["centroid_lon"] = -73.15
     newer["max_reflectivity_dbz"] = 47.0
     newer["area_km2"] = 110.0
