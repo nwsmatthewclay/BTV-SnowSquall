@@ -40,7 +40,7 @@ This methodology is useful as an external benchmark for our object detector and 
 
 ## External data package
 
-Penn State Data Commons provides the associated files, including snsq.nc, null.nc, reduced 100-km datasets, and a sample CSV. The Data Commons directory lists three ZIP archives totaling roughly 40 GB, so the repository should acquire only the small case catalog and selectively reconstruct Level-II data rather than commit the bulk archive.
+Penn State Data Commons provides the associated files, including snsq.nc, null.nc, reduced 100-km datasets, and a sample CSV. The Data Commons directory lists three ZIP archives totaling roughly 25.7 GB on disk, containing roughly 98 GB of uncompressed NetCDF data. The repository should acquire only the small case catalog and selectively reconstruct Level-II data rather than commit the bulk archive.
 
 Penn State also provides a public case-list spreadsheet linked by the paper's Data Availability Statement. The acquisition script in this repository is designed to retrieve that public catalog without requiring private Google credentials.
 
