@@ -1,4 +1,4 @@
-""""Score candidate snow-squall models on an independent validation population."""
+"""Score candidate snow-squall models on an independent validation population."""
 from __future__ import annotations
 
 import argparse
