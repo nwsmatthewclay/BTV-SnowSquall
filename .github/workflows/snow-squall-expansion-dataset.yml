@@ -310,7 +310,44 @@ jobs:
             printf '%s\n' '{"status":"national_pretraining_not_available"}' > "$summary"
           fi
           echo "Augmented feature file: $output"
-      - name: Restore prior cumulative feature batch,        id: prior_features,        env:,          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }},        run: |,          set -euo pipefail,          run_id="$(gh run list --workflow "Snow Squall Expansion Dataset" --branch snow-squall-model-foundation --status success --limit 1 --json databaseId --jq '.[0].databaseId')",          root="",          if [ -n "$run_id" ] && [ "$run_id" != "null" ]; then,            gh run download "$run_id" --name snow-squall-expansion-feature-batch --dir prior_expansion || true,          fi,          if [ -d prior_expansion ]; then,            prior="$(find prior_expansion -name 'snow_squall_model_features_expanded_augmented.csv' -type f -print -quit)",            if [ -n "$prior" ]; then root="$prior"; fi,          fi,          echo "path=$root" >> "$GITHUB_OUTPUT",          echo "Prior cumulative feature batch: ${root:-none}",,      - name: Merge cumulative expansion feature population,        run: |,          set -euo pipefail,          current=data/derived/snow_squall_model_features_expanded_augmented.csv,          cumulative=data/derived/snow_squall_model_features_cumulative.csv,          if [ -n "${{ steps.prior_features.outputs.path }}" ]; then,            python scripts/merge_expansion_feature_batches.py \,              --current "$current" \,              --prior "${{ steps.prior_features.outputs.path }}" \,              --output "$cumulative",          else,            cp "$current" "$cumulative",          fi,          python - <<'PY',          import pandas as pd,          d=pd.read_csv('data/derived/snow_squall_model_features_cumulative.csv'),          print('Cumulative feature rows:',len(d)),          print('Cumulative groups:',d['split_group'].nunique() if 'split_group' in d.columns else 'not-yet-created'),          PY,      - name: Audit expanded model feature policy
+      - name: Restore prior cumulative feature batch
+        id: prior_features
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          run_id="$(gh run list --workflow "Snow Squall Expansion Dataset" --branch snow-squall-model-foundation --status success --limit 1 --json databaseId --jq '.[0].databaseId')"
+          root=""
+          if [ -n "$run_id" ] && [ "$run_id" != "null" ]; then
+            gh run download "$run_id" --name snow-squall-expansion-feature-batch --dir prior_expansion || true
+          fi
+          if [ -d prior_expansion ]; then
+            prior="$(find prior_expansion -name 'snow_squall_model_features_cumulative.csv' -type f -print -quit)"
+            if [ -n "$prior" ]; then root="$prior"; fi
+          fi
+          echo "path=$root" >> "$GITHUB_OUTPUT"
+          echo "Prior cumulative feature batch: ${root:-none}"
+
+      - name: Merge cumulative expansion feature population
+        run: |
+          set -euo pipefail
+          current=data/derived/snow_squall_model_features_expanded_augmented.csv
+          cumulative=data/derived/snow_squall_model_features_cumulative.csv
+          if [ -n "${{ steps.prior_features.outputs.path }}" ]; then
+            python scripts/merge_expansion_feature_batches.py \
+              --current "$current" \
+              --prior "${{ steps.prior_features.outputs.path }}" \
+              --output "$cumulative"
+          else
+            cp "$current" "$cumulative"
+          fi
+          python - <<'PY'
+          import pandas as pd
+          d=pd.read_csv('data/derived/snow_squall_model_features_cumulative.csv')
+          print('Cumulative feature rows:', len(d))
+          print('Unique object-timestep rows:', d['row_identity_key'].nunique() if 'row_identity_key' in d.columns else 'not-present')
+          PY
+      - name: Audit expanded model feature policy
         run: |
           python - <<'PY'
           import json
@@ -340,7 +377,7 @@ jobs:
         run: |
           for h in 15 30 45 60; do
             python scripts/train_candidate_ensemble.py \
-              data/derived/snow_squall_model_features_expanded_augmented.csv \
+              data/derived/snow_squall_model_features_cumulative.csv \
               --schema data/derived/snow_squall_model_features_expanded.schema.json \
               --target squall_onset_within_${h}m \
               --output-dir data/derived/candidate_ensemble_expansion_${h}m
