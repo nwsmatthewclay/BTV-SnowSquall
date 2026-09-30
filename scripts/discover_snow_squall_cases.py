@@ -308,7 +308,6 @@ def gather_cow_sqw(cfg: dict) -> list[dict]:
                     "ncei_explicit_snow_squall": False,
                     "coordinate_source": "iem_warning_point",
                     "coordinate_precision": "warning_reference",
-                    "coordinate_precision": "event",
                     "lsr_count": lsr_count,
                     "warning_verified_by_iem": bool(props.get("verify")),
                     "warning_status": str(props.get("status") or ""),
@@ -333,7 +332,7 @@ def gather_swdi_plsr(cfg: dict) -> list[dict]:
             continue
         normalized = {str(col).strip().upper(): col for col in frame.columns}
         state_col = next((normalized.get(x) for x in ("STATE", "STATE_ABBR", "STATE_CODE") if normalized.get(x)), None)
-        time_col = next((normalized.get(x) for x in ("VALID", "VALID_TIME", "UTC_TIME", "DATE_TIME", "DATETIME") if normalized.get(x)), None)
+        time_col = next((normalized.get(x) for x in ("ZTIME", "VALID", "VALID_TIME", "UTC_TIME", "DATE_TIME", "DATETIME") if normalized.get(x)), None)
         if state_col is None or time_col is None:
             continue
         states = frame[state_col].astype(str).str.upper().str.strip()
