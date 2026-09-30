@@ -185,3 +185,13 @@ def test_surface_observation_fields_are_not_operational_predictors():
         "gust_excess_kt",
     }
     assert OPERATIONAL_LIVE_PREDICTORS.isdisjoint(blocked)
+
+
+
+def test_json_safe_replaces_nonfinite_numbers():
+    import math
+    from scripts.process_live_volume import _json_safe
+
+    payload = _json_safe({"nan": float("nan"), "posinf": float("inf"), "neginf": float("-inf"), "ok": 1.25})
+    assert payload == {"nan": None, "posinf": None, "neginf": None, "ok": 1.25}
+    assert math.isfinite(payload["ok"])
