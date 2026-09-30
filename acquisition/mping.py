@@ -139,13 +139,10 @@ def _query_case(
         lat = coords[1] if len(coords) >= 2 else None
         normalized.append({
             "case_id": case_id,
-            "mping_id": item.get("id"),
             "obtime": item.get("obtime"),
             "category": item.get("category"),
             "description": item.get("description"),
             "description_id": item.get("description_id"),
-            "lon": lon,
-            "lat": lat,
             "ptype_bucket": ptype_bucket(item.get("category"), item.get("description")),
             "truth_source": "mPING",
             "truth_status": "independent_surface_ptype_evidence",
@@ -221,7 +218,7 @@ def acquire_cases(
 
     result = pd.concat(frames, ignore_index=True) if frames else pd.DataFrame(columns=OUTPUT_COLUMNS)
     if not result.empty:
-        result = result.drop_duplicates(["case_id", "mping_id"]).sort_values(["case_id", "obtime"]).reset_index(drop=True)
+        result = result.drop_duplicates(["case_id", "obtime", "category", "description"]).sort_values(["case_id", "obtime"]).reset_index(drop=True)
 
     summary = {
         "status": "complete",
@@ -232,6 +229,7 @@ def acquire_cases(
         "records": int(len(result)),
         "ptype_counts": result["ptype_bucket"].value_counts().to_dict() if not result.empty else {},
         "policy": "mPING is independent precipitation-type evidence only; it is not an automatic snow-squall truth label.",
+        "privacy_policy": "Persisted evidence omits individual report IDs and coordinates; only case-linked time/phenomenon fields are retained.",
         "api_endpoint": BASE_URL,
         "cases": sorted(statuses, key=lambda x: x["case_id"]),
     }
