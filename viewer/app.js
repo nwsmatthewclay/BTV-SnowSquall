@@ -2,6 +2,7 @@ const map=L.map("map",{zoomControl:true,preferCanvas:true}).setView([44.2,-73.1]
 L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{maxZoom:12,attribution:"© OpenStreetMap contributors"}).addTo(map);
 const radarLayer=L.layerGroup().addTo(map),objectsLayer=L.layerGroup().addTo(map),tracksLayer=L.layerGroup().addTo(map);
 let catalog=null,current=null,features=[],times=[],currentIndex=0,playing=false,timer=null,selectedKey=null;
+const isTrainingPage=document.body.dataset.mode==="training";
 const radarLocations={KCXX:[44.511,-73.166],KTYX:[43.756,-75.680],KBTV:[44.472,-73.154]};
 const num=(v,d=1)=>v==null||Number.isNaN(Number(v))?"—":Number(v).toFixed(d);
 const fmtTime=t=>t?new Date(t).toLocaleString(undefined,{month:"short",day:"numeric",hour:"numeric",minute:"2-digit"}):"—";
@@ -115,4 +116,13 @@ document.getElementById("radarOpacity").addEventListener("input",e=>{setText("ra
 document.getElementById("prevBtn").onclick=()=>advance(-1);document.getElementById("nextBtn").onclick=()=>advance(1);document.getElementById("playBtn").onclick=togglePlay;
 document.getElementById("detailsBtn").onclick=()=>{setText("statusText",catalog?.truth_note||"—");document.getElementById("statusList").innerHTML=[["Package",catalog?.version],["Data status",catalog?.data_status],["QC posture",catalog?.source_dataset_status],["Case/radar datasets",catalog?.cases?.length],["Source object rows",catalog?.source_object_rows],["Probability",catalog?.probability_status],["Build commit",catalog?.build_commit?catalog.build_commit.slice(0,12):"—"],["Build time",catalog?.build_time_utc?fmtUtc(catalog.build_time_utc):"—"],["Policy",catalog?.future_information_policy]].map(x=>"<div class='status-row'><span>"+x[0]+"</span><b>"+(x[1]??"—")+"</b></div>").join("");document.getElementById("modal").classList.remove("hidden")};
 document.getElementById("closeModal").onclick=()=>document.getElementById("modal").classList.add("hidden");
-Promise.all([fetch("data/catalog.json").then(r=>r.json())]).then(([c])=>{catalog=c;renderModelSummary();populateCases();loadCase(0)}).catch(err=>setText("subtitle","Viewer data unavailable: "+err));
+Promise.all([fetch("data/catalog.json").then(r=>r.json())]).then(([c])=>{
+  catalog=c;
+  renderModelSummary();
+  populateCases();
+  const preferred=isTrainingPage?catalog.cases.findIndex(x=>x.case_id==="BTV20181121"):0;
+  const initial=Math.max(0,preferred);
+  const selector=document.getElementById("caseSelect");
+  selector.value=String(initial);
+  loadCase(initial);
+}).catch(err=>setText("subtitle","Viewer data unavailable: "+err));
