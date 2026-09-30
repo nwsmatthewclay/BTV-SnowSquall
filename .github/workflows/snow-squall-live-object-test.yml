@@ -12,6 +12,9 @@ on:
 
 jobs:
   live-object-test:
+    env:
+      PYTHONPATH: ${{ github.workspace }}
+      PYTHONUNBUFFERED: "1"
     strategy:
       fail-fast: false
       matrix:
