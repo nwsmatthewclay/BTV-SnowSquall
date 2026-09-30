@@ -9,6 +9,18 @@ from __future__ import annotations
 import argparse
 import json
 from datetime import datetime, timezone
+import math
+
+
+def json_safe(value):
+    if isinstance(value, dict):
+        return {key: json_safe(val) for key, val in value.items()}
+    if isinstance(value, list):
+        return [json_safe(val) for val in value]
+    if isinstance(value, float):
+        return value if math.isfinite(value) else None
+    return value
+
 from pathlib import Path
 
 
@@ -42,8 +54,8 @@ def normalize_object(obj):
 
 def normalize_json_file(path: Path):
     payload = json.loads(path.read_text(encoding="utf-8"))
-    normalized = normalize_object(payload)
-    path.write_text(json.dumps(normalized, indent=2) + "\n", encoding="utf-8")
+    normalized = json_safe(normalize_object(payload))
+    path.write_text(json.dumps(normalized, indent=2, allow_nan=False) + "\n", encoding="utf-8")
     return normalized
 
 
@@ -53,7 +65,7 @@ def normalize_jsonl_file(path: Path):
         for line in path.read_text(encoding="utf-8").splitlines():
             if not line.strip():
                 continue
-            rows.append(normalize_object(json.loads(line)))
+            rows.append(json_safe(normalize_object(json.loads(line))))
     path.write_text(
         "\n".join(json.dumps(row, separators=(",", ":")) for row in rows)
         + ("\n" if rows else ""),
