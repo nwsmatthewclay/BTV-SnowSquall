@@ -59,3 +59,15 @@ def test_documented_warning_without_surface_timing_is_not_hard_positive():
     eligible,reason=training_eligibility(row)
     assert not eligible
     assert 'surface_timing_missing_or_inconsistent' in reason
+
+
+def test_string_false_surface_timing_is_not_treated_as_true():
+    eligible,reason=training_eligibility({
+        'verification_class':'study_verified',
+        'surface_timing_consistent':'False',
+        'observation_count':10,
+        'radar_scan_count':20,
+        'verification_points':9,
+    })
+    assert not eligible
+    assert 'surface_timing_missing_or_inconsistent' in reason
