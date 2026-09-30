@@ -1,6 +1,11 @@
 name: Snow Squall Archived Replay Smoke
 
 on:
+  push:
+    branches:
+      - snow-squall-model-foundation
+    paths:
+      - .github/archived-replay-trigger
   workflow_run:
     workflows:
       - Snow Squall Expansion Dataset
