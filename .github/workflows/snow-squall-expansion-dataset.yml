@@ -6,9 +6,8 @@ on:
       archive_override:
         description: "Explicitly allow a one-off historical archive rerun"
         required: false
-        default: "false"
+        default: false
         type: boolean
-    inputs:
       official_offset:
         description: "Documented cases to skip for this batch"
         required: false
