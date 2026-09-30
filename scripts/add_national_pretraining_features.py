@@ -21,7 +21,7 @@ def augment(frame: pd.DataFrame, model_root: Path) -> tuple[pd.DataFrame, dict]:
         metrics_path = root / "metrics.json"
         feature_name = f"national_pretrain_probability_{horizon}m"
         if not model_path.exists() or not metrics_path.exists():
-            summary[str(horizon)] = {"status": "not_available"}
+            summary[f"{horizon}m"] = {"status": "not_available"}
             continue
         metadata = json.loads(metrics_path.read_text(encoding="utf-8"))
         predictors = list(metadata.get("predictor_columns") or [])
@@ -36,7 +36,7 @@ def augment(frame: pd.DataFrame, model_root: Path) -> tuple[pd.DataFrame, dict]:
         model = joblib.load(model_path)
         probabilities = np.asarray(model.predict_proba(working[predictors]), dtype=float)[:, 1]
         out[feature_name] = probabilities
-        summary[str(horizon)] = {
+        summary[f"{horizon}m"] = {
             "status": "applied",
             "predictor_count": len(predictors),
             "missing_source_predictors": missing,
