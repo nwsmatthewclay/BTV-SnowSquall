@@ -17,6 +17,7 @@ def test_baseline_split_group_is_case_or_null():
             "case_id": ["BTV20040315", "BTV20040315", None, None],
             "null_id": [None, None, "NULL0001", "NULL0002"],
             "track_event_associated": [True, True, False, False],
+            "supervision_class": ["supervised_positive", "supervised_positive", "", ""],
             "squall_onset_within_15m": [1, 0, 0, 0],
             "max_reflectivity_dbz": [20.0, 25.0, 10.0, 12.0],
         }
@@ -48,6 +49,7 @@ def test_baseline_excludes_post_onset_case_rows():
             "case_id": ["CASE1", "CASE1", None, None],
             "null_id": [None, None, "NULL0001", "NULL0002"],
             "track_event_associated": [True, True, False, False],
+            "supervision_class": ["supervised_positive", "supervised_positive", "", ""],
             "label_status": [
                 "prospective_positive",
                 "verified_event_interval",
