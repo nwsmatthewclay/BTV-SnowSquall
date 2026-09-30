@@ -57,6 +57,33 @@ def score_row(row):
         tier='D_review_only'
     return points,tier,','.join(evidence)
 
+def training_eligibility(row):
+    """Return (eligible, reason) for the initial supervised positive population.
+
+    A case can be retained as a documented/review candidate without being used
+    as a hard supervised positive. The first supervised population requires:
+    (1) documented/study evidence, (2) observed surface timing, (3) at least
+    one reconstructed radar object scan, and (4) at least six evidence points.
+    """
+    cls=str(row.get('verification_class') or '')
+    documented = cls in STRONG
+    surface_ok = bool(row.get('surface_timing_consistent')) and num(row.get('observation_count')) > 0
+    radar_ok = num(row.get('radar_scan_count')) > 0
+    points = num(row.get('verification_points'))
+    if documented and surface_ok and radar_ok and points >= 6:
+        return True, 'documented_source_plus_surface_timing_plus_radar_reconstruction'
+    reasons=[]
+    if not documented:
+        reasons.append('no_strong_documented_source')
+    if not surface_ok:
+        reasons.append('surface_timing_missing_or_inconsistent')
+    if not radar_ok:
+        reasons.append('radar_reconstruction_missing')
+    if points < 6:
+        reasons.append('insufficient_evidence_points')
+    return False, ';'.join(reasons)
+
+
 def build(cases_path, surface_path, objects_path, radar_path, output_path):
     cases=pd.read_csv(cases_path)
     for path in [surface_path, objects_path, radar_path]:
@@ -78,6 +105,9 @@ def build(cases_path, surface_path, objects_path, radar_path, output_path):
             cases=cases.merge(r[r_cols].drop_duplicates('candidate_id'),left_on='candidate_id',right_on='candidate_id',how='left')
     cases['radar_scan_count']=cases.get('radar_scan_count',pd.Series(0,index=cases.index)).fillna(0)
     cases['verification_points'],cases['verification_tier'],cases['verification_evidence']=zip(*cases.apply(score_row,axis=1))
+    elig = cases.apply(training_eligibility, axis=1, result_type='expand')
+    cases['training_eligible'] = elig[0].astype(bool)
+    cases['training_exclusion_reason'] = elig[1]
     cases['verification_policy']='descriptive_evidence_promotion_queue_v1'
     cases.to_csv(output_path,index=False)
     print('Case evidence scorecard:',len(cases))
