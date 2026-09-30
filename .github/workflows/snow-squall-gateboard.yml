@@ -1,0 +1,126 @@
+name: Snow Squall Gateboard
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - snow-squall-model-foundation
+    paths:
+      - .github/gateboard-trigger
+
+permissions:
+  actions: read
+  contents: read
+
+concurrency:
+  group: snow-squall-gateboard
+  cancel-in-progress: true
+
+jobs:
+  gateboard:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      GH_TOKEN: \${{ secrets.GITHUB_TOKEN }}
+      PYTHONUNBUFFERED: "1"
+    steps:
+      - name: Check out foundation
+        uses: actions/checkout@v4
+        with:
+          ref: snow-squall-model-foundation
+
+      - name: Evaluate current gate state
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          import subprocess
+          from datetime import datetime, timezone
+          from pathlib import Path
+
+          REPO = "\${{ github.repository }}"
+          BRANCH = "snow-squall-model-foundation"
+          HEAD = "\${{ github.sha }}"
+
+          def run_gh(args):
+              return subprocess.check_output(["gh", *args], text=True)
+
+          def status_gate(name, workflow):
+              rows = json.loads(run_gh([
+                  "run", "list",
+                  "--workflow", workflow,
+                  "--branch", BRANCH,
+                  "--limit", "20",
+                  "--json", "databaseId,status,conclusion,headSha,event,createdAt,updatedAt",
+              ]))
+              completed_success = next(
+                  (r for r in rows if r.get("conclusion") == "success"), None
+              )
+              latest_row = rows[0] if rows else None
+              ok = bool(completed_success)
+              return {
+                  "gate": name,
+                  "status": "green" if ok else "yellow",
+                  "ok": ok,
+                  "reason": "latest successful run found" if ok else "no successful run found",
+                  "latest_run": latest_row,
+                  "latest_success": completed_success,
+              }
+
+          checks = []
+
+          exp_text = Path(".github/workflows/snow-squall-expansion-dataset.yml").read_text()
+          ctrl_text = Path(".github/workflows/snow-squall-expansion-controller.yml").read_text()
+          archive_ok = "'auto_continue': False," in exp_text and "Historical expansion is archived" in ctrl_text
+          checks.append({
+              "gate": "historical_archive_lock",
+              "status": "green" if archive_ok else "red",
+              "ok": archive_ok,
+              "reason": "expansion workflow/controller stop automatic historical continuation" if archive_ok else "archive lock missing",
+          })
+
+          for name, workflow in [
+              ("unit_tests", "Snow Squall Tests"),
+              ("modern_independent_validation", "Modern Independent Validation"),
+              ("archived_viewer_smoke", "Archived Snow Squall Viewer Smoke Test"),
+              ("archived_replay_smoke", "Snow Squall Archived Replay Smoke"),
+              ("live_object_worker", "Snow Squall Live Object Worker Test"),
+              ("live_shadow", "Publish Live Snow Squall Model Shadow"),
+          ]:
+              checks.append(status_gate(name, workflow))
+
+          shadow_ref = subprocess.run(
+              ["gh","api",f"/repos/{REPO}/git/ref/heads/snow-squall-shadow-data"],
+              text=True, capture_output=True, check=False
+          )
+          checks.append({
+              "gate": "shadow_branch_present",
+              "status": "green" if shadow_ref.returncode == 0 else "yellow",
+              "ok": shadow_ref.returncode == 0,
+              "reason": "isolated shadow branch is present" if shadow_ref.returncode == 0 else "shadow branch is missing",
+          })
+
+          release_block = {
+              "status": "candidate_only_not_operational",
+              "probability_enablement": False,
+              "future_information_policy": "current_and_past_only",
+              "current_head_sha": HEAD,
+              "evaluated_utc": datetime.now(timezone.utc).isoformat().replace("+00:00","Z"),
+              "checks": checks,
+          }
+          release_block["summary"] = {
+              "green": sum(c["status"] == "green" for c in checks),
+              "yellow": sum(c["status"] == "yellow" for c in checks),
+              "red": sum(c["status"] == "red" for c in checks),
+              "overall": "all_evidence_gates_green" if all(c["ok"] for c in checks) else "candidate_gates_incomplete",
+          }
+          Path("gateboard.json").write_text(json.dumps(release_block, indent=2)+"\n", encoding="utf-8")
+          print(json.dumps(release_block, indent=2))
+          PY
+
+      - name: Upload gateboard
+        uses: actions/upload-artifact@v4
+        with:
+          name: snow-squall-gateboard
+          retention-days: 30
+          path: gateboard.json
