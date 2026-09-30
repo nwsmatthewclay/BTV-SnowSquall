@@ -255,6 +255,59 @@ jobs:
             --timeline replay/score_timeline.json \
             --output replay/viewer_case.geojson
 
+      - name: Build replay viewer manifest
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          import pandas as pd
+          info = json.loads(Path('replay_input_case.json').read_text())
+          pd.DataFrame([info]).rename(columns={
+              'window_start_utc': 'window_start_utc',
+              'window_end_utc': 'window_end_utc',
+          })[['case_id','radar_site','window_start_utc','window_end_utc']].to_csv(
+              'replay_viewer_manifest.csv', index=False
+          )
+          PY
+          rm -rf replay_viewer
+          python scripts/export_viewer_radar_frames.py \
+            --manifest replay_viewer_manifest.csv \
+            --input replay_input \
+            --output-dir replay_viewer
+          python scripts/build_replay_static_viewer.py \
+            --case-id "${{ steps.inputs.outputs.case_id }}" \
+            --radar-site "${{ steps.inputs.outputs.radar_site }}" \
+            --replay-case replay/viewer_case.geojson \
+            --timeline replay/score_timeline.json \
+            --frames-root replay_viewer \
+            --output-dir replay_viewer
+          cp viewer/index.html viewer/app.js viewer/style.css replay_viewer/
+
+      - name: Validate replay viewer package
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          catalog=json.loads(Path('replay_viewer/data/catalog.json').read_text())
+          assert catalog['data_status'] == 'research_replay'
+          assert catalog['probability_status'] == 'research_replay'
+          assert catalog['research_probability_status'] == 'candidate_only_not_operational'
+          case=catalog['cases'][0]
+          assert case['radar_frames']
+          geo=json.loads(Path('replay_viewer/data/'+case['file']).read_text())
+          scored=sum(bool((f.get('properties') or {}).get('research_probabilities')) for f in geo.get('features',[]))
+          assert scored > 0
+          print('Replay viewer validation: PASS')
+          print('Scored features:', scored)
+          print('Radar frames:', len(case['radar_frames']))
+          PY
+
+      - name: Upload replay viewer package
+        uses: actions/upload-artifact@v4
+        with:
+          name: snow-squall-archived-replay-viewer
+          retention-days: 14
+          path: replay_viewer
       - name: Upload replay smoke package
         uses: actions/upload-artifact@v4
         with:
