@@ -57,7 +57,7 @@ jobs:
           set -euo pipefail
           validation_run="${{inputs.validation_run_id }}"
           if [ -z "$validation_run" ]; then
-            validation_run="$(gh run list --workflow "Snow Squall Modern Independent Validation" --branch snow-squall-model-foundation --status success --limit 1 --json databaseId --jq '.[0].databaseId')"
+            validation_run="$(gh run list --workflow "Modern Independent Validation" --branch snow-squall-model-foundation --status success --limit 1 --json databaseId --jq '.[0].databaseId')"
           fi
           expansion_run="${{inputs.expansion_run_id }}"
           if [ -z "$expansion_run" ] && [ "${{ github.event_name }}" = "workflow_run" ]; then
