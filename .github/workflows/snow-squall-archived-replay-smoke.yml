@@ -78,7 +78,7 @@ jobs:
           set -euo pipefail
           mkdir -p validation_artifact
           gh run download "${{steps.runs.outputs.validation_run }}" \
-            --name snow-squall-modern-validation \
+            --name modern-independent-validation \
             --dir validation_artifact
 
       - name: Download candidate model bundle
@@ -105,11 +105,11 @@ jobs:
         id: inputs
         run: |
           set -euo pipefail
-          level2_root="$(find validation_artifact -type d -path "*/data/raw/modern_validation_level2" -print -quit)"
+          level2_root="$(find validation_artifact -type d -path "*/data/raw/modern_level2" -print -quit)"
           if [ -z "$level2_root" ]; then
             level2_root="$(find validation_artifact -type d -name modern_validation_level2 -print -quit)"
           fi
-          cases_csv="$(find validation_artifact -type f -path "*/data/manifests/modern_validation/modern_validation_cases.csv" -print -quit)"
+          cases_csv="$(find validation_artifact -type f -path "*/data/manifests/modern_independent_validation_cases.csv" -print -quit)"
           test -n "$level2_root"
           test -n "$cases_csv"
           test -n "$(find "$level2_root" -type f -print -quit)"
