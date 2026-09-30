@@ -53,8 +53,11 @@ def main():
 
     for horizon in HORIZONS:
         target = f'squall_onset_within_{horizon}m'
-        model_dir = Path(args.model_root) / f'candidate_expansion_{horizon}m'
+        ensemble_dir = Path(args.model_root) / f'candidate_ensemble_expansion_{horizon}m'
+        baseline_dir = Path(args.model_root) / f'baseline_expansion_{horizon}m'
+        model_dir = ensemble_dir if (ensemble_dir / 'baseline_model.joblib').exists() else baseline_dir
         probabilities, metrics = score_one(features, model_dir, target)
+        metrics['selected_model_dir'] = model_dir.name
         summary[str(horizon)] = metrics
         if probabilities is not None:
             cols = [c for c in ['case_id', 'radar_site', 'object_id', 'scan_time_utc', target] if c in features.columns]
