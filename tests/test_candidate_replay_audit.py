@@ -22,6 +22,7 @@ def _write_replay(root, horizon, probabilities, wrong=None):
         "metadata": {
             "probability_status": "scored",
             "model_horizon_minutes": horizon,
+            "probability_mode": "research_replay",
             "future_information_policy": "one_scan_at_a_time",
         },
         "features": [{"type":"Feature","geometry":None,"properties":props}],
