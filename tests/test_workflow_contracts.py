@@ -10,6 +10,8 @@ WORKFLOWS = [
     '.github/workflows/snow-squall-case-ledger.yml',
     '.github/workflows/snow-squall-expansion-dataset.yml',
     '.github/workflows/snow-squall-expansion-controller.yml',
+    '.github/workflows/national-sqw-radar-sample-controller.yml',
+    '.github/workflows/snow-squall-live-shadow.yml',
     '.github/workflows/national-sqw-radar-pretraining.yml',
     '.github/workflows/snow-squall-modern-validation.yml',
 ]
