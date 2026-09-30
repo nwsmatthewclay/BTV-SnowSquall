@@ -88,13 +88,39 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt -r requirements-science.txt
 
+      - name: Locate unified ledger files
+        id: ledger
+        run: |
+          set -euo pipefail
+          ledger="$(find discovery_artifact -name snow_squall_case_ledger.csv -type f -print -quit)"
+          radar="$(find discovery_artifact -name snow_squall_case_radar_manifest.csv -type f -print -quit)"
+          test -n "$ledger"
+          test -n "$radar"
+          echo "ledger=$ledger" >> "$GITHUB_OUTPUT"
+          echo "radar=$radar" >> "$GITHUB_OUTPUT"
+          echo "Ledger: $ledger"
+          echo "Radar manifest: $radar"
+
+      - name: Inspect unified ledger size
+        run: |
+          python - <<'PY'
+          import pandas as pd
+          ledger=pd.read_csv('${{ steps.ledger.outputs.ledger }}')
+          radar=pd.read_csv('${{ steps.ledger.outputs.radar }}')
+          print('Unified case records:',len(ledger))
+          print('Physical episodes:',ledger['episode_id'].nunique() if 'episode_id' in ledger else 'missing')
+          print('Radar acquisition rows:',len(radar))
+          print('Verification classes:')
+          print(ledger['verification_class'].value_counts().to_string())
+          PY
+
       - name: Select expanded documented and unverified case pool
         run: |
           set -euo pipefail
           rm -rf data/manifests/snow_squall_expansion
           python scripts/select_snow_squall_case_pool.py \
-            --input discovery_artifact/unified/snow_squall_case_ledger.csv \
-            --radar-manifest discovery_artifact/unified/snow_squall_case_radar_manifest.csv \
+            --input "${{ steps.ledger.outputs.ledger }}" \
+            --radar-manifest "${{ steps.ledger.outputs.radar }}" \
             --output-dir data/manifests/snow_squall_expansion \
             --max-official "${{ inputs.max_official || '50' }}" \
             --max-unverified "${{ inputs.max_unverified || '25' }}" \
