@@ -5,6 +5,7 @@ on:
     workflows:
       - Snow Squall Case Discovery
       - Snow Squall IEM LSR Harvest
+      - Snow Squall NWS Text Review
     types:
       - completed
   push:
@@ -60,6 +61,13 @@ jobs:
             echo "skip=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
+          nws_text_run="$(gh run list --workflow "Snow Squall NWS Text Review" --branch snow-squall-model-foundation --status success --limit 1 --json databaseId --jq '.[0].databaseId')"
+          if [ -z "$nws_text_run" ] || [ "$nws_text_run" = "null" ]; then
+            echo "BTV NWS text review is not ready yet; this ledger pass will exit cleanly."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "nws_text_run=$nws_text_run" >> "$GITHUB_OUTPUT"
           echo "discovery_run=$discovery_run" >> "$GITHUB_OUTPUT"
           echo "lsr_run=$lsr_run" >> "$GITHUB_OUTPUT"
 
@@ -76,11 +84,17 @@ jobs:
         run: gh run download "${{ steps.sources.outputs.lsr_run }}" --name snow-squall-iem-lsr-review --dir lsr_artifact
 
       - name: Build unified case ledger
+      - name: Download BTV NWS text review artifact
+        if: steps.sources.outputs.skip != 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh run download "${{ steps.sources.outputs.nws_text_run }}" --name snow-squall-nws-text-review --dir nws_text_artifact
         if: steps.sources.outputs.skip != 'true'
         run: |
           python scripts/merge_snow_squall_case_sources.py \
             --discovery discovery_artifact/snow_squall_candidates.csv \
             --iem-lsr lsr_artifact/iem_lsr_case_clusters.csv \
+            --nws-text nws_text_artifact/iem_nws_text_candidates.csv \
             --output-dir data/discovery/unified
 
       - name: Audit unified ledger
@@ -89,7 +103,7 @@ jobs:
           python scripts/audit_snow_squall_case_ledger.py \
             --cases data/discovery/unified/snow_squall_case_ledger.csv \
             --radar data/discovery/unified/snow_squall_case_radar_manifest.csv \
-            --start-year 2002 \
+            --start-year 1950 \
             --end-year 2026 \
             --output data/discovery/unified/snow_squall_case_ledger_audit.json
 
