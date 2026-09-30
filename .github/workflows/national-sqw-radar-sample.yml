@@ -118,8 +118,8 @@ jobs:
 
           listing_keys = set()
           for row in d.to_dict("records"):
-              start = pd.Timestamp(row["window_start_utc"], tz="UTC").normalize()
-              end = pd.Timestamp(row["window_end_utc"], tz="UTC").normalize()
+              start = pd.to_datetime(row["window_start_utc"], utc=True).normalize()
+              end = pd.to_datetime(row["window_end_utc"], utc=True).normalize()
               day = start
               while day <= end:
                   listing_keys.add((row["radar_site"], day.to_pydatetime()))
@@ -138,11 +138,11 @@ jobs:
 
           rows = []
           for record in d.to_dict("records"):
-              start = pd.Timestamp(record["window_start_utc"], tz="UTC").to_pydatetime()
-              end = pd.Timestamp(record["window_end_utc"], tz="UTC").to_pydatetime()
+              start = pd.to_datetime(record["window_start_utc"], utc=True).to_pydatetime()
+              end = pd.to_datetime(record["window_end_utc"], utc=True).to_pydatetime()
               available = False
-              day = pd.Timestamp(start, tz="UTC").normalize()
-              last = pd.Timestamp(end, tz="UTC").normalize()
+              day = pd.Timestamp(start).tz_convert("UTC").normalize()
+              last = pd.Timestamp(end).tz_convert("UTC").normalize()
               while day <= last:
                   keys = listings[(record["radar_site"], day.to_pydatetime())]
                   if any(
