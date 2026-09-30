@@ -57,7 +57,24 @@ def score_site(site: str, live_root: Path, model_root: Path) -> tuple[dict, list
         track_id = props.get("track_id")
         if track_id is None:
             continue
+        current_timestamp = props.get("timestamp") or geo.get("metadata", {}).get("scan_time_utc")
+        try:
+            current_dt = datetime.fromisoformat(str(current_timestamp).replace("Z", "+00:00")).astimezone(timezone.utc)
+        except (TypeError, ValueError):
+            current_dt = None
         track_history = [r for r in history if str(r.get("track_id")) == str(track_id)]
+        if current_dt is not None:
+            filtered_history = []
+            for row in track_history:
+                try:
+                    row_dt = datetime.fromisoformat(
+                        str(row.get("timestamp")).replace("Z", "+00:00")
+                    ).astimezone(timezone.utc)
+                except (TypeError, ValueError):
+                    continue
+                if row_dt <= current_dt:
+                    filtered_history.append(row)
+            track_history = filtered_history
         if not track_history:
             track_history = [dict(props)]
         frame = build_live_feature_frame(track_history, track_id)
