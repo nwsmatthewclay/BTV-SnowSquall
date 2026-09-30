@@ -95,7 +95,10 @@ def test_replay_parity_matches_historical_and_live_feature_paths():
     assert result["comparable_predictors"] == 9
 
 
-def test_replay_parity_detects_causal_feature_drift():
+
+def test_replay_parity_detects_adapter_drift(monkeypatch):
+    import scripts.audit_live_feature_parity as mod
+
     raw = pd.DataFrame([
         {
             "timestamp": "2026-01-01T12:00:00Z",
@@ -111,20 +114,28 @@ def test_replay_parity_detects_causal_feature_drift():
             "max_reflectivity_dbz": 30.0,
             "area_km2": 12.0,
         },
+        {
+            "timestamp": "2026-01-01T12:10:00Z",
+            "track_id": "sq2",
+            "radar_site": "KCXX",
+            "max_reflectivity_dbz": 40.0,
+            "area_km2": 16.0,
+        },
     ])
 
-    result = audit_track(
+    original = mod.build_live_feature_frame
+
+    def drifted(history, track_id):
+        frame = original(history, track_id)
+        frame.loc[frame.index[-1], "max_reflectivity_dbz_rate_per_min"] = 99.0
+        return frame
+
+    monkeypatch.setattr(mod, "build_live_feature_frame", drifted)
+    result = mod.audit_track(
         raw,
         ["max_reflectivity_dbz_rate_per_min"],
         "sq2",
     )
-    assert result["status"] == "pass"
-
-    mutated = raw.copy()
-    mutated.loc[1, "max_reflectivity_dbz"] = 99.0
-    drift = audit_track(
-        mutated,
-        ["max_reflectivity_dbz_rate_per_min"],
-        "sq2",
-    )
-    assert drift["status"] == "pass"
+    assert result["status"] == "fail"
+    assert result["mismatch_count"] == 1
+    assert result["mismatches"][0]["kind"] == "numeric_mismatch"
