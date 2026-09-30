@@ -1,0 +1,32 @@
+name: Snow Squall Expansion Bootstrap
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/snow-squall-expansion-dataset.yml
+      - .github/expansion-bootstrap-trigger
+  workflow_dispatch:
+
+permissions:
+  actions: write
+  contents: read
+
+jobs:
+  dispatch-expansion:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Dispatch expansion workflow on foundation branch
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          gh workflow run snow-squall-expansion-dataset.yml \
+            --repo "$GITHUB_REPOSITORY" \
+            --ref snow-squall-model-foundation \
+            -f official_offset=0 \
+            -f unverified_offset=0 \
+            -f max_official=30 \
+            -f max_unverified=15
+          echo "Dispatched Snow Squall Expansion Dataset on snow-squall-model-foundation"
