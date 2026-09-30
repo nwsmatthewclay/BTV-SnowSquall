@@ -9,6 +9,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from pathlib import Path
 from collections import OrderedDict
+from processing.snsq_profile import build_snsq_profile
 
 import numpy as np
 import xarray as xr
@@ -37,6 +38,7 @@ FIELD_SPECS = {
     "temperature_2m_k": ("heightAboveGround", "tmp", 2),
     "dewpoint_2m_k": ("heightAboveGround", "dpt", 2),
     "rh_2m_pct": ("heightAboveGround", "r", 2),
+    "surface_pressure_pa": ("surface", "sp", None),
 }
 
 
@@ -126,6 +128,65 @@ def _dataset_valid_time(ds):
     return None
 
 
+def _open_profile(path: Path, short_name: str):
+    return _open_field(path, "isobaricInhPa", short_name, None)
+
+def _nearest_profile(ds, latitude, longitude):
+    if ds is None or not ds.data_vars:
+        return None
+    lat_name = next((x for x in ("latitude", "lat") if x in ds.coords), None)
+    lon_name = next((x for x in ("longitude", "lon") if x in ds.coords), None)
+    level_name = next((x for x in ("isobaricInhPa", "isobaricInPa") if x in ds.coords), None)
+    if lat_name is None or lon_name is None or level_name is None:
+        return None
+    lats = np.asarray(ds[lat_name].values)
+    lons = np.asarray(ds[lon_name].values)
+    distance = (lats - latitude) ** 2 + ((lons - longitude) * np.cos(np.deg2rad(latitude))) ** 2
+    idx = np.unravel_index(np.nanargmin(distance), distance.shape)
+    variable = next(iter(ds.data_vars))
+    values = np.asarray(ds[variable].values)
+    levels = np.asarray(ds[level_name].values, dtype=float).reshape(-1)
+    if values.ndim != 3:
+        return None
+    return levels, values[:, idx[0], idx[1]].astype(float)
+
+def _extract_snsq(path: Path, latitude, longitude, values):
+    try:
+        profiles = {}
+        for name in ("r", "gh", "t", "dpt", "u", "v"):
+            result = _nearest_profile(_open_profile(path, name), latitude, longitude)
+            if result is None:
+                return {"snsq": None, "snsq_status": "profile_missing"}
+            profiles[name] = result
+        level, rh = profiles["r"]
+        gh_level, gh = profiles["gh"]
+        t_level, temp = profiles["t"]
+        dpt_level, dpt = profiles["dpt"]
+        u_level, u = profiles["u"]
+        v_level, v = profiles["v"]
+        if not all(np.array_equal(level, other) for other in (gh_level, t_level, dpt_level, u_level, v_level)):
+            return {"snsq": None, "snsq_status": "profile_level_mismatch"}
+        orog = _nearest(_open_field(path, "surface", "orog", None), latitude, longitude)
+        if orog is None:
+            return {"snsq": None, "snsq_status": "terrain_missing"}
+        pressure_hpa = level if np.nanmax(level) < 2000 else level / 100.0
+        surface_pressure_hpa = float(values["surface_pressure_pa"]) / 100.0 if values.get("surface_pressure_pa") is not None else None
+        if surface_pressure_hpa is None:
+            return {"snsq": None, "snsq_status": "surface_pressure_missing"}
+        result = build_snsq_profile(
+            np.asarray(gh, dtype=float) - float(orog),
+            pressure_hpa, np.asarray(temp, dtype=float), np.asarray(dpt, dtype=float),
+            np.asarray(rh, dtype=float), np.asarray(u, dtype=float), np.asarray(v, dtype=float),
+            surface_pressure_hpa, values.get("temperature_2m_k"), values.get("dewpoint_2m_k"),
+            surface_rh_pct=values.get("rh_2m_pct"), surface_u_ms=values.get("u10_ms"),
+            surface_v_ms=values.get("v10_ms"), wetbulb_2m_c=None,
+        )
+        result["snsq_status"] = "complete" if result.get("snsq") is not None else "profile_insufficient"
+        return result
+    except Exception as exc:
+        return {"snsq": None, "snsq_status": type(exc).__name__}
+
+
 def extract_features(
     path: Path,
     latitude: float,
@@ -156,6 +217,9 @@ def extract_features(
             values[name] = _nearest(ds, latitude, longitude)
         except Exception as exc:
             failures[name] = type(exc).__name__
+
+    snsq = _extract_snsq(path, latitude, longitude, values)
+    values.update(snsq)
 
     if values["pwat_mm"] is not None:
         # RAP PWAT is kg m^-2, numerically equivalent to mm of liquid water.
