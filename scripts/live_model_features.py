@@ -273,6 +273,31 @@ def build_live_feature_frame(history: Iterable[dict], track_id: str | int) -> pd
             track_count=idx + 1,
         )
 
+        # Three-scan trailing state mirrors the historical feature builder.
+        if idx >= 2:
+            prev2 = rows[idx - 2]
+            prev2_time = _utc(prev2.get("timestamp"))
+            if current_time is not None and prev2_time is not None:
+                dt2 = (current_time - prev2_time).total_seconds() / 60.0
+                prev_dt = (previous_time - prev2_time).total_seconds() / 60.0 if previous_time is not None else None
+                if 0 < dt2 <= 20 and prev_dt is not None and 0 < prev_dt <= 10:
+                    for source in ("max_reflectivity_dbz", "area_km2", "echo_top_km", "motion_speed_kt"):
+                        vals = [_number(prev2.get(source)), _number(current.get(source)), _number(previous.get(source))]
+                        finite = [v for v in vals if v is not None]
+                        if finite:
+                            row[source + "_trailing_mean_3"] = sum(finite) / len(finite)
+                            if len(finite) >= 2:
+                                mean = sum(finite) / len(finite)
+                                row[source + "_trailing_std_3"] = (sum((v - mean) ** 2 for v in finite) / (len(finite) - 1)) ** 0.5
+                        old = _number(prev2.get(source))
+                        cur = _number(current.get(source))
+                        if old is not None and cur is not None:
+                            row[source + "_change_2scan"] = cur - old
+                            row[source + "_rate_2scan_per_min"] = (cur - old) / dt2
+                        p = _number(previous.get(source))
+                        if old is not None and p is not None and cur is not None:
+                            row[source + "_acceleration_per_min2"] = ((cur - p) / prev_dt) - ((p - old) / prev_dt)
+
         current_time = _utc(current.get("timestamp"))
         first_time = _utc(first_timestamp)
         row["track_age_min"] = (
