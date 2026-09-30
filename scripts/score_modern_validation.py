@@ -22,7 +22,12 @@ def score_case(case_row, objects, model_root: Path):
     case_objects=objects[objects['case_id'].astype(str).eq(case_id)].copy()
     results=[]
     for track_id, group in case_objects.groupby('object_id',sort=False):
-        history=group.to_dict(orient='records')
+        history=[]
+        for row in group.to_dict(orient='records'):
+            item=dict(row)
+            item['track_id']=str(track_id)
+            item['timestamp']=row.get('scan_time_utc')
+            history.append(item)
         frame=build_live_feature_frame(history,track_id)
         if frame.empty: continue
         base={}
