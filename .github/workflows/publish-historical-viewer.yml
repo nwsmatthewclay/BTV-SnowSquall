@@ -11,6 +11,11 @@ on:
       - scripts/build_static_viewer.py
       - .github/workflows/publish-historical-viewer.yml
       - .github/pilot-trigger
+  workflow_run:
+    workflows:
+      - Snow Squall Expansion Dataset
+    types:
+      - completed
   workflow_dispatch:
 
 permissions:
@@ -36,142 +41,31 @@ jobs:
         with:
           ref: snow-squall-model-foundation
 
-      - name: Resolve latest dataset workflow run
+      - name: Resolve latest successful dataset workflow run
         id: source
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         shell: bash
         run: |
           set -euo pipefail
-          JSON=$(gh api \
-            --header 'Accept: application/vnd.github+json' \
-            --header 'X-GitHub-Api-Version: 2022-11-28' \
-            "/repos/${GITHUB_REPOSITORY}/actions/runs?branch=snow-squall-model-foundation&per_page=100")
 
-          MIN_DATASET_SHA="626048af263afaef735118e653aecc3ae884ff75"
-          ACTIVE=""
-          USABLE=""
+          # The historical viewer is a research/replay surface. Always publish
+          # from the newest completed successful dataset rather than blocking on
+          # a newer in-progress expansion batch.
+          CANDIDATE=$(gh run list             --branch snow-squall-model-foundation             --status success             --limit 30             --json databaseId,name,status,conclusion             --jq '[.[] | select(.name == "Snow Squall Expansion Dataset" or .name == "Object Dataset Full Expansion" or .name == "Object Dataset Pilot")] | sort_by(.databaseId) | reverse | .[0]')
 
-          while IFS= read -r RUN; do
-            SHA=$(printf '%s' "${RUN}" | jq -r '.head_sha')
-            STATUS=$(gh api "/repos/${GITHUB_REPOSITORY}/compare/${MIN_DATASET_SHA}...${SHA}" -q '.status')
-            if [ "${STATUS}" != "ahead" ] && [ "${SHA}" != "${MIN_DATASET_SHA}" ]; then
-              continue
-            fi
-
-            RUN_STATUS=$(printf '%s' "${RUN}" | jq -r '.status')
-            RUN_CONCLUSION=$(printf '%s' "${RUN}" | jq -r '.conclusion')
-            RUN_ID=$(printf '%s' "${RUN}" | jq -r '.id')
-            RUN_NAME=$(printf '%s' "${RUN}" | jq -r '.name')
-
-            if [ "${RUN_STATUS}" != "completed" ]; then
-              ACTIVE="${RUN}"
-              break
-            fi
-
-            if [ "${RUN_CONCLUSION}" = "success" ]; then
-              USABLE="${RUN}"
-              break
-            fi
-
-            # A failed pilot may still be usable for the research viewer/replay
-            # when every dataset science step completed and only the known test
-            # gate failed. Never treat that run as an operational release.
-            JOBS=$(gh api "/repos/${GITHUB_REPOSITORY}/actions/runs/${RUN_ID}/jobs?per_page=100")
-            DATASET_JOB=$(printf '%s' "${JOBS}" | jq -c '.jobs[] | select(.name == "dataset-pilot")' | head -n 1)
-            if [ -n "${DATASET_JOB}" ] && [ "$(printf '%s' "${DATASET_JOB}" | jq -r '.conclusion')" = "failure" ]; then
-              STEP42=$(printf '%s' "${DATASET_JOB}" | jq -r '.steps[] | select(.name=="Train case-held-out baseline models") | .conclusion')
-              STEP43=$(printf '%s' "${DATASET_JOB}" | jq -r '.steps[] | select(.name=="Summarize baseline horizon verification") | .conclusion')
-              STEP45=$(printf '%s' "${DATASET_JOB}" | jq -r '.steps[] | select(.name=="Build event-level verification diagnostics") | .conclusion')
-              STEP46=$(printf '%s' "${DATASET_JOB}" | jq -r '.steps[] | select(.name=="Audit training dataset") | .conclusion')
-              STEP47=$(printf '%s' "${DATASET_JOB}" | jq -r '.steps[] | select(.name=="Render positive radar frames for viewer") | .conclusion')
-              STEP48=$(printf '%s' "${DATASET_JOB}" | jq -r '.steps[] | select(.name=="Build historical viewer data package") | .conclusion')
-              STEP50=$(printf '%s' "${DATASET_JOB}" | jq -r '.steps[] | select(.name=="Build SOO-ready pilot report") | .conclusion')
-              STEP51=$(printf '%s' "${DATASET_JOB}" | jq -r '.steps[] | select(.name=="Run tests") | .conclusion')
-              STEP53=$(printf '%s' "${DATASET_JOB}" | jq -r '.steps[] | select(.name=="Upload object dataset pilot") | .conclusion')
-              if [ "${STEP42}" = "success" ] && [ "${STEP43}" = "success" ] && [ "${STEP45}" = "success" ] && [ "${STEP46}" = "success" ] && [ "${STEP47}" = "success" ] && [ "${STEP48}" = "success" ] && [ "${STEP50}" = "success" ] && [ "${STEP51}" = "failure" ] && [ "${STEP53}" = "success" ]; then
-                USABLE="${RUN}"
-                echo "Using research-package-only failed run ${RUN_ID}: all science/package gates passed; only Run tests failed."
-                break
-              fi
-            fi
-          done < <(printf '%s' "${JSON}" | jq -c '
-            [.workflow_runs[]
-             | select(.name == "Object Dataset Pilot" or .name == "Object Dataset Full Expansion")]
-            | sort_by(.id)
-            | reverse
-            | .[]')
-
-          CANDIDATE="${ACTIVE:-${USABLE}}"
-          if [ -z "${CANDIDATE}" ]; then
-            echo "No active or usable repaired-lineage dataset run found; nothing to publish."
+          if [ -z "${CANDIDATE}" ] || [ "${CANDIDATE}" = "null" ]; then
+            echo "No successful historical dataset workflow run is available."
             echo "skip=true" >> "${GITHUB_OUTPUT}"
             exit 0
           fi
 
-          ID=$(printf '%s' "${CANDIDATE}" | jq -r '.id')
+          ID=$(printf '%s' "${CANDIDATE}" | jq -r '.databaseId')
           NAME=$(printf '%s' "${CANDIDATE}" | jq -r '.name')
-          STATUS=$(printf '%s' "${CANDIDATE}" | jq -r '.status')
-          CONCLUSION=$(printf '%s' "${CANDIDATE}" | jq -r '.conclusion')
-          SHA=$(printf '%s' "${CANDIDATE}" | jq -r '.head_sha')
-
-          echo "Selected dataset run ${ID}: ${NAME}, status=${STATUS}, conclusion=${CONCLUSION}, sha=${SHA}"
+          echo "Selected successful dataset run ${ID}: ${NAME}"
           echo "run_id=${ID}" >> "${GITHUB_OUTPUT}"
           echo "workflow_name=${NAME}" >> "${GITHUB_OUTPUT}"
-          echo "status=${STATUS}" >> "${GITHUB_OUTPUT}"
-
-          if [ "${STATUS}" != "completed" ]; then
-            echo "wait=true" >> "${GITHUB_OUTPUT}"
-          else
-            echo "wait=false" >> "${GITHUB_OUTPUT}"
-          fi
-
-      - name: Wait for active dataset run
-        if: steps.source.outputs.skip != 'true' && steps.source.outputs.wait == 'true'
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          SOURCE_RUN_ID: ${{ steps.source.outputs.run_id }}
-          SOURCE_NAME: ${{ steps.source.outputs.workflow_name }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          for attempt in $(seq 1 180); do
-            RUN=$(gh api \
-              --header 'Accept: application/vnd.github+json' \
-              --header 'X-GitHub-Api-Version: 2022-11-28' \
-              "/repos/${GITHUB_REPOSITORY}/actions/runs/${SOURCE_RUN_ID}")
-            STATUS=$(printf '%s' "${RUN}" | jq -r '.status')
-            CONCLUSION=$(printf '%s' "${RUN}" | jq -r '.conclusion')
-            echo "${SOURCE_NAME} run ${SOURCE_RUN_ID}: status=${STATUS} conclusion=${CONCLUSION}"
-            if [ "${STATUS}" = "completed" ]; then
-              if [ "${CONCLUSION}" = "success" ]; then
-                exit 0
-              fi
-
-              JOBS=$(gh api "/repos/${GITHUB_REPOSITORY}/actions/runs/${SOURCE_RUN_ID}/jobs?per_page=100")
-              DATASET_JOB=$(printf '%s' "${JOBS}" | jq -c '.jobs[] | select(.name == "dataset-pilot")' | head -n 1)
-              [ -n "${DATASET_JOB}" ] || exit 1
-              JOB_CONCLUSION=$(printf '%s' "${DATASET_JOB}" | jq -r '.conclusion')
-
-              STEP42=$(printf '%s' "${DATASET_JOB}" | jq -r '.steps[] | select(.name=="Train case-held-out baseline models") | .conclusion')
-              STEP43=$(printf '%s' "${DATASET_JOB}" | jq -r '.steps[] | select(.name=="Summarize baseline horizon verification") | .conclusion')
-              STEP46=$(printf '%s' "${DATASET_JOB}" | jq -r '.steps[] | select(.name=="Audit training dataset") | .conclusion')
-              STEP47=$(printf '%s' "${DATASET_JOB}" | jq -r '.steps[] | select(.name=="Render positive radar frames for viewer") | .conclusion')
-              STEP48=$(printf '%s' "${DATASET_JOB}" | jq -r '.steps[] | select(.name=="Build historical viewer data package") | .conclusion')
-              STEP50=$(printf '%s' "${DATASET_JOB}" | jq -r '.steps[] | select(.name=="Build SOO-ready pilot report") | .conclusion')
-              STEP51=$(printf '%s' "${DATASET_JOB}" | jq -r '.steps[] | select(.name=="Run tests") | .conclusion')
-              STEP53=$(printf '%s' "${DATASET_JOB}" | jq -r '.steps[] | select(.name=="Upload object dataset pilot") | .conclusion')
-
-              if [ "${JOB_CONCLUSION}" = "failure" ] && [ "${STEP42}" = "success" ] && [ "${STEP43}" = "success" ] && [ "${STEP46}" = "success" ] && [ "${STEP47}" = "success" ] && [ "${STEP48}" = "success" ] && [ "${STEP50}" = "success" ] && [ "${STEP51}" = "failure" ] && [ "${STEP53}" = "success" ]; then
-                echo "Dataset science/package completed; test-only failure is being treated as research-package usable."
-                exit 0
-              fi
-              exit 1
-            fi
-            sleep 60
-          done
-          echo "Timed out waiting for dataset run."
-          exit 1
+          echo "skip=false" >> "${GITHUB_OUTPUT}"
 
       - name: Download dataset artifact
         if: steps.source.outputs.skip != 'true'
