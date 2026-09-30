@@ -50,6 +50,45 @@ def validate_scan_sequence(scans: list[Path]) -> dict:
         "last_input_scan_utc": timestamps[-1].isoformat().replace("+00:00", "Z") if timestamps else None,
     }
 
+
+def resume_prefix(scans: list[Path], output_dir: Path, state_path: Path) -> int:
+    """Return the completed output prefix for a safe interrupted replay resume."""
+    prefix = 0
+    for index, source in enumerate(scans, 1):
+        output = output_dir / f"{index:04d}_{source.stem}.geojson"
+        if not output.exists():
+            break
+        prefix = index
+
+    if prefix == 0:
+        if state_path.exists():
+            state = json.loads(state_path.read_text(encoding="utf-8"))
+            if state.get("last_source"):
+                raise ValueError(
+                    "Replay state exists but no completed replay outputs were found; "
+                    "refusing to resume from an ambiguous tracker state."
+                )
+        return 0
+
+    first_missing = prefix
+    for index in range(first_missing + 1, len(scans) + 1):
+        output = output_dir / f"{index:04d}_{scans[index - 1].stem}.geojson"
+        if output.exists():
+            raise ValueError(
+                "Replay outputs are not a contiguous prefix; refusing to resume "
+                "because tracker state and output history may be inconsistent."
+            )
+
+    state = json.loads(state_path.read_text(encoding="utf-8")) if state_path.exists() else {}
+    if not state:
+        raise ValueError("Replay outputs exist but replay state is missing; refusing to resume.")
+    if state.get("last_source") != scans[prefix - 1].name:
+        raise ValueError(
+            "Replay state does not terminate at the last completed output; "
+            "refusing to resume from an ambiguous state."
+        )
+    return prefix
+
 def replay_case(input_dir: Path, output_dir: Path, state_path: Path, case_id: str, max_scans: int|None=None, resume: bool=False, continue_on_error: bool=False, window_start: datetime|None=None, window_end: datetime|None=None, model_dir: Path|None=None) -> dict:
     scans=ordered_inputs(input_dir)
     if window_start is not None:
@@ -65,6 +104,7 @@ def replay_case(input_dir: Path, output_dir: Path, state_path: Path, case_id: st
             "timestamps would make scan-by-scan causality ambiguous."
         )
     output_dir.mkdir(parents=True, exist_ok=True); state_path.parent.mkdir(parents=True, exist_ok=True)
+    resume_count = resume_prefix(scans, output_dir, state_path) if resume else 0
     if state_path.exists() and not resume:
         state_path.unlink()
     records=[]
@@ -75,8 +115,18 @@ def replay_case(input_dir: Path, output_dir: Path, state_path: Path, case_id: st
         output=output_dir/f"{index:04d}_{source.stem}.geojson"
         started=datetime.now(timezone.utc)
         expected_scan_time = iso_utc(scan_time(source).isoformat())
-        try:
-            process_volume(
+        if index <= resume_count:
+            try:
+                payload=json.loads(output.read_text(encoding="utf-8"))
+                metadata=payload.get("metadata",{})
+            except (OSError, json.JSONDecodeError) as exc:
+                raise ValueError(f"Completed replay output is unreadable: {output}") from exc
+            actual_scan_time=metadata.get("scan_time_utc")
+            if actual_scan_time is None or iso_utc(actual_scan_time) != expected_scan_time:
+                raise ValueError(f"Completed replay output timestamp mismatch: {output}")
+        else:
+            try:
+                process_volume(
                 source,
                 state_path,
                 output,
@@ -85,15 +135,17 @@ def replay_case(input_dir: Path, output_dir: Path, state_path: Path, case_id: st
                 model_dir=model_dir,
                 research_replay=(model_dir is not None),
             )
-        except Exception as exc:
-            errors.append({"sequence":index,"source_file":source.name,"error_type":type(exc).__name__,"error_message":str(exc)})
-            print(f"REPLAY ERROR {source.name}: {type(exc).__name__}: {exc}")
-            if not continue_on_error:
-                raise
-            continue
-        finished=datetime.now(timezone.utc)
-        payload=json.loads(output.read_text(encoding="utf-8"))
-        metadata=payload.get("metadata",{})
+            except Exception as exc:
+                errors.append({"sequence":index,"source_file":source.name,"error_type":type(exc).__name__,"error_message":str(exc)})
+                print(f"REPLAY ERROR {source.name}: {type(exc).__name__}: {exc}")
+                if not continue_on_error:
+                    raise
+                continue
+            finished=datetime.now(timezone.utc)
+            payload=json.loads(output.read_text(encoding="utf-8"))
+            metadata=payload.get("metadata",{})
+        else:
+            finished=datetime.now(timezone.utc)
         actual_scan_time = metadata.get("scan_time_utc")
         if actual_scan_time is None:
             raise ValueError(f"Replay output has no scan_time_utc: {output}")
