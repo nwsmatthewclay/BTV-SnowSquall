@@ -22,4 +22,4 @@ def test_choose_diverse_round_robins_years():
         'ncei_explicit_snow_squall':[True,False,True,False],
     })
     result=choose_diverse(candidates,4)
-    assert result["event_start_utc"].dt.year.tolist() if hasattr(result["event_start_utc"], "dt") else list(pd.to_datetime(result["event_start_utc"]).dt.year) == [2022,2023,2022,2023]
+    assert pd.to_datetime(result["event_start_utc"]).dt.year.tolist() == [2022, 2023, 2022, 2023]
