@@ -37,6 +37,7 @@ def _synthetic_history() -> list[dict]:
         "scan_time_utc": "2026-01-01T00:00:00Z",
         "timestamp": "2026-01-01T00:00:00Z",
         "track_id": "beta-track-1",
+        "object_id": "beta-object-1",
         "radar_site": "KCXX",
         "centroid_lat": 44.5,
         "centroid_lon": -73.2,
