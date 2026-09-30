@@ -4,6 +4,7 @@ on:
   workflow_run:
     workflows:
       - Reconstruct Modern Candidate Cohort
+      - Snow Squall Candidate Model Refresh
     types:
       - completed
 
@@ -46,28 +47,56 @@ jobs:
         run: |
           set -euo pipefail
           selected=""
+          artifact_name=""
+          model_prefix=""
+          # Prefer the refreshed national-prior model when one exists.
           while IFS= read -r run; do
             run_id="$(printf '%s' "${run}" | jq -r '.id')"
             artifacts="$(gh api "/repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}/artifacts?per_page=100")"
-            count="$(printf '%s' "${artifacts}" | jq '[.artifacts[] | select(.name=="snow-squall-live-model-bundles" and .expired==false)] | length')"
+            count="$(printf '%s' "${artifacts}" | jq '[.artifacts[] | select(.name=="snow-squall-refreshed-model-bundles" and .expired==false)] | length')"
             if [ "${count}" -gt 0 ]; then
               selected="${run}"
+              artifact_name="snow-squall-refreshed-model-bundles"
+              model_prefix="candidate_ensemble_refresh_"
               break
             fi
           done < <(
             gh api "/repos/${GITHUB_REPOSITORY}/actions/runs?branch=snow-squall-model-foundation&per_page=100" |
             jq -c '[.workflow_runs[]
-              | select(.name=="Snow Squall Expansion Dataset"
-                  or .name=="Object Dataset Full Expansion"
-                  or .path==".github/workflows/snow-squall-expansion-dataset.yml"
-                  or .path==".github/workflows/object-dataset-full-expansion.yml")
+              | select(.name=="Snow Squall Candidate Model Refresh")
               | select(.status=="completed" and .conclusion=="success")]
               | sort_by(.id) | reverse | .[]'
           )
+
+          if [ -z "${selected}" ]; then
+            while IFS= read -r run; do
+              run_id="$(printf '%s' "${run}" | jq -r '.id')"
+              artifacts="$(gh api "/repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}/artifacts?per_page=100")"
+              count="$(printf '%s' "${artifacts}" | jq '[.artifacts[] | select(.name=="snow-squall-live-model-bundles" and .expired==false)] | length')"
+              if [ "${count}" -gt 0 ]; then
+                selected="${run}"
+                artifact_name="snow-squall-live-model-bundles"
+                model_prefix="candidate_ensemble_expansion_"
+                break
+              fi
+            done < <(
+              gh api "/repos/${GITHUB_REPOSITORY}/actions/runs?branch=snow-squall-model-foundation&per_page=100" |
+              jq -c '[.workflow_runs[]
+                | select(.name=="Snow Squall Expansion Dataset"
+                    or .name=="Object Dataset Full Expansion"
+                    or .path==".github/workflows/snow-squall-expansion-dataset.yml"
+                    or .path==".github/workflows/object-dataset-full-expansion.yml")
+                | select(.status!="in_progress")]
+                | sort_by(.id) | reverse | .[]'
+            )
+          fi
+
           test -n "${selected}"
           run_id="$(printf '%s' "${selected}" | jq -r '.id')"
           echo "run_id=${run_id}" >> "${GITHUB_OUTPUT}"
-          echo "Using candidate model bundle run ${run_id}"
+          echo "artifact_name=${artifact_name}" >> "${GITHUB_OUTPUT}"
+          echo "model_prefix=${model_prefix}" >> "${GITHUB_OUTPUT}"
+          echo "Using model run ${run_id}, artifact ${artifact_name}, prefix ${model_prefix}"
 
       - name: Download candidate model bundle
         run: |
