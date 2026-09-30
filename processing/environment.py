@@ -85,6 +85,11 @@ def canonicalize_environment_fields(provider, fields):
     if out.get("visibility_m") is not None and out.get("visibility_sm") is None:
         out["visibility_sm"] = float(out["visibility_m"]) / 1609.344
 
+    if out.get("cloud_layer_mean_wind_ms") is not None and out.get("cloud_layer_mean_wind_kt") is None:
+        out["cloud_layer_mean_wind_kt"] = float(out["cloud_layer_mean_wind_ms"]) * 1.94384449244
+    if out.get("cloud_layer_shear_ms") is not None and out.get("cloud_layer_shear_kt") is None:
+        out["cloud_layer_shear_kt"] = float(out["cloud_layer_shear_ms"]) * 1.94384449244
+
     return out
 
 
