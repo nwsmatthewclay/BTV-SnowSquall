@@ -51,6 +51,7 @@ UNVERIFIED_RE = re.compile(
     re.I,
 )
 IEM_COW_BASE = "https://mesonet.agron.iastate.edu/api/1/cow.json"
+NCEI_INDEX_CACHE = None
 
 def request(url: str, **kwargs) -> requests.Response:
     last = None
@@ -67,7 +68,10 @@ def request(url: str, **kwargs) -> requests.Response:
     raise RuntimeError(str(last))
 
 def ncei_url(year: int) -> str:
-    index = request(NCEI_BASE + "/").text
+    global NCEI_INDEX_CACHE
+    if NCEI_INDEX_CACHE is None:
+        NCEI_INDEX_CACHE = request(NCEI_BASE + "/").text
+    index = NCEI_INDEX_CACHE
     pattern = re.compile(
         rf'href="(StormEvents_details-ftp_v1\.0_d{year}_c\d{{8}}\.csv\.gz)"'
     )
