@@ -281,6 +281,9 @@ def build_live_feature_frame(history: Iterable[dict], track_id: str | int) -> pd
             else None
         )
 
+        row["track_persistence_min"] = row.get("track_age_min")
+        row["recent_scan_count_3"] = min(idx + 1, 3)
+
         # Three-scan trailing state mirrors the historical feature builder.
         if idx >= 2:
             prev2 = rows[idx - 2]
