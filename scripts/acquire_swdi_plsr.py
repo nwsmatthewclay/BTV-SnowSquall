@@ -23,6 +23,7 @@ import requests
 
 BASE_URL = "https://www.ncei.noaa.gov/swdiws/csv/plsr"
 BULK_BASE_URL = "https://www.ncei.noaa.gov/pub/data/swdi/database-csv/v2"
+BTV_BBOX = "-80,40,-67,48"
 STATION_STATE = {
     "KBTV": "VT",
     "KMPV": "VT",
@@ -55,16 +56,43 @@ def _find_column(frame: pd.DataFrame, names: tuple[str, ...]) -> str | None:
     return None
 
 
+def _rest_year(year: int, start: pd.Timestamp, end: pd.Timestamp, state: str) -> pd.DataFrame:
+    start_text = pd.Timestamp(start).tz_convert('UTC').strftime('%Y%m%d%H%M')
+    end_text = pd.Timestamp(end).tz_convert('UTC').strftime('%Y%m%d%H%M')
+    url = f'{BASE_URL}/{start_text}:{end_text}/1000000'
+    response = _request(url + f'?bbox={BTV_BBOX}')
+    if not response.text.strip():
+        return pd.DataFrame()
+    return pd.read_csv(io.StringIO(response.text))
+
+
 def _bulk_year(year: int, start: pd.Timestamp, end: pd.Timestamp, state: str, columns: list[str] | None = None) -> pd.DataFrame:
+    # Prefer the live SWDI REST service. Keep the annual bulk archive as a
+    # fallback for older archive quirks.
+    try:
+        frame = _rest_year(year, start, end, state)
+        if not frame.empty:
+            normalized = {str(col).strip().upper(): col for col in frame.columns}
+            time_col = next((normalized.get(x) for x in ('ZTIME', 'VALID', 'VALID_TIME', 'UTC_TIME', 'DATE_TIME', 'DATETIME') if normalized.get(x)), None)
+            state_col = next((normalized.get(x) for x in ('STATE', 'STATE_ABBR', 'STATE_CODE') if normalized.get(x)), None)
+            if time_col is not None:
+                times = pd.to_datetime(frame[time_col], utc=True, errors='coerce')
+                mask = times.between(start, end, inclusive='both')
+                if state_col and state:
+                    mask &= frame[state_col].astype(str).str.upper().eq(state)
+                return frame.loc[mask].copy()
+    except Exception as exc:
+        print(f'SWDI REST fallback to annual bulk for {year}: {type(exc).__name__}: {exc}')
+
     if year < BULK_START_YEAR:
         return pd.DataFrame()
-    url = f"{BULK_BASE_URL}/plsr-{year}.csv.gz"
+    url = f'{BULK_BASE_URL}/plsr-{year}.csv.gz'
     response = _request(url)
-    header = pd.read_csv(io.BytesIO(response.content), compression="gzip", nrows=0)
-    time_col = _find_column(header, ("VALID", "VALID_TIME", "UTC_TIME", "DATE_TIME", "DATETIME"))
-    state_col = _find_column(header, ("STATE", "STATE_ABBR", "STATE_CODE"))
+    header = pd.read_csv(io.BytesIO(response.content), compression='gzip', nrows=0, comment='#')
+    time_col = _find_column(header, ('VALID', 'VALID_TIME', 'UTC_TIME', 'DATE_TIME', 'DATETIME', 'ZTIME'))
+    state_col = _find_column(header, ('STATE', 'STATE_ABBR', 'STATE_CODE'))
     if time_col is None:
-        raise RuntimeError(f"PLSR bulk file {year} has no recognized time column")
+        raise RuntimeError(f'PLSR bulk file {year} has no recognized time column')
     usecols = list(header.columns)
     if columns:
         normalized = {str(col).strip().upper(): col for col in header.columns}
@@ -74,13 +102,12 @@ def _bulk_year(year: int, start: pd.Timestamp, end: pd.Timestamp, state: str, co
         if state_col and state_col not in resolved:
             resolved.append(state_col)
         usecols = list(dict.fromkeys(resolved))
-    frame = pd.read_csv(io.BytesIO(response.content), compression="gzip", usecols=usecols, low_memory=False)
-    times = pd.to_datetime(frame[time_col], utc=True, errors="coerce")
-    mask = times.between(start, end, inclusive="both")
-    if state_col is not None and state:
+    frame = pd.read_csv(io.BytesIO(response.content), compression='gzip', usecols=usecols, low_memory=False, comment='#')
+    times = pd.to_datetime(frame[time_col], utc=True, errors='coerce')
+    mask = times.between(start, end, inclusive='both')
+    if state_col and state:
         mask &= frame[state_col].astype(str).str.upper().eq(state)
     return frame.loc[mask].copy()
-
 
 def acquire_case(case: pd.Series) -> tuple[pd.DataFrame, dict]:
     case_id = str(case["case_id"])
