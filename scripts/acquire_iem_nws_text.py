@@ -106,7 +106,7 @@ def main():
             print(f'IEM text {year} {pil}')
             try:
                 raw = fetch_product(pil, year)
-                (out / f'{pil}_{year}.txt').write_text(raw, encoding='utf-8', errors='replace')
+                (out / f'{pil}_{year}.zip').write_bytes(raw)
                 rows.extend(extract_candidates(raw, pil, year))
             except Exception as exc:
                 errors.append({'year': year, 'pil': pil, 'error_type': type(exc).__name__, 'error_message': str(exc)})
