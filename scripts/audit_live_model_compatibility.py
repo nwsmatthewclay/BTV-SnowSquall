@@ -18,7 +18,12 @@ from scripts.build_model_features import (
 
 
 HORIZONS = (15, 30, 45, 60)
-BUNDLE_PREFIXES = ("baseline_expansion_", "candidate_ensemble_expansion_")
+BUNDLE_PREFIXES = (
+    "baseline_expansion_",
+    "candidate_ensemble_expansion_",
+    "baseline_refresh_",
+    "candidate_ensemble_refresh_",
+)
 
 
 def audit_bundle(root: Path, schema: dict, prefix: str, horizon: int) -> dict:
