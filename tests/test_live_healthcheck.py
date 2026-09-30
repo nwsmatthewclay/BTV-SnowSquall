@@ -52,3 +52,30 @@ def test_live_healthcheck_detects_stale_product(tmp_path):
     report = healthcheck(sp, gp, max_age_minutes=15)
     assert report["status"] == "degraded"
     assert report["checks"]["fresh_within_threshold"] is False
+
+
+def test_live_healthcheck_audits_shadow_probability_sequence(tmp_path):
+    from scripts.live_healthcheck import audit_shadow_root
+
+    for site in ("KCXX", "KTYX"):
+        payload = {
+            "mode": "live_shadow_research",
+            "operational_release_status": "candidate_only_not_operational",
+            "site": site,
+            "scored_object_count": 1,
+            "records": [{
+                "research_probabilities": {
+                    "15": 0.20,
+                    "30": 0.40,
+                    "45": 0.40,
+                    "60": 0.70,
+                }
+            }],
+        }
+        (tmp_path / f"{site}_shadow.json").write_text(
+            json.dumps(payload), encoding="utf-8"
+        )
+
+    report = audit_shadow_root(tmp_path)
+    assert report["status"] == "pass"
+    assert all(row["probability_count"] == 4 for row in report["sites"])
