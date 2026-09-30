@@ -244,19 +244,19 @@ jobs:
           assert len(training_cases) > 0, 'No cases passed the supervised evidence gate'
           PY
 
-      - name: Build documented historical environment and labels
+      - name: Build supervised historical environment and labels
         run: |
           python scripts/build_historical_dataset.py \
-            data/derived/snow_squall_verified_objects.csv \
-            --cases data/manifests/snow_squall_expansion/snow_squall_verified_cases.csv \
-            --output data/derived/snow_squall_verified_environment.csv \
+            data/derived/snow_squall_training_objects.csv \
+            --cases data/manifests/snow_squall_expansion/snow_squall_training_cases.csv \
+            --output data/derived/snow_squall_training_environment.csv \
             --rap-dir data/raw/RAP_expansion \
             --ruc-dir data/raw/RUC_expansion
           python scripts/label_historical_outcomes.py \
-            data/derived/snow_squall_verified_environment.csv \
-            --cases data/manifests/snow_squall_expansion/snow_squall_verified_cases.csv \
-            --output data/derived/snow_squall_verified_labeled.csv \
-            --diagnostics-output data/derived/snow_squall_verified_label_diagnostics.json
+            data/derived/snow_squall_training_environment.csv \
+            --cases data/manifests/snow_squall_expansion/snow_squall_training_cases.csv \
+            --output data/derived/snow_squall_training_labeled.csv \
+            --diagnostics-output data/derived/snow_squall_training_label_diagnostics.json
 
       - name: Build unverified research population with environment
         run: |
@@ -270,7 +270,7 @@ jobs:
         run: |
           mkdir -p data/manifests/snow_squall_expansion
           python scripts/build_null_window_manifest.py \
-            --cases data/manifests/snow_squall_expansion/snow_squall_verified_cases.csv \
+            --cases data/manifests/snow_squall_expansion/snow_squall_training_cases.csv \
             --start 2008-10-01T00:00:00Z \
             --end 2026-06-30T21:00:00Z \
             --sample-count 40 \
@@ -301,7 +301,7 @@ jobs:
       - name: Build unified expanded training dataset
         run: |
           python scripts/build_unified_object_dataset.py \
-            data/derived/snow_squall_verified_labeled.csv \
+            data/derived/snow_squall_training_labeled.csv \
             data/derived/snow_squall_expansion_null_environment.csv \
             --null-activity data/derived/snow_squall_expansion_null_activity.csv \
             --output data/derived/snow_squall_object_population_expanded.csv \
