@@ -27,7 +27,7 @@ def build(source: Path, output: Path, radar_output: Path):
     d['min_visibility_km']=pd.to_numeric(d.get('visibility_miles', pd.Series(pd.NA,index=d.index)),errors='coerce')*1.609344
     d['hybrid_case']=False
     d['observing_station']=d['observing_station'].astype(str)
-    case_cols=['case_id','event_start_utc','event_anchor_utc','source_study','observing_station','peak_wind_kt','min_visibility_km','hybrid_case','analysis_window_start_utc','analysis_window_end_utc']
+    case_cols=['case_id','event_start_utc','event_anchor_utc','anchor_source','source_study','observing_station','peak_wind_kt','min_visibility_km','hybrid_case','analysis_window_start_utc','analysis_window_end_utc']
     for c in case_cols:
         if c not in d: d[c]=pd.NA
     d[case_cols].to_csv(output,index=False)
