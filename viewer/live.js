@@ -187,8 +187,21 @@ function shadowRecord(site,trackId){
 }
 function shadowGrid(record){
   const probs=record?.research_probabilities||{};
-  if(!Object.keys(probs).length) return "<div class='shadow-note'>No live research score is available yet.</div>";
-  return "<div class='shadow-grid'>"+[15,30,45,60].map(h=>"<div class='shadow-cell'><span>"+h+" min</span><b>"+(probs[String(h)]==null?"—":(Number(probs[String(h)])*100).toFixed(1)+"%")+"</b></div>").join("")+"</div>";
+  const coverage=record?.feature_coverage||{};
+  const errors=record?.score_errors||{};
+  if(!Object.keys(probs).length){
+    const detail=Object.keys(errors).length
+      ? " "+Object.entries(errors).map(([h,e])=>h+" min: "+e).join(" • ")
+      : "";
+    return "<div class='shadow-note'>No live research score is available yet."+esc(detail)+"</div>";
+  }
+  return "<div class='shadow-grid'>" + [15,30,45,60].map(h=>{
+    const p=probs[String(h)];
+    const fraction=coverage[String(h)]?.fraction;
+    const err=errors[String(h)];
+    const sub=err?"error":(fraction==null?"coverage —":"coverage "+(Number(fraction)*100).toFixed(0)+"%");
+    return "<div class='shadow-cell'><span>"+h+" min</span><b>"+(p==null?"—":(Number(p)*100).toFixed(1)+"%")+"</b><span>"+esc(sub)+"</span></div>";
+  }).join("")+"</div>";
 }
 
 function renderShadowCard(summary){
