@@ -155,6 +155,10 @@ jobs:
             --surface-root data/raw/ASOS_IEM_expansion \
             --output data/derived/snow_squall_expansion_surface_truth.csv \
             --summary data/derived/snow_squall_expansion_surface_truth.json
+      - name: Acquire NCEI Storm Events evidence
+        run: |
+          python scripts/acquire_ncei_storm_events.py             --start-year 2002             --end-year 2026             --output data/derived/snow_squall_expansion_ncei_storm_events.csv
+
       - name: Acquire expanded SWDI PLSR evidence
         run: |
           python scripts/acquire_swdi_plsr.py \
