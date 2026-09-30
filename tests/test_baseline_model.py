@@ -89,7 +89,7 @@ def test_baseline_excludes_case_rows_at_or_after_onset_even_if_nonimpact(tmp_pat
             "case_id": ["CASE1", "CASE1", None, None],
             "null_id": [None, None, "NULL0001", "NULL0002"],
             "track_event_associated": [True, True, False, False],
-            "supervision_class": ["supervised_positive", "supervised_positive", "", "", ""],
+            "supervision_class": ["supervised_positive", "supervised_positive", "", ""],
             "label_status": [
                 "prospective_positive",
                 "case_associated_nonimpact",
