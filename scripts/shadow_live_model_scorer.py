@@ -7,6 +7,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from scripts.live_model_features import build_live_feature_frame, feature_coverage
+from scripts.add_national_pretraining_features import augment as augment_national_pretraining
 from scripts.model_runtime import ModelRuntime
 
 HORIZONS = (15, 30, 45, 60)
@@ -59,6 +60,7 @@ def score_site(site: str, live_root: Path, model_root: Path) -> tuple[dict, list
         if not track_history:
             track_history = [dict(props)]
         frame = build_live_feature_frame(track_history, track_id)
+        frame, national_prior = augment_national_pretraining(frame, model_root)
         record = {
             "radar_site": site,
             "track_id": str(track_id),
@@ -69,6 +71,7 @@ def score_site(site: str, live_root: Path, model_root: Path) -> tuple[dict, list
             "research_probabilities": {},
             "score_errors": {},
             "score_policy": {"minimum_feature_coverage": MIN_FEATURE_COVERAGE},
+        "national_pretraining": national_prior,
         }
         for horizon in HORIZONS:
             runtime = runtimes[horizon]
