@@ -83,7 +83,7 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt -r requirements-science.txt
 
-      - name: Select covered verified warnings
+      - name: Select covered warning cases
         run: |
           set -euo pipefail
           python - <<'PY'
@@ -93,13 +93,13 @@ jobs:
           manifest=pd.read_csv("radar_sample/national_sqw_radar_manifest.csv")
           pre=pd.read_csv("radar_sample/level2_preflight.csv")
           d=manifest.merge(pre,on=["case_id","radar_site"],how="left",validate="one_to_one")
-          d=d[d["iem_verified"].fillna(False) & d["level2_window_available"].fillna(False)].copy()
+          d=d[d["level2_window_available"].fillna(False)].copy()
           d=d.sort_values(["verifying_lsr_count","event_start_utc"],ascending=[False,True],kind="stable")
           d=d.head(int("${{ inputs.max_manifest_rows || '40' }}"))
           out=Path("data/manifests/national_sqw_pretraining")
           out.mkdir(parents=True,exist_ok=True)
           d.to_csv(out/"national_sqw_verified_radar_manifest.csv",index=False)
-          print("Selected covered verified warning/radar rows:",len(d))
+          print("Selected covered warning/radar rows:",len(d))
           print(d["radar_site"].value_counts().to_string())
           assert len(d)>0
           PY
