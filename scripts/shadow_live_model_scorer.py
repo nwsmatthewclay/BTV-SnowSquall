@@ -74,7 +74,6 @@ def score_site(site: str, live_root: Path, model_root: Path) -> tuple[dict, list
             "score_errors": {},
             "national_pretraining": national_pretraining,
             "score_policy": {"minimum_feature_coverage": MIN_FEATURE_COVERAGE},
-        "national_pretraining": national_prior,
         }
         for horizon in HORIZONS:
             runtime = runtimes[horizon]
