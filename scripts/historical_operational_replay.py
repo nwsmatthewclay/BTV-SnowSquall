@@ -22,6 +22,34 @@ def ordered_inputs(input_dir: Path) -> list[Path]:
     files=[p for p in input_dir.rglob("*") if p.is_file() and not p.name.endswith((".part",".tmp"))]
     return sorted(files, key=scan_time)
 
+
+def iso_utc(value) -> str:
+    """Normalize an ISO timestamp to the replay's canonical UTC representation."""
+    parsed = datetime.fromisoformat(str(value).replace("Z", "+00:00")).astimezone(timezone.utc)
+    return parsed.isoformat().replace("+00:00", "Z")
+
+
+def validate_scan_sequence(scans: list[Path]) -> dict:
+    """Validate that replay inputs form a deterministic, strictly ordered scan stream."""
+    timestamps = [scan_time(path) for path in scans]
+    duplicate_timestamps = {}
+    for index, timestamp in enumerate(timestamps):
+        key = timestamp.isoformat()
+        duplicate_timestamps.setdefault(key, []).append(index)
+    duplicate_timestamps = {
+        key: indexes for key, indexes in duplicate_timestamps.items() if len(indexes) > 1
+    }
+    strictly_increasing = all(
+        later > earlier for earlier, later in zip(timestamps, timestamps[1:])
+    )
+    return {
+        "strictly_increasing_scan_times": strictly_increasing,
+        "duplicate_scan_timestamp_count": len(duplicate_timestamps),
+        "duplicate_scan_timestamps": duplicate_timestamps,
+        "first_input_scan_utc": timestamps[0].isoformat().replace("+00:00", "Z") if timestamps else None,
+        "last_input_scan_utc": timestamps[-1].isoformat().replace("+00:00", "Z") if timestamps else None,
+    }
+
 def replay_case(input_dir: Path, output_dir: Path, state_path: Path, case_id: str, max_scans: int|None=None, resume: bool=False, continue_on_error: bool=False, window_start: datetime|None=None, window_end: datetime|None=None, model_dir: Path|None=None) -> dict:
     scans=ordered_inputs(input_dir)
     if window_start is not None:
@@ -30,6 +58,12 @@ def replay_case(input_dir: Path, output_dir: Path, state_path: Path, case_id: st
         scans=[p for p in scans if scan_time(p) <= window_end]
     if max_scans is not None: scans=scans[:max_scans]
     if not scans: raise RuntimeError(f"No replayable Level-II files found under {input_dir}")
+    sequence_validation = validate_scan_sequence(scans)
+    if not sequence_validation["strictly_increasing_scan_times"]:
+        raise ValueError(
+            "Replay input scans are not strictly increasing; duplicate or non-monotonic "
+            "timestamps would make scan-by-scan causality ambiguous."
+        )
     output_dir.mkdir(parents=True, exist_ok=True); state_path.parent.mkdir(parents=True, exist_ok=True)
     if state_path.exists() and not resume:
         state_path.unlink()
@@ -40,6 +74,7 @@ def replay_case(input_dir: Path, output_dir: Path, state_path: Path, case_id: st
     for index,source in enumerate(scans,1):
         output=output_dir/f"{index:04d}_{source.stem}.geojson"
         started=datetime.now(timezone.utc)
+        expected_scan_time = iso_utc(scan_time(source).isoformat())
         try:
             process_volume(
                 source,
@@ -59,9 +94,22 @@ def replay_case(input_dir: Path, output_dir: Path, state_path: Path, case_id: st
         finished=datetime.now(timezone.utc)
         payload=json.loads(output.read_text(encoding="utf-8"))
         metadata=payload.get("metadata",{})
+        actual_scan_time = metadata.get("scan_time_utc")
+        if actual_scan_time is None:
+            raise ValueError(f"Replay output has no scan_time_utc: {output}")
+        try:
+            actual_scan_time = iso_utc(actual_scan_time)
+        except (TypeError, ValueError) as exc:
+            raise ValueError(f"Replay output has invalid scan_time_utc: {output}") from exc
+        if actual_scan_time != expected_scan_time:
+            raise ValueError(
+                f"Replay timestamp mismatch for {source.name}: "
+                f"input={expected_scan_time}, output={actual_scan_time}"
+            )
         records.append({
             "sequence":index,"source_file":source.name,
-            "scan_time_utc":metadata.get("scan_time_utc"),
+            "expected_scan_time_utc":expected_scan_time,
+            "scan_time_utc":actual_scan_time,
             "object_count":metadata.get("object_count",0),
             "output_file":str(output.relative_to(output_dir)),
             "processing_seconds":round((finished-started).total_seconds(),3),
@@ -94,6 +142,14 @@ def replay_case(input_dir: Path, output_dir: Path, state_path: Path, case_id: st
         "last_scan_utc":records[-1]["scan_time_utc"] if records else None,
         "records":records,
         "errors":errors,
+        "causality_audit": {
+            **sequence_validation,
+            "output_timestamps_match_inputs": all(
+                r.get("expected_scan_time_utc") == r.get("scan_time_utc")
+                for r in records
+            ),
+            "future_information_policy": "one_scan_at_a_time",
+        },
     }
     (output_dir/"replay_manifest.json").write_text(json.dumps(manifest,indent=2),encoding="utf-8")
     return manifest
