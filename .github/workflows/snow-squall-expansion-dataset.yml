@@ -453,6 +453,14 @@ jobs:
           python scripts/compare_candidate_models.py \
             --root data/derived \
             --output data/derived/snow_squall_candidate_model_comparison.json
+
+      - name: Audit live model compatibility
+        run: |
+          python scripts/audit_live_model_compatibility.py \
+            --schema data/derived/snow_squall_model_features_expanded.schema.json \
+            --model-root data/derived \
+            --output data/derived/snow_squall_live_model_compatibility.json
+
       - name: Calibrate candidate model bundles
         run: |
           for h in 15 30 45 60; do
@@ -533,6 +541,7 @@ jobs:
             data/derived/candidate_ensemble_expansion_*m
             data/derived/snow_squall_expanded_horizon_summary.json
             data/derived/snow_squall_candidate_model_comparison.json
+            data/derived/snow_squall_live_model_compatibility.json
             data/derived/national_sqw_weak_model_*m
 
       - name: Upload expanded research package
