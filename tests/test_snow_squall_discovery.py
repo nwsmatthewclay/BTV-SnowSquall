@@ -87,3 +87,8 @@ def test_ncei_state_normalization_accepts_full_names():
     }
     assert in_primary_cwa({"STATE": "VERMONT", "CZ_NAME": "CHITTENDEN"}, cfg)
     assert in_primary_cwa({"STATE": "NEW YORK", "CZ_NAME": "CLINTON"}, cfg)
+
+
+def test_screening_class_is_explicitly_allowed():
+    from scripts.audit_snow_squall_case_ledger import ALLOWED_CLASSES
+    assert "official_screening_candidate" in ALLOWED_CLASSES
