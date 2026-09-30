@@ -34,6 +34,10 @@ def ordered_inputs(input_dir: Path) -> list[Path]:
 def iso_utc(value) -> str:
     """Normalize an ISO timestamp to the replay's canonical UTC representation."""
     parsed = datetime.fromisoformat(str(value).replace("Z", "+00:00")).astimezone(timezone.utc)
+    # Level-II source filenames resolve scan time only to whole seconds. Canonicalize
+    # replay timestamps to that source precision while still rejecting second-level
+    # causality mismatches.
+    parsed = parsed.replace(microsecond=0)
     return parsed.isoformat().replace("+00:00", "Z")
 
 
