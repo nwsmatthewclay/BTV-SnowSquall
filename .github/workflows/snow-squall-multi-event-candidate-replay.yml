@@ -177,7 +177,7 @@ jobs:
             for horizon in 15 30 45 60; do
               output_dir="multi_event_replay/${case_id}/${radar_site}/${horizon}m"
               mkdir -p "${output_dir}"
-              python scripts/historical_operational_replay.py                 --case-id "${case_id}_${radar_site}"                 --input-dir "${input_dir}"                 --output-dir "${output_dir}"                 --state-path "${output_dir}/replay_state.json"                 --continue-on-error                 --window-start-utc "${window_start_utc}"                 --window-end-utc "${window_end_utc}"                 --model-dir "model_bundle/candidate_ensemble_expansion_${horizon}m"
+              python scripts/historical_operational_replay.py                 --case-id "${case_id}_${radar_site}"                 --input-dir "${input_dir}"                 --output-dir "${output_dir}"                 --state-path "${output_dir}/replay_state.json"                 --continue-on-error                 --window-start-utc "${window_start_utc}"                 --window-end-utc "${window_end_utc}"                 --model-dir "model_bundle/${{ steps.model.outputs.model_prefix }}${horizon}m"
             done
           done < replay_case_matrix.csv
 
