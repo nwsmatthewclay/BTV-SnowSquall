@@ -78,6 +78,12 @@ def summarize(timeline: dict, onset_utc: str | None = None) -> dict:
         "observed_onset_utc": onset_utc,
         "threshold_lead_time_minutes": lead_time,
         "alignment_gap_count": timeline.get("alignment_gap_count", 0),
+        "replay_status": timeline.get("status", "unknown"),
+        "timeline_integrity": {
+            "records_present": bool(records),
+            "alignment_gaps_clear": timeline.get("alignment_gap_count", 0) == 0,
+            "future_information_policy": timeline.get("future_information_policy", "one_scan_at_a_time") == "one_scan_at_a_time",
+        },
     }
 
 
