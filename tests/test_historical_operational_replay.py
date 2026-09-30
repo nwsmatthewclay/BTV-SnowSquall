@@ -233,8 +233,10 @@ def test_resume_rejects_noncontiguous_outputs(tmp_path):
         "KCXX20200101_121000_V06",
         "KCXX20200101_122000_V06",
     ]
+    input_dir = tmp_path / "input"
+    input_dir.mkdir()
     for name in names:
-        (tmp_path / name).write_bytes(b"placeholder")
+        (input_dir / name).write_bytes(b"placeholder")
     out = tmp_path / "out"
     out.mkdir()
     import json
@@ -244,4 +246,4 @@ def test_resume_rejects_noncontiguous_outputs(tmp_path):
             encoding="utf-8",
         )
     with pytest.raises(ValueError, match="contiguous prefix"):
-        replay.replay_case(tmp_path, out, tmp_path/"state.json", "CASE", resume=True)
+        replay.replay_case(input_dir, out, tmp_path/"state.json", "CASE", resume=True)
