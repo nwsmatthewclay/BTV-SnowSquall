@@ -165,6 +165,21 @@ def event_end_utc(row: pd.Series) -> datetime | None:
         return naive.replace(tzinfo=LOCAL_STANDARD_TZ).astimezone(timezone.utc)
     except (KeyError, TypeError, ValueError, OverflowError):
         return None
+
+
+def as_bool(value) -> bool:
+    """Parse boolean-like API values without treating the string 'False' as true."""
+    if isinstance(value, bool):
+        return value
+    if value is None:
+        return False
+    text = str(value).strip().lower()
+    if text in {"true", "1", "yes", "y", "t"}:
+        return True
+    if text in {"false", "0", "no", "n", "f", ""}:
+        return False
+    return False
+
 def finite_float(value):
     try:
         v = float(value)
@@ -284,7 +299,7 @@ def gather_cow_sqw(cfg: dict) -> list[dict]:
                 lon = finite_float(props.get("lon0"))
                 report_ids = str(props.get("stormreports_all") or "").strip()
                 lsr_count = len([item for item in report_ids.split(",") if item.strip()])
-                iem_verified = bool(props.get("verify"))
+                iem_verified = as_bool(props.get("verify"))
                 lead_min = finite_float(props.get("lead0"))
                 anchor = issue
                 anchor_type = "warning_issue"
@@ -313,7 +328,7 @@ def gather_cow_sqw(cfg: dict) -> list[dict]:
                     "coordinate_source": "iem_warning_point",
                     "coordinate_precision": "warning_reference",
                     "lsr_count": lsr_count,
-                    "warning_verified_by_iem": bool(props.get("verify")),
+                    "warning_verified_by_iem": iem_verified,
                     "warning_status": str(props.get("status") or ""),
                     "warning_wfo": str(props.get("wfo") or wfo),
                 })
