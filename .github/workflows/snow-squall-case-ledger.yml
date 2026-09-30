@@ -111,6 +111,7 @@ jobs:
           python scripts/build_case_review_report.py \
             --cases data/discovery/unified/snow_squall_case_ledger.csv \
             --summary data/discovery/unified/snow_squall_case_ledger_summary.json \
+            --radar data/discovery/unified/snow_squall_case_radar_manifest.csv \
             --output data/discovery/unified/snow_squall_case_review.html
 
       - name: Audit unified ledger
