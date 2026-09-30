@@ -18,9 +18,6 @@ LIVE_TO_MODEL = {
     "visibility_sm": "visibility_m",
     "sbcape_jkg": "cape_jkg",
     "sbcin_jkg": "cin_jkg",
-        "snsq", "mean_rh_0_2km_pct", "thetae_delta_0_2km_k", "mean_wind_0_2km_ms", "wetbulb_2m_c",
-        "snsq_moisture_factor", "snsq_instability_factor", "snsq_wind_factor",
-        "snsq_snow_temperature_pass",
 }
 
 
