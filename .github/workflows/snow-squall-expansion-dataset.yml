@@ -408,7 +408,7 @@ jobs:
           print(json.dumps(summary,indent=2))
           PY
 
-      - name: Upload cumulative expansion feature batch
+      - name: Write next automatic expansion batch state,        run: |,          python - <<'PY',          import json,          from pathlib import Path,          import pandas as pd,          cases=pd.read_csv('data/manifests/snow_squall_expansion/snow_squall_expansion_cases.csv'),          strong={,              'official_documented','official_plus_independent_report','official_plus_warning',,              'official_plus_warning_and_report','official_plus_warning_verified',,              'official_study_warning_verified','official_plus_study','study_verified',,              'study_warning_verified',,          },          official=int(cases['verification_class'].isin(strong).sum()),          review=int((~cases['verification_class'].isin(strong)).sum()),          official_offset=int('${{ inputs.official_offset || '0' }}'),          review_offset=int('${{ inputs.unverified_offset || '0' }}'),          state={,              'auto_continue': True,,              'batch_rows': {'official':official,'review':review},,              'next_official_offset': official_offset+official,,              'next_unverified_offset': review_offset+review,,              'max_automatic_official': 150,,              'max_automatic_unverified': 125,,          },          Path('data/derived/next_expansion_batch.json').write_text(json.dumps(state,indent=2)+'\n',encoding='utf-8'),          print(json.dumps(state,indent=2)),          PY,      - name: Upload cumulative expansion feature batch
         uses: actions/upload-artifact@v4
         with:
           name: snow-squall-expansion-feature-batch
@@ -417,6 +417,7 @@ jobs:
             data/derived/snow_squall_model_features_cumulative.csv
             data/derived/snow_squall_model_features_expanded.schema.json
             data/derived/snow_squall_national_pretraining_feature_summary.json
+            data/derived/next_expansion_batch.json
             data/manifests/snow_squall_expansion/snow_squall_expansion_cases.csv
             data/manifests/snow_squall_expansion/snow_squall_verified_cases.csv
       - name: Upload lightweight live-model bundle
