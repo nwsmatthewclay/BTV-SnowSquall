@@ -17,3 +17,9 @@ The expanded pipeline separates three populations:
 3. **Review/weak population** — warning-only, screening, incomplete, or otherwise insufficient cases remain archived but are not automatically converted into hard positives.
 
 This distinction is deliberate. An official Snow Squall Warning is evidence, but warning issuance time is not assumed to equal observed squall onset. The target labels remain tied to the best independently supported event timing available at replay time.
+
+## Cumulative-batch protection
+
+Expanded feature batches carry `supervision_class=supervised_positive` on positive-context rows. When a new batch is merged with an older cumulative artifact, positive rows from pre-gate batches that lack this provenance are discarded rather than silently becoming training positives. Null/research rows are retained.
+
+The expansion workflow also runs an integrity audit covering predictor/target separation, forecast-time timestamp validity, duplicate object-timestep identities, population counts, and 15/30/45/60-minute target availability.
