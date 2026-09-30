@@ -45,6 +45,8 @@ def score_site(site: str, live_root: Path, model_root: Path) -> tuple[dict, list
             "model_version": runtime.metadata.get("model_version"),
             "operational_release_status": runtime.metadata.get("operational_release_status"),
             "predictor_count": len(runtime.feature_columns),
+            "model_family": runtime.metadata.get("estimator_family") or runtime.metadata.get("model_version"),
+            "selected_artifact": directory.name,
             "bundle_family": "candidate_soft_vote_ensemble" if directory.name.startswith("candidate_expansion_") else "baseline_hist_gradient_boosting",
         }
 
