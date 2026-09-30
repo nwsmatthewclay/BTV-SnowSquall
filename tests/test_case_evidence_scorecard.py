@@ -45,7 +45,7 @@ def test_training_eligibility_requires_surface_and_radar_evidence():
     }
     eligible,reason=training_eligibility(row)
     assert eligible
-    assert 'documented_source' not in reason
+    assert 'documented_source_plus_surface_timing_plus_radar_reconstruction' == reason
 
 
 def test_documented_warning_without_surface_timing_is_not_hard_positive():
