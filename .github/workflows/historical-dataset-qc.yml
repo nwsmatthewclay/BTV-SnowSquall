@@ -9,7 +9,11 @@ on:
       radar_site:
         required: true
         default: KCXX
-
+  push:
+    branches:
+      - snow-squall-model-foundation
+    paths:
+      - .github/historical-qc-trigger
 jobs:
   qc:
     runs-on: ubuntu-latest
