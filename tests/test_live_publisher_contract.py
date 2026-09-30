@@ -12,3 +12,22 @@ def test_live_publisher_contract():
     assert 'Restore prior live feed history' in text
     assert 'git push --force origin HEAD:snow-squall-live-data' in text
     assert 'snow-squall-live-data' in text
+
+
+def test_live_normalization_emits_strict_json_for_nonfinite_values():
+    import json
+    from scripts.normalize_live_products import json_safe
+
+    payload=json_safe({"nan": float("nan"), "inf": float("inf"), "neg_inf": float("-inf"), "ok": 2.0})
+    encoded=json.dumps(payload, allow_nan=False)
+    assert 'NaN' not in encoded and 'Infinity' not in encoded
+    assert json.loads(encoded)["nan"] is None
+
+
+def test_live_history_clean_rejects_nonfinite_values():
+    from scripts.append_live_object_history import _clean
+
+    assert _clean(float("nan")) is None
+    assert _clean(float("inf")) is None
+    assert _clean(float("-inf")) is None
+    assert _clean(12.5) == 12.5
