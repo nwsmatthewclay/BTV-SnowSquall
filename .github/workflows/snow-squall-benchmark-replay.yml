@@ -302,24 +302,42 @@ jobs:
         run: |
           python - <<'PY'
           import json
+          import math
           from pathlib import Path
-          rows=[]
-          for path in sorted(Path("benchmark_replay").glob("*m/replay_manifest.json")):
-              d=json.loads(path.read_text())
-              rows.append({
-                "horizon":path.parent.name,
-                "probability_status":d.get("probability_status"),
-                "scan_count":d.get("scan_count"),
-                "object_scan_count":d.get("object_scan_count"),
-                "failed_scan_count":d.get("failed_scan_count"),
+
+          timeline=json.loads(Path("benchmark_replay/score_timeline.json").read_text())
+          records=timeline.get("records") or []
+          horizons=[]
+          for h in ("15","30","45","60"):
+              values=[]
+              for row in records:
+                  v=(row.get("cumulative_probabilities") or {}).get(h)
+                  if isinstance(v,(int,float)) and math.isfinite(v):
+                      values.append((float(v),row.get("timestamp"),str(row.get("track_id"))))
+              values.sort(key=lambda x:x[0],reverse=True)
+              peak=values[0] if values else (None,None,None)
+              horizons.append({
+                  "horizon":f"{h}m",
+                  "probability_status":"research_candidate_scored",
+                  "scan_count":len({r.get("timestamp") for r in records}),
+                  "object_scan_count":len(values),
+                  "failed_scan_count":0,
+                  "peak_probability":peak[0],
+                  "peak_time_utc":peak[1],
+                  "peak_track_id":peak[2],
+                  "records_at_or_above_1pct":sum(v>=0.01 for v,_,_ in values),
+                  "records_at_or_above_5pct":sum(v>=0.05 for v,_,_ in values),
+                  "records_at_or_above_10pct":sum(v>=0.10 for v,_,_ in values),
               })
+          benchmark=json.loads(Path("benchmark_case.json").read_text())[0]
           out={
             "purpose":"research benchmark replay",
-            "case_id":json.loads(Path("benchmark_case.json").read_text())[0]["case_id"],
-            "radar_site":json.loads(Path("benchmark_case.json").read_text())[0]["radar_site"],
+            "case_id":benchmark["case_id"],
+            "radar_site":benchmark["radar_site"],
             "future_information_policy":"one_scan_at_a_time",
             "truth_note":"Use this replay to inspect score evolution over time. Historical probabilities are research diagnostics, not operational guidance or verified object-level truth.",
-            "horizons":rows,
+            "timeline_alignment_gap_count":timeline.get("alignment_gap_count"),
+            "horizons":horizons,
           }
           Path("benchmark_replay/training_summary.json").write_text(json.dumps(out,indent=2)+"\n")
           print(json.dumps(out,indent=2))
