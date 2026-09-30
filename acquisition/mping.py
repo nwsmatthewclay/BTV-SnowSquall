@@ -29,9 +29,16 @@ DEFAULT_RADIUS_KM = 75.0
 TIMEOUT_SECONDS = 60
 MAX_PAGES = 200
 
+OUTPUT_COLUMNS = [
+    "case_id", "obtime", "category", "description",
+    "description_id", "ptype_bucket", "truth_source", "truth_status",
+]
+
 
 def ptype_bucket(category: object, description: object) -> str:
-    text = f"{category or ''} {description or ''}".strip().lower()
+    desc = str(description or "").strip().lower()
+    cat = str(category or "").strip().lower()
+    text = desc if desc and desc not in {"nan", "none", "null"} else cat
     if any(token in text for token in ("freezing rain", "freezing drizzle", "ice storm")):
         return "freezing_rain"
     if any(token in text for token in ("mixed", "sleet", "ice pellets", "snow pellets")):
