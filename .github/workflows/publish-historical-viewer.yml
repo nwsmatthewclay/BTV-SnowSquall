@@ -71,7 +71,7 @@ jobs:
         if: steps.source.outputs.skip != 'true'
         uses: actions/download-artifact@v4
         with:
-          name: ${{ steps.source.outputs.workflow_name == 'Object Dataset Full Expansion' && 'object-population-expansion' || 'object-population-pilot' }}
+          name: ${{ (steps.source.outputs.workflow_name == 'Object Dataset Full Expansion' || steps.source.outputs.workflow_name == 'Snow Squall Expansion Dataset') && 'object-population-expansion' || 'object-population-pilot' }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
           repository: ${{ github.repository }}
           run-id: ${{ steps.source.outputs.run_id }}
