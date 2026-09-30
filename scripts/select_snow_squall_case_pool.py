@@ -158,6 +158,10 @@ def main():
         nearest_station(lat, lon)
         for lat, lon in zip(selected["lat"], selected["lon"])
     ]
+    selected["case_lat"] = pd.to_numeric(selected["lat"], errors="coerce")
+    selected["case_lon"] = pd.to_numeric(selected["lon"], errors="coerce")
+    selected["case_coordinate_precision"] = selected.get("coordinate_precision", pd.Series("", index=selected.index)).fillna("")
+    selected["case_event_end_utc"] = selected.get("event_end_utc", pd.Series(pd.NA, index=selected.index))
     selected["hybrid_case"] = False
     selected["peak_wind_kt"] = pd.NA
     selected["min_visibility_km"] = pd.NA
