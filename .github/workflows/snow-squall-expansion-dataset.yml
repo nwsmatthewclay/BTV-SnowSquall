@@ -364,7 +364,6 @@ jobs:
           for h in 15 30 45 60; do
             python scripts/train_baseline_model.py \
               data/derived/snow_squall_model_features_cumulative.csv \
-
               --schema data/derived/snow_squall_model_features_expanded.schema.json \
               --target squall_onset_within_${h}m \
               --output-dir data/derived/baseline_expansion_${h}m
