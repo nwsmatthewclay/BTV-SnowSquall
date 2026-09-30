@@ -9,6 +9,7 @@ from pathlib import Path
 import pandas as pd
 
 from scripts.live_model_features import build_live_feature_frame, feature_coverage
+from scripts.add_national_pretraining_features import augment as augment_national_pretraining
 from scripts.model_runtime import ModelRuntime
 
 HORIZONS=(15,30,45,60)
@@ -29,6 +30,7 @@ def score_case(case_row, objects, model_root: Path):
             item['timestamp']=row.get('scan_time_utc')
             history.append(item)
         frame=build_live_feature_frame(history,track_id)
+        frame, national_prior=augment_national_pretraining(frame, model_root)
         if frame.empty: continue
         base={}
         for h in HORIZONS:
