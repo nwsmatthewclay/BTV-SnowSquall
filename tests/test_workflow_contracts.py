@@ -11,6 +11,7 @@ WORKFLOWS = [
     '.github/workflows/snow-squall-expansion-dataset.yml',
     '.github/workflows/snow-squall-expansion-controller.yml',
     '.github/workflows/national-sqw-radar-pretraining.yml',
+    '.github/workflows/snow-squall-modern-validation.yml',
 ]
 
 
