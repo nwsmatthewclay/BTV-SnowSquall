@@ -162,6 +162,23 @@ def grouped_bootstrap_intervals(y, probability, groups, n_boot=500, seed=42):
         'average_precision': interval(aps),
         'brier_score': interval(briers),
     }
+def fold_predictors(frame: pd.DataFrame, predictor_cols: list[str], train_idx) -> list[str]:
+    """Keep predictors with at least two finite training values in a fold.
+
+    HistGradientBoosting can fail when a feature has only one usable value in a
+    training fold. Treating such a feature as unavailable is safer than adding
+    synthetic jitter or letting fold-specific numerical artifacts affect the
+    research evaluation.
+    """
+    train = frame.iloc[train_idx][predictor_cols]
+    usable = []
+    for column in predictor_cols:
+        values = pd.to_numeric(train[column], errors="coerce").replace([np.inf, -np.inf], np.nan).dropna()
+        if values.nunique() >= 2:
+            usable.append(column)
+    return usable
+
+
 def evaluate(frame: pd.DataFrame, predictor_cols: list[str], target: str):
     logo = LeaveOneGroupOut()
     X = frame[predictor_cols]
@@ -183,6 +200,15 @@ def evaluate(frame: pd.DataFrame, predictor_cols: list[str], target: str):
             })
             continue
 
+        fold_predictor_cols = fold_predictors(frame, predictor_cols, train_idx)
+        if not fold_predictor_cols:
+            fold_rows.append({
+                "fold": fold,
+                "held_out_group": groups[test_idx][0],
+                "status": "skipped_no_variable_predictors",
+            })
+            continue
+
         model = HistGradientBoostingClassifier(
             learning_rate=0.08,
             max_iter=200,
@@ -191,8 +217,8 @@ def evaluate(frame: pd.DataFrame, predictor_cols: list[str], target: str):
             random_state=42,
         )
         evidence = pd.to_numeric(frame.iloc[train_idx].get("evidence_weight", pd.Series(1.0, index=frame.iloc[train_idx].index)), errors="coerce").fillna(1.0).to_numpy()
-        model.fit(X.iloc[train_idx], train_y, sample_weight=class_balanced_weights(train_y) * evidence)
-        oof[test_idx] = model.predict_proba(X.iloc[test_idx])[:, 1]
+        model.fit(X.iloc[train_idx][fold_predictor_cols], train_y, sample_weight=class_balanced_weights(train_y) * evidence)
+        oof[test_idx] = model.predict_proba(X.iloc[test_idx][fold_predictor_cols])[:, 1]
         fold_rows.append({
             "fold": fold,
             "held_out_group": groups[test_idx][0],
