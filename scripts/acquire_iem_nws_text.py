@@ -17,12 +17,12 @@ TERMS = re.compile(
     re.I,
 )
 
-def fetch_product(pil: str, year: int) -> str:
+def fetch_product(pil: str, year: int, month: int) -> str:
     params = {
         "pil": pil,
         "center": "KBTV",
-        "sdate": f"{year}0101",
-        "edate": f"{year + 1}0101",
+        "sdate": f"{year}{month:02d}01",
+        "edate": f"{year}{month:02d}{pd.Period(f"{year}-{month:02d}").days_in_month:02d}",
         "fmt": "text",
         "limit": 10000,
     }
@@ -41,7 +41,7 @@ def fetch_product(pil: str, year: int) -> str:
                 raise
     raise RuntimeError(str(last))
 
-def extract_candidates(raw: str, pil: str, year: int) -> list[dict]:
+def extract_candidates(raw: str, pil: str, year: int, month: int) -> list[dict]:
     lines = raw.splitlines()
     rows = []
     current = []
@@ -56,9 +56,13 @@ def extract_candidates(raw: str, pil: str, year: int) -> list[dict]:
                     day_hhmm = m.group(2)
                     try:
                         issued = pd.Timestamp(
-                            f"{year:04d}-{pd.Timestamp(f'{year}-01-01').month:02d}-{int(day_hhmm[:2]):02d}",
+                            year=int(year),
+                            month=int(month),
+                            day=int(day_hhmm[:2]),
+                            hour=int(day_hhmm[2:4]),
+                            minute=int(day_hhmm[4:6]),
                             tz="UTC",
-                        ) + pd.Timedelta(hours=int(day_hhmm[2:4]), minutes=int(day_hhmm[4:6]))
+                        )
                         issued = issued.isoformat().replace("+00:00", "Z")
                     except Exception:
                         issued = None
@@ -83,8 +87,10 @@ def extract_candidates(raw: str, pil: str, year: int) -> list[dict]:
                 try:
                     day = int(day_hhmm[:2])
                     if 1 <= day <= 31:
-                        issued = pd.Timestamp(f"{year}-{day_hhmm[:2]}", tz="UTC")
-                        issued = issued.replace(hour=int(day_hhmm[2:4]), minute=int(day_hhmm[4:6]))
+                        issued = pd.Timestamp(
+                            year=int(year), month=int(month), day=day,
+                            hour=int(day_hhmm[2:4]), minute=int(day_hhmm[4:6]), tz="UTC"
+                        )
                         issued = issued.isoformat().replace("+00:00", "Z")
                 except Exception:
                     issued = None
@@ -102,17 +108,18 @@ def main():
     rows = []
     errors = []
     for year in range(args.start_year, args.end_year + 1):
-        for pil in PRODUCTS:
-            print(f'IEM text {year} {pil}')
-            try:
-                raw = fetch_product(pil, year)
-                (out / f'{pil}_{year}.zip').write_bytes(raw)
-                rows.extend(extract_candidates(raw, pil, year))
+        for month in range(1, 13):
+            for pil in PRODUCTS:
+                print(f'IEM text {year}-{month:02d} {pil}')
+                try:
+                    raw = fetch_product(pil, year, month)
+                    (out / f'{pil}_{year}_{month:02d}.txt').write_text(raw, encoding="utf-8")
+                    rows.extend(extract_candidates(raw, pil, year, month))
             except Exception as exc:
                 errors.append({'year': year, 'pil': pil, 'error_type': type(exc).__name__, 'error_message': str(exc)})
     pd.DataFrame(rows).to_csv(out / 'iem_nws_text_candidates.csv', index=False)
     pd.DataFrame(errors).to_csv(out / 'iem_nws_text_errors.csv', index=False)
-    summary = {'start_year': args.start_year, 'end_year': args.end_year, 'candidate_records': len(rows), 'download_errors': len(errors), 'policy': 'Text matches are review evidence only; absence is never a negative label.'}
+    summary = {'start_year': args.start_year, 'end_year': args.end_year, 'months_requested': (args.end_year-args.start_year+1)*12, 'candidate_records': len(rows), 'download_errors': len(errors), 'policy': 'Text matches are review evidence only; absence is never a negative label.'}
     (out / 'iem_nws_text_summary.json').write_text(json.dumps(summary, indent=2) + '\n', encoding='utf-8')
     print(json.dumps(summary, indent=2))
 
