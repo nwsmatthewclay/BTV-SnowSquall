@@ -41,7 +41,7 @@ permissions:
 
 concurrency:
   group: snow-squall-expansion-dataset-v2
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   expand:
