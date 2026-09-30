@@ -105,16 +105,13 @@ jobs:
         id: inputs
         run: |
           set -euo pipefail
-          level2_root="$(find validation_artifact -type d -path "*/data/raw/modern_level2" -print -quit)"
-          if [ -z "$level2_root" ]; then
-            level2_root="$(find validation_artifact -type d -name modern_validation_level2 -print -quit)"
-          fi
-          cases_csv="$(find validation_artifact -type f -path "*/data/manifests/modern_independent_validation_cases.csv" -print -quit)"
+          level2_root="validation_artifact/raw/modern_level2"
+          cases_csv="validation_artifact/manifests/modern_independent_validation_cases.csv"
           test -n "$level2_root"
           test -n "$cases_csv"
           test -n "$(find "$level2_root" -type f -print -quit)"
 
-          requested_case="\${{inputs.case_id }}"
+          requested_case="${{ inputs.case_id }}"
           if [ -z "$requested_case" ]; then
             requested_case="$(python - "$cases_csv" <<'PY'
           import sys
