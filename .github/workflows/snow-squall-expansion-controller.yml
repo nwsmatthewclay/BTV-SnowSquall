@@ -1,0 +1,70 @@
+name: Snow Squall Expansion Batch Controller
+
+on:
+  workflow_run:
+    workflows:
+      - Snow Squall Expansion Dataset
+    types:
+      - completed
+
+permissions:
+  actions: write
+  contents: read
+
+concurrency:
+  group: snow-squall-expansion-controller
+  cancel-in-progress: true
+
+jobs:
+  advance:
+    if: github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Download batch state
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          rm -rf state_artifact
+          gh run download "${{ github.event.workflow_run.id }}" \
+            --name snow-squall-expansion-feature-batch \
+            --dir state_artifact
+          test -s state_artifact/next_expansion_batch.json
+
+      - name: Advance bounded expansion series
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          s=json.loads(Path('state_artifact/next_expansion_batch.json').read_text())
+          if not s.get('auto_continue'):
+              print('Automatic continuation disabled.')
+              raise SystemExit(0)
+          no_new = s.get('batch_rows',{}).get('official',0) == 0 and s.get('batch_rows',{}).get('review',0) == 0
+          if no_new:
+              print('No new cases in this batch; stopping.')
+              raise SystemExit(0)
+          if s['next_official_offset'] >= s['max_automatic_official'] and s['next_unverified_offset'] >= s['max_automatic_unverified']:
+              print('Automatic batch cap reached; stopping.')
+              raise SystemExit(0)
+          print(json.dumps(s,indent=2))
+          PY
+          official_next="$(python -c 'import json; print(json.load(open("state_artifact/next_expansion_batch.json"))["next_official_offset"])')"
+          review_next="$(python -c 'import json; print(json.load(open("state_artifact/next_expansion_batch.json"))["next_unverified_offset"])')"
+          max_official="$(python -c 'import json; print(min(30, json.load(open("state_artifact/next_expansion_batch.json"))["max_automatic_official"]-int(official_next)))')"
+          max_review="$(python -c 'import json; print(min(25, json.load(open("state_artifact/next_expansion_batch.json"))["max_automatic_unverified"]-int(review_next)))')"
+          if [ "$max_official" -le 0 ] && [ "$max_review" -le 0 ]; then
+            echo 'No remaining automatic capacity.'
+            exit 0
+          fi
+          gh workflow run "Snow Squall Expansion Dataset" \
+            --ref snow-squall-model-foundation \
+            -f official_offset="$official_next" \
+            -f unverified_offset="$review_next" \
+            -f max_official="$max_official" \
+            -f max_unverified="$max_review"
+          echo "Dispatched next expansion batch: official=$official_next review=$review_next sizes=$max_official/$max_review"
