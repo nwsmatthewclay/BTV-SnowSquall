@@ -180,8 +180,10 @@ def build_labels(df: pd.DataFrame, cases_csv: Path):
 
         case = case_rows[case_id]
         station = getattr(case, "observing_station", None)
+        case_lat = pd.to_numeric(getattr(case, "case_lat", None), errors="coerce") if hasattr(case, "case_lat") else pd.NA
+        case_lon = pd.to_numeric(getattr(case, "case_lon", None), errors="coerce") if hasattr(case, "case_lon") else pd.NA
         if (
-            station not in STATIONS
+            (station not in STATIONS and (pd.isna(case_lat) or pd.isna(case_lon)))
             or pd.isna(row.get("centroid_lat"))
             or pd.isna(row.get("centroid_lon"))
         ):
@@ -205,7 +207,7 @@ def build_labels(df: pd.DataFrame, cases_csv: Path):
             continue
 
         out.at[idx, "track_event_distance_km"] = track_distance
-        out.at[idx, "track_event_associated"] = track_distance <= ASSOCIATION_RADIUS_KM
+        out.at[idx, "track_event_associated"] = True
 
         if track_distance > ASSOCIATION_RADIUS_KM:
             out.at[idx, "label_status"] = "unassociated_object"
