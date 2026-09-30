@@ -98,6 +98,13 @@ def test_operational_predictor_set_is_live_covered():
     base["width_km"] = 2.0
     base["pixel_count"] = 12
     base["core_pixel_count"] = 4
+    older = dict(base)
+    older["timestamp"] = "2026-01-01T11:55:00Z"
+    older["centroid_lat"] = 43.97
+    older["max_reflectivity_dbz"] = 26.0
+    older["mean_reflectivity_dbz"] = 18.0
+    older["area_km2"] = 9.0
+
     previous = dict(base)
     previous["timestamp"] = "2026-01-01T12:00:00Z"
     previous["centroid_lat"] = 44.0
@@ -105,7 +112,7 @@ def test_operational_predictor_set_is_live_covered():
     previous["mean_reflectivity_dbz"] = 19.0
     previous["area_km2"] = 10.0
 
-    frame = build_live_feature_frame([previous, base], "7")
+    frame = build_live_feature_frame([older, previous, base], "7")
     coverage = feature_coverage(frame.tail(1), OPERATIONAL_LIVE_PREDICTORS)
     assert coverage["fraction"] == 1.0
     assert coverage["missing"] == []
