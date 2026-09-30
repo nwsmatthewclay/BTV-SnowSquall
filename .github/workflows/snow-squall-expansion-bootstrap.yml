@@ -6,6 +6,7 @@ on:
       - main
     paths:
       - .github/workflows/snow-squall-expansion-dataset.yml
+      - .github/workflows/snow-squall-expansion-bootstrap.yml
       - .github/expansion-bootstrap-trigger
   workflow_dispatch:
 
@@ -20,13 +21,41 @@ jobs:
       - name: Dispatch expansion workflow on foundation branch
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPOSITORY: ${{ github.repository }}
         run: |
           set -euo pipefail
+          python - <<'PY'
+          import json, os
+          from datetime import datetime, timezone
+          payload = {
+              "status": "dispatching",
+              "timestamp_utc": datetime.now(timezone.utc).isoformat(),
+              "repository": os.environ["REPOSITORY"],
+              "target_workflow": "snow-squall-expansion-dataset.yml",
+              "target_ref": "snow-squall-model-foundation",
+              "official_offset": 0,
+              "unverified_offset": 0,
+              "max_official": 30,
+              "max_unverified": 15,
+          }
+          open("bootstrap_launch.json","w").write(json.dumps(payload, indent=2)+"\n")
+          PY
           gh workflow run snow-squall-expansion-dataset.yml \
-            --repo "$GITHUB_REPOSITORY" \
+            --repo "$REPOSITORY" \
             --ref snow-squall-model-foundation \
             -f official_offset=0 \
             -f unverified_offset=0 \
             -f max_official=30 \
             -f max_unverified=15
-          echo "Dispatched Snow Squall Expansion Dataset on snow-squall-model-foundation"
+          python - <<'PY'
+          import json
+          p=json.load(open("bootstrap_launch.json"))
+          p["status"]="dispatch_command_succeeded"
+          open("bootstrap_launch.json","w").write(json.dumps(p,indent=2)+"\n")
+          PY
+      - name: Upload bootstrap heartbeat
+        uses: actions/upload-artifact@v4
+        with:
+          name: snow-squall-expansion-bootstrap-heartbeat
+          path: bootstrap_launch.json
+          retention-days: 14
