@@ -2,6 +2,12 @@ name: Snow Squall Model Gate Launcher
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/snow-squall-model-gate-launcher.yml
+      - .github/model-gate-trigger
 
 permissions:
   actions: write
