@@ -434,8 +434,8 @@ jobs:
               'batch_rows': {'official': official_count, 'review': review_count},
               'batch_size': {'official': official_batch, 'review': review_batch},
               'current_offsets': {'official': official_offset, 'review': review_offset},
-              'next_official_offset': official_offset + official_batch,
-              'next_unverified_offset': review_offset + review_batch,
+              'next_official_offset': official_offset + official_count,
+              'next_unverified_offset': review_offset + review_count,
               'max_automatic_official': 150,
               'max_automatic_unverified': 125,
           }
