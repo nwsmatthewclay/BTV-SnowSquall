@@ -1,0 +1,187 @@
+name: Snow Squall Candidate Model Refresh
+
+on:
+  workflow_run:
+    workflows:
+      - National SQW Radar Pretraining Pool
+    types:
+      - completed
+
+permissions:
+  actions: read
+  contents: read
+
+concurrency:
+  group: snow-squall-candidate-model-refresh
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    if: github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    env:
+      PYTHONPATH: ${{ github.workspace }}
+      PYTHONUNBUFFERED: "1"
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    steps:
+      - name: Checkout model foundation
+        uses: actions/checkout@v4
+        with:
+          ref: snow-squall-model-foundation
+
+      - name: Download national pretraining pool
+        uses: actions/download-artifact@v4
+        with:
+          name: national-sqw-radar-pretraining-pool
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          repository: ${{ github.repository }}
+          run-id: ${{ github.event.workflow_run.id }}
+          path: national_pretrain_artifact
+
+      - name: Resolve latest archived expansion feature batch
+        id: expansion
+        shell: bash
+        run: |
+          set -euo pipefail
+          selected=""
+          while IFS= read -r run; do
+            run_id="$(printf '%s' "${run}" | jq -r '.id')"
+            artifacts="$(gh api "/repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}/artifacts?per_page=100")"
+            count="$(printf '%s' "${artifacts}" | jq '[.artifacts[] | select(.name=="snow-squall-expansion-feature-batch" and .expired==false)] | length')"
+            if [ "${count}" -gt 0 ]; then
+              selected="${run}"
+              break
+            fi
+          done < <(
+            gh api "/repos/${GITHUB_REPOSITORY}/actions/runs?branch=snow-squall-model-foundation&per_page=100" |
+            jq -c '[.workflow_runs[]
+              | select(.name=="Snow Squall Expansion Dataset"
+                  or .name=="Object Dataset Full Expansion"
+                  or .path==".github/workflows/snow-squall-expansion-dataset.yml"
+                  or .path==".github/workflows/object-dataset-full-expansion.yml")
+              | select(.status!="in_progress")]
+              | sort_by(.id) | reverse | .[]'
+          )
+          test -n "${selected}"
+          run_id="$(printf '%s' "${selected}" | jq -r '.id')"
+          echo "run_id=${run_id}" >> "${GITHUB_OUTPUT}"
+          echo "Using archived expansion feature batch from run ${run_id}"
+
+      - name: Download archived expansion feature batch
+        run: |
+          set -euo pipefail
+          rm -rf expansion_artifact
+          gh run download "${{ steps.expansion.outputs.run_id }}"             --name snow-squall-expansion-feature-batch             --dir expansion_artifact
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install science dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt -r requirements-science.txt
+
+      - name: Stage historical cumulative feature population
+        run: |
+          set -euo pipefail
+          cumulative="$(find expansion_artifact -name 'snow_squall_model_features_cumulative.csv' -type f -print -quit)"
+          schema="$(find expansion_artifact -name 'snow_squall_model_features_expanded.schema.json' -type f -print -quit)"
+          test -n "${cumulative}"
+          test -n "${schema}"
+          mkdir -p data/derived
+          cp "${cumulative}" data/derived/snow_squall_model_features_cumulative_prior.csv
+          cp "${schema}" data/derived/snow_squall_model_features_expanded.schema.json
+          echo "Historical cumulative rows:"
+          python - <<'PY'
+          import pandas as pd
+          d=pd.read_csv("data/derived/snow_squall_model_features_cumulative_prior.csv")
+          print("rows=",len(d))
+          print("columns=",len(d.columns))
+          print("case_groups=",d["case_id"].nunique() if "case_id" in d.columns else 0)
+          print("null_groups=",d["null_id"].nunique() if "null_id" in d.columns else 0)
+          PY
+
+      - name: Stage national pretraining models
+        run: |
+          set -euo pipefail
+          root="$(find national_pretrain_artifact -type d -name 'national_sqw_weak_model_15m' -print -quit | xargs -r dirname)"
+          test -n "${root}"
+          cp -R "${root}"/national_sqw_weak_model_*m data/derived/
+          for h in 15 30 45 60; do
+            test -f "data/derived/national_sqw_weak_model_${h}m/weak_pretraining_model.joblib"
+            test -f "data/derived/national_sqw_weak_model_${h}m/metrics.json"
+          done
+
+      - name: Apply national BTV-excluded radar priors
+        run: |
+          set -euo pipefail
+          python scripts/add_national_pretraining_features.py             --features data/derived/snow_squall_model_features_cumulative_prior.csv             --model-root data/derived             --output data/derived/snow_squall_model_features_cumulative.csv             --summary data/derived/snow_squall_national_pretraining_feature_summary_refresh.json             --schema data/derived/snow_squall_model_features_expanded.schema.json
+          python - <<'PY'
+          import pandas as pd
+          d=pd.read_csv("data/derived/snow_squall_model_features_cumulative.csv")
+          national=[c for c in d.columns if c.startswith("national_pretrain_probability_")]
+          print("National prior columns:", national)
+          if len(national) != 4:
+              raise SystemExit("Expected four national pretraining probability columns")
+          print("augmented_rows=",len(d),"augmented_columns=",len(d.columns))
+          PY
+
+      - name: Train refreshed four-horizon baseline and ensemble candidates
+        run: |
+          set -euo pipefail
+          for h in 15 30 45 60; do
+            python scripts/train_baseline_model.py               data/derived/snow_squall_model_features_cumulative.csv               --schema data/derived/snow_squall_model_features_expanded.schema.json               --target squall_onset_within_${h}m               --output-dir data/derived/baseline_refresh_${h}m
+
+            python scripts/train_candidate_ensemble.py               data/derived/snow_squall_model_features_cumulative.csv               --schema data/derived/snow_squall_model_features_expanded.schema.json               --target squall_onset_within_${h}m               --output-dir data/derived/candidate_ensemble_refresh_${h}m
+
+            python scripts/calibrate_model_bundle.py               --model-dir data/derived/candidate_ensemble_refresh_${h}m
+          done
+
+      - name: Audit refreshed live compatibility
+        run: |
+          python scripts/audit_live_model_compatibility.py             --schema data/derived/snow_squall_model_features_expanded.schema.json             --model-root data/derived             --output data/derived/snow_squall_live_model_compatibility_refresh.json
+
+      - name: Write refresh provenance and comparison
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          out={}
+          for h in (15,30,45,60):
+              p=Path(f"data/derived/candidate_ensemble_refresh_{h}m/metrics.json")
+              m=json.loads(p.read_text())
+              out[f"{h}m"]={
+                  "training_rows":m.get("training_rows"),
+                  "training_groups":m.get("training_groups"),
+                  "positive_case_group_count":m.get("positive_case_group_count"),
+                  "evaluation_status":m.get("evaluation_status"),
+                  "operational_release_status":m.get("operational_release_status"),
+                  "metrics":m.get("metrics",{}),
+              }
+          Path("data/derived/snow_squall_candidate_refresh_summary.json").write_text(
+              json.dumps({
+                  "release_status":"candidate_only_not_operational",
+                  "national_pretraining_source":"BTV-excluded national SQW warning/radar weak supervision",
+                  "horizons":out,
+              },indent=2)+"\n",encoding="utf-8")
+          print(json.dumps(out,indent=2))
+          PY
+
+      - name: Upload refreshed candidate model bundles
+        uses: actions/upload-artifact@v4
+        with:
+          name: snow-squall-refreshed-model-bundles
+          retention-days: 30
+          path: |
+            data/derived/candidate_ensemble_refresh_*m
+            data/derived/baseline_refresh_*m
+            data/derived/snow_squall_candidate_refresh_summary.json
+            data/derived/snow_squall_national_pretraining_feature_summary_refresh.json
+            data/derived/snow_squall_live_model_compatibility_refresh.json
+            data/derived/snow_squall_model_features_cumulative.csv
+            data/derived/snow_squall_model_features_expanded.schema.json
