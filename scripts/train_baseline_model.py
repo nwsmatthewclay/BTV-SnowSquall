@@ -115,6 +115,10 @@ def prepare_dataset(frame: pd.DataFrame, schema: dict, target: str):
     predictor_cols = [
         c for c in predictor_cols if not d[c].isna().all()
     ]
+    # Remove globally constant predictors before the final model fit. Fold-level
+    # filtering below handles predictors that become constant only in a holdout
+    # training fold.
+    predictor_cols = [c for c in predictor_cols if d[c].dropna().nunique() >= 2]
     if not predictor_cols:
         raise ValueError("Every predictor is missing in the training population.")
 
