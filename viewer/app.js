@@ -110,6 +110,17 @@ function renderProbabilityEvolution(){
     box.innerHTML="<div class='history-empty'>This track has no attached research score history.</div>";
     return;
   }
+
+  const activeTs=times[currentIndex];
+  let activePointIndex=points.findIndex(pt=>pt.ts===activeTs);
+  if(activePointIndex<0){
+    for(let i=0;i<points.length;i++){
+      if(points[i].ts<=activeTs) activePointIndex=i;
+    }
+    if(activePointIndex<0) activePointIndex=0;
+  }
+  const active=points[activePointIndex]?.values||[];
+  const prior=points[activePointIndex-1]?.values||[];
   const W=330,H=150,P=24;
   const observed=points.flatMap(pt=>pt.values).filter(v=>Number.isFinite(v)&&v>=0);
   const maxY=Math.min(1,Math.max(0.01,(Math.max(...observed)||0.01)*1.15));
@@ -123,14 +134,15 @@ function renderProbabilityEvolution(){
       return (n?"L":"M")+xs[x.i].toFixed(1)+" "+yy.toFixed(1);
     }).join(" ");
   };
-  const latest=points[points.length-1]?.values||[];
   const labels=["15","30","45","60"], glyphs=["#58b9ff","#63d1a3","#d9aa64","#c9a3ff"];
+  const currentX=xs[activePointIndex];
   const svg="<svg class='prob-chart' viewBox='0 0 "+W+" "+H+"' role='img' aria-label='Research probability evolution'>"+
     "<line x1='"+P+"' y1='"+(H-P)+"' x2='"+(W-P)+"' y2='"+(H-P)+"' class='chart-axis'/>"+
     "<line x1='"+P+"' y1='"+P+"' x2='"+P+"' y2='"+(H-P)+"' class='chart-axis'/>"+
+    "<line x1='"+currentX.toFixed(1)+"' y1='"+P+"' x2='"+currentX.toFixed(1)+"' y2='"+(H-P)+"' class='chart-current'/>"+
     "<text x='"+(P-4)+"' y='"+(P+3)+"' text-anchor='end' class='chart-label'>"+(maxY*100).toFixed(1)+"%</text>"+
     "<text x='"+(P-4)+"' y='"+((H/2)+3)+"' text-anchor='end' class='chart-label'>"+(maxY*50).toFixed(1)+"%</text>"+
-    "<text x='"+(P-4)+"' y='"+(H- P +3)+"' text-anchor='end' class='chart-label'>0%</text>"+
+    "<text x='"+(P-4)+"' y='"+(H-P+3)+"' text-anchor='end' class='chart-label'>0%</text>"+
     [0,1,2,3].map(i=>{
       const path=pathFor(i);
       return path?"<path d='"+path+"' fill='none' stroke='"+glyphs[i]+"' stroke-width='2' stroke-linecap='round'/>":"";
@@ -139,12 +151,18 @@ function renderProbabilityEvolution(){
       return pt.values.map((v,j)=>{
         if(!Number.isFinite(v))return "";
         const yy=yFor(v);
-        return "<circle cx='"+xs[i].toFixed(1)+"' cy='"+yy.toFixed(1)+"' r='2.5' fill='"+glyphs[j]+"'/>";
+        const current=i===activePointIndex;
+        return "<circle cx='"+xs[i].toFixed(1)+"' cy='"+yy.toFixed(1)+"' r='"+(current?"3.5":"2.5")+"' fill='"+glyphs[j]+"'"+(current?" stroke='#ffffff' stroke-width='1.5'":"")+"/>"; 
       }).join("");
     }).join(""))+
     "</svg>"+
-    "<div class='chart-legend'>"+labels.map((l,i)=>"<span><i style='background:"+glyphs[i]+"'></i>"+l+"m "+(latest[i]==null?"—":(latest[i]*100).toFixed(1)+"%")+"</span>").join("")+"</div>"+
-    "<div class='research-prob-note'>The trace follows only scores available at each historical scan; later scans are never used to construct an earlier point.</div>";
+    "<div class='chart-legend'>"+labels.map((l,i)=>{
+      const v=active[i], pv=prior[i];
+      const delta=Number.isFinite(v)&&Number.isFinite(pv)?v-pv:null;
+      const deltaText=delta==null?"":" • Δ "+(delta>=0?"+":"")+(delta*100).toFixed(1)+" pp";
+      return "<span><i style='background:"+glyphs[i]+"'></i>"+l+"m "+(v==null?"—":(v*100).toFixed(1)+"%")+deltaText+"</span>";
+    }).join("")+"</div>"+
+    "<div class='research-prob-note'>Current scan: "+fmtUtc(points[activePointIndex]?.ts||activeTs)+". The trace follows only scores available at each historical scan; later scans are never used to construct an earlier point.</div>";
   box.innerHTML=svg;
 }
 
