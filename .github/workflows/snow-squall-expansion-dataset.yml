@@ -236,7 +236,7 @@ jobs:
             --start 2008-10-01T00:00:00Z \
             --end 2026-06-30T21:00:00Z \
             --sample-count 40 \
-            --seed 20260929 \
+            --seed $((20260929 + ${{ inputs.official_offset || '0' }} + ${{ inputs.unverified_offset || '0' }})) \
             --radars KCXX KTYX \
             --output data/manifests/snow_squall_expansion/snow_squall_null_windows.csv
           python acquisition/historical_level2.py \
