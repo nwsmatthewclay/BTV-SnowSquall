@@ -130,6 +130,7 @@ def main():
         Path(args.null_csv),
         Path(args.output),
         Path(args.null_activity) if args.null_activity else None,
+        args.dataset_version,
     )
 
 
