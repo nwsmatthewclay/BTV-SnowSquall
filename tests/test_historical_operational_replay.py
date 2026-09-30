@@ -77,3 +77,28 @@ def test_replay_respects_explicit_case_window(tmp_path, monkeypatch):
 def test_surface_radar_diagnostic_distinguishes_nonlocal_object():
     from scripts.build_modern_surface_radar_diagnostic import distance_km
     assert distance_km(44.20, -72.56, 43.82, -72.99) > 40
+
+
+def test_candidate_runtime_is_blocked_outside_replay():
+    from scripts.process_live_volume import score_with_runtime
+
+    class FakeRuntime:
+        model = object()
+        enabled = False
+
+        def score_candidate(self, frame):
+            return [0.42]
+
+        def score(self, frame):
+            return [0.99]
+
+    frame = __import__("pandas").DataFrame({"x": [1.0]})
+    runtime = FakeRuntime()
+
+    blocked, mode = score_with_runtime(frame, runtime, research_replay=False)
+    assert blocked is None
+    assert mode == "candidate_blocked"
+
+    scored, mode = score_with_runtime(frame, runtime, research_replay=True)
+    assert scored == [0.42]
+    assert mode == "research_replay"
