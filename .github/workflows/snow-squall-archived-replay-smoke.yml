@@ -109,7 +109,21 @@ jobs:
           test -n "$cases_csv"
           test -n "$(find "$level2_root" -type f -print -quit)"
 
-          python - "$cases_csv" "$level2_root" "replay_input" "${{inputs.case_id }}" <<'PY'
+          requested_case="\${{inputs.case_id }}"
+          if [ -z "$requested_case" ]; then
+            requested_case="$(python - "$cases_csv" <<'PY'
+          import sys
+          import pandas as pd
+          cases = pd.read_csv(sys.argv[1])
+          if cases.empty:
+              raise SystemExit("Modern validation manifest contains no cases")
+          print(str(cases.iloc[0]["case_id"]))
+          PY
+            )"
+          fi
+          echo "Replay case: $requested_case"
+
+          python - "$cases_csv" "$level2_root" "replay_input" "$requested_case" <<'PY'
           import json
           import shutil
           import sys
