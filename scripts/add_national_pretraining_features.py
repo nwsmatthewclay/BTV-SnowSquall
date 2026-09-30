@@ -34,7 +34,7 @@ def augment(frame: pd.DataFrame, model_root: Path) -> tuple[pd.DataFrame, dict]:
                 working[column] = np.nan
                 missing.append(column)
         model = joblib.load(model_path)
-        probabilities = model.predict_proba(working[predictors])[:, 1]
+        probabilities = np.asarray(model.predict_proba(working[predictors]), dtype=float)[:, 1]
         out[feature_name] = probabilities
         summary[str(horizon)] = {
             "status": "applied",
