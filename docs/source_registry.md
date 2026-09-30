@@ -11,7 +11,7 @@ must be recorded before case data are treated as truth.
 | NEXRAD Level II KCXX/KTYX | Storm structure | 3-D radar features and evolution |
 | MRMS | Precipitation context | Modern-era lowest reflectivity and precipitation accumulation; additional fields only when defensibly archived |
 | RAP | Environment | SNSQ and thermodynamic/kinematic fields |
-| ASOS/METAR/NCEI | Surface truth | Visibility, snow, wind/gust |
+| ASOS/METAR/NCEI | Surface truth | Visibility, snow, wind/gust |\n| mPING | Independent precipitation-type QC | Case/time-linked rain, snow, mixed and freezing-precipitation evidence; never an automatic truth label |
 | NWS/IEM SQW archives | Event truth | Warning polygons/timing and provenance |
 
 ## Evidence rule
@@ -27,3 +27,13 @@ Published case lists identify where to look. They do not replace reconstruction
 from observations. Every case should be reconstructed through the same pipeline
 as possible null events so the model learns physical/event differences rather
 than study-selection artifacts.
+
+
+## mPING access and retention
+
+mPING API access requires an API key obtained through the mPING registration process.
+The workflow reads the key only from the `MPING_API_KEY` GitHub Actions secret and
+fails soft when the key is absent. Persisted project evidence intentionally omits
+individual report IDs and coordinates; only case-linked observation time and
+predefined phenomenon fields are retained. mPING evidence is non-authoritative QC
+and is never converted directly into a positive or negative snow-squall label.
