@@ -12,6 +12,26 @@ from scripts.model_runtime import ModelRuntime
 
 HORIZONS = (15, 30, 45, 60)
 
+def expected_calibration_error(y, p, bins=10):
+    y = pd.Series(y).astype(float)
+    p = pd.Series(p).astype(float).clip(0.0, 1.0)
+    edges = [i / bins for i in range(bins + 1)]
+    ece = 0.0
+    total = float(len(y))
+    rows = []
+    if total == 0:
+        return 0.0, rows
+    for left, right in zip(edges[:-1], edges[1:]):
+        mask = (p >= left) & ((p < right) if right < 1 else (p <= right))
+        n = int(mask.sum())
+        if not n:
+            continue
+        mean_p = float(p[mask].mean())
+        mean_y = float(y[mask].mean())
+        ece += (n / total) * abs(mean_p - mean_y)
+        rows.append({"lower": left, "upper": right, "n": n, "mean_probability": mean_p, "observed_frequency": mean_y})
+    return float(ece), rows
+
 
 def score_one(features: pd.DataFrame, model_dir: Path, target: str):
     runtime = ModelRuntime.load(model_dir)
