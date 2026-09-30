@@ -141,3 +141,38 @@ def test_replay_audit_requires_research_mode_for_scored_records(tmp_path):
     import pytest
     with pytest.raises(ValueError, match="research_replay"):
         audit_horizon(tmp_path, 15)
+
+
+def test_validate_scan_sequence_rejects_duplicate_timestamps(tmp_path):
+    from scripts.historical_operational_replay import validate_scan_sequence
+    paths = [
+        tmp_path / "KCXX20200101_120000_V06",
+        tmp_path / "KCXX20200101_120000_V06.duplicate",
+    ]
+    result = validate_scan_sequence(paths)
+    assert result["duplicate_scan_timestamp_count"] == 1
+    assert result["strictly_increasing_scan_times"] is False
+
+
+def test_replay_rejects_output_timestamp_mismatch(tmp_path, monkeypatch):
+    from scripts import historical_operational_replay as replay
+    source = tmp_path / "KCXX20191218_224000_V06"
+    source.write_bytes(b"placeholder")
+
+    def fake_process(source, state_path, output_path, history_jsonl_path=None, history_csv_path=None, model_dir=None, research_replay=False):
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path.write_text(
+            '{"metadata":{"scan_time_utc":"2019-12-18T22:45:00Z","object_count":1}}',
+            encoding="utf-8",
+        )
+        return True
+
+    monkeypatch.setattr(replay, "process_volume", fake_process)
+    import pytest
+    with pytest.raises(ValueError, match="timestamp mismatch"):
+        replay.replay_case(
+            tmp_path,
+            tmp_path / "out",
+            tmp_path / "state.json",
+            "CASE",
+        )
