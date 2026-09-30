@@ -59,7 +59,6 @@ STRONG_CLASSES = {
     "official_plus_study",
     "study_verified",
     "study_warning_verified",
-    "warning_verified",
 }
 
 def distance_km(lat1, lon1, lat2, lon2):
