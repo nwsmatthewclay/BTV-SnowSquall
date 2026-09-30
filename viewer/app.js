@@ -1,3 +1,4 @@
+const RESEARCH_RELEASE_STATUS = "candidate_only_not_operational";
 const map=L.map("map",{zoomControl:true,preferCanvas:true}).setView([44.2,-73.1],8);
 L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{maxZoom:12,attribution:"© OpenStreetMap contributors"}).addTo(map);
 const radarLayer=L.layerGroup().addTo(map),objectsLayer=L.layerGroup().addTo(map),tracksLayer=L.layerGroup().addTo(map);
