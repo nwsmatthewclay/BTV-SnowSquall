@@ -155,3 +155,27 @@ def test_operational_predictors_are_subset_of_declared_live_contract(tmp_path):
     schema = write_schema(build_features(frame), tmp_path / "schema.json")
     assert set(schema["operational_predictor_columns"]) <= set(schema["predictor_columns"])
     assert "mystery_future_field" not in schema["operational_predictor_columns"]
+
+
+def test_three_scan_state_requires_continuous_scans():
+    source = pd.DataFrame(
+        {
+            "population": ["winter_null_candidate"] * 3,
+            "radar_site": ["KCXX"] * 3,
+            "object_id": [12] * 3,
+            "scan_time_utc": [
+                "2006-02-07T12:00:00Z",
+                "2006-02-07T12:05:00Z",
+                "2006-02-07T12:17:00Z",
+            ],
+            "max_reflectivity_dbz": [20.0, 30.0, 40.0],
+            "area_km2": [10.0, 12.0, 15.0],
+            "echo_top_km": [1.5, 2.0, 2.8],
+            "motion_speed_kt": [20.0, 22.0, 24.0],
+        }
+    )
+    result = build_features(source)
+    assert pd.isna(result.loc[2, "max_reflectivity_dbz_trailing_mean_3"])
+    assert pd.isna(result.loc[2, "max_reflectivity_dbz_trailing_std_3"])
+    assert pd.isna(result.loc[2, "area_km2_trailing_mean_3"])
+    assert pd.isna(result.loc[2, "echo_top_km_trailing_mean_3"])
