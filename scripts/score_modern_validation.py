@@ -11,6 +11,7 @@ import pandas as pd
 from scripts.live_model_features import build_live_feature_frame, feature_coverage
 from scripts.add_national_pretraining_features import augment as augment_national_pretraining
 from scripts.model_runtime import ModelRuntime
+from scripts.probability_postprocess import monotone_cumulative_probabilities
 
 HORIZONS=(15,30,45,60)
 THRESHOLDS=(0.10,0.20,0.30,0.50)
@@ -55,6 +56,12 @@ def score_case(case_row, objects, model_root: Path):
                 hits=[t for t,p in vals if p>=threshold and pd.notna(anchor) and t<=anchor]
                 crosses[str(threshold)]=hits[0].isoformat() if hits else None
             first_cross[str(h)]=crosses
+        projected_window = monotone_cumulative_probabilities(max_in_window)
+        projected_pre = monotone_cumulative_probabilities(max_pre)
+        if projected_window:
+            max_in_window = projected_window["cumulative"]
+        if projected_pre:
+            max_pre = projected_pre["cumulative"]
         results.append({'case_id':case_id,'object_id':str(track_id),'anchor_utc':anchor.isoformat() if pd.notna(anchor) else None,'anchor_source':anchor_source,'analysis_window_start_utc':start.isoformat() if pd.notna(start) else None,'analysis_window_end_utc':end.isoformat() if pd.notna(end) else None,'national_pretraining':national_prior_status,'max_probability_in_window':max_in_window,'max_probability_pre_anchor':max_pre,'first_threshold_crossing_before_anchor':first_cross})
     return results
 
