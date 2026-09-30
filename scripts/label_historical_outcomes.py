@@ -74,7 +74,10 @@ def build_labels(df: pd.DataFrame, cases_csv: Path):
     association = {}
     for case_id, case in case_rows.items():
         station = getattr(case, "observing_station", None)
-        if station not in STATIONS:
+        case_lat = pd.to_numeric(getattr(case, "case_lat", None), errors="coerce") if hasattr(case, "case_lat") else pd.NA
+        case_lon = pd.to_numeric(getattr(case, "case_lon", None), errors="coerce") if hasattr(case, "case_lon") else pd.NA
+        precision = str(getattr(case, "case_coordinate_precision", "") or "")
+        if station not in STATIONS and (pd.isna(case_lat) or pd.isna(case_lon)):
             continue
         start = parse_time(case.event_start_utc)
         if start is None:
@@ -83,6 +86,8 @@ def build_labels(df: pd.DataFrame, cases_csv: Path):
         corridor_end_time = verified_end or (start + timedelta(minutes=60))
         corridor_start = start - timedelta(minutes=PRE_EVENT_ASSOCIATION_MIN)
         corridor_end = corridor_end_time + timedelta(minutes=POST_EVENT_ASSOCIATION_MIN)
+        association_reference = "case_coordinate" if not pd.isna(case_lat) and not pd.isna(case_lon) else "station"
+        association_radius = 100.0 if precision == "routing_only" else ASSOCIATION_RADIUS_KM
 
         case_mask = (
             (out["case_id"] == case_id)
@@ -109,10 +114,15 @@ def build_labels(df: pd.DataFrame, cases_csv: Path):
             track["_abs_minutes_from_onset"] = (
                 (track["scan_dt"] - start).abs().dt.total_seconds().div(60.0)
             )
+            ref_lat, ref_lon = (
+                (float(case_lat), float(case_lon))
+                if association_reference == "case_coordinate"
+                else STATIONS[station]
+            )
             track["_distance_km"] = track.apply(
                 lambda r: distance_km(
                     float(r["centroid_lat"]), float(r["centroid_lon"]),
-                    STATIONS[station][0], STATIONS[station][1],
+                    ref_lat, ref_lon,
                 ),
                 axis=1,
             )
@@ -158,7 +168,7 @@ def build_labels(df: pd.DataFrame, cases_csv: Path):
                 )
 
         for radar_site, (_, min_distance, object_id) in by_radar.items():
-            if min_distance <= ASSOCIATION_RADIUS_KM:
+            if min_distance <= association_radius:
                 association[_track_key(case_id, radar_site, object_id)] = min_distance
 
     for idx, row in out.iterrows():
@@ -177,9 +187,14 @@ def build_labels(df: pd.DataFrame, cases_csv: Path):
         ):
             continue
 
+        ref_lat, ref_lon = (
+            (float(case_lat), float(case_lon))
+            if not pd.isna(case_lat) and not pd.isna(case_lon)
+            else STATIONS[station]
+        )
         distance = distance_km(
             float(row["centroid_lat"]), float(row["centroid_lon"]),
-            STATIONS[station][0], STATIONS[station][1],
+            ref_lat, ref_lon,
         )
         out.at[idx, "case_station_distance_km"] = distance
 
