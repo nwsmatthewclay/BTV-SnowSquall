@@ -118,6 +118,22 @@ def save_state(path: Path, state: dict, tracker: CentroidTracker):
     tmp.replace(path)
 
 
+
+
+def score_with_runtime(frame, runtime: ModelRuntime, research_replay: bool = False):
+    """Score a frame using the live release gate or an explicit replay override.
+
+    Candidate models are scoreable only when research_replay is explicitly true.
+    Ordinary/live execution remains release-gated.
+    """
+    if runtime.model is None:
+        return None, "no_model"
+    if runtime.enabled:
+        return runtime.score(frame), "released"
+    if research_replay:
+        return runtime.score_candidate(frame), "research_replay"
+    return None, "candidate_blocked"
+
 def process_volume(
     path: Path,
     state_path: Path,
@@ -125,6 +141,7 @@ def process_volume(
     history_jsonl_path: Path | None = None,
     history_csv_path: Path | None = None,
     model_dir: Path | None = None,
+    research_replay: bool = False,
 ):
     state, tracker = load_state(state_path)
     source_name = path.name
@@ -390,13 +407,13 @@ def process_volume(
             "model_version": "live-object-foundation-v2",
         })
 
-    # Optional learned-model scoring is deliberately opt-in and release-gated.
-    # Candidate bundles return no probability; malformed or incomplete live
-    # feature mappings degrade the product rather than taking down the worker.
+    # Optional learned-model scoring is deliberately opt-in and release-gated
+    # for live execution. Archived replay may explicitly score candidate bundles.
     model_runtime = ModelRuntime.load(model_dir) if model_dir else ModelRuntime()
     model_scored = False
     model_errors = {}
-    if model_runtime.enabled and features:
+    probability_mode = "none"
+    if features and (model_runtime.enabled or (research_replay and model_runtime.model is not None)):
         prior_rows_by_track = {}
         prior_path = history_jsonl_path or Path("data/derived/live_object_history.jsonl")
         if prior_path.exists():
@@ -419,7 +436,9 @@ def process_volume(
             history = prior_rows_by_track.get(track_id, [])
             frame = build_live_feature_frame(history + [current_row], track_id)
             try:
-                scores = model_runtime.score(frame.tail(1))
+                scores, score_mode = score_with_runtime(frame.tail(1), model_runtime, research_replay=research_replay)
+                if score_mode != "candidate_blocked":
+                    probability_mode = score_mode
                 if scores is not None and scores:
                     horizon = model_runtime.horizon_minutes
                     if horizon in {15, 30, 45, 60}:
@@ -447,14 +466,15 @@ def process_volume(
             "fields": radar_fields,
             "object_count": len(features),
             "probability_status": ("scored" if model_scored else ("model_error" if model_errors else "not_scored")),
+            "probability_mode": probability_mode,
             "environment_status": (
                 "attached" if rap_result is not None else "unavailable"
             ),
             "environment_source": "RAP",
             "radar_origin": list(radar_origin) if radar_origin is not None else None,
-            "model_version": model_runtime.metadata.get("model_version") if model_runtime.enabled else None,
-            "model_target": model_runtime.metadata.get("target") if model_runtime.enabled else None,
-            "model_horizon_minutes": model_runtime.horizon_minutes if model_runtime.enabled else None,
+            "model_version": model_runtime.metadata.get("model_version") if model_runtime.model is not None else None,
+            "model_target": model_runtime.metadata.get("target") if model_runtime.model is not None else None,
+            "model_horizon_minutes": model_runtime.horizon_minutes if model_runtime.model is not None else None,
             "model_errors": model_errors,
         },
     }
