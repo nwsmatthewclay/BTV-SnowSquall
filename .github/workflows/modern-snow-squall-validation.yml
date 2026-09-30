@@ -2,6 +2,11 @@ name: Modern Snow Squall Independent Validation
 
 on:
   workflow_dispatch:
+  workflow_run:
+    workflows:
+      - Snow Squall Expansion Dataset
+    types:
+      - completed
 
 permissions:
   actions: read
@@ -9,6 +14,10 @@ permissions:
 
 jobs:
   validate:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.head_branch == 'snow-squall-model-foundation')
     runs-on: ubuntu-latest
     timeout-minutes: 180
     env:
@@ -19,7 +28,7 @@ jobs:
       - name: Check out model foundation
         uses: actions/checkout@v4
         with:
-          ref: snow-squall-model-foundation
+          ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -85,7 +94,10 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
-          run_id="$(gh run list --workflow "Snow Squall Expansion Dataset" --branch snow-squall-model-foundation --status success --limit 10 --json databaseId --jq '.[0].databaseId')"
+          run_id="${{ github.event_name == 'workflow_run' && github.event.workflow_run.id || '' }}"
+          if [ -z "$run_id" ]; then
+            run_id="$(gh run list --workflow "Snow Squall Expansion Dataset" --branch snow-squall-model-foundation --status success --limit 10 --json databaseId --jq '.[0].databaseId')"
+          fi
           if [ -z "$run_id" ] || [ "$run_id" = "null" ]; then
             echo "No expanded model bundle is available yet."
             echo "skip=true" >> "$GITHUB_OUTPUT"
