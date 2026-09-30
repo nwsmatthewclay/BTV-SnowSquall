@@ -58,7 +58,7 @@ jobs:
           done
           export TARGET_RUN_OBSERVED="$found"
           python - <<'PY'
-          import json
+          import json, os
           p=json.load(open("bootstrap_launch.json"))
           p["status"]="dispatch_command_succeeded"
           p["target_run_observed"] = bool(os.environ.get("TARGET_RUN_OBSERVED"))
