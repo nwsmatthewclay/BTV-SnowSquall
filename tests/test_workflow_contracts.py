@@ -54,3 +54,13 @@ def test_replay_and_shadow_contracts_keep_candidate_scoring_research_only():
     assert 'candidate_blocked' in process
     assert 'audit_live_feature_parity.py' in parity
     assert 'ref: snow-squall-model-foundation' in shadow
+
+
+def test_archived_replay_workflow_has_four_horizon_qc():
+    text = Path('.github/workflows/snow-squall-archived-replay-smoke.yml').read_text(encoding='utf-8')
+    assert 'historical_operational_replay.py' in text
+    assert 'audit_candidate_replay.py' in text
+    assert 'audit_live_feature_parity.py' in text
+    assert 'candidate_ensemble_expansion_15m' in text
+    assert 'candidate_ensemble_expansion_60m' in text
+    assert 'BTV20181121' in text
