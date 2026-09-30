@@ -8,7 +8,8 @@ ENVIRONMENT_COLUMNS = [
     "wind_0_1km_kt", "wind_0_3km_kt", "shear_0_1km_kt",
     "shear_0_3km_kt", "shear_0_6km_kt", "lapse_rate_0_3km_c_km",
     "lapse_rate_0_7_5km_c_km", "wet_bulb_0_3km_c", "frontogenesis", "dcva",
-    "omega", "epv",
+    "omega", "epv", "cloud_layer_depth_m", "cloud_layer_rh_pct",
+    "cloud_layer_mean_wind_kt", "cloud_layer_shear_kt",
 ]
 
 def normalize_environment_frame(frame):
