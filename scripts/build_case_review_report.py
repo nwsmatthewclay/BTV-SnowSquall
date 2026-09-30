@@ -7,15 +7,21 @@ from pathlib import Path
 
 import pandas as pd
 
-def build(cases_path: Path, summary_path: Path, output: Path):
+def build(cases_path: Path, summary_path: Path, output: Path, radar_path: Path | None = None):
     cases = pd.read_csv(cases_path)
+    if radar_path is not None and radar_path.exists():
+        radar = pd.read_csv(radar_path)
+        radar_cols = [c for c in ["candidate_id", "radar_site", "radar_distance_km", "coordinate_precision"] if c in radar.columns]
+        if radar_cols and "candidate_id" in radar.columns:
+            radar = radar[radar_cols].drop_duplicates("candidate_id")
+            cases = cases.merge(radar, on="candidate_id", how="left", suffixes=("", "_radar"))
     summary = summary_path.read_text(encoding='utf-8') if summary_path.exists() else '{}'
     cols = [
         "candidate_id","episode_id","event_start_utc","event_end_utc","state","county",
         "verification_class","verification_status","candidate_source","source_types",
         "evidence_sources","event_type","lsr_count","warning_verified_by_iem",
         "ncei_explicit_snow_squall","radar_site","radar_distance_km","coordinate_precision",
-        "narrative","text_matched_terms"
+        "narrative","text_matched_terms","truth_tier","evidence_weight"
     ]
     present=[c for c in cols if c in cases.columns]
     table=cases[present].copy()
@@ -46,6 +52,7 @@ def main():
     p.add_argument('--cases',required=True)
     p.add_argument('--summary',required=True)
     p.add_argument('--output',required=True)
+    p.add_argument('--radar')
     a=p.parse_args()
     build(Path(a.cases),Path(a.summary),Path(a.output))
 
