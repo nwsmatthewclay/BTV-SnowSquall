@@ -37,7 +37,7 @@ def test_shadow_scoring_keeps_candidate_non_operational(tmp_path, monkeypatch):
 
     class Stub:
         def __call__(self, directory):
-            horizon=int(directory.name.replace("baseline_expansion_", "").replace("m", ""))
+            horizon=int(directory.name.replace("candidate_ensemble_expansion_", "").replace("m", ""))
             return FakeRuntime(horizon)
 
     monkeypatch.setattr("scripts.shadow_live_model_scorer.ModelRuntime.load", Stub())
