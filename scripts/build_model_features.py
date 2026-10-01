@@ -65,7 +65,9 @@ OPERATIONAL_LIVE_PREDICTORS = {
     "dewpoint_2m_k", "rh_2m_pct",
 }
 
-# Environment-evolution predictors are live-compatible because the same causalfor _col in ENVIRONMENTAL_EVOLUTION_COLUMNS:
+# Environment-evolution predictors are live-compatible because the same causal
+# transform is applied by scripts/live_model_features.py.
+for _col in ENVIRONMENTAL_EVOLUTION_COLUMNS:
     if _col == "dcape_jkg":
         # DCAPE itself is live-compatible; its temporal derivatives remain
         # optional research diagnostics because provider coverage can be sparse.
