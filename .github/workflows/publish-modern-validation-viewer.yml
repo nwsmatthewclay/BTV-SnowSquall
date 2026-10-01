@@ -48,19 +48,40 @@ jobs:
           set -euo pipefail
           rm -rf incoming
           mkdir -p incoming
-          if gh run download "${{ steps.source.outputs.run_id }}"               --name modern-validation-viewer               --dir incoming; then
+          if gh run download "${{ steps.source.outputs.run_id }}" --name modern-validation-viewer --dir incoming; then
             echo "Downloaded lightweight validation viewer artifact."
           else
-            echo "Lightweight artifact not present; falling back to reconstruction package."
+            echo "Lightweight artifact not present; using the existing independent-validation package."
+            validation_run="$(gh run list --workflow "Modern Independent Validation" --branch snow-squall-model-foundation --status success --limit 1 --json databaseId --jq '.[0].databaseId')"
+            test -n "${validation_run}" && test "${validation_run}" != "null"
             rm -rf incoming
             mkdir -p incoming
-            gh run download "${{ steps.source.outputs.run_id }}"               --name modern-candidate-reconstruction               --dir incoming
+            gh run download "${validation_run}" --name modern-independent-validation --dir incoming
+            test -f incoming/data/derived/modern_validation_case_summary.csv
+            mkdir -p incoming/viewer/data/validation
+            python - <<'PY'
+          import csv
+          import json
+          from pathlib import Path
+
+          src = Path("incoming/data/derived/modern_validation_case_summary.csv")
+          with src.open(newline="", encoding="utf-8") as f:
+              records = list(csv.DictReader(f))
+          payload = {
+              "version": "modern-validation-viewer-v1",
+              "data_status": "independent_review_package",
+              "scoring_status": "not_scored",
+              "training_eligible": False,
+              "truth_note": "Independent validation evidence only. Candidate truth is not established automatically and probabilities are disabled.",
+              "cases": records,
+          }
+          Path("incoming/viewer/data/validation/catalog.json").write_text(
+              json.dumps(payload, indent=2) + "\n", encoding="utf-8"
+          )
+          PY
           fi
 
-          test -f incoming/viewer/validation.html
-          test -f incoming/viewer/validation.js
           test -f incoming/viewer/data/validation/catalog.json
-
       - name: Merge validation viewer into published site
         run: |
           set -euo pipefail
