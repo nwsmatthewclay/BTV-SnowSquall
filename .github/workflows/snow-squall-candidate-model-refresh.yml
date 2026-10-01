@@ -23,7 +23,7 @@ concurrency:
 
 jobs:
   refresh:
-    if: github.event_name == 'push' || github.event.workflow_run.conclusion == 'success'
+    if: github.event_name == 'push' || (github.event_name == 'workflow_run' && (github.event.workflow_run.name == 'National SQW Radar Pretraining Pool' || github.event.workflow_run.name == 'Snow Squall Expansion Dataset'))
     runs-on: ubuntu-latest
     timeout-minutes: 240
     env:
@@ -68,18 +68,24 @@ jobs:
           set -euo pipefail
           selected=""
           if [ "${{ github.event_name }}" = "workflow_run" ] && [ "${{ github.event.workflow_run.name }}" = "Snow Squall Expansion Dataset" ]; then
-            selected="${{ github.event.workflow_run.id }}"
-            echo "Using triggering successful expansion run $selected"
-          fi
-          for run_id in $(gh run list --workflow "Snow Squall Expansion Dataset" --branch snow-squall-model-foundation --status success --limit 20 --json databaseId --jq '.[].databaseId'); do
-            [ -n "$selected" ] && break
-            echo "Checking expansion run $run_id for feature artifact..."
-            if gh run download "$run_id" --repo "$GITHUB_REPOSITORY" --name snow-squall-expansion-feature-batch --dir /tmp/expansion_probe >/dev/null 2>&1; then
-              selected="$run_id"
-              break
-            fi
+            trigger_run="${{ github.event.workflow_run.id }}"
+            echo "Checking triggering expansion run $trigger_run for feature artifact..."
             rm -rf /tmp/expansion_probe
-          done
+            if gh run download "$trigger_run" --repo "$GITHUB_REPOSITORY" --name snow-squall-expansion-feature-batch --dir /tmp/expansion_probe >/dev/null 2>&1; then
+              selected="$trigger_run"
+              echo "Using triggering expansion run $selected"
+            fi
+          fi
+          if [ -z "$selected" ]; then
+            for run_id in $(gh run list --workflow "Snow Squall Expansion Dataset" --branch snow-squall-model-foundation --status success --limit 20 --json databaseId --jq '.[].databaseId'); do
+              echo "Checking expansion run $run_id for feature artifact..."
+              rm -rf /tmp/expansion_probe
+              if gh run download "$run_id" --repo "$GITHUB_REPOSITORY" --name snow-squall-expansion-feature-batch --dir /tmp/expansion_probe >/dev/null 2>&1; then
+                selected="$run_id"
+                break
+              fi
+            done
+          fi
           if [ -z "$selected" ]; then
             echo "No usable successful expansion feature batch found."
             exit 1
