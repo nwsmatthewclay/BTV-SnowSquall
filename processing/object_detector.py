@@ -9,9 +9,9 @@ from scipy import ndimage
 
 @dataclass(frozen=True)
 class ObjectDetectionConfig:
-    threshold_dbz: float = 20.0
+    threshold_dbz: float = 25.0
     core_threshold_dbz: float = 35.0
-    min_pixels: int = 20
+    min_pixels: int = 24
     connectivity: int = 2
 
 
