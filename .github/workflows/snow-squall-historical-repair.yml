@@ -1,0 +1,36 @@
+name: Snow Squall Historical Repair Launcher
+
+on:
+  push:
+    branches:
+      - snow-squall-model-foundation
+    paths:
+      - .github/historical-repair-trigger
+  workflow_dispatch:
+
+permissions:
+  actions: write
+  contents: read
+
+concurrency:
+  group: snow-squall-historical-repair
+  cancel-in-progress: false
+
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Dispatch corrected PSU catalog acquisition
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          gh workflow run --repo "$GITHUB_REPOSITORY" "Acquire Penn State Schneider 2024 Case Catalog" --ref snow-squall-model-foundation
+      - name: Dispatch full object expansion by workflow file
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          gh api --method POST             "repos/$GITHUB_REPOSITORY/actions/workflows/object-dataset-expansion.yml/dispatches"             -f ref=snow-squall-model-foundation
+          echo "Dispatched Object Dataset Full Expansion from object-dataset-expansion.yml"

@@ -52,7 +52,11 @@ def normalize_sheet(frame, sheet_name):
     out["research_mode"] = frame[mode_col].astype(str) if mode_col else ""
     out["source_sheet"] = sheet_name
     out["source_row"] = frame.index + 2
-    out["narrative"] = frame.astype(str).agg(" | ".join, axis=1).str.slice(0, 2000)
+    # Pandas 3's row-wise aggregation is stricter about mixed numeric/string
+    # scalars. Coerce each cell to string before joining so the public workbook
+    # can be normalized regardless of source column dtypes.
+    narrative_frame = frame.map(lambda value: "" if pd.isna(value) else str(value))
+    out["narrative"] = narrative_frame.agg(" | ".join, axis=1).str.slice(0, 2000)
     return out[out["event_start_utc"].notna()].copy()
 
 def main():
