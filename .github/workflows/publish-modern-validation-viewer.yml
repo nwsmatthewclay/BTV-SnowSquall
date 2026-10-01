@@ -13,8 +13,8 @@ permissions:
   actions: read
 
 concurrency:
-  group: snow-squall-validation-viewer
-  cancel-in-progress: true
+  group: snow-squall-viewer-pages-publish
+  cancel-in-progress: false
 
 jobs:
   publish:
