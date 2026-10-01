@@ -22,6 +22,7 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import average_precision_score, brier_score_loss, roc_auc_score
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
+from src.snow_squall.training import case_scan_balanced_weights, case_weighted_metrics
 
 HORIZONS = (15, 30, 45, 60)
 TARGET_TEMPLATE = "squall_onset_within_{h}m"
@@ -92,6 +93,7 @@ def evaluate(df: pd.DataFrame, target: str, predictors: list[str]) -> dict:
 
     if y.nunique() < 2:
         return {"status": "insufficient_class_diversity", "n": int(len(y)), "classes": y.value_counts().to_dict()}
+    row_weights = case_scan_balanced_weights(work)
 
     folds = event_folds(groups)
     fold_rows = []
@@ -111,7 +113,7 @@ def evaluate(df: pd.DataFrame, target: str, predictors: list[str]) -> dict:
         if not fold_predictors:
             continue
         model = fit_pipeline()
-        model.fit(work.loc[train_mask, fold_predictors], y.loc[train_mask])
+        model.fit(work.loc[train_mask, fold_predictors], y.loc[train_mask], model__sample_weight=row_weights[train_mask])
         p = model.predict_proba(work.loc[test_mask, fold_predictors])[:, 1]
         yt = y.loc[test_mask]
         fold_rows.append({
@@ -123,6 +125,7 @@ def evaluate(df: pd.DataFrame, target: str, predictors: list[str]) -> dict:
             "roc_auc": float(roc_auc_score(yt, p)),
             "pr_auc": float(average_precision_score(yt, p)),
             "brier": float(brier_score_loss(yt, p)),
+            **{f"case_balanced_{k}": v for k, v in case_weighted_metrics(yt, p, row_weights[test_mask]).items()},
         })
 
     result = {
@@ -175,7 +178,7 @@ def main():
         if y.loc[valid].nunique() >= 2:
             model = fit_pipeline()
             final_predictors = [p for p in predictors if df.loc[valid, p].notna().any()]
-            model.fit(df.loc[valid, final_predictors], y.loc[valid].astype(int))
+            model.fit(df.loc[valid, final_predictors], y.loc[valid].astype(int), model__sample_weight=case_scan_balanced_weights(df.loc[valid]))
             final_models[str(h)] = {"model": model, "predictors": final_predictors}
 
     with (out / "metrics.json").open("w") as f:
