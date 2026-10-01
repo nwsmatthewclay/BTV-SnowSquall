@@ -79,10 +79,14 @@ def _nearest(ds, latitude, longitude):
         _COORD_CACHE[cache_key] = cached
     lat, lon = cached
 
-    distance = (lat - latitude) ** 2 + (
-        (lon - longitude) * np.cos(np.deg2rad(latitude))
-    ) ** 2
-    idx = np.unravel_index(np.nanargmin(distance), distance.shape)
+    index_key=(cache_key,round(float(latitude),4),round(float(longitude),4))
+    idx=_NEAREST_INDEX_CACHE.get(index_key)
+    if idx is None:
+        distance = (lat - latitude) ** 2 + (
+            (lon - longitude) * np.cos(np.deg2rad(latitude))
+        ) ** 2
+        idx = np.unravel_index(np.nanargmin(distance), distance.shape)
+        _NEAREST_INDEX_CACHE[index_key]=idx
 
     variable = next(iter(ds.data_vars))
     value = np.asarray(ds[variable].values)
