@@ -17,6 +17,7 @@ class ObjectDetectionConfig:
     open_iterations: int = 1
     fill_holes: bool = True
     split_merged: bool = True
+    preserve_boundary_components: bool = True
     min_peak_separation_px: int = 8
 
 
@@ -69,6 +70,7 @@ def detect_reflectivity_objects(reflectivity, config=ObjectDetectionConfig()):
     work=np.where(finite,arr,np.nanmedian(arr[finite]))
     work=ndimage.gaussian_filter(work,sigma=config.smooth_sigma)
     mask=finite&(work>=config.threshold_dbz)
+    raw_mask = mask.copy()
     structure=ndimage.generate_binary_structure(2,config.connectivity)
     if config.close_iterations:
         mask=ndimage.binary_closing(mask,structure=structure,iterations=config.close_iterations)
@@ -76,6 +78,23 @@ def detect_reflectivity_objects(reflectivity, config=ObjectDetectionConfig()):
         mask=ndimage.binary_opening(mask,structure=structure,iterations=config.open_iterations)
     if config.fill_holes:
         mask=ndimage.binary_fill_holes(mask)
+
+    if config.preserve_boundary_components:
+        raw_labels, raw_count = ndimage.label(raw_mask, structure=structure)
+        boundary = np.zeros_like(raw_mask, dtype=bool)
+        if raw_count:
+            edge_ids = set(np.unique(np.concatenate([
+                raw_labels[0, :],
+                raw_labels[-1, :],
+                raw_labels[:, 0],
+                raw_labels[:, -1],
+            ])).tolist())
+            edge_ids.discard(0)
+            for raw_id in edge_ids:
+                component = raw_labels == raw_id
+                if int(component.sum()) >= config.min_pixels:
+                    boundary |= component
+        mask |= boundary
 
     labels,count=ndimage.label(mask,structure=structure)
     objects=[]
