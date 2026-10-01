@@ -1,10 +1,12 @@
 const map=L.map("liveMap",{zoomControl:true,preferCanvas:true}).setView([44.15,-73.65],8);
+map.createPane("radarMosaicPane");
+map.getPane("radarMosaicPane").style.zIndex=250;
 L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{maxZoom:12,attribution:"© OpenStreetMap contributors"}).addTo(map);
 const layers={KCXX:L.layerGroup().addTo(map),KTYX:L.layerGroup().addTo(map)};
 const radarLocations={KCXX:[44.511,-73.166],KTYX:[43.756,-75.680]};
 const LIVE_BASE="https://raw.githubusercontent.com/nwsmatthewclay/BTV-SnowSquall/snow-squall-live-data/viewer/data/live/";
 const SHADOW_BASE="https://raw.githubusercontent.com/nwsmatthewclay/BTV-SnowSquall/snow-squall-shadow-data/viewer/data/shadow/";
-let datasets={},selected=null,refreshTimer=null,hasInitialExtent=false;
+let datasets={},selected=null,refreshTimer=null,hasInitialExtent=false,radarMosaicLayer=L.layerGroup().addTo(map),radarMosaic=null;
 
 const num=(v,d=1)=>v==null||Number.isNaN(Number(v))?"—":Number(v).toFixed(d);
 const fmt=t=>t?new Date(t).toLocaleString(undefined,{month:"short",day:"numeric",hour:"numeric",minute:"2-digit",second:"2-digit"}):"—";
@@ -14,6 +16,8 @@ const ktFromMs=v=>v==null||Number.isNaN(Number(v))?null:Number(v)*1.943844492;
 const cFromK=v=>v==null||Number.isNaN(Number(v))?null:Number(v)-273.15;
 const url=name=>LIVE_BASE+name+"?cb="+Date.now();
 const shadowUrl=name=>SHADOW_BASE+name+"?cb="+Date.now();
+const mosaicMetaUrl=()=>LIVE_BASE+"radar_mosaic.json?cb="+Date.now();
+const mosaicImageUrl=()=>LIVE_BASE+"radar_mosaic.png?cb="+Date.now();
 
 function markerIcon(site){
   return L.divIcon({className:"radar-station",iconSize:[12,12],iconAnchor:[6,6],html:""});
@@ -51,6 +55,24 @@ async function getFeed(site){
     fetchOptionalJson(shadowUrl(site+"_shadow.json"),null)
   ]);
   return {geo,state,history,health,shadow};
+}
+async function getRadarMosaic(){
+  try{
+    const response=await fetch(mosaicMetaUrl());
+    if(!response.ok)return null;
+    return await response.json();
+  }catch(_){return null;}
+}
+function renderRadarMosaic(meta){
+  radarMosaicLayer.clearLayers();
+  radarMosaic=meta;
+  if(!meta||meta.status!=="ready"||!meta.bounds)return;
+  L.imageOverlay(mosaicImageUrl(),meta.bounds,{
+    pane:"radarMosaicPane",
+    opacity:.72,
+    interactive:false,
+    crossOrigin:true
+  }).addTo(radarMosaicLayer);
 }
 
 function summarize(site,item){
@@ -167,12 +189,15 @@ function renderObjectList(summary){
     return;
   }
 
-  document.getElementById("objectList").innerHTML=all.slice(0,20).map(p=>
-    "<div class='live-object "+(selected&&selected.track_id===p.track_id&&selected.radar_site===p.radar_site?"selected":"")+"' data-id='"+esc(p.radar_site+"|"+p.track_id)+"'>"+
+  document.getElementById("objectList").innerHTML=all.slice(0,20).map(p=>{
+    const shadow=shadowRecord(p.radar_site,p.track_id);
+    const rp=shadow?.research_probabilities||{};
+    const score=rp["15"];
+    return "<div class='live-object "+(selected&&selected.track_id===p.track_id&&selected.radar_site===p.radar_site?"selected":"")+"' data-id='"+esc(p.radar_site+"|"+p.track_id)+"'>"+
     "<div class='title'>"+esc(p.radar_site)+" • Track "+esc(p.track_id)+" <span class='chip'>"+(p.source_kind==="recent"?"RECENT":"ACTIVE")+"</span></div>"+
     "<div class='sub'>"+esc(fmt(p.timestamp))+(p.source_kind==="recent"?" • latest retained track sample":"")+"</div>"+
-    "<div class='chips'><span class='chip'>"+num(p.max_reflectivity_dbz)+" dBZ</span><span class='chip'>"+num(p.motion_speed_kt)+" kt</span><span class='chip'>"+num(p.area_km2)+" km²</span><span class='chip'>"+esc(p.data_quality||"—")+"</span></div></div>"
-  ).join("");
+    "<div class='chips'><span class='chip'>"+num(p.max_reflectivity_dbz)+" dBZ</span><span class='chip'>"+num(p.motion_speed_kt)+" kt</span><span class='chip'>"+num(p.area_km2)+" km²</span>"+(score==null?"":"<span class='chip research-chip'>15m "+(Number(score)*100).toFixed(0)+"% RESEARCH</span>")+"<span class='chip'>"+esc(p.data_quality||"—")+"</span></div></div>";
+  }).join("");
 
   document.querySelectorAll(".live-object").forEach(el=>el.onclick=()=>{
     const [site,id]=el.dataset.id.split("|");
@@ -335,6 +360,7 @@ async function refresh(){
   document.getElementById("overallText").textContent="Fetching latest persisted KCXX/KTYX objects and histories.";
   try{
     const sites=["KCXX","KTYX"];
+    const mosaicPromise=getRadarMosaic();
     const results=await Promise.all(sites.map(async site=>{
       try{
         return summarize(site,await getFeed(site));
@@ -344,6 +370,7 @@ async function refresh(){
     }));
     const summary=results;
     datasets=Object.fromEntries(summary.map(x=>[x.site,x]));
+    renderRadarMosaic(await mosaicPromise);
     renderRadarCards(summary);
     renderShadowCard(summary);
     renderMap(summary);
