@@ -68,6 +68,11 @@ jobs:
         run: |
           python scripts/live_object_worker.py             --radar KTYX             --poll-seconds 2             --max-polls 1             --state viewer/data/live/KTYX_state.json             --output viewer/data/live/KTYX_objects.geojson             --history-jsonl viewer/data/live/KTYX_history.jsonl             --history-csv data/derived/KTYX_history.csv
 
+      - name: Build KCXX KTYX live radar mosaic
+        run: |
+          set -euo pipefail
+          python scripts/build_live_radar_mosaic.py             --raw-root data/raw             --kcxx-state viewer/data/live/KCXX_state.json             --ktyx-state viewer/data/live/KTYX_state.json             --output-image viewer/data/live/radar_mosaic.png             --output-json viewer/data/live/radar_mosaic.json
+
       - name: Normalize persisted live timestamps
         run: |
           python scripts/normalize_live_products.py --root viewer/data/live
