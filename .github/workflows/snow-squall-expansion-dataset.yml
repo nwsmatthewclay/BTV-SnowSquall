@@ -322,6 +322,16 @@ jobs:
             --output data/derived/snow_squall_expansion_objects.csv \
             --error-log data/derived/snow_squall_expansion_objects_errors.csv
 
+      - name: Audit radar reconstruction completeness
+        run: |
+          set -euo pipefail
+          python scripts/audit_radar_reconstruction.py             data/derived/snow_squall_expansion_objects.csv             --errors data/derived/snow_squall_expansion_objects_errors.csv             --input-root data/raw/snow_squall_expansion_level2             --max-failure-rate 0.20             --report data/derived/snow_squall_expansion_radar_reconstruction_audit.json
+
+      - name: Audit object tracking quality
+        run: |
+          set -euo pipefail
+          python scripts/audit_object_tracking.py             data/derived/snow_squall_expansion_objects.csv             --output data/derived/snow_squall_expansion_object_tracking_audit.json
+
       - name: Annotate reconstructed objects to candidate cases
         run: |
           python scripts/annotate_object_population.py \
