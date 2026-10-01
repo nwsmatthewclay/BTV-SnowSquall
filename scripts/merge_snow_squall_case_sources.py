@@ -237,7 +237,12 @@ def load_study_records(study_path):
 def attach_nws_text_records(records, text_path):
     if text_path is None or not Path(text_path).exists():
         return records, 0, 0
-    text = pd.read_csv(text_path)
+    try:
+        text = pd.read_csv(text_path)
+    except pd.errors.EmptyDataError:
+        # Supplementary NWS text is optional. An empty evidence harvest means
+        # there were no parseable text candidates, not that the ledger is bad.
+        return records, 0, 0
     added = matched = 0
     for idx, row in text.iterrows():
         rec = _text_candidate_record(row, idx)
