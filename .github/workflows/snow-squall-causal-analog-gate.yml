@@ -64,8 +64,8 @@ jobs:
           PY
       - name: Build frozen live/replay analog bundle
         run: |
-          python scripts/build_analog_bundle.py
-            "${{ steps.feature.outputs.path }}"
+          python scripts/build_analog_bundle.py \
+            "${{ steps.feature.outputs.path }}" \
             --output snow_squall_analog_library.joblib
       - name: Upload analog feature population
         uses: actions/upload-artifact@v4
