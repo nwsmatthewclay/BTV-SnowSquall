@@ -64,6 +64,21 @@ def build_live_feature_row(
 ) -> dict:
     row = {"timestamp": current.get("timestamp"), "track_id": current.get("track_id")}
 
+    # Keep the live adapter's motion vocabulary structurally identical to the
+    # historical builder even when a given scan has no prior displacement or
+    # no radar-derived storm-motion solution yet. Missing values remain null;
+    # callers never need to special-case absent columns.
+    for key in (
+        "motion_direction_deg", "motion_dir_deg", "motion_speed_kt",
+        "motion_u_kt", "motion_v_kt", "radar_motion_speed_kt",
+        "radar_motion_direction_deg", "radar_motion_u_kt", "radar_motion_v_kt",
+        "radar_motion_direction_sin", "radar_motion_direction_cos",
+        "radar_motion_confidence", "motion_speed_minus_radar_kt",
+        "motion_direction_error_deg", "motion_radar_alignment",
+        "motion_axis_alignment", "radar_motion_axis_alignment",
+    ):
+        row[key] = None
+
     for target, source in LIVE_TO_MODEL.items():
         row[target] = _number(current.get(source))
 
@@ -162,6 +177,8 @@ def build_live_feature_row(
     # Canonical motion naming used by the historical feature builder.
     if row.get("motion_dir_deg") is None:
         row["motion_dir_deg"] = _number(current.get("motion_direction_deg"))
+    if row.get("motion_direction_deg") is None:
+        row["motion_direction_deg"] = row.get("motion_dir_deg")
     row["motion_speed_kt"] = _number(current.get("motion_speed_kt"))
     row["aspect_ratio"] = _number(current.get("aspect_ratio"))
     # Backward-compatible aliases retained for existing contract tests/tools.
