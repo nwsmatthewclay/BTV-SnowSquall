@@ -502,7 +502,14 @@ jobs:
           set -euo pipefail
           run_id="$(gh run list --workflow "National SQW Radar Pretraining Pool" --branch snow-squall-model-foundation --status success --limit 1 --json databaseId --jq '.[0].databaseId')"
           if [ -n "$run_id" ] && [ "$run_id" != "null" ]; then
-            gh run download "$run_id" --name national-sqw-radar-pretraining-pool --dir national_pretrain_artifact || true
+            if gh run download "$run_id" --name national-sqw-radar-model-bundles --dir national_pretrain_artifact; then
+              echo "Using lightweight national pretraining model bundle from run $run_id"
+            else
+              echo "Lightweight national bundle unavailable; falling back to full pretraining artifact."
+              rm -rf national_pretrain_artifact
+              mkdir -p national_pretrain_artifact
+              gh run download "$run_id" --name national-sqw-radar-pretraining-pool --dir national_pretrain_artifact || true
+            fi
           fi
           root=""
           if [ -d national_pretrain_artifact ]; then
@@ -796,6 +803,7 @@ jobs:
           echo "Dispatched next automatic expansion batch: official=$official_next review=$review_next sizes=$max_official/$max_review"
 
       - name: Upload expanded research package
+        continue-on-error: true
         uses: actions/upload-artifact@v4
         with:
           name: snow-squall-expansion-research-package
