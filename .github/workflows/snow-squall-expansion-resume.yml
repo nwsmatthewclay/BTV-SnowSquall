@@ -58,4 +58,12 @@ jobs:
           source_run="$(gh run list --workflow "Snow Squall Unified Case Ledger" --branch snow-squall-model-foundation --status success --limit 1 --json databaseId --jq '.[0].databaseId')"
           test -n "$source_run" && test "$source_run" != "null"
           echo "Using unified ledger run $source_run"
-          gh workflow run "Snow Squall Expansion Dataset"             --repo "$GITHUB_REPOSITORY"             --ref snow-squall-model-foundation             -f archive_override=true             -f official_offset="$official_offset"             -f unverified_offset="$unverified_offset"             -f max_official="$max_official"             -f max_unverified="$max_unverified"             -f source_expansion_run_id="$source_run"
+          gh workflow run "Snow Squall Expansion Dataset" \
+            --repo "$GITHUB_REPOSITORY" \
+            --ref snow-squall-model-foundation \
+            -f archive_override=true \
+            -f official_offset="$official_offset" \
+            -f unverified_offset="$unverified_offset" \
+            -f max_official="$max_official" \
+            -f max_unverified="$max_unverified" \
+            -f source_unified_ledger_run_id="$source_run"
