@@ -1,0 +1,98 @@
+name: Publish Modern Snow Squall Validation Viewer
+
+on:
+  workflow_run:
+    workflows:
+      - Reconstruct Modern Candidate Cohort
+    types:
+      - completed
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: read
+
+concurrency:
+  group: snow-squall-validation-viewer
+  cancel-in-progress: true
+
+jobs:
+  publish:
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    steps:
+      - name: Checkout current gh-pages
+        uses: actions/checkout@v4
+        with:
+          ref: gh-pages
+          fetch-depth: 1
+
+      - name: Resolve reconstruction run
+        id: source
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "workflow_run" ]; then
+            echo "run_id=${{ github.event.workflow_run.id }}" >> "${GITHUB_OUTPUT}"
+          else
+            run_id="$(gh run list               --workflow "Reconstruct Modern Candidate Cohort"               --branch snow-squall-model-foundation               --status success               --limit 1               --json databaseId               --jq '.[0].databaseId')"
+            test -n "${run_id}" && test "${run_id}" != "null"
+            echo "run_id=${run_id}" >> "${GITHUB_OUTPUT}"
+          fi
+
+      - name: Download lightweight validation viewer artifact
+        run: |
+          set -euo pipefail
+          rm -rf incoming
+          mkdir -p incoming
+          if gh run download "${{ steps.source.outputs.run_id }}"               --name modern-validation-viewer               --dir incoming; then
+            echo "Downloaded lightweight validation viewer artifact."
+          else
+            echo "Lightweight artifact not present; falling back to reconstruction package."
+            rm -rf incoming
+            mkdir -p incoming
+            gh run download "${{ steps.source.outputs.run_id }}"               --name modern-candidate-reconstruction               --dir incoming
+          fi
+
+          test -f incoming/viewer/validation.html
+          test -f incoming/viewer/validation.js
+          test -f incoming/viewer/data/validation/catalog.json
+
+      - name: Merge validation viewer into published site
+        run: |
+          set -euo pipefail
+          cp incoming/viewer/validation.html ./validation.html
+          cp incoming/viewer/validation.js ./validation.js
+          mkdir -p data/validation
+          cp incoming/viewer/data/validation/catalog.json data/validation/catalog.json
+          test -f ./index.html
+
+          python - <<'PY'
+          from pathlib import Path
+          p = Path("index.html")
+          text = p.read_text(encoding="utf-8")
+          link = '<a class="nav-link" href="validation.html">Independent Validation</a>'
+          if 'href="validation.html"' not in text:
+              anchor = '<a class="nav-link" href="live.html">'
+              if anchor in text:
+                  text = text.replace(anchor, link + anchor, 1)
+              else:
+                  text = text.replace("</header>", link + "</header>", 1)
+              p.write_text(text, encoding="utf-8")
+          print("Validation link present:", 'href="validation.html"' in p.read_text(encoding="utf-8"))
+          PY
+
+          touch .nojekyll
+          git status --short
+
+      - name: Publish updated viewer branch
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add validation.html validation.js data/validation/catalog.json index.html .nojekyll
+          git commit -m "Publish modern validation viewer" || exit 0
+          git push origin HEAD:gh-pages
