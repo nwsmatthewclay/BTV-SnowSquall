@@ -7,6 +7,11 @@ on:
       - Snow Squall Expansion Dataset
     types:
       - completed
+  push:
+    branches:
+      - snow-squall-model-foundation
+    paths:
+      - .github/analog-trigger
 
 permissions:
   actions: read
