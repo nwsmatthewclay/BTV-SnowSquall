@@ -33,6 +33,11 @@ on:
         required: false
         default: ""
         type: string
+      source_unified_ledger_run_id:
+        description: "Successful Snow Squall Unified Case Ledger run containing the current discovery ledger."
+        required: false
+        default: ""
+        type: string
 
 
 permissions:
@@ -76,7 +81,7 @@ jobs:
           EOF
           cat data/derived/expansion_runner_heartbeat.json
 
-      - name: Download unified case ledger artifact
+      - name: Download unified case ledger artifact from workflow trigger
         if: github.event_name == 'workflow_run'
         uses: actions/download-artifact@v4
         with:
@@ -86,8 +91,18 @@ jobs:
           run-id: ${{ github.event.workflow_run.id }}
           path: discovery_artifact
 
+      - name: Download unified case ledger artifact from explicit source
+        if: github.event_name == 'workflow_dispatch' && inputs.source_unified_ledger_run_id != ''
+        uses: actions/download-artifact@v4
+        with:
+          name: snow-squall-unified-case-ledger
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          repository: ${{ github.repository }}
+          run-id: ${{ inputs.source_unified_ledger_run_id }}
+          path: discovery_artifact
+
       - name: Download prior expansion discovery ledger
-        if: github.event_name == 'workflow_dispatch' && inputs.source_expansion_run_id != ''
+        if: github.event_name == 'workflow_dispatch' && inputs.source_unified_ledger_run_id == '' && inputs.source_expansion_run_id != ''
         uses: actions/download-artifact@v4
         with:
           name: snow-squall-expansion-discovery-ledger
@@ -97,7 +112,7 @@ jobs:
           path: discovery_artifact
 
       - name: Discover directly when no workflow artifact is provided
-        if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.source_expansion_run_id == '')
+        if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.source_unified_ledger_run_id == '' && inputs.source_expansion_run_id == '')
         run: |
           set -euo pipefail
           python -m pip install --upgrade pip
@@ -107,7 +122,7 @@ jobs:
           python scripts/merge_snow_squall_case_sources.py --discovery discovery_artifact/snow_squall_candidates.csv --iem-lsr lsr_artifact/iem_lsr_case_clusters.csv --study data/manifests/banacos_2014_cases.csv --output-dir discovery_artifact/unified
 
       - name: Prefer newest successful unified evidence ledger for automatic batches
-        if: github.event_name == 'workflow_dispatch' && inputs.source_expansion_run_id != ''
+        if: github.event_name == 'workflow_dispatch' && inputs.source_unified_ledger_run_id == '' && inputs.source_expansion_run_id != ''
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -135,7 +150,7 @@ jobs:
           fi
 
       - name: Augment direct discovery with latest successful NWS text evidence
-        if: github.event_name == 'workflow_dispatch' && inputs.source_expansion_run_id == ''
+        if: github.event_name == 'workflow_dispatch' && inputs.source_unified_ledger_run_id == '' && inputs.source_expansion_run_id == ''
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
