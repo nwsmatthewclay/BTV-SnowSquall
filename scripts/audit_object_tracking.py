@@ -21,12 +21,20 @@ def audit(frame: pd.DataFrame) -> dict:
     radar_dir=pd.to_numeric(d.get("radar_motion_direction_deg"),errors="coerce")
     obj_dir=pd.to_numeric(d.get("motion_direction_deg",d.get("motion_dir_deg")),errors="coerce")
     direction_error=np.abs((obj_dir-radar_dir+180.0)%360.0-180.0)
+    track_sizes=g.size()
+    track_first=g["scan_dt"].min()
+    track_last=g["scan_dt"].max()
+    track_duration=(track_last-track_first).dt.total_seconds()/60.0
     out={
         "records":int(len(d)),
         "tracks":int(g.ngroups),
-        "multi_scan_tracks":int((g.size()>=2).sum()),
-        "median_track_scans":float(g.size().median()),
-        "p90_track_scans":float(g.size().quantile(.90)),
+        "multi_scan_tracks":int((track_sizes>=2).sum()),
+        "singleton_tracks":int((track_sizes==1).sum()),
+        "singleton_track_fraction":float((track_sizes==1).mean()) if len(track_sizes) else 0.0,
+        "median_track_scans":float(track_sizes.median()),
+        "p90_track_scans":float(track_sizes.quantile(.90)),
+        "median_track_duration_min":float(track_duration.median()) if len(track_duration) else 0.0,
+        "p90_track_duration_min":float(track_duration.quantile(.90)) if len(track_duration) else 0.0,
         "gaps_gt_10min":int((dt>10).sum()),
         "impossible_speed_over_90kt":int((speed>90).sum()),
         "radar_motion_available":int(radar_speed.notna().sum()),
