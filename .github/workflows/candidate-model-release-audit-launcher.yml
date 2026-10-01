@@ -1,0 +1,26 @@
+name: Snow Squall Candidate Release Audit Launcher
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/candidate-model-release-audit-launcher.yml
+      - .github/candidate-release-audit-trigger
+
+permissions:
+  actions: write
+  contents: read
+
+jobs:
+  dispatch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Dispatch candidate release audit
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          gh workflow run candidate-model-release-audit.yml --repo "$GITHUB_REPOSITORY" --ref snow-squall-model-foundation
+          echo "Dispatched Candidate Model Release Audit"
