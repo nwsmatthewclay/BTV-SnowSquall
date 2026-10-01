@@ -81,6 +81,18 @@ jobs:
           unzip -q /tmp/features.zip -d data/derived/input
           find data/derived/input -type f | sort
 
+      - name: Rebuild model features from cached object population
+        if: contains(steps.source.outputs.source_name, 'Object Dataset Pilot') || contains(steps.source.outputs.source_name, 'Object Dataset Full Expansion') || contains(steps.source.outputs.source_name, 'Object Population')
+        run: |
+          set -euo pipefail
+          population="$(find data/derived/input -type f -name 'object_population_pilot.csv' -o -name 'object_population_expansion.csv' | head -1)"
+          if [ -z "$population" ]; then
+            echo "No cached object population available; retaining published feature table."
+            exit 0
+          fi
+          python scripts/build_model_features.py "$population"             --output data/derived/input/rebuilt_model_features.csv             --schema-output data/derived/input/rebuilt_model_features.schema.json
+          echo "Rebuilt feature table from: $population"
+
       - name: Resolve training feature table
         id: feature_table
         run: |
