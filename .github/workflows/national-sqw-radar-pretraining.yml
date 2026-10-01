@@ -196,6 +196,18 @@ jobs:
           assert s["weak_positive_rows"] > 0
           PY
 
+      - name: Upload lightweight national model bundles
+        uses: actions/upload-artifact@v4
+        with:
+          name: national-sqw-radar-model-bundles
+          retention-days: 60
+          compression-level: 6
+          path: |
+            data/derived/national_sqw_weak_model_*m/weak_pretraining_model.joblib
+            data/derived/national_sqw_weak_model_*m/metrics.json
+            data/derived/national_sqw_pretraining_features.schema.json
+          if-no-files-found: error
+
       - name: Upload national pretraining pool
         uses: actions/upload-artifact@v4
         with:
