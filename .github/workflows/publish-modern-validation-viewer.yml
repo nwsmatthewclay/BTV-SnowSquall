@@ -1,6 +1,11 @@
 name: Publish Modern Snow Squall Validation Viewer
 
 on:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/modern-viewer-publish-trigger
   workflow_run:
     workflows:
       - Reconstruct Modern Candidate Cohort
