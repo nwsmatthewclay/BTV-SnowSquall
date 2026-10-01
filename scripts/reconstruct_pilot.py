@@ -333,6 +333,9 @@ def main():
             rows.extend(radar_rows)
             errors.extend(radar_errors)
 
+    if not rows:
+        raise SystemExit("No candidate objects were produced.")
+
     rows.sort(key=lambda r: (
         str(r.get("radar_site", "")),
         str(r.get("scan_time_utc", "")),
@@ -340,8 +343,10 @@ def main():
     ))
     errors.sort(key=lambda r: (str(r.get("radar_site", "")), str(r.get("source_file", ""))))
 
+    frame = pd.DataFrame(rows)
+    frame = add_motion_features(frame)
     output.parent.mkdir(parents=True, exist_ok=True)
-    pd.DataFrame(rows).to_csv(output, index=False)
+    frame.to_csv(output, index=False)
     pd.DataFrame(
         errors,
         columns=["radar_site", "source_file", "error_type", "error_message"],
