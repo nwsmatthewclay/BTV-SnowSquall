@@ -79,19 +79,34 @@ jobs:
               "reason": "expansion workflow/controller stop automatic historical continuation" if archive_ok else "archive lock missing",
           })
 
-          for name, workflow in [
-              ("unit_tests", "Snow Squall Tests"),
-              ("modern_independent_validation", "Modern Independent Validation"),
-              ("archived_viewer_smoke", "Archived Snow Squall Viewer Smoke Test"),
-              ("archived_replay_smoke", "Snow Squall Archived Replay Smoke"),
-              ("live_object_worker", "Snow Squall Live Object Worker Test"),
-              ("live_shadow", "Publish Live Snow Squall Model Shadow"),
-              ("case_heldout_model_gate", "Case-Held-Out Model Gate"),
-              ("candidate_model_release_audit", "Candidate Model Release Audit"),
-          ]:
-              checks.append(status_gate(name, workflow))
+          gate_specs = [
+              ("unit_tests", "Snow Squall Tests", None),
+              ("modern_independent_validation", "Modern Independent Validation", None),
+              ("archived_viewer_smoke", "Archived Snow Squall Viewer Smoke Test", None),
+              ("archived_replay_smoke", "Snow Squall Archived Replay Smoke", None),
+              ("live_object_worker", "Snow Squall Live Object Worker Test", None),
+              ("live_shadow", "Publish Live Snow Squall Model Shadow", None),
+              ("case_heldout_model_gate", "Case-Held-Out Model Gate", "Awaiting a successful Snow Squall Expansion Dataset feature artifact; historical expansion is intentionally archived."),
+              ("candidate_model_release_audit", "Candidate Model Release Audit", "Awaiting a successful Snow Squall Candidate Model Refresh bundle; no candidate bundle is currently available to audit."),
+          ]
+          for name, workflow, dependency_reason in gate_specs:
+              check = status_gate(name, workflow)
+              if not check["ok"] and dependency_reason:
+                  check["reason"] = dependency_reason
+              checks.append(check)
 
-          shadow_ref = subprocess.run(
+          viewer_branch = subprocess.run(
+              ["gh","api",f"/repos/{REPO}/git/ref/heads/gh-pages"],
+              text=True, capture_output=True, check=False
+          )
+          checks.append({
+              "gate": "viewer_publication",
+              "status": "green" if viewer_branch.returncode == 0 else "yellow",
+              "ok": viewer_branch.returncode == 0,
+              "reason": "validated historical viewer package is published on gh-pages" if viewer_branch.returncode == 0 else "gh-pages viewer branch is missing",
+          })
+
+          shadow_ref = subprocess.run
               ["gh","api",f"/repos/{REPO}/git/ref/heads/snow-squall-shadow-data"],
               text=True, capture_output=True, check=False
           )
