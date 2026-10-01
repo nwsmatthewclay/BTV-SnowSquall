@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>BTV Snow Squall Operational Object Viewer</title>
+<title>BTV Snow Squall Live Object Viewer</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <link rel="stylesheet" href="style.css">
 <style>
@@ -68,7 +68,7 @@
     <div id="subtitle">Loading live KCXX/KTYX radar objects…</div>
   </div>
   <div class="header-actions">
-    <span class="badge research">FOUNDATION</span>
+    <span class="badge research">LIVE • RESEARCH</span>
     <a class="nav-link" href="index.html">Historical Explorer</a><a class="nav-link" href="training.html">Training Replay</a>
     <button id="refreshBtn">Refresh</button>
   </div>
@@ -96,7 +96,7 @@
       <div class="section-head compact"><h3>Model status</h3></div>
       <div class="live-status degraded">
         <strong>Operational probability: gated</strong>
-        <span>Probability scoring disabled in the operational object feed. The candidate model is not exposed here; research shadow scoring is isolated separately.</span>
+        <span>Operational probability is gated. Candidate scoring is displayed only in the isolated research shadow feed while the model remains under validation.</span>
       </div>
       <div class="live-card" id="shadowCard">
         <h3>Live research shadow</h3>
