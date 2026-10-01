@@ -88,13 +88,48 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt -r requirements-science.txt
 
+      - name: Locate latest successful candidate model bundle
+        id: model
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          selected=""
+          while IFS= read -r run; do
+            run_id="$(printf '%s' "${run}" | jq -r '.id')"
+            artifacts="$(gh api "/repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}/artifacts?per_page=100")"
+            count="$(printf '%s' "${artifacts}" | jq '[.artifacts[] | select(.name=="snow-squall-refreshed-model-bundles" and .expired==false)] | length')"
+            if [ "${count}" -gt 0 ]; then
+              selected="${run}"
+              break
+            fi
+          done < <(
+            gh api "/repos/${GITHUB_REPOSITORY}/actions/runs?branch=snow-squall-model-foundation&per_page=100" |
+            jq -c '[.workflow_runs[] | select(.name=="Snow Squall Candidate Model Refresh") | select(.status=="completed" and .conclusion=="success")] | sort_by(.id) | reverse | .[]'
+          )
+          test -n "${selected}"
+          run_id="$(printf '%s' "${selected}" | jq -r '.id')"
+          echo "run_id=${run_id}" >> "${GITHUB_OUTPUT}"
+          echo "Using refreshed candidate model run ${run_id}"
+
+      - name: Download candidate model bundle
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          rm -rf model_bundle
+          gh run download "${{ steps.model.outputs.run_id }}" --name snow-squall-refreshed-model-bundles --dir model_bundle
+          find model_bundle -maxdepth 4 -type f | sort | head -80
+
       - name: Preflight learned-model bundles
         run: |
           set -euo pipefail
           for horizon in 15 30 45 60; do
-            model_dir="replay-package/data/derived/baseline_model_${horizon}m"
+            model_dir="model_bundle/data/derived/candidate_ensemble_refresh_${horizon}m"
             test -f "${model_dir}/metrics.json"
             test -f "${model_dir}/baseline_model.joblib"
+            test -f "${model_dir}/probability_calibrator.joblib"
             echo "${horizon}m bundle:"
             python - <<PY
           import json
@@ -103,10 +138,10 @@ jobs:
           m=json.loads(p.read_text(encoding="utf-8"))
           print("  evaluation_status:", m.get("evaluation_status"))
           print("  operational_release_status:", m.get("operational_release_status"))
+          print("  calibration_status:", m.get("calibration_status"))
           print("  predictor_count:", len(m.get("predictor_columns") or []))
           PY
           done
-
       - name: Identify requested case input
         env:
           CASE_ID: ${{ inputs.case_id }}
@@ -143,7 +178,7 @@ jobs:
               --output-dir "replay-output/${horizon}m" \
               --state-path "replay-output/${horizon}m/replay_state.json" \
               --continue-on-error \
-              --model-dir "replay-package/data/derived/baseline_model_${horizon}m" \
+              --model-dir "model_bundle/data/derived/candidate_ensemble_refresh_${horizon}m" \
               "${max_args[@]}"
           done
 
