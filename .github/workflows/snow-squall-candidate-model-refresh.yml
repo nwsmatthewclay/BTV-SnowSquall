@@ -36,7 +36,7 @@ jobs:
         with:
           ref: snow-squall-model-foundation
 
-      - name: Resolve and download national pretraining pool
+      - name: Resolve and download national model bundle
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -48,8 +48,15 @@ jobs:
             source_run="$(gh run list --workflow "National SQW Radar Pretraining Pool" --branch snow-squall-model-foundation --status success --limit 1 --json databaseId --jq '.[0].databaseId' || true)"
           fi
           test -n "$source_run" && test "$source_run" != "null"
-          gh run download "$source_run" --repo "$GITHUB_REPOSITORY" --name national-sqw-radar-pretraining-pool --dir national_pretrain_artifact
-          echo "Using national pretraining pool from run $source_run"
+          mkdir -p national_pretrain_artifact
+          if gh run download "$source_run" --repo "$GITHUB_REPOSITORY" --name national-sqw-radar-model-bundles --dir national_pretrain_artifact; then
+            echo "Using lightweight national model bundle from run $source_run"
+          else
+            echo "Lightweight bundle not present; falling back to full national pretraining artifact."
+            rm -rf national_pretrain_artifact
+            gh run download "$source_run" --repo "$GITHUB_REPOSITORY" --name national-sqw-radar-pretraining-pool --dir national_pretrain_artifact
+            echo "Using full national pretraining pool from run $source_run"
+          fi
 
       - name: Resolve latest archived expansion feature batch
         id: expansion
