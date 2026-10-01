@@ -6,7 +6,7 @@ const layers={KCXX:L.layerGroup().addTo(map),KTYX:L.layerGroup().addTo(map)};
 const radarLocations={KCXX:[44.511,-73.166],KTYX:[43.756,-75.680]};
 const LIVE_BASE="https://raw.githubusercontent.com/nwsmatthewclay/BTV-SnowSquall/snow-squall-live-data/viewer/data/live/";
 const SHADOW_BASE="https://raw.githubusercontent.com/nwsmatthewclay/BTV-SnowSquall/snow-squall-shadow-data/viewer/data/shadow/";
-let datasets={},selected=null,refreshTimer=null,hasInitialExtent=false,radarMosaicLayer=L.layerGroup().addTo(map),radarMosaic=null;
+let datasets={},selected=null,refreshTimer=null,hasInitialExtent=false,radarMosaicLayer=L.layerGroup().addTo(map),radarMosaic=null,showAllLiveTracks=false;
 
 const num=(v,d=1)=>v==null||Number.isNaN(Number(v))?"—":Number(v).toFixed(d);
 const fmt=t=>t?new Date(t).toLocaleString(undefined,{month:"short",day:"numeric",hour:"numeric",minute:"2-digit",second:"2-digit"}):"—";
@@ -86,6 +86,7 @@ function renderRadarMosaic(meta){
   if(sources)sources.textContent=src.join(" + ")||"—";
   const times=(meta.sources||[]).map(x=>x.scan_time_utc).filter(Boolean).sort();
   if(time)time.textContent=times.length?fmt(times[times.length-1]):fmt(meta.updated_utc);
+  if(!hasInitialExtent){map.fitBounds(meta.bounds,{padding:[25,25],maxZoom:8});hasInitialExtent=true;}
 }
 
 function summarize(site,item){
@@ -132,17 +133,19 @@ function renderMap(summary){
       if(r.track_id==null||r.centroid_lat==null||r.centroid_lon==null)return;
       (grouped[String(r.track_id)]??=[]).push(r);
     });
-    Object.values(grouped).forEach(rows=>{
+    const activeTrackIds=new Set((x.features||[]).map(f=>String((f.properties||{}).track_id)));
+    Object.entries(grouped).forEach(([id,rows])=>{
+      if(!showAllLiveTracks&&!activeTrackIds.has(id))return;
       rows.sort((a,b)=>String(a.timestamp).localeCompare(String(b.timestamp)));
-      const coords=rows.slice(-12).map(r=>[Number(r.centroid_lat),Number(r.centroid_lon)])
+      const selectedTrack=selected&&selected.radar_site===x.site&&String(selected.track_id)===id;
+      const count=selectedTrack?12:(showAllLiveTracks?8:4);
+      const coords=rows.slice(-count).map(r=>[Number(r.centroid_lat),Number(r.centroid_lon)])
         .filter(v=>v.every(Number.isFinite));
       if(coords.length<2)return;
-      const id=String(rows[0].track_id);
-      const selectedTrack=selected&&selected.radar_site===x.site&&String(selected.track_id)===id;
       L.polyline(coords,{
         color:selectedTrack?"#ffffff":"#8795a3",
-        weight:selectedTrack?4:2,
-        opacity:selectedTrack?.9:.38,
+        weight:selectedTrack?4:1.5,
+        opacity:selectedTrack?.9:(showAllLiveTracks?.30:.24),
         dashArray:selectedTrack?null:"4 5",
         interactive:false
       }).addTo(layers[x.site]);
@@ -413,6 +416,8 @@ async function refresh(){
 }
 
 addRadarMarkers();
+const liveTrackToggle=document.getElementById("showAllLiveTracks");
+if(liveTrackToggle)liveTrackToggle.onchange=e=>{showAllLiveTracks=e.target.checked;renderMap(Object.values(datasets))};
 document.getElementById("refreshBtn").onclick=refresh;
 refresh();
 refreshTimer=setInterval(refresh,120000);
