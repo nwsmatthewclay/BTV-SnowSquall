@@ -109,9 +109,10 @@ class CentroidTracker:
             self.config.max_time_gap_minutes,
             max(0.1, self._dt_minutes(timestamp, previous)),
         )
+        # 1 kt = 1.852 km/h; dt is in minutes.
         max_distance_km = max(
             self.config.min_gate_distance_km,
-            self.config.max_motion_kt * 0.514444 * (dt / 60.0),
+            self.config.max_motion_kt * 1.852 * (dt / 60.0),
         )
         return min(
             self.config.max_pixel_distance,
