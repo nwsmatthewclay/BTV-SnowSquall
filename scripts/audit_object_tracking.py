@@ -18,8 +18,16 @@ def audit(frame: pd.DataFrame) -> dict:
     dt=g["scan_dt"].diff().dt.total_seconds()/60.0
     speed=pd.to_numeric(d.get("motion_speed_kt"),errors="coerce")
     radar_speed=pd.to_numeric(d.get("radar_motion_speed_kt"),errors="coerce")
-    radar_dir=pd.to_numeric(d.get("radar_motion_direction_deg"),errors="coerce")
-    obj_dir=pd.to_numeric(d.get("motion_direction_deg",d.get("motion_dir_deg")),errors="coerce")
+    radar_dir=pd.to_numeric(
+        d["radar_motion_direction_deg"] if "radar_motion_direction_deg" in d.columns else pd.Series(np.nan,index=d.index),
+        errors="coerce",
+    )
+    obj_dir_source = (
+        d["motion_direction_deg"] if "motion_direction_deg" in d.columns
+        else d["motion_dir_deg"] if "motion_dir_deg" in d.columns
+        else pd.Series(np.nan,index=d.index)
+    )
+    obj_dir=pd.to_numeric(obj_dir_source,errors="coerce")
     direction_error=np.abs((obj_dir-radar_dir+180.0)%360.0-180.0)
     track_sizes=g.size()
     track_first=g["scan_dt"].min()
