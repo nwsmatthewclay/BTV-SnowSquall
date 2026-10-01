@@ -42,12 +42,29 @@ def _core_seed_split(component, field, config):
         sy, sx = np.where(seed_labels == seed_id)
         if len(sx) < 2:
             continue
-        seeds.append((float(np.mean(sy)), float(np.mean(sx))))
+        peak = float(np.nanmax(local[sy, sx]))
+        seeds.append((peak, float(np.mean(sy)), float(np.mean(sx)), int(len(sx))))
     if len(seeds) < 2:
         return [component]
 
+    # Keep only genuinely separated cores. Without this guard, a broad snow
+    # squall band containing several nearby threshold-crossing pixels can be
+    # partitioned into many artificial Voronoi fragments that then become
+    # confusing pseudo-tracks.
+    seeds.sort(key=lambda s: (-s[0], -s[3], s[1], s[2]))
+    selected = []
+    min_sep = max(0, int(config.min_peak_separation_px))
+    for seed in seeds:
+        if all(
+            hypot(seed[1] - keep[1], seed[2] - keep[2]) >= min_sep
+            for keep in selected
+        ):
+            selected.append(seed)
+    if len(selected) < 2:
+        return [component]
+
+    centers = np.asarray([(s[1], s[2]) for s in selected], dtype=float)
     points = np.column_stack((yy, xx))
-    centers = np.asarray(seeds)
     nearest = np.argmin(
         ((points[:, None, :] - centers[None, :, :]) ** 2).sum(axis=2),
         axis=1,
