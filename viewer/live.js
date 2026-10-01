@@ -6,7 +6,7 @@ const layers={KCXX:L.layerGroup().addTo(map),KTYX:L.layerGroup().addTo(map)};
 const radarLocations={KCXX:[44.511,-73.166],KTYX:[43.756,-75.680]};
 const LIVE_BASE="https://raw.githubusercontent.com/nwsmatthewclay/BTV-SnowSquall/snow-squall-live-data/viewer/data/live/";
 const SHADOW_BASE="https://raw.githubusercontent.com/nwsmatthewclay/BTV-SnowSquall/snow-squall-shadow-data/viewer/data/shadow/";
-let datasets={},selected=null,refreshTimer=null,hasInitialExtent=false,radarMosaicLayer=L.layerGroup().addTo(map),radarMosaic=null,showAllLiveTracks=false;
+let datasets={},selected=null,refreshTimer=null,hasInitialExtent=false,radarMosaicLayer=L.layerGroup().addTo(map),radarMosaic=null,showAllLiveTracks=false,radarMode="clean",qcdRadarLayer=null;
 
 const num=(v,d=1)=>v==null||Number.isNaN(Number(v))?"—":Number(v).toFixed(d);
 const fmt=t=>t?new Date(t).toLocaleString(undefined,{month:"short",day:"numeric",hour:"numeric",minute:"2-digit",second:"2-digit"}):"—";
@@ -17,7 +17,11 @@ const cFromK=v=>v==null||Number.isNaN(Number(v))?null:Number(v)-273.15;
 const url=name=>LIVE_BASE+name+"?cb="+Date.now();
 const shadowUrl=name=>SHADOW_BASE+name+"?cb="+Date.now();
 const mosaicMetaUrl=()=>LIVE_BASE+"radar_mosaic.json?cb="+Date.now();
-const mosaicImageUrl=()=>LIVE_BASE+"radar_mosaic.png?cb="+Date.now();
+const mosaicImageUrl=(mode="clean")=>{
+  const product=radarMosaic?.display_products||{};
+  const name=mode==="raw"?(product.raw_image||"radar_mosaic_raw.png"):(product.clean_image||"radar_mosaic_clean.png");
+  return LIVE_BASE+name+"?cb="+Date.now();
+};
 
 function markerIcon(site){
   return L.divIcon({className:"radar-station",iconSize:[12,12],iconAnchor:[6,6],html:""});
@@ -67,38 +71,55 @@ async function getRadarMosaic(){
 function renderRadarMosaic(meta){
   radarMosaicLayer.clearLayers();
   if(mrmsFallbackLayer){try{map.removeLayer(mrmsFallbackLayer)}catch(_){} mrmsFallbackLayer=null;}
+  if(qcdRadarLayer){try{map.removeLayer(qcdRadarLayer)}catch(_){} qcdRadarLayer=null;}
   radarMosaic=meta;
   const status=document.getElementById("mosaicStatus");
   const sources=document.getElementById("mosaicSources");
   const time=document.getElementById("mosaicTime");
+  const modeLabel=document.getElementById("hudMode");
   if(!meta||meta.status!=="ready"||!meta.bounds){
-    if(status)status.textContent="Local mosaic unavailable • using NOAA MRMS fallback";
-    if(sources)sources.textContent="MRMS composite";
+    if(status)status.textContent="Local mosaic unavailable";
+    if(sources)sources.textContent="NOAA QC fallback";
     if(time)time.textContent="Live NOAA feed";
+    if(modeLabel)modeLabel.textContent="NOAA QC FALLBACK";
     addMrmsFallback();
     return;
   }
-  const overlay=L.imageOverlay(mosaicImageUrl(),meta.bounds,{
-    pane:"radarMosaicPane",
-    opacity:.82,
-    interactive:false,
-    crossOrigin:true
-  });
-  overlay.once("load",()=>{});
-  overlay.once("error",()=>{
-    radarMosaicLayer.clearLayers();
-    if(status)status.textContent="Local mosaic image failed • NOAA radar fallback";
-    if(sources)sources.textContent="NOAA radar";
-    addMrmsFallback();
-  });
-  overlay.addTo(radarMosaicLayer);
+
   const src=(meta.sources||[]).map(x=>x.radar).filter(Boolean);
   if(status)status.textContent=src.length===2?"READY • KCXX + KTYX":("READY • "+src.join(" + "));
   if(sources)sources.textContent=src.join(" + ")||"—";
   const times=(meta.sources||[]).map(x=>x.scan_time_utc).filter(Boolean).sort();
   if(time)time.textContent=times.length?fmt(times[times.length-1]):fmt(meta.updated_utc);
+  if(modeLabel)modeLabel.textContent=radarMode==="raw"?"RAW DISPLAY":(radarMode==="qcd"?"NOAA QC DISPLAY":"CLEAN DISPLAY");
+
+  if(radarMode==="qcd"){
+    addMrmsFallback();
+  }else{
+    const overlay=L.imageOverlay(mosaicImageUrl(radarMode),meta.bounds,{
+      pane:"radarMosaicPane",
+      opacity:radarMode==="raw"?.66:.84,
+      interactive:false,
+      crossOrigin:true
+    });
+    overlay.once("error",()=>{
+      radarMosaicLayer.clearLayers();
+      if(status)status.textContent="Local image failed • NOAA QC fallback";
+      addMrmsFallback();
+    });
+    overlay.addTo(radarMosaicLayer);
+  }
+
   if(!hasInitialExtent){map.fitBounds(meta.bounds,{padding:[25,25],maxZoom:8});hasInitialExtent=true;}
 }
+function setRadarMode(mode){
+  radarMode=mode;
+  document.querySelectorAll(".display-btn").forEach(btn=>btn.classList.toggle("active",btn.dataset.radarMode===mode));
+  if(radarMosaic)renderRadarMosaic(radarMosaic);
+  const subtitle=document.getElementById("hudMode");
+  if(subtitle)subtitle.textContent=mode==="raw"?"RAW DISPLAY":(mode==="qcd"?"NOAA QC DISPLAY":"CLEAN DISPLAY");
+}
+
 let mrmsFallbackLayer=null;
 function addMrmsFallback(){
   if(mrmsFallbackLayer)return;
@@ -448,6 +469,20 @@ async function refresh(){
 
     const degraded=summary.filter(x=>x.error||!x.good);
     const allObjects=summary.reduce((n,x)=>n+x.features.length,0);
+    const hudScan=document.getElementById("hudScan");
+    const hudSources=document.getElementById("hudSources");
+    const hudObjects=document.getElementById("hudObjects");
+    const feedBadge=document.getElementById("feedBadge");
+    const empty=document.getElementById("mapEmptyState");
+    if(hudScan)hudScan.textContent=fmt(summary.map(x=>x.last).filter(Boolean).sort().at(-1));
+    if(hudSources)hudSources.textContent=summary.filter(x=>!x.error).map(x=>x.site).join(" + ")||"NO DATA";
+    if(hudObjects)hudObjects.textContent=allObjects+" objects";
+    if(feedBadge)feedBadge.textContent=degraded.length?"DEGRADED":"HEALTHY";
+    if(empty){
+      empty.classList.toggle("visible",allObjects===0);
+      empty.querySelector("strong").textContent=degraded.length?"Radar data unavailable":"No significant echoes";
+      empty.querySelector("span").textContent=degraded.length?"Waiting for a valid radar product.":"Radar feed is healthy. Weak returns below the display threshold are intentionally muted.";
+    }
     document.getElementById("overallTitle").textContent=degraded.length?"Live feed degraded":"Live feeds healthy";
     document.getElementById("overallText").textContent=degraded.length?
       degraded.map(x=>x.site+" "+(x.error?"unavailable":"stale")).join(", ")+" • "+allObjects+" current objects":
@@ -465,5 +500,6 @@ addRadarMarkers();
 const liveTrackToggle=document.getElementById("showAllLiveTracks");
 if(liveTrackToggle)liveTrackToggle.onchange=e=>{showAllLiveTracks=e.target.checked;renderMap(Object.values(datasets))};
 document.getElementById("refreshBtn").onclick=refresh;
+document.querySelectorAll(".display-btn").forEach(btn=>btn.onclick=()=>setRadarMode(btn.dataset.radarMode));
 refresh();
 refreshTimer=setInterval(refresh,60000);
