@@ -106,7 +106,7 @@ jobs:
               "reason": "validated historical viewer package is published on gh-pages" if viewer_branch.returncode == 0 else "gh-pages viewer branch is missing",
           })
 
-          shadow_ref = subprocess.run
+          shadow_ref = subprocess.run(
               ["gh","api",f"/repos/{REPO}/git/ref/heads/snow-squall-shadow-data"],
               text=True, capture_output=True, check=False
           )
