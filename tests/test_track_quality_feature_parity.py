@@ -13,7 +13,7 @@ def test_track_quality_diagnostics_propagate():
       "area_km2":20.0,"length_km":8.0
     })
     assert row["track_association_distance_px"]==2.0
-    assert row["track_merge_candidate"] is True
+    assert row["track_merge_candidate"] == 1.0
 
 def test_historical_builder_keeps_track_quality_fields():
     d=pd.DataFrame({
