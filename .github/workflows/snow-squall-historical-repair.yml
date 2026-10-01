@@ -32,5 +32,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
-          gh api --method POST             "repos/$GITHUB_REPOSITORY/actions/workflows/object-dataset-expansion.yml/dispatches"             -f ref=snow-squall-model-foundation
-          echo "Dispatched Object Dataset Full Expansion from object-dataset-expansion.yml"
+          # The full object expansion workflow is exposed from the default branch.
+          # Run it against the foundation branch so it uses today's code.
+          gh workflow run snow-squall-expansion-dataset.yml             --repo "$GITHUB_REPOSITORY"             --ref snow-squall-model-foundation             -f archive_override=true             -f official_offset=30             -f unverified_offset=15             -f max_official=30             -f max_unverified=15
+          echo "Dispatched Snow Squall Expansion Dataset at archived offsets 30/15"
