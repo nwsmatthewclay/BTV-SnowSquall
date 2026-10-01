@@ -239,6 +239,17 @@ def main():
                 "length_km": obj.get("length_km"),
                 "width_km": obj.get("width_km"),
                 "geometry_wkt": obj.get("geometry_wkt"),
+                "core_fraction": float(obj["core_pixel_count"]) / max(1, int(obj["pixel_count"])),
+                "track_association_status": obj.get("track_association_status"),
+                "track_association_distance_px": obj.get("track_association_distance_px"),
+                "track_association_gate_px": obj.get("track_association_gate_px"),
+                "track_association_cost": obj.get("track_association_cost"),
+                "track_age_scans": obj.get("track_age_scans"),
+                "track_missed_scans": obj.get("track_missed_scans"),
+                "track_competing_track_count": obj.get("track_competing_track_count"),
+                "track_competing_object_count": obj.get("track_competing_object_count"),
+                "track_merge_candidate": obj.get("track_merge_candidate"),
+                "track_split_candidate": obj.get("track_split_candidate"),
             }
             derived_keys = (
                 "motion_distance_km", "motion_speed_kt", "motion_direction_deg",
