@@ -187,11 +187,17 @@ class AnalogLibrary:
         for case_id, null_value, pop_value in zip(
             case_series, null_series, pop_series
         ):
-            if case_id and case_id.lower() not in {"nan", "none"}:
+            case_id = "" if pd.isna(case_id) else str(case_id).strip()
+            null_value = "" if pd.isna(null_value) else str(null_value).strip()
+            pop_value = "" if pd.isna(pop_value) else str(pop_value).strip()
+            case_key = case_id.lower()
+            null_key = null_value.lower()
+            pop_key = pop_value.lower()
+            if case_id and case_key not in {"nan", "none"}:
                 query_groups.append("case:" + case_id)
-            elif null_value and null_value.lower() not in {"nan", "none"}:
+            elif null_value and null_key not in {"nan", "none"}:
                 query_groups.append("null:" + null_value)
-            elif pop_value and pop_value.lower() not in {"nan", "none"}:
+            elif pop_value and pop_key not in {"nan", "none"}:
                 query_groups.append("pop:" + pop_value)
             else:
                 query_groups.append("")
