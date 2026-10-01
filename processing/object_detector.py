@@ -56,7 +56,7 @@ def _core_seed_split(component, field, config):
     min_sep = max(0, int(config.min_peak_separation_px))
     for seed in seeds:
         if all(
-            hypot(seed[1] - keep[1], seed[2] - keep[2]) >= min_sep
+            np.hypot(seed[1] - keep[1], seed[2] - keep[2]) >= min_sep
             for keep in selected
         ):
             selected.append(seed)
