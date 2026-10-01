@@ -153,6 +153,28 @@ def haversine_km(lat1, lon1, lat2, lon2):
 
 def build_features(frame: pd.DataFrame) -> pd.DataFrame:
     df = frame.copy()
+
+    # Normalize the shared motion vocabulary before temporal derivation. Radar
+    # motion is optional in historical records, so absent fields are explicit
+    # null columns rather than structural differences from live inference.
+    for _key in (
+        "motion_dir_deg", "motion_direction_deg", "motion_speed_kt",
+        "motion_u_kt", "motion_v_kt", "radar_motion_speed_kt",
+        "radar_motion_direction_deg", "radar_motion_u_kt", "radar_motion_v_kt",
+        "radar_motion_direction_sin", "radar_motion_direction_cos",
+        "radar_motion_confidence", "motion_speed_minus_radar_kt",
+        "motion_direction_error_deg", "motion_radar_alignment",
+        "motion_axis_alignment", "radar_motion_axis_alignment",
+    ):
+        if _key not in df.columns:
+            df[_key] = np.nan
+    if "motion_direction_deg" in df.columns and "motion_dir_deg" in df.columns:
+        df["motion_direction_deg"] = pd.to_numeric(df["motion_direction_deg"], errors="coerce").fillna(
+            pd.to_numeric(df["motion_dir_deg"], errors="coerce")
+        )
+        df["motion_dir_deg"] = pd.to_numeric(df["motion_dir_deg"], errors="coerce").fillna(
+            df["motion_direction_deg"]
+        )
     df["scan_dt"] = pd.to_datetime(df["scan_time_utc"], utc=True, errors="coerce")
     df = df.dropna(subset=["scan_dt", "object_id"]).copy()
 
@@ -227,6 +249,22 @@ def build_features(frame: pd.DataFrame) -> pd.DataFrame:
         df["motion_speed_kmh"] = (
             displacement / dt_min.replace(0, np.nan) * 60.0
         ).where(continuity_ok)
+
+    # Derive band/radar directional alignment from available current-state
+    # directions. Absolute cosine is invariant to a 180-degree band-axis flip.
+    orient = pd.to_numeric(df["orientation_deg"], errors="coerce") if "orientation_deg" in df.columns else pd.Series(np.nan, index=df.index)
+    motion_dir = pd.to_numeric(df["motion_direction_deg"], errors="coerce")
+    radar_dir = pd.to_numeric(df["radar_motion_direction_deg"], errors="coerce")
+    angle = ((motion_dir - orient + 90.0) % 180.0) - 90.0
+    align = np.abs(np.cos(np.radians(angle)))
+    df["motion_axis_alignment"] = align.where(orient.notna() & motion_dir.notna())
+    df.loc[df["motion_axis_alignment"].abs() < 1e-12, "motion_axis_alignment"] = 0.0
+    df.loc[(1.0 - df["motion_axis_alignment"]).abs() < 1e-12, "motion_axis_alignment"] = 1.0
+    angle = ((radar_dir - orient + 90.0) % 180.0) - 90.0
+    align = np.abs(np.cos(np.radians(angle)))
+    df["radar_motion_axis_alignment"] = align.where(orient.notna() & radar_dir.notna())
+    df.loc[df["radar_motion_axis_alignment"].abs() < 1e-12, "radar_motion_axis_alignment"] = 0.0
+    df.loc[(1.0 - df["radar_motion_axis_alignment"]).abs() < 1e-12, "radar_motion_axis_alignment"] = 1.0
 
     if {"u10_ms", "v10_ms"}.issubset(df.columns):
         wind = np.hypot(pd.to_numeric(df["u10_ms"], errors="coerce"), pd.to_numeric(df["v10_ms"], errors="coerce"))
