@@ -114,6 +114,7 @@ def test_operational_predictor_set_is_live_covered():
 
     frame = build_live_feature_frame([older, previous, base], "7")
     coverage = feature_coverage(frame.tail(1), OPERATIONAL_LIVE_PREDICTORS)
+    print("LIVE COVERAGE MISSING:", coverage["missing"])
     assert coverage["fraction"] == 1.0
     assert coverage["missing"] == []
 
