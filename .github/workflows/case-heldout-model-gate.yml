@@ -125,23 +125,12 @@ jobs:
             "${{ steps.feature_table.outputs.path }}" \
             --output-dir data/derived/model_gate
 
-      - name: Train nonlinear HGB baselines and candidate ensembles
+      - name: Compare model families on common held-out folds
         run: |
           set -euo pipefail
-          schema="data/derived/input/rebuilt_model_features.schema.json"
-          test -f "$schema"
-          for horizon in 15 30 45 60; do
-            python scripts/train_baseline_model.py \
-              "${{ steps.feature_table.outputs.path }}" \
-              --schema "$schema" \
-              --target "squall_onset_within_${horizon}m" \
-              --output-dir "data/derived/nonlinear_hgb_${horizon}m"
-            python scripts/train_candidate_ensemble.py \
-              "${{ steps.feature_table.outputs.path }}" \
-              --schema "$schema" \
-              --target "squall_onset_within_${horizon}m" \
-              --output-dir "data/derived/candidate_ensemble_${horizon}m"
-          done
+          python scripts/evaluate_model_families.py \
+            "${{ steps.feature_table.outputs.path }}" \
+            --output-dir data/derived/model_family_comparison
 
       - name: Upload model gate
         uses: actions/upload-artifact@v4
@@ -151,3 +140,4 @@ jobs:
             data/derived/model_gate/metrics.json
             data/derived/model_gate/metrics.csv
             data/derived/model_gate/models.joblib
+            data/derived/model_family_comparison/metrics.json
