@@ -8,6 +8,7 @@ available to a real-time model.
 """
 from __future__ import annotations
 from dataclasses import dataclass
+import joblib
 import numpy as np
 import pandas as pd
 from sklearn.preprocessing import StandardScaler
@@ -114,6 +115,13 @@ class AnalogLibrary:
                 out.at[row_index, f"analog_onset_rate_{h}m"] = float(np.average(y, weights=weights))
                 out.at[row_index, f"analog_onset_count_{h}m"] = int(np.sum(y))
         return out
+
+    def save(self, path):
+        joblib.dump(self, path)
+
+    @classmethod
+    def load(cls, path):
+        return joblib.load(path)
 
 def add_causal_analog_features(frame: pd.DataFrame, top_k=15, max_age_days=None) -> pd.DataFrame:
     out = frame.copy()
