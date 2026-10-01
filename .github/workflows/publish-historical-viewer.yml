@@ -19,10 +19,8 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
   actions: read
-  pages: write
-  id-token: write
 
 concurrency:
   group: snow-squall-viewer-pages
@@ -115,21 +113,26 @@ jobs:
           path: _site
           if-no-files-found: error
 
-      - name: Configure GitHub Pages
-        id: pages_config
+      - name: Publish viewer to gh-pages branch
         if: steps.source.outputs.skip != 'true'
-        continue-on-error: true
-        uses: actions/configure-pages@v5
-        with:
-          enablement: true
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
 
-      - name: Upload Pages artifact
-        if: steps.source.outputs.skip != 'true'
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: _site
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-      - name: Deploy to GitHub Pages
-        if: steps.source.outputs.skip != 'true' && steps.pages_config.outcome == 'success'
-        id: deployment
-        uses: actions/deploy-pages@v4
+          git fetch origin --no-tags
+          git checkout --orphan gh-pages
+          git rm -rf . >/dev/null 2>&1 || true
+          cp -R _site/. .
+          touch .nojekyll
+          git add -A
+          git commit -m "Publish historical Snow Squall viewer" || exit 0
+          git push --force origin gh-pages
+
+          echo "Published viewer branch: https://github.com/${GITHUB_REPOSITORY}/tree/gh-pages"
+          echo "When GitHub Pages is enabled from gh-pages, site URL is https://nwsmatthewclay.github.io/BTV-SnowSquall/"
+
