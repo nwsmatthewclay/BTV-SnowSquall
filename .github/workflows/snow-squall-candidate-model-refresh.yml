@@ -6,6 +6,11 @@ on:
       - National SQW Radar Pretraining Pool
     types:
       - completed
+  push:
+    branches:
+      - snow-squall-model-foundation
+    paths:
+      - .github/model-refresh-trigger
 
 permissions:
   actions: read
@@ -17,7 +22,7 @@ concurrency:
 
 jobs:
   refresh:
-    if: github.event.workflow_run.conclusion == 'success'
+    if: github.event_name == 'push' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 240
     env:
