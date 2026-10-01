@@ -233,8 +233,9 @@ function renderObjectList(summary){
     const shadow=shadowRecord(p.radar_site,p.track_id);
     const rp=shadow?.research_probabilities||{};
     const score=rp["15"];
+    const state=lifecycleState(p);
     return "<div class='live-object "+(selected&&selected.track_id===p.track_id&&selected.radar_site===p.radar_site?"selected":"")+"' data-id='"+esc(p.radar_site+"|"+p.track_id)+"'>"+
-    "<div class='title'>"+esc(p.radar_site)+" • Track "+esc(p.track_id)+" <span class='chip'>"+(p.source_kind==="recent"?"RECENT":"ACTIVE")+"</span></div>"+
+    "<div class='title'>"+esc(p.radar_site)+" • Track "+esc(p.track_id)+" <span class='chip'>"+esc(state)+"</span><span class='chip'>"+(p.source_kind==="recent"?"RECENT":"ACTIVE")+"</span></div>"+
     "<div class='sub'>"+esc(fmt(p.timestamp))+(p.source_kind==="recent"?" • latest retained track sample":"")+"</div>"+
     "<div class='chips'><span class='chip'>"+num(p.max_reflectivity_dbz)+" dBZ</span><span class='chip'>"+num(p.motion_speed_kt)+" kt</span><span class='chip'>"+num(p.area_km2)+" km²</span>"+(score==null?"":"<span class='chip research-chip'>15m "+(Number(score)*100).toFixed(0)+"% RESEARCH</span>")+"<span class='chip'>"+esc(p.data_quality||"—")+"</span></div></div>";
   }).join("");
@@ -264,8 +265,8 @@ function shadowGrid(record){
     const p=probs[String(h)];
     const fraction=coverage[String(h)]?.fraction;
     const err=errors[String(h)];
-    const sub=err?"error":(fraction==null?"coverage —":"coverage "+(Number(fraction)*100).toFixed(0)+"%");
-    return "<div class='shadow-cell'><span>"+h+" min</span><b>"+(p==null?"—":(Number(p)*100).toFixed(1)+"%")+"</b><span>"+esc(sub)+"</span></div>";
+    const sub=err?"error":(fraction==null?"coverage —":(Number(fraction)*100<80?"warming up • coverage "+(Number(fraction)*100).toFixed(0)+"%":"coverage "+(Number(fraction)*100).toFixed(0)+"%"));
+    return "<div class='shadow-cell'><span>"+h+" min</span><b>"+(p==null?(err?"ERROR":"—"):""+(Number(p)*100).toFixed(1)+"%")+"</b><span>"+esc(sub)+"</span></div>";
   }).join("")+"</div>";
 }
 
