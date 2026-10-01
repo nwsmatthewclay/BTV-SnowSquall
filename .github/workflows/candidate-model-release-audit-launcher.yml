@@ -19,7 +19,7 @@ jobs:
     steps:
       - name: Dispatch candidate release audit
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           gh workflow run candidate-model-release-audit.yml --repo "$GITHUB_REPOSITORY" --ref snow-squall-model-foundation
