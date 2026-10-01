@@ -46,7 +46,7 @@ jobs:
         run: |
           set -euo pipefail
           candidate=""
-          for run in $(gh run list --branch snow-squall-model-foundation --status success --limit 30 --json databaseId,name --jq '.[]. | @base64'); do
+          for run in $(gh run list --branch snow-squall-model-foundation --status success --limit 30 --json databaseId,name --jq '.[] | @base64'); do
             obj="$(printf '%s' "$run" | base64 -d)"
             name="$(printf '%s' "$obj" | jq -r '.name')"
             run_id="$(printf '%s' "$obj" | jq -r '.databaseId')"
