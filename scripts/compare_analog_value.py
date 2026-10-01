@@ -15,6 +15,7 @@ from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
 
 from src.snow_squall.analogs import AnalogLibrary
+from src.snow_squall.training import case_scan_balanced_weights, case_weighted_metrics
 
 HORIZONS = (15, 30, 45, 60)
 ANALOG_PREFIX = "analog_"
@@ -92,6 +93,7 @@ def evaluate(df: pd.DataFrame, target: str):
     y = ys.loc[valid].astype(int).to_numpy()
     groups = data["case_id"].astype(str).to_numpy()
 
+    row_weights = case_scan_balanced_weights(data)
     folds = make_folds(groups)
     predictions = {
         ("baseline", name): np.full(len(data), np.nan) for name in model_specs()
@@ -129,7 +131,7 @@ def evaluate(df: pd.DataFrame, target: str):
                 and train_frame[c].nunique(dropna=True) >= 2
             ]
             for name, spec in model_specs().items():
-                spec.fit(train_frame[cols], y[train_mask])
+                spec.fit(train_frame[cols], y[train_mask], model__sample_weight=row_weights[train_mask])
                 predictions[(variant, name)][test_mask] = (
                     spec.predict_proba(test_frame[cols])[:, 1]
                 )
@@ -142,16 +144,13 @@ def evaluate(df: pd.DataFrame, target: str):
             continue
         yy = y[ok]
         pp = pred[ok]
-        models[f"{variant}_{name}"] = {
-            "status": "ok",
-            "evaluated_rows": int(ok.sum()),
-            "roc_auc": float(roc_auc_score(yy, pp)) if len(np.unique(yy)) == 2 else None,
-            "pr_auc": float(average_precision_score(yy, pp)) if yy.sum() else None,
-            "brier": float(brier_score_loss(yy, pp)),
-        }
+        raw = {"roc_auc": float(roc_auc_score(yy, pp)) if len(np.unique(yy)) == 2 else None, "pr_auc": float(average_precision_score(yy, pp)) if yy.sum() else None, "brier": float(brier_score_loss(yy, pp))}
+        balanced = case_weighted_metrics(yy, pp, row_weights[ok])
+        models[f"{variant}_{name}"] = {"status":"ok","evaluated_rows":int(ok.sum()),**raw,**{f"case_balanced_{k}":v for k,v in balanced.items()}}
 
     return {
         "status": "ok" if fold_reports else "no_valid_folds",
+        "weighting": "equal_case_equal_scan",
         "records": int(len(data)),
         "cases": int(data["case_id"].nunique()),
         "positive": int(y.sum()),

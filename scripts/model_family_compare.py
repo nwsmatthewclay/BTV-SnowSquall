@@ -13,6 +13,7 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import average_precision_score, brier_score_loss, roc_auc_score
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
+from src.snow_squall.training import case_scan_balanced_weights, case_weighted_metrics
 
 HORIZONS = (15, 30, 45, 60)
 BLOCKED_PREFIXES = ("case_", "label_", "squall_", "track_event_", "association_", "truth_", "surface_")
@@ -109,6 +110,7 @@ def evaluate(df: pd.DataFrame, target: str):
     nfolds = min(5, unique.size)
     fold_groups = [shuffled[i::nfolds] for i in range(nfolds)]
 
+    row_weights = case_scan_balanced_weights(data)
     predictor_cols = choose_predictors(data, target)
     specs = model_specs()
     oof = {name: np.full(len(data), np.nan) for name in specs}
@@ -135,7 +137,7 @@ def evaluate(df: pd.DataFrame, target: str):
         probs = {}
 
         for name, spec in specs.items():
-            spec.fit(X_train, y[train], model__sample_weight=weights)
+            spec.fit(X_train, y[train], model__sample_weight=weights * row_weights[train])
             probs[name] = spec.predict_proba(X_test)[:, 1]
             oof[name][test] = probs[name]
 
@@ -180,6 +182,7 @@ def evaluate(df: pd.DataFrame, target: str):
             "roc_auc": float(roc_auc_score(yy, pp)) if len(np.unique(yy)) == 2 else None,
             "pr_auc": float(average_precision_score(yy, pp)) if yy.sum() else None,
             "brier": float(brier_score_loss(yy, pp)),
+            **{f"case_balanced_{k}": v for k, v in case_weighted_metrics(yy, pp, row_weights[ok]).items()},
         }
     return report
 
