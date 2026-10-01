@@ -269,8 +269,17 @@ def process_volume(
     except Exception as exc:
         print(f"RAP acquisition warning: {type(exc).__name__}: {exc}")
 
-    tracked = tracker.update(timestamp, detections)
+    previous_reflectivity, previous_radar_time = load_previous_radar_field(state_path)
+    radar_motion = None
+    if previous_reflectivity is not None and previous_radar_time is not None:
+        try:
+            previous_dt = (radar_dt - datetime.fromisoformat(previous_radar_time.replace("Z", "+00:00")).astimezone(timezone.utc)).total_seconds() / 60.0
+            radar_motion = attach_radar_storm_motion(previous_reflectivity, data, previous_dt, spacing_km=1.0)
+        except (TypeError, ValueError, OverflowError):
+            radar_motion = None
 
+    tracked = tracker.update(timestamp, detections, radar_motion=radar_motion)
+    save_previous_radar_field(state_path, data, timestamp)
     features = []
     current_positions = {}
     previous_positions = state.get("object_positions", {})
@@ -448,6 +457,9 @@ def process_volume(
             "motion_speed_kt": speed_kt,
             "motion_dir_deg": direction_deg,
             "motion_direction_deg": direction_deg,
+            "radar_motion_speed_kt": obj.get("radar_motion_speed_kt"),
+            "radar_motion_direction_deg": obj.get("radar_motion_direction_deg"),
+            "radar_motion_confidence": obj.get("radar_motion_confidence"),
             "age_scans": age_scans,
             "reflectivity_trend_dbz_per_hr": z_trend,
             "area_growth_fraction": area_growth,
