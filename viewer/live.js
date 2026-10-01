@@ -66,13 +66,26 @@ async function getRadarMosaic(){
 function renderRadarMosaic(meta){
   radarMosaicLayer.clearLayers();
   radarMosaic=meta;
-  if(!meta||meta.status!=="ready"||!meta.bounds)return;
+  const status=document.getElementById("mosaicStatus");
+  const sources=document.getElementById("mosaicSources");
+  const time=document.getElementById("mosaicTime");
+  if(!meta||meta.status!=="ready"||!meta.bounds){
+    if(status)status.textContent="Unavailable";
+    if(sources)sources.textContent="—";
+    if(time)time.textContent="—";
+    return;
+  }
   L.imageOverlay(mosaicImageUrl(),meta.bounds,{
     pane:"radarMosaicPane",
     opacity:.72,
     interactive:false,
     crossOrigin:true
   }).addTo(radarMosaicLayer);
+  const src=(meta.sources||[]).map(x=>x.radar).filter(Boolean);
+  if(status)status.textContent=src.length===2?"READY • KCXX + KTYX":("READY • "+src.join(" + "));
+  if(sources)sources.textContent=src.join(" + ")||"—";
+  const times=(meta.sources||[]).map(x=>x.scan_time_utc).filter(Boolean).sort();
+  if(time)time.textContent=times.length?fmt(times[times.length-1]):fmt(meta.updated_utc);
 }
 
 function summarize(site,item){
