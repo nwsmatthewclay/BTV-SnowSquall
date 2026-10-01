@@ -86,6 +86,19 @@ class CentroidTracker:
             vc=(1-w)*vc+w*float(radar_motion.get("radar_motion_column_per_min",vc))
         return track.row+vr*dt,track.column+vc*dt
 
+    def _radar_velocity(self,radar_motion):
+        if not radar_motion:
+            return None
+        try:
+            confidence=float(radar_motion.get("radar_motion_confidence",0.0))
+            vr=float(radar_motion.get("radar_motion_row_per_min"))
+            vc=float(radar_motion.get("radar_motion_column_per_min"))
+        except (TypeError,ValueError):
+            return None
+        if not np.isfinite(confidence) or confidence <= 0 or not np.isfinite(vr) or not np.isfinite(vc):
+            return None
+        return vr,vc,float(np.clip(confidence,0.0,1.0))
+
     def _association_gate_pixels(self,timestamp,previous):
         dt=min(self.config.max_time_gap_minutes,max(0.1,self._dt_minutes(timestamp,previous)))
         max_distance_km=max(self.config.min_gate_distance_km,self.config.max_motion_kt*1.852*(dt/60.0))
@@ -140,8 +153,21 @@ class CentroidTracker:
             cost_value=self._cost(track,obj,timestamp,radar_motion)
             new_vr=(measured_row-old_row)/dt; new_vc=(measured_col-old_col)/dt
             alpha=0.55 if track.age_scans<3 else 0.35
-            track.velocity_row=(1-alpha)*track.velocity_row+alpha*new_vr
-            track.velocity_column=(1-alpha)*track.velocity_column+alpha*new_vc
+            measured_track_vr=(1-alpha)*track.velocity_row+alpha*new_vr
+            measured_track_vc=(1-alpha)*track.velocity_column+alpha*new_vc
+            radar_velocity=self._radar_velocity(radar_motion)
+            if radar_velocity is not None:
+                radar_vr,radar_vc,radar_conf=radar_velocity
+                motion_weight=self.config.radar_motion_weight*radar_conf
+                track.velocity_row=(1-motion_weight)*measured_track_vr+motion_weight*radar_vr
+                track.velocity_column=(1-motion_weight)*measured_track_vc+motion_weight*radar_vc
+                obj["track_motion_source"]="object_radar_blend"
+                obj["track_motion_radar_weight"]=float(motion_weight)
+            else:
+                track.velocity_row=measured_track_vr
+                track.velocity_column=measured_track_vc
+                obj["track_motion_source"]="object_only"
+                obj["track_motion_radar_weight"]=0.0
             track.last_time=timestamp; track.row=measured_row; track.column=measured_col
             track.age_scans+=1; track.missed_scans=0; track.area_km2=self._area(obj); track.max_reflectivity_dbz=self._z(obj)
             obj["track_association_status"]="matched"
@@ -153,6 +179,8 @@ class CentroidTracker:
             obj["track_association_gate_px"]=float(gate)
             obj["track_association_cost"]=float(cost_value)
             obj["track_age_scans"]=int(track.age_scans); obj["track_missed_scans"]=0
+            obj["track_velocity_row_per_min"]=float(track.velocity_row)
+            obj["track_velocity_column_per_min"]=float(track.velocity_column)
             if radar_motion:
                 obj["radar_motion_speed_kt"]=radar_motion.get("radar_motion_speed_kt")
                 obj["radar_motion_direction_deg"]=radar_motion.get("radar_motion_direction_deg")
@@ -164,8 +192,22 @@ class CentroidTracker:
         for oi,obj in enumerate(objects):
             if oi in used: continue
             tid=self.next_id; self.next_id+=1
-            self.tracks[tid]=Track(tid,timestamp,float(obj["row_centroid"]),float(obj["column_centroid"]),area_km2=self._area(obj),max_reflectivity_dbz=self._z(obj))
+            initial_vr=0.0
+            initial_vc=0.0
+            radar_velocity=self._radar_velocity(radar_motion)
+            if radar_velocity is not None:
+                initial_vr,initial_vc,_=radar_velocity
+                motion_source="radar_prior"
+                radar_weight=1.0
+            else:
+                motion_source="object_only"
+                radar_weight=0.0
+            self.tracks[tid]=Track(tid,timestamp,float(obj["row_centroid"]),float(obj["column_centroid"]),velocity_row=initial_vr,velocity_column=initial_vc,area_km2=self._area(obj),max_reflectivity_dbz=self._z(obj))
             obj["track_association_status"]="new"; obj["track_association_distance_px"]=float("nan"); obj["track_association_gate_px"]=float("nan"); obj["track_association_cost"]=float("nan"); obj["track_age_scans"]=1; obj["track_missed_scans"]=0
+            obj["track_motion_source"]=motion_source
+            obj["track_motion_radar_weight"]=float(radar_weight)
+            obj["track_velocity_row_per_min"]=float(initial_vr)
+            obj["track_velocity_column_per_min"]=float(initial_vc)
             obj["track_competing_track_count"] = int(candidate_counts[oi]) if oi < len(candidate_counts) else 0
             obj["track_competing_object_count"] = 0
             obj["track_merge_candidate"] = bool(obj["track_competing_track_count"] > 1)
