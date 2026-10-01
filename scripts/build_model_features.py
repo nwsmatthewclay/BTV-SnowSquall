@@ -51,6 +51,7 @@ OPERATIONAL_LIVE_PREDICTORS = {
     "frontogenesis", "dcva", "omega", "epv",
     "cloud_layer_depth_m", "cloud_layer_rh_pct", "cloud_layer_mean_wind_kt", "cloud_layer_shear_kt",
     "cape_shear_product", "reflectivity_core_excess",
+    "cape_weighted_reflectivity_growth", "moisture_weighted_reflectivity_growth", "shear_weighted_area_growth",
     "area_per_length", "shear_motion_ratio",
     "pwat_mm", "mlcape_jkg", "mlcin_jkg", "mucape_jkg", "mucin_jkg",
     "srh01_m2s2", "srh03_m2s2", "shear_u_0_6km_ms", "shear_v_0_6km_ms",
@@ -133,6 +134,53 @@ def build_features(frame: pd.DataFrame) -> pd.DataFrame:
     dt_min = (df["scan_dt"] - g["scan_dt"].shift(1)).dt.total_seconds() / 60.0
     continuity_ok = dt_min.between(0, 10, inclusive="both")
     df["track_gap_gt_10min"] = dt_min.gt(10).fillna(False)
+    # Environmental evolution: the probability should respond not only to the
+    # instantaneous environment, but to how the background state is changing.
+    # All deltas/rates are past-only and reset after discontinuities.
+    environmental_columns = [
+        "snsq", "cape_jkg", "mlcape_jkg", "mucape_jkg", "dcape_jkg",
+        "pwat_mm", "srh01_m2s2", "srh03_m2s2", "shear_0_6km_kt",
+        "mean_rh_0_2km_pct", "mean_wind_0_2km_ms", "thetae_delta_0_2km_k",
+        "wetbulb_2m_c", "temperature_dewpoint_spread_k", "frontogenesis",
+        "dcva", "omega", "epv", "cloud_layer_depth_m",
+        "cloud_layer_rh_pct", "cloud_layer_mean_wind_kt", "cloud_layer_shear_kt",
+        "cape_shear_product", "snsq_moisture_factor", "snsq_instability_factor",
+        "snsq_wind_factor",
+    ]
+    for col in environmental_columns:
+        if col not in df.columns:
+            continue
+        numeric = pd.to_numeric(df[col], errors="coerce")
+        prev = pd.to_numeric(g[col].shift(1), errors="coerce")
+        delta = (numeric - prev).where(continuity_ok)
+        df[f"{col}_delta"] = delta
+        df[f"{col}_rate_per_min"] = (delta / dt_min.replace(0, np.nan)).where(continuity_ok)
+
+    # Three-scan environmental state / acceleration mirrors the radar-evolution
+    # features and remains causal at every row.
+    for col in environmental_columns:
+        if col not in df.columns:
+            continue
+        current = pd.to_numeric(df[col], errors="coerce")
+        prev1 = pd.to_numeric(g[col].shift(1), errors="coerce")
+        prev2 = pd.to_numeric(g[col].shift(2), errors="coerce")
+        triple = pd.concat([current, prev1, prev2], axis=1)
+        df[f"{col}_trailing_mean_3"] = triple.mean(axis=1, skipna=True).where(continuity_2)
+        df[f"{col}_trailing_std_3"] = triple.std(axis=1, skipna=True).where(continuity_2)
+        df[f"{col}_change_2scan"] = (current - prev2).where(continuity_2)
+        df[f"{col}_rate_2scan_per_min"] = ((current - prev2) / second_dt_min.replace(0, np.nan)).where(continuity_2)
+        prior_rate = ((prev1 - prev2) / previous_dt_min.replace(0, np.nan)).where(continuity_2)
+        current_rate = ((current - prev1) / dt_min.replace(0, np.nan)).where(continuity_ok)
+        df[f"{col}_acceleration_per_min2"] = (current_rate - prior_rate).where(continuity_2)
+
+    # Physically useful interaction terms: changing storm intensity in a
+    # changing environment is more informative than either term alone.
+    if {"max_reflectivity_dbz_rate_per_min", "cape_jkg"}.issubset(df.columns):
+        df["cape_weighted_reflectivity_growth"] = pd.to_numeric(df["max_reflectivity_dbz_rate_per_min"], errors="coerce") * pd.to_numeric(df["cape_jkg"], errors="coerce").clip(lower=0) / 100.0
+    if {"max_reflectivity_dbz_rate_per_min", "mean_rh_0_2km_pct"}.issubset(df.columns):
+        df["moisture_weighted_reflectivity_growth"] = pd.to_numeric(df["max_reflectivity_dbz_rate_per_min"], errors="coerce") * pd.to_numeric(df["mean_rh_0_2km_pct"], errors="coerce") / 100.0
+    if {"area_km2_rate_per_min", "shear_0_6km_kt"}.issubset(df.columns):
+        df["shear_weighted_area_growth"] = pd.to_numeric(df["area_km2_rate_per_min"], errors="coerce") * pd.to_numeric(df["shear_0_6km_kt"], errors="coerce")
     temporal_columns = [
         "max_reflectivity_dbz", "mean_reflectivity_dbz", "area_km2",
         "length_km", "width_km", "core_pixel_count", "pixel_count",
