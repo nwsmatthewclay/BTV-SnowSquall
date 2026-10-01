@@ -87,22 +87,31 @@ def _open_field(path: Path, type_of_level: str, short_name: str, level=None):
     return ds
 
 
-def _nearest(ds, latitude: float, longitude: float):
-    if not ds.data_vars:
-        return None
-
+def _nearest_index(ds, latitude: float, longitude: float):
+    key=(id(ds),round(float(latitude),4),round(float(longitude),4))
+    cached=_NEAREST_INDEX_CACHE.get(key)
+    if cached is not None:
+        return cached
     lat_name = next((x for x in ("latitude", "lat") if x in ds.coords), None)
     lon_name = next((x for x in ("longitude", "lon") if x in ds.coords), None)
     if lat_name is None or lon_name is None:
         return None
-
     lats = np.asarray(ds[lat_name].values)
     lons = np.asarray(ds[lon_name].values)
     distance = (lats - latitude) ** 2 + (
         (lons - longitude) * np.cos(np.deg2rad(latitude))
     ) ** 2
     idx = np.unravel_index(np.nanargmin(distance), distance.shape)
+    _NEAREST_INDEX_CACHE[key]=idx
+    return idx
 
+
+def _nearest(ds, latitude: float, longitude: float):
+    if not ds.data_vars:
+        return None
+    idx=_nearest_index(ds,latitude,longitude)
+    if idx is None:
+        return None
     variable = next(iter(ds.data_vars))
     value = np.asarray(ds[variable].values)[idx]
     return float(value) if np.isfinite(value) else None
