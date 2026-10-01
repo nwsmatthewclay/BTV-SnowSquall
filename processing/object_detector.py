@@ -67,10 +67,14 @@ def detect_reflectivity_objects(reflectivity, config=ObjectDetectionConfig()):
     finite=np.isfinite(arr)
     if not finite.any():
         return []
+    # Preserve the unsmoothed threshold mask for edge-component recovery.
+    # Gaussian smoothing can attenuate a small echo that touches the grid edge
+    # even though the original radar field contains a valid threshold-exceeding
+    # component that should remain trackable.
+    raw_mask = finite & (arr >= config.threshold_dbz)
     work=np.where(finite,arr,np.nanmedian(arr[finite]))
     work=ndimage.gaussian_filter(work,sigma=config.smooth_sigma)
     mask=finite&(work>=config.threshold_dbz)
-    raw_mask = mask.copy()
     structure=ndimage.generate_binary_structure(2,config.connectivity)
     if config.close_iterations:
         mask=ndimage.binary_closing(mask,structure=structure,iterations=config.close_iterations)
