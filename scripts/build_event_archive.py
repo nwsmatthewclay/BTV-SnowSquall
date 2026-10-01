@@ -16,7 +16,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from acquisition.level2_reader import read_level2, resolve_fields, volume_metadata
-from processing.environment import acquire_for_radar_time, extract_features
+from processing.environment import acquire_for_radar_time, extract_features, environment_cache_key
 from processing.radar_grid import grid_field_2d, grid_latlon, grid_lowest_sweep
 from processing.radar_sites import apply_radar_origin, radar_origin_for_site
 
@@ -28,7 +28,7 @@ ENV_FIELDS=("snsq","moisture_factor","instability_factor","wind_factor","snow_te
 "shear_0_1km_kt","shear_0_3km_kt","lapse_rate_0_3km_c_km","lapse_rate_0_7_5km_c_km",
 "wet_bulb_0_3km_c","frontogenesis","dcva","omega","epv","cloud_layer_depth_m",
 "cloud_layer_rh_pct","cloud_layer_mean_wind_kt","cloud_layer_shear_kt")
-STATION_COORDS={"KBTV":(44.471955,-73.153276),"KMPV":(44.203489,-72.562096),"KMSS":(44.936241,-73.845120)}
+STATION_COORDS={"KBTV":(44.471955,-73.153276),"KMPV":(44.203489,-72.562096),"KMSS":(44.936241,-74.845120)}
 
 def parse_utc(v):
     return datetime.fromisoformat(str(v).replace("Z","+00:00")).astimezone(timezone.utc)
@@ -149,7 +149,7 @@ def main():
 def build_env(case,ts,rap_dir,ruc_dir,cache):
     lat,lon=normalize_coord(case)
     if lat is None or lon is None: return {"environment_status":"unavailable","environment_error":"missing_case_coordinates"}
-    key=(ts.strftime("%Y%m%d%H"),)
+    key=environment_cache_key(ts)
     if key not in cache:
         try: cache[key]=acquire_for_radar_time(ts,rap_dir=rap_dir,ruc_dir=ruc_dir,max_age_minutes=180)
         except Exception as exc: cache[key]=("ERROR",type(exc).__name__,str(exc))
