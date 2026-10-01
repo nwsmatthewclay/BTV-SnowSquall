@@ -9,6 +9,7 @@ import argparse
 import json
 import re
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
 import pandas as pd
@@ -123,32 +124,55 @@ def main():
     parser.add_argument("--start-year", type=int, default=2002)
     parser.add_argument("--end-year", type=int, default=2026)
     parser.add_argument("--output-dir", required=True)
+    parser.add_argument("--workers", type=int, default=6)
     args = parser.parse_args()
 
     out = Path(args.output_dir)
     out.mkdir(parents=True, exist_ok=True)
-    rows: list[dict] = []
+    workers = max(1, min(int(args.workers), 12))
+
+    tasks = [
+        (year, month, pil)
+        for year in range(args.start_year, args.end_year + 1)
+        for month in range(1, 13)
+        for pil in PRODUCTS
+    ]
+    results = []
     errors: list[dict] = []
 
-    for year in range(args.start_year, args.end_year + 1):
-        for month in range(1, 13):
-            for pil in PRODUCTS:
-                print(f"IEM text {year}-{month:02d} {pil}")
-                try:
-                    raw = fetch_product(pil, year, month)
-                    (out / f"{pil}_{year}_{month:02d}.txt").write_text(
-                        raw,
-                        encoding="utf-8",
-                    )
-                    rows.extend(extract_candidates(raw, pil, year, month))
-                except Exception as exc:
-                    errors.append({
-                        "year": year,
-                        "month": month,
-                        "pil": pil,
-                        "error_type": type(exc).__name__,
-                        "error_message": str(exc),
-                    })
+    def run_task(year: int, month: int, pil: str):
+        try:
+            raw = fetch_product(pil, year, month)
+            rows = extract_candidates(raw, pil, year, month)
+            return year, month, pil, raw, rows, None
+        except Exception as exc:
+            return year, month, pil, None, [], {
+                "year": year,
+                "month": month,
+                "pil": pil,
+                "error_type": type(exc).__name__,
+                "error_message": str(exc),
+            }
+
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        future_map = {
+            pool.submit(run_task, year, month, pil): (year, month, pil)
+            for year, month, pil in tasks
+        }
+        for future in as_completed(future_map):
+            results.append(future.result())
+
+    rows: list[dict] = []
+    for year, month, pil, raw, candidates, error in sorted(
+        results, key=lambda x: (x[0], x[1], x[2])
+    ):
+        print(f"IEM text {year}-{month:02d} {pil}")
+        if error is not None:
+            errors.append(error)
+            continue
+        path = out / f"{pil}_{year}_{month:02d}.txt"
+        path.write_text(raw or "", encoding="utf-8")
+        rows.extend(candidates)
 
     pd.DataFrame(rows).to_csv(out / "iem_nws_text_candidates.csv", index=False)
     pd.DataFrame(errors).to_csv(out / "iem_nws_text_errors.csv", index=False)
@@ -156,6 +180,8 @@ def main():
         "start_year": args.start_year,
         "end_year": args.end_year,
         "months_requested": (args.end_year - args.start_year + 1) * 12,
+        "request_count": len(tasks),
+        "workers": workers,
         "candidate_records": len(rows),
         "download_errors": len(errors),
         "policy": (
@@ -168,6 +194,7 @@ def main():
         encoding="utf-8",
     )
     print(json.dumps(summary, indent=2))
+
 
 
 if __name__ == "__main__":
