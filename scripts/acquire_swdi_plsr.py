@@ -186,9 +186,8 @@ def main() -> None:
         futures = {pool.submit(acquire_case, row): str(row["case_id"]) for _, row in cases.iterrows()}
         results = []
         for future in as_completed(futures):
-            results.append(futures[future],)
-        for case_result in results:
-            frame, status = case_result.result()
+            results.append(future.result())
+        for frame, status in results:
             statuses.append(status)
             if not frame.empty:
                 frames.append(frame)
