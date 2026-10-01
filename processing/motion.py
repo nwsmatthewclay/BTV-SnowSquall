@@ -45,5 +45,8 @@ def add_motion_features(frame, group_col="object_id"):
     y = np.sin(dlon) * np.cos(lat2)
     x = np.cos(lat1) * np.sin(lat2) - np.sin(lat1) * np.cos(lat2) * np.cos(dlon)
     out["motion_direction_deg"] = (np.degrees(np.arctan2(y, x)) + 360.0) % 360.0
+    direction_rad = np.radians(out["motion_direction_deg"])
+    out["motion_u_kt"] = out["motion_speed_kt"] * np.sin(direction_rad)
+    out["motion_v_kt"] = out["motion_speed_kt"] * np.cos(direction_rad)
 
     return out.drop(columns=["prev_lat", "prev_lon", "prev_time", "_motion_group"])

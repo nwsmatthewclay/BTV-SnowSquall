@@ -78,10 +78,14 @@ def build_live_feature_row(
         "motion_dir_deg",
         "motion_direction_deg",
         "motion_speed_kt",
+        "motion_u_kt",
+        "motion_v_kt",
         "radar_motion_speed_kt",
         "radar_motion_direction_deg",
         "radar_motion_u_kt",
         "radar_motion_v_kt",
+        "radar_motion_direction_sin",
+        "radar_motion_direction_cos",
         "radar_motion_confidence",
         "aspect_ratio",
         "max_reflectivity_dbz",
@@ -308,6 +312,20 @@ def build_live_feature_row(
         row["track_scan_count_to_date"] = int(track_count)
         row["track_scan_index"] = int(track_count) - 1
 
+    if row.get("motion_speed_kt") is not None and row.get("motion_direction_deg") is not None:
+        rad = math.radians(row["motion_direction_deg"])
+        row["motion_u_kt"] = row["motion_speed_kt"] * math.sin(rad)
+        row["motion_v_kt"] = row["motion_speed_kt"] * math.cos(rad)
+    if row.get("radar_motion_direction_deg") is not None:
+        rad = math.radians(row["radar_motion_direction_deg"])
+        row["radar_motion_direction_sin"] = math.sin(rad)
+        row["radar_motion_direction_cos"] = math.cos(rad)
+    if row.get("motion_u_kt") is not None and row.get("motion_v_kt") is not None and row.get("radar_motion_u_kt") is not None and row.get("radar_motion_v_kt") is not None:
+        denom = math.hypot(row["motion_u_kt"], row["motion_v_kt"]) * math.hypot(row["radar_motion_u_kt"], row["radar_motion_v_kt"])
+        row["motion_radar_alignment"] = (
+            (row["motion_u_kt"] * row["radar_motion_u_kt"] + row["motion_v_kt"] * row["radar_motion_v_kt"]) / denom
+            if denom > 0 else None
+        )
     return row
 
 

@@ -91,5 +91,7 @@ def attach_radar_storm_motion(previous, current, dt_minutes, spacing_km=1.0, **k
         "radar_motion_direction_deg": np.nan,
         "radar_motion_u_kt": np.nan,
         "radar_motion_v_kt": np.nan,
+        "radar_motion_direction_sin": np.nan,
+        "radar_motion_direction_cos": np.nan,
         "radar_motion_confidence": 0.0,
     }
