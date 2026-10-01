@@ -15,7 +15,7 @@ sys.path.insert(0, str(ROOT / "src"))
 
 import pandas as pd
 
-from snow_squall.evolution import add_environment_evolution_features
+from snow_squall.evolution import add_environment_evolution_features, add_motion_evolution_features
 
 
 LIVE_TO_MODEL = {
@@ -68,6 +68,8 @@ def build_live_feature_row(
         row[target] = _number(current.get(source))
 
     for key in (
+        "centroid_lat",
+        "centroid_lon",
         "area_km2",
         "length_km",
         "width_km",
@@ -381,6 +383,11 @@ def build_live_feature_frame(history: Iterable[dict], track_id: str | int) -> pd
     # Apply exactly the same causal environmental-evolution transform used by
     # historical training. The live frame is already restricted to one track.
     frame = add_environment_evolution_features(
+        frame,
+        group_cols=["track_id"],
+        time_col="timestamp",
+    )
+    frame = add_motion_evolution_features(
         frame,
         group_cols=["track_id"],
         time_col="timestamp",
