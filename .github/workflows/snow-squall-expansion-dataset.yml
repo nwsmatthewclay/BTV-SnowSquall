@@ -207,8 +207,7 @@ jobs:
             --cases data/manifests/snow_squall_expansion/snow_squall_expansion_cases.csv \
             --output data/raw/ASOS_IEM_expansion \
             --buffer-before 120 \
-            --buffer-after 150 \
-            --workers 6
+            --buffer-after 150
 
       - name: Acquire historical mPING precipitation-type evidence
         env:
