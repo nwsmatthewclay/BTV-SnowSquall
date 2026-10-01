@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
   workflow_run:
     workflows:
-      - Object Dataset Pilot
+      - Snow Squall Expansion Dataset
     types:
       - completed
   push:
@@ -39,36 +39,34 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Locate latest successful object dataset artifact
+      - name: Locate latest successful expansion feature artifact
         id: source
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          RUN_ID="$(gh run list \
-            --workflow object-dataset-pilot.yml \
-            --branch snow-squall-model-foundation \
-            --status success \
-            --limit 1 \
-            --json databaseId \
-            --jq '.[0].databaseId')"
-          test -n "$RUN_ID"
-          echo "run_id=$RUN_ID" >> "$GITHUB_OUTPUT"
-          echo "Using object-dataset-pilot run $RUN_ID"
-
-      - name: Download lightweight feature artifact only
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "workflow_run" ]; then
+            RUN_ID="${{ github.event.workflow_run.id }}"
+          else
+            RUN_ID="$(gh run list --workflow "snow-squall-expansion-dataset.yml" --branch snow-squall-model-foundation --status success --limit 1 --json databaseId --jq '.[0].databaseId')"
+          fi
+          test -n "${RUN_ID}" && test "${RUN_ID}" != "null"
+          echo "run_id=${RUN_ID}" >> "${GITHUB_OUTPUT}"
+          echo "Using expansion dataset run ${RUN_ID}"
+      - name: Download expansion feature artifact only
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           mkdir -p data/derived/input
-          ARTIFACT_ID="$(gh api "/repos/${GITHUB_REPOSITORY}/actions/runs/${{ steps.source.outputs.run_id }}/artifacts?per_page=100" -q '.artifacts[] | select(.name=="object-model-feature-table" and .expired==false) | .id' | head -1)"
+          ARTIFACT_ID="$(gh api "/repos/${GITHUB_REPOSITORY}/actions/runs/${{ steps.source.outputs.run_id }}/artifacts?per_page=100" -q '.artifacts[] | select(.name=="snow-squall-expansion-feature-batch" and .expired==false) | .id' | head -1)
           test -n "${ARTIFACT_ID}"
-          curl -fsSL -H "Authorization: Bearer ${GH_TOKEN}" -H "Accept: application/vnd.github+json" -o /tmp/model_features.zip "https://api.github.com/repos/${GITHUB_REPOSITORY}/actions/artifacts/${ARTIFACT_ID}/zip"
-          unzip -q /tmp/model_features.zip -d data/derived/input
+          curl -fsSL -H "Authorization: Bearer ${GH_TOKEN}" -H "Accept: application/vnd.github+json" -o /tmp/expansion_features.zip "https://api.github.com/repos/${GITHUB_REPOSITORY}/actions/artifacts/${ARTIFACT_ID}/zip"
+          unzip -q /tmp/expansion_features.zip -d data/derived/input
           find data/derived/input -maxdepth 4 -type f | sort
       - name: Verify training input
         run: |
-          test -f data/derived/input/data/derived/object_model_features_pilot.csv
+          test -f data/derived/input/data/derived/snow_squall_model_features_cumulative.csv
           python - <<'PY'
           import pandas as pd
           p = "data/derived/input/data/derived/object_model_features_pilot.csv"
