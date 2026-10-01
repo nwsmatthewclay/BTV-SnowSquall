@@ -2,6 +2,16 @@ name: Case-Held-Out Model Gate
 
 on:
   workflow_dispatch:
+  workflow_run:
+    workflows:
+      - Object Dataset Pilot
+    types:
+      - completed
+  push:
+    branches:
+      - snow-squall-model-foundation
+    paths:
+      - .github/model-gate-trigger
 
 permissions:
   actions: read
@@ -9,6 +19,7 @@ permissions:
 
 jobs:
   train-and-evaluate:
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
@@ -31,7 +42,7 @@ jobs:
       - name: Locate latest successful object dataset artifact
         id: source
         env:
-          GH_TOKEN: \${{ github.token }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           RUN_ID="$(gh run list \
             --workflow object-dataset-pilot.yml \
@@ -46,7 +57,7 @@ jobs:
 
       - name: Download dataset artifact only
         env:
-          GH_TOKEN: \${{ github.token }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           mkdir -p data/derived/input
           gh run download "\${{ steps.source.outputs.run_id }}" \
