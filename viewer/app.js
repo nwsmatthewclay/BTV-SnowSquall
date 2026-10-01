@@ -64,16 +64,18 @@ function renderTracks(ts){tracksLayer.clearLayers();const grouped={};features.fo
 function renderObjects(ts){objectsLayer.clearLayers();featuresAt(ts).forEach(f=>{const p=f.properties;const selected=selectedKey===p.track_key;const fill="#58b9ff";const layer=L.geoJSON(f,{style:{color:selected?"#ffffff":fill,fillColor:fill,fillOpacity:selected?.50:.16,weight:selected?3:1.5,className:"object-footprint"}}).addTo(objectsLayer);layer.bindTooltip("Track "+esc(p.object_id)+" • "+num(p.max_reflectivity_dbz)+" dBZ • "+num(p.motion_speed_kt)+" kt",{sticky:true});layer.bindPopup("<b>"+p.case_id+" • "+p.radar_site+"</b><br>Track "+esc(p.object_id)+"<br>"+fmtUtc(p.timestamp));layer.on("click",()=>selectObject(f))});renderObjectList(ts)}
 function renderObjectList(ts){const box=document.getElementById("objectList"),count=document.getElementById("currentObjectCount");if(!box||!count)return;const rows=featuresAt(ts).slice().sort((a,b)=>Number(b.properties.max_reflectivity_dbz||0)-Number(a.properties.max_reflectivity_dbz||0));count.textContent=String(rows.length);if(!rows.length){box.innerHTML="<div class='history-empty'>No tracked objects at this scan.</div>";return}box.innerHTML=rows.map(f=>{const p=f.properties,selected=selectedKey===p.track_key;return "<button type='button' class='object-row"+(selected?" selected":"")+"' data-track='"+esc(p.track_key)+"'><span class='object-row-main'><b>Track "+esc(p.object_id)+"</b><span>"+num(p.max_reflectivity_dbz)+" dBZ • "+num(p.area_km2)+" km²</span></span><span class='object-row-sub'>"+num(p.motion_speed_kt)+" kt • "+esc(p.environment_status||"environment —")+"</span></button>"}).join("");box.querySelectorAll("[data-track]").forEach(btn=>{btn.onclick=()=>{const f=featuresAt(ts).find(x=>x.properties.track_key===btn.dataset.track);if(f)selectObject(f)}})}
 function selectObject(f){selectedKey=f.properties.track_key;const b=document.getElementById("analogsBtn");b.disabled=false;b.onclick=()=>window.open("analogs.html?case="+catalog.cases.indexOf(current)+"&track="+encodeURIComponent(f.properties.track_key),"_blank");render()}
-function trendSvg(rows,key,label,unit){
-  const vals=rows.map(r=>Number(r.properties[key])).filter(Number.isFinite);
+function trendSvg(rows,key,label,unit,activeIndex){
+  const raw=rows.map(r=>Number(r.properties[key]));
+  const vals=raw.filter(Number.isFinite);
   if(!vals.length)return "<div class='trend-row'><span>"+label+"</span><div class='trend-empty'>No data</div></div>";
   const W=250,H=54,P=8,min=Math.min(...vals),max=Math.max(...vals),range=Math.max(max-min,0.1);
-  const points=rows.map((r,i)=>{const v=Number(r.properties[key]);return Number.isFinite(v)?{i,v}:null}).filter(Boolean);
+  const points=rows.map((r,i)=>{const v=raw[i];return Number.isFinite(v)?{i,v}:null}).filter(Boolean);
   const x=i=>P+(rows.length===1?0:i*(W-2*P)/(rows.length-1));
   const y=v=>(H-P)-(v-min)/range*(H-2*P);
   const path=points.map((pt,i)=>(i?"L":"M")+x(pt.i).toFixed(1)+" "+y(pt.v).toFixed(1)).join(" ");
-  const current=points[points.length-1];
-  return "<div class='trend-row'><div class='trend-label'><span>"+label+"</span><b>"+num(current.v, label==="Max Z"?0:1)+" "+unit+"</b></div><svg class='trend-spark' viewBox='0 0 "+W+" "+H+"' aria-label='"+label+" trend'><line x1='"+P+"' y1='"+(H-P)+"' x2='"+(W-P)+"' y2='"+(H-P)+"' class='trend-axis'/><path d='"+path+"' class='trend-path'/><circle cx='"+x(current.i).toFixed(1)+"' cy='"+y(current.v).toFixed(1)+"' r='3.5' class='trend-current'/><text x='"+(P-2)+"' y='10' text-anchor='end' class='trend-scale'>"+num(max,label==="Max Z"?0:1)+"</text><text x='"+(P-2)+"' y='"+(H-P+3)+"' text-anchor='end' class='trend-scale'>"+num(min,label==="Max Z"?0:1)+"</text></svg></div>";
+  const chosen=points.find(pt=>pt.i===activeIndex)||points.filter(pt=>pt.i<=activeIndex).pop()||points[0];
+  const digits=label==="Max Z"?0:1;
+  return "<div class='trend-row'><div class='trend-label'><span>"+label+"</span><b>"+num(chosen.v,digits)+" "+unit+"</b></div><svg class='trend-spark' viewBox='0 0 "+W+" "+H+"' aria-label='"+label+" trend'><line x1='"+P+"' y1='"+(H-P)+"' x2='"+(W-P)+"' y2='"+(H-P)+"' class='trend-axis'/><path d='"+path+"' class='trend-path'/><line x1='"+x(chosen.i).toFixed(1)+"' y1='"+P+"' x2='"+x(chosen.i).toFixed(1)+"' y2='"+(H-P)+"' class='trend-cursor'/><circle cx='"+x(chosen.i).toFixed(1)+"' cy='"+y(chosen.v).toFixed(1)+"' r='3.5' class='trend-current'/><text x='"+(P-2)+"' y='10' text-anchor='end' class='trend-scale'>"+num(max,digits)+"</text><text x='"+(P-2)+"' y='"+(H-P+3)+"' text-anchor='end' class='trend-scale'>"+num(min,digits)+"</text></svg></div>";
 }
 function renderTrackTrend(){
   const box=document.getElementById("trackTrend");
@@ -81,10 +83,14 @@ function renderTrackTrend(){
   if(!selectedKey){box.innerHTML="<div class='history-empty'>Select a storm object to see intensity, size, and motion trends.</div>";return;}
   const rows=features.filter(x=>x.properties.track_key===selectedKey).sort((a,b)=>a.properties.timestamp.localeCompare(b.properties.timestamp));
   if(!rows.length){box.innerHTML="<div class='history-empty'>No trend history is available for this track.</div>";return;}
-  box.innerHTML="<div class='trend-note'>Track "+esc(rows[0].properties.object_id)+" • "+rows.length+" scans • earlier scans are left, latest available scan is right</div>"+
-    trendSvg(rows,"max_reflectivity_dbz","Max Z","dBZ")+
-    trendSvg(rows,"area_km2","Area","km²")+
-    trendSvg(rows,"motion_speed_kt","Motion","kt");
+  const activeTs=times[currentIndex];
+  let activeIndex=rows.findIndex(r=>r.properties.timestamp===activeTs);
+  if(activeIndex<0)activeIndex=rows.map(r=>r.properties.timestamp).reduce((best,ts,i)=>ts<=activeTs?i:best,-1);
+  if(activeIndex<0)activeIndex=0;
+  box.innerHTML="<div class='trend-note'>Track "+esc(rows[0].properties.object_id)+" • "+rows.length+" scans • cursor marks the current replay time</div>"+
+    trendSvg(rows,"max_reflectivity_dbz","Max Z","dBZ",activeIndex)+
+    trendSvg(rows,"area_km2","Area","km²",activeIndex)+
+    trendSvg(rows,"motion_speed_kt","Motion","kt",activeIndex);
 }
 function renderTrackHistory(){
   const box=document.getElementById("trackHistory");
