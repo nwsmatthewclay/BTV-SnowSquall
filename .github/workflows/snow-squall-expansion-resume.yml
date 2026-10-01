@@ -1,0 +1,57 @@
+name: Snow Squall Expansion Resume
+
+on:
+  workflow_dispatch:
+    inputs:
+      official_offset:
+        description: "Documented cases to skip"
+        required: false
+        default: "30"
+        type: string
+      unverified_offset:
+        description: "Review cases to skip"
+        required: false
+        default: "15"
+        type: string
+      max_official:
+        description: "Documented cases in resumed batch"
+        required: false
+        default: "30"
+        type: string
+      max_unverified:
+        description: "Review cases in resumed batch"
+        required: false
+        default: "15"
+        type: string
+  push:
+    branches:
+      - snow-squall-model-foundation
+    paths:
+      - .github/expansion-resume-trigger
+
+permissions:
+  actions: write
+  contents: read
+
+concurrency:
+  group: snow-squall-expansion-resume
+  cancel-in-progress: true
+
+jobs:
+  launch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Dispatch resumed expansion from newest unified ledger
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          official_offset="${{ inputs.official_offset || '30' }}"
+          unverified_offset="${{ inputs.unverified_offset || '15' }}"
+          max_official="${{ inputs.max_official || '30' }}"
+          max_unverified="${{ inputs.max_unverified || '15' }}"
+          source_run="$(gh run list --workflow "Snow Squall Unified Case Ledger" --branch snow-squall-model-foundation --status success --limit 1 --json databaseId --jq '.[0].databaseId')"
+          test -n "$source_run" && test "$source_run" != "null"
+          echo "Using unified ledger run $source_run"
+          gh workflow run "Snow Squall Expansion Dataset"             --repo "$GITHUB_REPOSITORY"             --ref snow-squall-model-foundation             -f archive_override=true             -f official_offset="$official_offset"             -f unverified_offset="$unverified_offset"             -f max_official="$max_official"             -f max_unverified="$max_unverified"             -f source_expansion_run_id="$source_run"
