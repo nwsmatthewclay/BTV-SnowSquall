@@ -16,6 +16,7 @@ on:
       - scripts/live_healthcheck.py
       - .github/workflows/live-object-publisher.yml
       - .github/live-object-trigger
+      - scripts/build_live_radar_mosaic.py
 
 permissions:
   contents: write
