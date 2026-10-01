@@ -349,6 +349,57 @@ jobs:
           set -euo pipefail
           python scripts/audit_object_tracking.py             data/derived/snow_squall_expansion_objects.csv             --output data/derived/snow_squall_expansion_object_tracking_audit.json
 
+      - name: Dispatch next historical acquisition batch
+        if: success()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          # Launch the next batch as soon as radar reconstruction/QC is clean.
+          # Downstream environment/model work in this run continues independently.
+          read -r next_official next_review batch_official batch_review < <(python - <<'PY'
+          import pandas as pd
+          cases=pd.read_csv('data/manifests/snow_squall_expansion/snow_squall_expansion_cases.csv')
+          verified={'official_documented','official_plus_independent_report','official_plus_warning','official_plus_warning_and_report','official_plus_warning_verified','official_study_warning_verified','official_plus_study','study_verified','study_warning_verified'}
+          official=int(cases['verification_class'].isin(verified).sum())
+          review=int(len(cases)-official)
+          base_o=int('${{ steps.batch.outputs.official_offset }}')
+          base_r=int('${{ steps.batch.outputs.unverified_offset }}')
+          print(base_o+official, base_r+review, official, review)
+          PY
+          )
+          max_auto_official=150
+          max_auto_review=125
+          remaining_official=$((max_auto_official-next_official))
+          remaining_review=$((max_auto_review-next_review))
+          [ "$remaining_official" -gt 0 ] || remaining_official=0
+          [ "$remaining_review" -gt 0 ] || remaining_review=0
+          next_official_size=$(( remaining_official < 30 ? remaining_official : 30 ))
+          next_review_size=$(( remaining_review < 15 ? remaining_review : 15 ))
+          if [ "$batch_official" -eq 0 ] && [ "$batch_review" -eq 0 ]; then
+            echo 'No cases reconstructed in this batch; acquisition chain stops safely.'
+            exit 0
+          fi
+          if [ "$next_official_size" -le 0 ] && [ "$next_review_size" -le 0 ]; then
+            echo 'Automatic historical acquisition cap reached.'
+            exit 0
+          fi
+          source_run='${{ inputs.source_unified_ledger_run_id }}'
+          if [ -z "$source_run" ]; then
+            source_run="$(gh run list --workflow "Snow Squall Unified Case Ledger" --branch snow-squall-model-foundation --status success --limit 1 --json databaseId --jq '.[0].databaseId')"
+          fi
+          test -n "$source_run" && test "$source_run" != "null"
+          gh workflow run "Snow Squall Expansion Dataset" \
+            --repo "$GITHUB_REPOSITORY" \
+            --ref snow-squall-model-foundation \
+            -f archive_override=true \
+            -f official_offset="$next_official" \
+            -f unverified_offset="$next_review" \
+            -f max_official="$next_official_size" \
+            -f max_unverified="$next_review_size" \
+            -f source_unified_ledger_run_id="$source_run"
+          echo "NEXT HISTORICAL BATCH DISPATCHED: official=$next_official review=$next_review size=$next_official_size/$next_review_size source=$source_run"
+
       - name: Annotate reconstructed objects to candidate cases
         run: |
           python scripts/annotate_object_population.py \
@@ -793,43 +844,9 @@ jobs:
             data/derived/national_sqw_weak_model_*m
 
       - name: Preserve archived historical expansion state
-        if: success()
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        if: always()
         run: |
-          set -euo pipefail
-          python - <<'PY'
-          import json
-          from pathlib import Path
-          s=json.loads(Path('data/derived/next_expansion_batch.json').read_text())
-          if not s.get('auto_continue'):
-              print('Historical expansion is archived; automatic continuation is disabled.')
-              raise SystemExit(0)
-          batch=s.get('batch_rows') or {}
-          if int(batch.get('official',0)) == 0 and int(batch.get('review',0)) == 0:
-              print('No new cases in this batch; automatic expansion stops.')
-              raise SystemExit(0)
-          if int(s['next_official_offset']) >= int(s['max_automatic_official']) and int(s['next_unverified_offset']) >= int(s['max_automatic_unverified']):
-              print('Automatic expansion cap reached; stopping.')
-              raise SystemExit(0)
-          print(json.dumps(s, indent=2))
-          PY
-          official_next="$(python -c 'import json; s=json.load(open("data/derived/next_expansion_batch.json")); print(s["next_official_offset"])')"
-          review_next="$(python -c 'import json; s=json.load(open("data/derived/next_expansion_batch.json")); print(s["next_unverified_offset"])')"
-          max_official="$(python -c 'import json; s=json.load(open("data/derived/next_expansion_batch.json")); print(min(30, max(0, int(s["max_automatic_official"])-int(s["next_official_offset"]))))')"
-          max_review="$(python -c 'import json; s=json.load(open("data/derived/next_expansion_batch.json")); print(min(15, max(0, int(s["max_automatic_unverified"])-int(s["next_unverified_offset"]))))')"
-          if [ "$max_official" -le 0 ] && [ "$max_review" -le 0 ]; then
-            echo 'No remaining automatic capacity.'
-            exit 0
-          fi
-          gh workflow run "Snow Squall Expansion Dataset" \
-            --ref snow-squall-model-foundation \
-            -f official_offset="$official_next" \
-            -f unverified_offset="$review_next" \
-            -f max_official="$max_official" \
-            -f max_unverified="$max_review" \
-            -f source_expansion_run_id="${{ github.run_id }}"
-          echo "Dispatched next automatic expansion batch: official=$official_next review=$review_next sizes=$max_official/$max_review"
+          echo "Historical acquisition continuation is dispatched immediately after radar QC; this run continues downstream processing."
 
       - name: Upload expanded research package
         continue-on-error: true
