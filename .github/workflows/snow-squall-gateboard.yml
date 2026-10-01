@@ -102,8 +102,12 @@ jobs:
 
           gate_specs = [
               ("unit_tests", "Snow Squall Tests", None),
+              ("historical_dataset_qc", "Historical Dataset QC", None),
               ("modern_independent_validation", "Modern Independent Validation", None),
+              ("modern_candidate_reconstruction", "Reconstruct Modern Candidate Cohort", None),
+              ("national_radar_pretraining", "National SQW Radar Pretraining Pool", None),
               ("archived_viewer_smoke", "Archived Snow Squall Viewer Smoke Test", None),
+              ("modern_validation_viewer", "Publish Modern Snow Squall Validation Viewer", None),
               ("archived_replay_smoke", "Snow Squall Archived Replay Smoke", None),
               ("live_object_worker", "Snow Squall Live Object Worker Test", None),
               ("live_shadow", "Publish Live Snow Squall Model Shadow", None),
