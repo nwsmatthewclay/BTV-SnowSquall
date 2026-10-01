@@ -213,10 +213,11 @@ def add_motion_evolution_features(
         step1 = haversine_km(lat, lon, prev_lat, prev_lon)
         step2 = haversine_km(prev_lat, prev_lon, prev2_lat, prev2_lon)
         net3 = haversine_km(lat, lon, prev2_lat, prev2_lon)
-        path3 = step1 + step2
+        path3 = pd.Series(step1 + step2, index=out.index)
+        net3_series = pd.Series(net3, index=out.index)
         out["motion_path_length_3_km"] = path3.where(contiguous2)
         out["motion_straightness_3"] = (
-            (net3 / path3.replace(0, np.nan)).clip(0, 1)
+            (net3_series / path3.replace(0, np.nan)).clip(0, 1)
         ).where(contiguous2)
 
     max_z_rate = pd.to_numeric(out.get("max_reflectivity_dbz_rate_per_min"), errors="coerce")
