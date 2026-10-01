@@ -61,7 +61,7 @@ jobs:
                 candidate="$run_id|$full_id|$run_name"
                 break 2
               fi
-            done < <(gh run list --workflow "$workflow" --branch snow-squall-model-foundation --status success --limit 20 --json databaseId,name)
+            done < <(gh run list --workflow "$workflow" --branch snow-squall-model-foundation --status success --limit 20 --json databaseId,name --jq ".[] | @json")
           done
           test -n "$candidate" || { echo "No usable feature artifact found."; exit 1; }
           IFS='|' read -r run_id artifact_id source_name <<< "$candidate"
