@@ -57,6 +57,18 @@ jobs:
           test -n "$cases"
           mkdir -p data/manifests/snow_squall_expansion
           cp "$cases" data/manifests/snow_squall_expansion/snow_squall_expansion_cases.csv
+      - name: Preserve object-centered model feature table when present
+        if: github.event_name == 'workflow_run'
+        run: |
+          set -euo pipefail
+          obj="$(find source_artifact -name snow_squall_model_features_expanded.csv -type f -print -quit || true)"
+          if [ -n "$obj" ]; then
+            mkdir -p data/archive/snow_squall_events
+            cp "$obj" data/archive/snow_squall_events/object_model_features_expanded.csv
+            echo "Preserved object-centered feature table: $obj"
+          else
+            echo "No object-centered feature table present in triggering research package."
+          fi
       - name: Reacquire Level-II for triggering batch
         if: github.event_name == 'workflow_run'
         run: |
