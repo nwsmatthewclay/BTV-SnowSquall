@@ -20,35 +20,45 @@ class ObjectDetectionConfig:
     min_peak_separation_px: int = 8
 
 
-def _watershed_split(mask, field, config):
-    # Avoid a dependency on skimage: identify separated local maxima, then
-    # assign connected pixels to the nearest peak. This is intentionally
-    # conservative and only splits broad, multi-core blobs.
-    distance=ndimage.distance_transform_edt(mask)
-    maxf=ndimage.maximum_filter(distance,size=max(3,config.min_peak_separation_px*2+1))
-    peaks=(distance==maxf)&(distance>=config.min_peak_separation_px/2)
-    peak_labels,n=ndimage.label(peaks,structure=ndimage.generate_binary_structure(2,2))
-    if n<2:
-        return [mask]
-    centers=[]
-    for i in range(1,n+1):
-        yy,xx=np.where(peak_labels==i)
-        if len(xx):
-            centers.append((float(np.mean(yy)),float(np.mean(xx))))
-    if len(centers)<2:
-        return [mask]
-    yy,xx=np.where(mask)
-    pts=np.column_stack([yy,xx])
-    c=np.asarray(centers)
-    nearest=np.argmin(((pts[:,None,:]-c[None,:,:])**2).sum(axis=2),axis=1)
-    pieces=[]
-    for i in range(len(centers)):
-        piece=np.zeros_like(mask)
-        sel=nearest==i
-        piece[yy[sel],xx[sel]]=True
-        if piece.sum()>=config.min_pixels:
+def _core_seed_split(component, field, config):
+    """Split a broad echo by separated reflectivity cores.
+
+    Snow squall bands can be elongated and contiguous while containing one or
+    more stronger embedded elements. Core-seeded partitioning preserves a
+    single broad band when there is one core, while separating genuinely
+    distinct embedded echoes.
+    """
+    yy, xx = np.where(component)
+    if len(xx) == 0:
+        return []
+    local = np.asarray(field, dtype=float)
+    core = component & np.isfinite(local) & (local >= config.core_threshold_dbz)
+    seed_labels, count = ndimage.label(
+        core, structure=ndimage.generate_binary_structure(2, 2)
+    )
+    seeds = []
+    for seed_id in range(1, count + 1):
+        sy, sx = np.where(seed_labels == seed_id)
+        if len(sx) < 2:
+            continue
+        seeds.append((float(np.mean(sy)), float(np.mean(sx))))
+    if len(seeds) < 2:
+        return [component]
+
+    points = np.column_stack((yy, xx))
+    centers = np.asarray(seeds)
+    nearest = np.argmin(
+        ((points[:, None, :] - centers[None, :, :]) ** 2).sum(axis=2),
+        axis=1,
+    )
+    pieces = []
+    for seed_index in range(len(seeds)):
+        piece = np.zeros_like(component)
+        select = nearest == seed_index
+        piece[yy[select], xx[select]] = True
+        if int(piece.sum()) >= config.min_pixels:
             pieces.append(piece)
-    return pieces or [mask]
+    return pieces or [component]
 
 
 def detect_reflectivity_objects(reflectivity, config=ObjectDetectionConfig()):
@@ -75,7 +85,7 @@ def detect_reflectivity_objects(reflectivity, config=ObjectDetectionConfig()):
         pixels=int(component.sum())
         if pixels<config.min_pixels:
             continue
-        pieces=_watershed_split(component,work,config) if config.split_merged else [component]
+        pieces=_core_seed_split(component,work,config) if config.split_merged else [component]
         for piece in pieces:
             yy,xx=np.where(piece)
             if len(xx)<config.min_pixels or len(xx)>config.max_pixels:
