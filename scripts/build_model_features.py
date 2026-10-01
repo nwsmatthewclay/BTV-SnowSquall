@@ -59,7 +59,7 @@ OPERATIONAL_LIVE_PREDICTORS = {
     "cape_shear_product", "reflectivity_core_excess",
     "cape_weighted_reflectivity_growth", "moisture_weighted_reflectivity_growth", "shear_weighted_area_growth",
     "area_per_length", "shear_motion_ratio",
-    "pwat_mm", "mlcape_jkg", "mlcin_jkg", "mucape_jkg", "mucin_jkg", "dcape_jkg",
+    "pwat_mm", "mlcape_jkg", "mlcin_jkg", "mucape_jkg", "mucin_jkg",
     "srh01_m2s2", "srh03_m2s2", "shear_u_0_6km_ms", "shear_v_0_6km_ms",
     "shear_0_6km_ms", "u10_ms", "v10_ms", "temperature_2m_k",
     "dewpoint_2m_k", "rh_2m_pct",
