@@ -68,6 +68,10 @@ OPERATIONAL_LIVE_PREDICTORS = {
 # Environment-evolution predictors are live-compatible because the same causal
 # transform is applied by scripts/live_model_features.py.
 for _col in ENVIRONMENTAL_EVOLUTION_COLUMNS:
+    if _col == "dcape_jkg":
+        # DCAPE itself is live-compatible; its temporal derivatives remain
+        # optional research diagnostics because provider coverage can be sparse.
+        continue
     OPERATIONAL_LIVE_PREDICTORS.update({
         f"{_col}_delta", f"{_col}_rate_per_min",
         f"{_col}_trailing_mean_3", f"{_col}_trailing_std_3",
