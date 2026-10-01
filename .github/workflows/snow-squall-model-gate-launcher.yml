@@ -19,7 +19,7 @@ jobs:
     steps:
       - name: Dispatch case-held-out model gate
         env:
-          GH_TOKEN: \${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: \${{ github.token }}
         run: |
           set -euo pipefail
           gh workflow run case-heldout-model-gate.yml \
