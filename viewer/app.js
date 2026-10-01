@@ -1,3 +1,22 @@
+const BOOT_VERSION = "2026-10-01-02";
+function showBootError(message){
+  const subtitle=document.getElementById("subtitle");
+  if(subtitle)subtitle.textContent=message;
+  const panel=document.getElementById("panel");
+  if(panel){
+    let box=document.getElementById("bootStatus");
+    if(!box){box=document.createElement("div");box.id="bootStatus";box.className="boot-error";panel.prepend(box);}
+    box.textContent=message;
+  }
+}
+window.addEventListener("error",e=>showBootError("Viewer runtime error: "+(e.message||"unknown JavaScript error")));
+window.addEventListener("unhandledrejection",e=>showBootError("Viewer data error: "+(e.reason?.message||e.reason||"unknown promise error")));
+if(!window.L){showBootError("Viewer initialization failed: Leaflet did not load.");throw new Error("Leaflet did not load");}
+async function fetchJson(url){
+  const response=await fetch(url,{cache:"no-store"});
+  if(!response.ok)throw new Error(url+" returned HTTP "+response.status);
+  return response.json();
+}
 const RESEARCH_RELEASE_STATUS = "candidate_only_not_operational";
 const map=L.map("map",{zoomControl:true,preferCanvas:true}).setView([44.2,-73.1],8);
 L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{maxZoom:12,attribution:"© OpenStreetMap contributors"}).addTo(map);
@@ -34,8 +53,8 @@ function renderModelSummary(){
   "<div class='model-note'>These are exploratory case-held-out diagnostics from the research candidate. They are not an operational probability, threshold, warning recommendation, or release decision.</div>";
 }
 
-function populateCases(){const sel=document.getElementById("caseSelect");sel.innerHTML=catalog.cases.map((c,i)=>"<option value="+i+">"+c.case_id+" • "+c.radar_site+"</option>").join("");sel.onchange=()=>loadCase(Number(sel.value))}
-async function loadCase(index){current=catalog.cases[index];selectedKey=null;const analogButton=document.getElementById("analogsBtn");analogButton.disabled=true;analogButton.onclick=null;const geo=await fetch("data/"+current.file).then(r=>r.json());features=geo.features||[];times=[...new Set(features.map(f=>f.properties.timestamp))].sort();currentIndex=0;document.getElementById("slider").max=Math.max(0,times.length-1);document.getElementById("slider").value=0;renderCaseInfo();addRadarMarker();fitToData();render()}
+function populateCases(){const sel=document.getElementById("caseSelect");sel.innerHTML=catalog.cases.map((c,i)=>"<option value="+i+">"+c.case_id+" • "+c.radar_site+"</option>").join("");sel.onchange=()=>loadCase(Number(sel.value)).catch(err=>showBootError("Historical case failed to load: "+err.message))}
+async function loadCase(index){current=catalog.cases[index];selectedKey=null;const analogButton=document.getElementById("analogsBtn");analogButton.disabled=true;analogButton.onclick=null;const geo=await fetchJson("data/"+current.file);features=geo.features||[];times=[...new Set(features.map(f=>f.properties.timestamp))].sort();currentIndex=0;document.getElementById("slider").max=Math.max(0,times.length-1);document.getElementById("slider").value=0;renderCaseInfo();addRadarMarker();fitToData();render()}
 function addRadarMarker(){map.eachLayer(layer=>{if(layer.options?.className==="radar-station")map.removeLayer(layer)});const loc=radarLocations[current?.radar_site];if(loc)L.marker(loc,{icon:L.divIcon({className:"radar-station",iconSize:[12,12],iconAnchor:[6,6],html:""}),interactive:false,title:current.radar_site}).addTo(map)}
 function fitToData(){const pts=features.map(f=>[Number(f.properties.centroid_lat),Number(f.properties.centroid_lon)]).filter(x=>x.every(Number.isFinite));if(!pts.length)return;map.fitBounds(L.latLngBounds(pts),{padding:[35,35],maxZoom:9})}
 function featuresAt(ts){return features.filter(f=>f.properties.timestamp===ts)}
@@ -225,5 +244,5 @@ Promise.all([fetch("data/catalog.json").then(r=>r.ok?r.json():Promise.reject(new
   const initial=Math.max(0,preferred);
   const selector=document.getElementById("caseSelect");
   selector.value=String(initial);
-  loadCase(initial);
-}).catch(err=>setText("subtitle","Viewer data unavailable: "+err));
+  loadCase(initial).catch(err=>showBootError("Historical case failed to load: "+err.message));
+}).catch(err=>showBootError("Viewer catalog failed to load: "+err.message));
