@@ -21,7 +21,7 @@ from processing.radar_grid import grid_field_2d, grid_latlon, grid_lowest_sweep
 from processing.radar_sites import apply_radar_origin, radar_origin_for_site
 
 FILENAME_RE=re.compile(r"^(?P<radar>K[A-Z0-9]{3})(?P<stamp>\d{8}_\d{6})(?:_.*|\.gz)$")
-ENV_FIELDS=("snsq","moisture_factor","instability_factor","wind_factor","snow_temperature_pass",
+ENV_FIELDS=("snsq","snsq_status","moisture_factor","instability_factor","wind_factor","snow_temperature_pass",
 "cape_jkg","mucape_jkg","mlcape_jkg","cin_jkg","mucin_jkg","mlcin_jkg","dcape_jkg","pwat_mm",
 "lcl_m","srh01_m2s2","srh03_m2s2","shear_0_6km_ms","shear_0_6km_kt","rh_2m_pct",
 "temperature_2m_k","dewpoint_2m_k","wet_bulb_2m_c","rh_0_2km_pct","wind_0_1km_kt","wind_0_3km_kt",
@@ -164,7 +164,14 @@ def build_env(case,ts,rap_dir,ruc_dir,cache):
              "environment_valid_time_utc":env.get("source_valid_time_utc"),"environment_age_minutes":env.get("age_minutes"),
              "environment_match_method":"latest_valid_analysis_at_or_before_scan",
              "environment_missing_fields":";".join(env.get("missing_fields") or [])}
-        out.update({k:fields.get(k) for k in ENV_FIELDS}); return out
+        out.update({k:fields.get(k) for k in ENV_FIELDS if k != "snsq_status"})
+        if "snsq_status" in fields:
+            out["snsq_status"] = fields.get("snsq_status")
+        elif provider == "RAP":
+            out["snsq_status"] = "not_reported_by_extractor"
+        else:
+            out["snsq_status"] = "historical_profile_extension_pending"
+        return out
     except Exception as exc: return {"environment_status":"error","environment_error":f"{type(exc).__name__}: {exc}"}
 
 if __name__=="__main__": main()
