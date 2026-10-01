@@ -7,6 +7,7 @@ error log so missing historical scans cannot disappear silently.
 from __future__ import annotations
 
 import argparse
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
 import numpy as np
@@ -185,6 +186,100 @@ def process_volume(path: Path, tracker: CentroidTracker, radar_origin=None, prev
     return tracked, data, timestamp
 
 
+def _process_radar_files(radar: str, files: list[Path]):
+    """Reconstruct one radar serially so its tracker remains scan-order causal."""
+    tracker = CentroidTracker()
+    previous_fields = {}
+    rows = []
+    errors = []
+
+    for path in files:
+        try:
+            radar_origin = radar_origin_for_site(radar)
+            result = process_volume(
+                path,
+                tracker,
+                radar_origin=radar_origin,
+                previous_reflectivity=previous_fields.get(radar, (None, None))[0],
+                previous_time=previous_fields.get(radar, (None, None))[1],
+            )
+            objects, current_reflectivity, current_timestamp = result
+            previous_fields[radar] = (current_reflectivity, current_timestamp)
+        except Exception as exc:
+            errors.append({
+                "radar_site": radar,
+                "source_file": str(path),
+                "error_type": type(exc).__name__,
+                "error_message": str(exc),
+            })
+            print(f"SKIP {path}: {type(exc).__name__}: {exc}")
+            continue
+
+        for obj in objects:
+            rows_arr = np.asarray(obj.get("row_indices", []), dtype=int)
+            cols_arr = np.asarray(obj.get("column_indices", []), dtype=int)
+            major_km, minor_km, orientation_deg = object_shape_metrics(
+                rows_arr, cols_arr, spacing_km=1.0
+            )
+            row = {
+                "radar_site": radar,
+                "source_file": str(path),
+                "scan_time_utc": obj.get("scan_time_utc"),
+                "reader_backend": obj.get("reader_backend"),
+                "object_id": obj["object_id"],
+                "pixel_count": obj["pixel_count"],
+                "max_reflectivity_dbz": obj["max_reflectivity_dbz"],
+                "mean_reflectivity_dbz": obj["mean_reflectivity_dbz"],
+                "core_pixel_count": obj["core_pixel_count"],
+                "touches_grid_edge": obj.get("touches_grid_edge", False),
+                "row_centroid": obj["row_centroid"],
+                "column_centroid": obj["column_centroid"],
+                "centroid_lat": obj.get("centroid_lat"),
+                "centroid_lon": obj.get("centroid_lon"),
+                "area_km2": obj.get("area_km2"),
+                "length_km": obj.get("length_km"),
+                "width_km": obj.get("width_km"),
+                "shape_major_km": major_km,
+                "shape_minor_km": minor_km,
+                "orientation_deg": orientation_deg,
+                "aspect_ratio": (
+                    major_km / minor_km
+                    if np.isfinite(major_km)
+                    and np.isfinite(minor_km)
+                    and minor_km > 0
+                    else np.nan
+                ),
+                "geometry_wkt": obj.get("geometry_wkt"),
+                "core_fraction": float(obj["core_pixel_count"]) / max(1, int(obj["pixel_count"])),
+                "track_association_status": obj.get("track_association_status"),
+                "track_association_distance_px": obj.get("track_association_distance_px"),
+                "track_association_gate_px": obj.get("track_association_gate_px"),
+                "track_association_cost": obj.get("track_association_cost"),
+                "track_age_scans": obj.get("track_age_scans"),
+                "track_missed_scans": obj.get("track_missed_scans"),
+                "track_competing_track_count": obj.get("track_competing_track_count"),
+                "track_competing_object_count": obj.get("track_competing_object_count"),
+                "track_merge_candidate": obj.get("track_merge_candidate"),
+                "track_split_candidate": obj.get("track_split_candidate"),
+            }
+            for key in (
+                "motion_distance_km", "motion_speed_kt", "motion_direction_deg",
+                "echo_top_km", "top_minus_base_km", "vertical_reflectivity_gradient",
+                "vertical_valid_points", "zdr_mean_db", "zdr_p90_db",
+                "zdr_gradient_dbkm", "rhohv_mean", "rhohv_max", "rhohv_p90",
+                "rhohv_min", "kdp_mean_degkm", "kdp_p90_degkm",
+                "velocity_mean_kt", "velocity_std_kt", "velocity_p90_abs_kt",
+                "velocity_gradient_ktkm", "radar_motion_speed_kt",
+                "radar_motion_direction_deg", "radar_motion_u_kt", "radar_motion_v_kt",
+                "radar_motion_confidence",
+            ):
+                if key in obj:
+                    row[key] = obj.get(key)
+            rows.append(row)
+
+    return rows, errors
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--input", default="data/raw/level2")
@@ -208,102 +303,52 @@ def main():
     if not files:
         raise SystemExit(f"No Level-II files found below {input_root}")
 
-    trackers = {}
-    rows = []
-    errors = []
-    previous_fields = {}
-
+    grouped: dict[str, list[Path]] = {}
     for path in files:
         radar = path.parts[-3] if len(path.parts) >= 3 else "UNKNOWN"
-        tracker = trackers.setdefault(radar, CentroidTracker())
+        grouped.setdefault(radar, []).append(path)
 
-        try:
-            radar_origin = radar_origin_for_site(radar)
-            result = process_volume(
-                path, tracker, radar_origin=radar_origin,
-                previous_reflectivity=previous_fields.get(radar, (None, None))[0],
-                previous_time=previous_fields.get(radar, (None, None))[1],
-            )
-            objects, current_reflectivity, current_timestamp = result
-            previous_fields[radar] = (current_reflectivity, current_timestamp)
-        except Exception as exc:
-            errors.append({
-                "radar_site": radar,
-                "source_file": str(path),
-                "error_type": type(exc).__name__,
-                "error_message": str(exc),
-            })
-            print(f"SKIP {path}: {type(exc).__name__}: {exc}")
-            continue
+    rows = []
+    errors = []
+    # Radar sites are independent; preserve chronological ordering within each
+    # radar while processing the two sites concurrently.
+    workers = min(2, max(1, len(grouped)))
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        futures = {
+            pool.submit(_process_radar_files, radar, sorted(radar_files)): radar
+            for radar, radar_files in sorted(grouped.items())
+        }
+        for future in as_completed(futures):
+            radar = futures[future]
+            try:
+                radar_rows, radar_errors = future.result()
+            except Exception as exc:
+                errors.append({
+                    "radar_site": radar,
+                    "source_file": "",
+                    "error_type": type(exc).__name__,
+                    "error_message": str(exc),
+                })
+                continue
+            rows.extend(radar_rows)
+            errors.extend(radar_errors)
 
-        for obj in objects:
-            rows_arr=np.asarray(obj.get("row_indices",[]),dtype=int)
-            cols_arr=np.asarray(obj.get("column_indices",[]),dtype=int)
-            major_km,minor_km,orientation_deg=object_shape_metrics(rows_arr,cols_arr,spacing_km=1.0)
-            row = {
-                "radar_site": radar,
-                "source_file": str(path),
-                "scan_time_utc": obj.get("scan_time_utc"),
-                "reader_backend": obj.get("reader_backend"),
-                "object_id": obj["object_id"],
-                "pixel_count": obj["pixel_count"],
-                "max_reflectivity_dbz": obj["max_reflectivity_dbz"],
-                "mean_reflectivity_dbz": obj["mean_reflectivity_dbz"],
-                "core_pixel_count": obj["core_pixel_count"],
-                "touches_grid_edge": obj.get("touches_grid_edge", False),
-                "row_centroid": obj["row_centroid"],
-                "column_centroid": obj["column_centroid"],
-                "centroid_lat": obj.get("centroid_lat"),
-                "centroid_lon": obj.get("centroid_lon"),
-                "area_km2": obj.get("area_km2"),
-                "length_km": obj.get("length_km"),
-                "width_km": obj.get("width_km"),
-                "shape_major_km": major_km,
-                "shape_minor_km": minor_km,
-                "orientation_deg": orientation_deg,
-                "aspect_ratio": (major_km / minor_km) if np.isfinite(major_km) and np.isfinite(minor_km) and minor_km > 0 else np.nan,
-                "geometry_wkt": obj.get("geometry_wkt"),
-                "core_fraction": float(obj["core_pixel_count"]) / max(1, int(obj["pixel_count"])),
-                "track_association_status": obj.get("track_association_status"),
-                "track_association_distance_px": obj.get("track_association_distance_px"),
-                "track_association_gate_px": obj.get("track_association_gate_px"),
-                "track_association_cost": obj.get("track_association_cost"),
-                "track_age_scans": obj.get("track_age_scans"),
-                "track_missed_scans": obj.get("track_missed_scans"),
-                "track_competing_track_count": obj.get("track_competing_track_count"),
-                "track_competing_object_count": obj.get("track_competing_object_count"),
-                "track_merge_candidate": obj.get("track_merge_candidate"),
-                "track_split_candidate": obj.get("track_split_candidate"),
-            }
-            derived_keys = (
-                "motion_distance_km", "motion_speed_kt", "motion_direction_deg",
-                "echo_top_km", "top_minus_base_km", "vertical_reflectivity_gradient",
-                "vertical_valid_points", "zdr_mean_db", "zdr_p90_db",
-                "zdr_gradient_dbkm", "rhohv_mean", "rhohv_max", "rhohv_p90",
-                "rhohv_min", "kdp_mean_degkm", "kdp_p90_degkm",
-                "velocity_mean_kt", "velocity_std_kt", "velocity_p90_abs_kt",
-                "velocity_gradient_ktkm", "radar_motion_speed_kt", "radar_motion_direction_deg", "radar_motion_u_kt", "radar_motion_v_kt", "radar_motion_confidence",
-            )
-            for key in derived_keys:
-                row[key] = obj.get(key)
-            rows.append(row)
+    rows.sort(key=lambda r: (
+        str(r.get("radar_site", "")),
+        str(r.get("scan_time_utc", "")),
+        int(r.get("object_id", 0) or 0),
+    ))
+    errors.sort(key=lambda r: (str(r.get("radar_site", "")), str(r.get("source_file", ""))))
 
-    if not rows:
-        raise SystemExit("No candidate objects were produced.")
-
-    frame = pd.DataFrame(rows)
-    frame = add_motion_features(frame)
     output.parent.mkdir(parents=True, exist_ok=True)
-    frame.to_csv(output, index=False)
-
-    error_log.parent.mkdir(parents=True, exist_ok=True)
+    pd.DataFrame(rows).to_csv(output, index=False)
     pd.DataFrame(
         errors,
         columns=["radar_site", "source_file", "error_type", "error_message"],
     ).to_csv(error_log, index=False)
 
-    print(f"Wrote {len(rows)} geographic object-scan records to {output}")
-    print(f"Failed radar volumes logged: {len(errors)} -> {error_log}")
+    print(f"Wrote {len(rows)} object scans to {output}")
+    print(f"Radar reconstruction failures: {len(errors)}")
 
 
 if __name__ == "__main__":
