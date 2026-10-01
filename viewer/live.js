@@ -66,6 +66,7 @@ async function getRadarMosaic(){
 }
 function renderRadarMosaic(meta){
   radarMosaicLayer.clearLayers();
+  if(mrmsFallbackLayer){try{map.removeLayer(mrmsFallbackLayer)}catch(_){} mrmsFallbackLayer=null;}
   radarMosaic=meta;
   const status=document.getElementById("mosaicStatus");
   const sources=document.getElementById("mosaicSources");
@@ -77,12 +78,20 @@ function renderRadarMosaic(meta){
     addMrmsFallback();
     return;
   }
-  L.imageOverlay(mosaicImageUrl(),meta.bounds,{
+  const overlay=L.imageOverlay(mosaicImageUrl(),meta.bounds,{
     pane:"radarMosaicPane",
-    opacity:.74,
+    opacity:.82,
     interactive:false,
     crossOrigin:true
-  }).addTo(radarMosaicLayer);
+  });
+  overlay.once("load",()=>{});
+  overlay.once("error",()=>{
+    radarMosaicLayer.clearLayers();
+    if(status)status.textContent="Local mosaic image failed • NOAA radar fallback";
+    if(sources)sources.textContent="NOAA radar";
+    addMrmsFallback();
+  });
+  overlay.addTo(radarMosaicLayer);
   const src=(meta.sources||[]).map(x=>x.radar).filter(Boolean);
   if(status)status.textContent=src.length===2?"READY • KCXX + KTYX":("READY • "+src.join(" + "));
   if(sources)sources.textContent=src.join(" + ")||"—";
@@ -152,7 +161,11 @@ function renderMap(summary){
       const selectedTrack=selected&&selected.radar_site===x.site&&String(selected.track_id)===id;
       if(!showAllLiveTracks && !active && !selectedTrack)return;
       rows.sort((a,b)=>String(a.timestamp).localeCompare(String(b.timestamp)));
-      const count=selectedTrack?12:(showAllLiveTracks?8:4);
+      // Do not draw tails for one-scan/noisy objects. This is the primary
+      // protection against the dense "spaghetti" display seen in live QC.
+      const ageScans=Number((x.features||[]).find(f=>String(f.properties?.track_id)===id)?.properties?.age_scans||0);
+      if(!selectedTrack && ageScans<2)return;
+      const count=selectedTrack?18:(showAllLiveTracks?8:5);
       const coords=rows.slice(-count).map(r=>[Number(r.centroid_lat),Number(r.centroid_lon)]).filter(v=>v.every(Number.isFinite));
       if(coords.length<2)return;
       L.polyline(coords,{
@@ -180,17 +193,18 @@ function renderMap(summary){
         {sticky:true,direction:"top"}
       );
       layer.on("click",()=>selectObject({...p,radar_site:x.site}));
-      if(p.centroid_lat!=null&&p.centroid_lon!=null){
-        const label=L.marker([Number(p.centroid_lat),Number(p.centroid_lon)],{
+      // Labels are useful for the selected object but overwhelm the map when
+      // every candidate is labeled. Keep the workspace visually sparse.
+      if(isSelected && p.centroid_lat!=null&&p.centroid_lon!=null){
+        L.marker([Number(p.centroid_lat),Number(p.centroid_lon)],{
           icon:L.divIcon({
             className:"live-object-label-wrap",
             iconSize:null,
             iconAnchor:[0,0],
-            html:"<div class='live-object-label "+(isSelected?"selected":"")+"'>"+esc(x.site)+"-"+esc(id)+"</div>"
+            html:"<div class='live-object-label selected'>"+esc(x.site)+"-"+esc(id)+"</div>"
           }),
           interactive:false
-        }).addTo(layers[x.site]);
-        label.bringToFront();
+        }).addTo(layers[x.site]).bringToFront();
       }
       const b=layer.getBounds?.();
       if(b&&b.isValid())bounds.push(b);
@@ -224,7 +238,9 @@ function renderObjectList(summary){
     all.sort((a,b)=>String(b.timestamp||"").localeCompare(String(a.timestamp||"")));
   }
 
-  document.getElementById("objectCount").textContent=String(all.length)+(usingHistory?" recent":"");
+  // Current objects are the operational map inventory. Retained history is
+  // shown only when there are no current objects, and is explicitly marked.
+  document.getElementById("objectCount").textContent=String(all.length)+(usingHistory?" recent":" active");
   if(!all.length){
     document.getElementById("objectList").innerHTML="<div class='live-card'>No current or recent tracked objects are available.</div>";
     return;
