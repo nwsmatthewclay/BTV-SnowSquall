@@ -58,10 +58,10 @@ jobs:
       PYTHONUNBUFFERED: '1'
 
     steps:
-      - name: Checkout model foundation
+      - name: Checkout current model foundation
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
+          ref: snow-squall-model-foundation
 
       - name: Expansion runner heartbeat
         run: |
