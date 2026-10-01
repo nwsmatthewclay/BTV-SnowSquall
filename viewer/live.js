@@ -102,12 +102,12 @@ function addMrmsFallback(){
 }
 
 function summarize(site,item){
-  const {geo,state,history,health,shadow}=item;
+  const {geo,state,history,health,shadow,shadowHistory}=item;
   const features=geo.features||[];
   const last=state.last_scan_time_utc||geo.metadata?.scan_time_utc||geo.metadata?.last_scan_utc;
   const age=ageMinutes(last);
   const good=age<=30;
-  return {site,features,state,geo,history,health,shadow,last,age,good};
+  return {site,features,state,geo,history,health,shadow,shadowHistory,last,age,good};
 }
 
 function renderRadarCards(summary){
@@ -316,6 +316,9 @@ function renderEnvironment(fields){
   }).join("")+"</div>";
 }
 
+function lifecycleState(p){const age=Number(p?.age_scans||0),trend=Number(p?.reflectivity_trend_dbz_per_hr);if(age<=2)return "NEW";if(Number.isFinite(trend)&&trend>=3)return "INTENSIFYING";if(Number.isFinite(trend)&&trend<=-3)return "WEAKENING";return "STEADY";}
+function liveSpark(rows,key,label,unit){const vals=rows.map(r=>Number(r[key])).filter(Number.isFinite);if(!vals.length)return "<div class='live-spark-row'><span>"+label+"</span><div class='trend-empty'>No data</div></div>";const W=300,H=58,P=7,min=Math.min(...vals),max=Math.max(...vals),range=Math.max(max-min,.1),pts=rows.map((r,i)=>{const v=Number(r[key]);return Number.isFinite(v)?{i,v}:null}).filter(Boolean),x=i=>P+(rows.length===1?0:i*(W-2*P)/Math.max(1,rows.length-1)),y=v=>(H-P)-(v-min)/range*(H-2*P),path=pts.map((pt,i)=>(i?"L":"M")+x(pt.i).toFixed(1)+" "+y(pt.v).toFixed(1)).join(" "),last=pts[pts.length-1],digits=label==="Max Z"?0:1;return "<div class='live-spark-row'><div class='live-spark-label'><span>"+label+"</span><b>"+num(last.v,digits)+" "+unit+"</b></div><svg class='live-spark' viewBox='0 0 "+W+" "+H+"'><line x1='"+P+"' y1='"+(H-P)+"' x2='"+(W-P)+"' y2='"+(H-P)+"' class='trend-axis'/><path d='"+path+"' class='trend-path'/><circle cx='"+x(last.i).toFixed(1)+"' cy='"+y(last.v).toFixed(1)+"' r='3.5' class='trend-current'/></svg></div>";}
+function renderLiveTrend(p){const box=document.getElementById("liveTrend");if(!box)return;if(!p){box.innerHTML="<div class='history-empty'>Select a live object to see its evolution.</div>";return;}const rows=(datasets[p.radar_site]?.history||[]).filter(r=>String(r.track_id)===String(p.track_id)).sort((a,b)=>String(a.timestamp).localeCompare(String(b.timestamp)));if(!rows.length){box.innerHTML="<div class='history-empty'>No retained history for this object.</div>";return;}box.innerHTML="<div class='live-trend-head'><span>Track "+esc(p.track_id)+"</span><b>"+lifecycleState(p)+"</b><small>"+rows.length+" retained scans</small></div>"+liveSpark(rows,"max_reflectivity_dbz","Max Z","dBZ")+liveSpark(rows,"area_km2","Area","km²")+liveSpark(rows,"motion_speed_kt","Motion","kt");const scored=(datasets[p.radar_site]?.shadowHistory||[]).filter(r=>String(r.track_id)===String(p.track_id)).sort((a,b)=>String(a.timestamp).localeCompare(String(b.timestamp))),latest=scored.at(-1),any=scored.some(r=>Object.values(r.research_probabilities||{}).some(v=>v!=null));if(any){box.innerHTML+="<div class='live-prob-trend'><div class='live-trend-head'><span>Research probability evolution</span><b>RESEARCH ONLY</b></div><div class='live-prob-grid'>"+[["15 min",latest?.research_probabilities?.["15"]],["30 min",latest?.research_probabilities?.["30"]],["45 min",latest?.research_probabilities?.["45"]],["60 min",latest?.research_probabilities?.["60"]]].map(x=>"<div><span>"+x[0]+"</span><b>"+(x[1]==null?"—":(Number(x[1])*100).toFixed(1)+"%")+"</b></div>").join("")+"</div><div class='mosaic-note'>Latest available shadow score. Early scans may be unscored while temporal predictors warm up.</div></div>";}}
 function renderSelectedHistory(p){
   const box=document.getElementById("liveHistory");
   const count=document.getElementById("liveTrackCount");
@@ -393,6 +396,7 @@ function selectObject(p){
     "<div class='shadow-note'>Candidate model scored this live object separately from the operational feed. Research only.</div></div>"+
     "<div class='live-stat'><span>Data quality</span><b>"+esc(p.data_quality||"—")+"</b></div>";
   renderSelectedHistory(p);
+  renderLiveTrend(p);
 }
 
 async function refresh(){
