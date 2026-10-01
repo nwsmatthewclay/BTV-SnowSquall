@@ -180,9 +180,15 @@ class CentroidTracker:
         for object_index, tid in assignments.items():
             obj = objects[object_index]
             track = self.tracks[tid]
-            dt = self._dt_minutes(timestamp, track.last_time)
+            previous_row = track.row
+            previous_col = track.column
+            previous_time = track.last_time
+            dt = self._dt_minutes(timestamp, previous_time)
             measured_row = float(obj["row_centroid"])
             measured_col = float(obj["column_centroid"])
+            association_distance = hypot(measured_row - track.row, measured_col - track.column)
+            association_gate = self._association_gate_pixels(timestamp, track.last_time)
+            association_cost = self._cost(track, obj, timestamp)
             new_vr = (measured_row - track.row) / dt
             new_vc = (measured_col - track.column) / dt
             # Exponential smoothing prevents a single noisy centroid from
@@ -197,6 +203,13 @@ class CentroidTracker:
             track.missed_scans = 0
             track.area_km2 = self._area(obj)
             track.max_reflectivity_dbz = self._z(obj)
+
+            obj["track_association_status"] = "matched"
+            obj["track_association_distance_px"] = float(association_distance)
+            obj["track_association_gate_px"] = float(association_gate)
+            obj["track_association_cost"] = float(association_cost)
+            obj["track_age_scans"] = int(track.age_scans)
+            obj["track_missed_scans"] = int(getattr(track, "missed_scans", 0))
 
         for tid, track in list(self.tracks.items()):
             if tid not in matched_track_ids and tid in self.tracks:
@@ -217,6 +230,12 @@ class CentroidTracker:
                 area_km2=self._area(obj),
                 max_reflectivity_dbz=self._z(obj),
             )
+            obj["track_association_status"] = "new"
+            obj["track_association_distance_px"] = float("nan")
+            obj["track_association_gate_px"] = float("nan")
+            obj["track_association_cost"] = float("nan")
+            obj["track_age_scans"] = 1
+            obj["track_missed_scans"] = 0
             assignments[object_index] = tid
 
         return [{"object_id": assignments[index], **obj} for index, obj in enumerate(objects)]

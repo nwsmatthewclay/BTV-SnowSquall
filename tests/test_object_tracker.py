@@ -29,3 +29,14 @@ def test_single_missed_scan_can_recover():
     assert t.update("2026-01-01T12:05:00Z",[])==[]
     second=t.update("2026-01-01T12:10:00Z",[obj(10,12)])[0]["object_id"]
     assert second==first
+
+
+def test_matched_track_emits_association_diagnostics():
+    t=CentroidTracker()
+    t.update("2026-01-01T12:00:00Z",[obj(10,10)])
+    row=t.update("2026-01-01T12:05:00Z",[obj(10,11)])[0]
+    assert row["track_association_status"]=="matched"
+    assert row["track_association_distance_px"] > 0
+    assert row["track_association_gate_px"] > row["track_association_distance_px"]
+    assert row["track_association_cost"] >= 0
+    assert row["track_age_scans"] == 2
