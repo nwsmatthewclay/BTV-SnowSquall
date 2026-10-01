@@ -30,9 +30,7 @@ jobs:
           gh workflow run --repo "$GITHUB_REPOSITORY" "Snow Squall IEM LSR Harvest" --ref snow-squall-model-foundation
           gh workflow run --repo "$GITHUB_REPOSITORY" "Snow Squall NWS Text Review" --ref snow-squall-model-foundation
           gh workflow run --repo "$GITHUB_REPOSITORY" "Acquire Penn State Schneider 2024 Case Catalog" --ref snow-squall-model-foundation
-          # The legacy full-object workflow is not exposed from the default branch.
-          # Launch the current chained expansion workflow instead; it uses the foundation
-          # branch code and retains the archived 30/15 batch offsets.
-          gh workflow run snow-squall-expansion-dataset.yml             --repo "$GITHUB_REPOSITORY"             --ref snow-squall-model-foundation             -f archive_override=true             -f official_offset=30             -f unverified_offset=15             -f max_official=30             -f max_unverified=15
-          echo "Dispatched discovery, LSR, NWS text, PSU catalog, and archived squall expansion."
+          # Expansion is chained from the successful unified ledger so each batch
+          # consumes the newest merged discovery/evidence population without duplication.
+          echo "Dispatched discovery, LSR, NWS text, and PSU catalog; expansion will follow the unified ledger."
           echo "Snow Squall Expansion Dataset will begin automatically from the successful unified ledger."
