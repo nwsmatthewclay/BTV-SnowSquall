@@ -36,14 +36,20 @@ jobs:
         with:
           ref: snow-squall-model-foundation
 
-      - name: Download national pretraining pool
-        uses: actions/download-artifact@v4
-        with:
-          name: national-sqw-radar-pretraining-pool
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          repository: ${{ github.repository }}
-          run-id: ${{ github.event.workflow_run.id }}
-          path: national_pretrain_artifact
+      - name: Resolve and download national pretraining pool
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          rm -rf national_pretrain_artifact
+          if [ "${{ github.event_name }}" = "workflow_run" ]; then
+            source_run="${{ github.event.workflow_run.id }}"
+          else
+            source_run="$(gh run list --workflow "National SQW Radar Pretraining Pool" --branch snow-squall-model-foundation --status success --limit 1 --json databaseId --jq '.[0].databaseId' || true)"
+          fi
+          test -n "$source_run" && test "$source_run" != "null"
+          gh run download "$source_run" --repo "$GITHUB_REPOSITORY" --name national-sqw-radar-pretraining-pool --dir national_pretrain_artifact
+          echo "Using national pretraining pool from run $source_run"
 
       - name: Resolve latest archived expansion feature batch
         id: expansion
