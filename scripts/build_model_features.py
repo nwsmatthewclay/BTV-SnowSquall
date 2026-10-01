@@ -13,6 +13,8 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
+from src.snow_squall.evolution import ENVIRONMENTAL_EVOLUTION_COLUMNS, add_environment_evolution_features
+
 
 OPERATIONAL_LIVE_PREDICTORS = {
     "area_km2", "length_km", "width_km", "aspect_ratio",
@@ -58,6 +60,16 @@ OPERATIONAL_LIVE_PREDICTORS = {
     "shear_0_6km_ms", "u10_ms", "v10_ms", "temperature_2m_k",
     "dewpoint_2m_k", "rh_2m_pct",
 }
+
+# Environment-evolution predictors are live-compatible because the same causal
+# transform is applied by scripts/live_model_features.py.
+for _col in ENVIRONMENTAL_EVOLUTION_COLUMNS:
+    OPERATIONAL_LIVE_PREDICTORS.update({
+        f"{_col}_delta", f"{_col}_rate_per_min",
+        f"{_col}_trailing_mean_3", f"{_col}_trailing_std_3",
+        f"{_col}_change_2scan", f"{_col}_rate_2scan_per_min",
+        f"{_col}_acceleration_per_min2",
+    })
 
 TARGET_COLUMNS = {
     "squall_onset_within_15m", "squall_onset_within_30m",
@@ -153,195 +165,10 @@ def build_features(frame: pd.DataFrame) -> pd.DataFrame:
                 (numeric - prev) / dt_min.replace(0, np.nan)
             ).where(continuity_ok)
 
-    # Physically useful interaction terms: changing storm intensity in a
-    # changing environment is more informative than either term alone.
-    if {"max_reflectivity_dbz_rate_per_min", "cape_jkg"}.issubset(df.columns):
-        df["cape_weighted_reflectivity_growth"] = pd.to_numeric(df["max_reflectivity_dbz_rate_per_min"], errors="coerce") * pd.to_numeric(df["cape_jkg"], errors="coerce").clip(lower=0) / 100.0
-    if {"max_reflectivity_dbz_rate_per_min", "mean_rh_0_2km_pct"}.issubset(df.columns):
-        df["moisture_weighted_reflectivity_growth"] = pd.to_numeric(df["max_reflectivity_dbz_rate_per_min"], errors="coerce") * pd.to_numeric(df["mean_rh_0_2km_pct"], errors="coerce") / 100.0
-    if {"area_km2_rate_per_min", "shear_0_6km_kt"}.issubset(df.columns):
-        df["shear_weighted_area_growth"] = pd.to_numeric(df["area_km2_rate_per_min"], errors="coerce") * pd.to_numeric(df["shear_0_6km_kt"], errors="coerce")
-    for col in ("max_reflectivity_dbz", "area_km2", "echo_top_km", "motion_speed_kt"):
-        if col not in df.columns:
-            continue
-        current = pd.to_numeric(df[col], errors="coerce")
-        prev1 = pd.to_numeric(g[col].shift(1), errors="coerce")
-        prev2 = pd.to_numeric(g[col].shift(2), errors="coerce")
-        triple = pd.concat([current, prev1, prev2], axis=1)
-        df[f"{col}_trailing_mean_3"] = triple.mean(axis=1, skipna=True).where(continuity_2)
-        df[f"{col}_trailing_std_3"] = triple.std(axis=1, skipna=True).where(continuity_2)
-        df[f"{col}_change_2scan"] = (current - prev2).where(continuity_2)
-        df[f"{col}_rate_2scan_per_min"] = ((current - prev2) / second_dt_min.replace(0, np.nan)).where(continuity_2)
-        prior_rate = ((prev1 - prev2) / previous_dt_min.replace(0, np.nan)).where(continuity_2)
-        current_rate = ((current - prev1) / dt_min.replace(0, np.nan)).where(continuity_ok)
-        df[f"{col}_acceleration_per_min2"] = (current_rate - prior_rate).where(continuity_2)
-    df["track_persistence_min"] = df["track_age_min"].clip(lower=0)
-    df["recent_scan_count_3"] = pd.concat([
-        pd.Series(1, index=df.index),
-        g["scan_dt"].shift(1).notna().astype(int),
-        g["scan_dt"].shift(2).notna().astype(int),
-    ], axis=1).sum(axis=1)
-
-    if {"centroid_lat", "centroid_lon"}.issubset(df.columns):
-        prev_lat = g["centroid_lat"].shift(1)
-        prev_lon = g["centroid_lon"].shift(1)
-        displacement = haversine_km(
-            pd.to_numeric(prev_lat, errors="coerce"),
-            pd.to_numeric(prev_lon, errors="coerce"),
-            pd.to_numeric(df["centroid_lat"], errors="coerce"),
-            pd.to_numeric(df["centroid_lon"], errors="coerce"),
-        )
-        df["centroid_displacement_km"] = displacement.where(continuity_ok)
-        df["motion_speed_kmh"] = (
-            displacement / dt_min.replace(0, np.nan) * 60.0
-        ).where(continuity_ok)
-
-    if {"u10_ms", "v10_ms"}.issubset(df.columns):
-        wind = np.hypot(pd.to_numeric(df["u10_ms"], errors="coerce"), pd.to_numeric(df["v10_ms"], errors="coerce"))
-        df["surface_wind_speed_kt"] = wind * 1.943844492
-    if {"shear_u_0_6km_ms", "shear_v_0_6km_ms"}.issubset(df.columns):
-        shear = np.hypot(pd.to_numeric(df["shear_u_0_6km_ms"], errors="coerce"), pd.to_numeric(df["shear_v_0_6km_ms"], errors="coerce"))
-        df["shear_0_6km_kt"] = shear * 1.943844492
-    if {"temperature_2m_k", "dewpoint_2m_k"}.issubset(df.columns):
-        df["temperature_dewpoint_spread_k"] = pd.to_numeric(df["temperature_2m_k"], errors="coerce") - pd.to_numeric(df["dewpoint_2m_k"], errors="coerce")
-    if {"cape_jkg", "shear_0_6km_kt"}.issubset(df.columns):
-        df["cape_shear_product"] = pd.to_numeric(df["cape_jkg"], errors="coerce") * pd.to_numeric(df["shear_0_6km_kt"], errors="coerce")
-    if {"gust_ms", "surface_wind_speed_kt"}.issubset(df.columns):
-        df["gust_excess_kt"] = pd.to_numeric(df["gust_ms"], errors="coerce") * 1.943844492 - pd.to_numeric(df["surface_wind_speed_kt"], errors="coerce")
-    if {"max_reflectivity_dbz", "mean_reflectivity_dbz"}.issubset(df.columns):
-        df["reflectivity_core_excess"] = pd.to_numeric(df["max_reflectivity_dbz"], errors="coerce") - pd.to_numeric(df["mean_reflectivity_dbz"], errors="coerce")
-    if {"area_km2", "length_km"}.issubset(df.columns):
-        length = pd.to_numeric(df["length_km"], errors="coerce").replace(0, np.nan)
-        df["area_per_length"] = pd.to_numeric(df["area_km2"], errors="coerce") / length
-    if {"shear_0_6km_kt", "motion_speed_kt"}.issubset(df.columns):
-        motion = pd.to_numeric(df["motion_speed_kt"], errors="coerce").abs().replace(0, np.nan)
-        df["shear_motion_ratio"] = pd.to_numeric(df["shear_0_6km_kt"], errors="coerce") / motion
-
-    for col in [
-        "max_reflectivity_dbz", "mean_reflectivity_dbz", "area_km2",
-        "core_pixel_count", "pixel_count",
-    ]:
-        if col in df.columns:
-            s = pd.to_numeric(df[col], errors="coerce")
-            df[f"{col}_running_max"] = s.groupby(
-                [df[c] for c in group_cols], dropna=False
-            ).cummax()
-
-    keep = [c for c in df.columns if c not in TARGET_COLUMNS and c != "scan_dt"]
-    target_outputs = [c for c in df.columns if c in TARGET_COLUMNS]
-    return df[keep + target_outputs]
-
-
-def predictor_columns(frame: pd.DataFrame) -> list[str]:
-    columns = []
-    for col in frame.columns:
-        if col in NON_PREDICTOR_COLUMNS or col.startswith(BLOCKED_PREFIXES):
-            continue
-        if pd.api.types.is_numeric_dtype(frame[col]):
-            columns.append(col)
-    return columns
-
-
-def write_schema(frame: pd.DataFrame, schema_path: Path):
-    schema = {
-        "schema_version": "model_features_v1",
-        "future_information_policy": "current_and_past_only",
-        "location_predictor_policy": "excluded_from_baseline",
-        "predictor_columns": predictor_columns(frame),
-        "operational_predictor_columns": [c for c in predictor_columns(frame) if c in OPERATIONAL_LIVE_PREDICTORS],
-        "blocked_non_predictors": sorted(NON_PREDICTOR_COLUMNS),
-        "blocked_prefixes": list(BLOCKED_PREFIXES),
-        "target_columns": sorted(TARGET_COLUMNS & set(frame.columns)),
-    }
-    schema_path.parent.mkdir(parents=True, exist_ok=True)
-    schema_path.write_text(json.dumps(schema, indent=2) + "\n", encoding="utf-8")
-    return schema
-
-
-def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("input_csv")
-    parser.add_argument("--output", required=True)
-    parser.add_argument(
-        "--schema-output",
-        default=None,
-        help="JSON schema path; defaults beside --output.",
-    )
-    args = parser.parse_args()
-
-    source = pd.read_csv(args.input_csv)
-    result = build_features(source)
-    output = Path(args.output)
-    output.parent.mkdir(parents=True, exist_ok=True)
-    result.to_csv(output, index=False)
-
-    schema_path = (
-        Path(args.schema_output)
-        if args.schema_output
-        else output.with_suffix(".schema.json")
-    )
-    schema = write_schema(result, schema_path)
-
-    print(f"Wrote {len(result)} forecast-time feature records to {output}")
-    print(f"Predictor columns: {len(schema['predictor_columns'])}")
-    print(f"Target/output columns: {len(schema['target_columns'])}")
-    print(f"Future-information policy: {schema['future_information_policy']}")
-
-
-if __name__ == "__main__":
-    main()
     # Multi-scan state uses only current and prior scans.
     previous_dt_min = (g["scan_dt"].shift(1) - g["scan_dt"].shift(2)).dt.total_seconds() / 60.0
     second_dt_min = (df["scan_dt"] - g["scan_dt"].shift(2)).dt.total_seconds() / 60.0
     continuity_2 = continuity_ok & previous_dt_min.between(0, 10, inclusive="both") & second_dt_min.between(0, 20, inclusive="both")
-
-    # Environmental evolution: the probability should respond not only to the
-    # instantaneous environment, but to how the background state is changing.
-    # All deltas/rates are past-only and reset after discontinuities.
-    environmental_columns = [
-        "snsq", "cape_jkg", "mlcape_jkg", "mucape_jkg", "dcape_jkg",
-        "pwat_mm", "srh01_m2s2", "srh03_m2s2", "shear_0_6km_kt",
-        "mean_rh_0_2km_pct", "mean_wind_0_2km_ms", "thetae_delta_0_2km_k",
-        "wetbulb_2m_c", "temperature_dewpoint_spread_k", "frontogenesis",
-        "dcva", "omega", "epv", "cloud_layer_depth_m",
-        "cloud_layer_rh_pct", "cloud_layer_mean_wind_kt", "cloud_layer_shear_kt",
-        "cape_shear_product", "snsq_moisture_factor", "snsq_instability_factor",
-        "snsq_wind_factor",
-    ]
-    for col in environmental_columns:
-        if col not in df.columns:
-            continue
-        numeric = pd.to_numeric(df[col], errors="coerce")
-        prev = pd.to_numeric(g[col].shift(1), errors="coerce")
-        delta = (numeric - prev).where(continuity_ok)
-        df[f"{col}_delta"] = delta
-        df[f"{col}_rate_per_min"] = (delta / dt_min.replace(0, np.nan)).where(continuity_ok)
-
-    # Three-scan environmental state / acceleration mirrors the radar-evolution
-    # features and remains causal at every row.
-    for col in environmental_columns:
-        if col not in df.columns:
-            continue
-        current = pd.to_numeric(df[col], errors="coerce")
-        prev1 = pd.to_numeric(g[col].shift(1), errors="coerce")
-        prev2 = pd.to_numeric(g[col].shift(2), errors="coerce")
-        triple = pd.concat([current, prev1, prev2], axis=1)
-        df[f"{col}_trailing_mean_3"] = triple.mean(axis=1, skipna=True).where(continuity_2)
-        df[f"{col}_trailing_std_3"] = triple.std(axis=1, skipna=True).where(continuity_2)
-        df[f"{col}_change_2scan"] = (current - prev2).where(continuity_2)
-        df[f"{col}_rate_2scan_per_min"] = ((current - prev2) / second_dt_min.replace(0, np.nan)).where(continuity_2)
-        prior_rate = ((prev1 - prev2) / previous_dt_min.replace(0, np.nan)).where(continuity_2)
-        current_rate = ((current - prev1) / dt_min.replace(0, np.nan)).where(continuity_ok)
-        df[f"{col}_acceleration_per_min2"] = (current_rate - prior_rate).where(continuity_2)
-
-    # Physically useful interaction terms: changing storm intensity in a
-    # changing environment is more informative than either term alone.
-    if {"max_reflectivity_dbz_rate_per_min", "cape_jkg"}.issubset(df.columns):
-        df["cape_weighted_reflectivity_growth"] = pd.to_numeric(df["max_reflectivity_dbz_rate_per_min"], errors="coerce") * pd.to_numeric(df["cape_jkg"], errors="coerce").clip(lower=0) / 100.0
-    if {"max_reflectivity_dbz_rate_per_min", "mean_rh_0_2km_pct"}.issubset(df.columns):
-        df["moisture_weighted_reflectivity_growth"] = pd.to_numeric(df["max_reflectivity_dbz_rate_per_min"], errors="coerce") * pd.to_numeric(df["mean_rh_0_2km_pct"], errors="coerce") / 100.0
-    if {"area_km2_rate_per_min", "shear_0_6km_kt"}.issubset(df.columns):
-        df["shear_weighted_area_growth"] = pd.to_numeric(df["area_km2_rate_per_min"], errors="coerce") * pd.to_numeric(df["shear_0_6km_kt"], errors="coerce")
     for col in ("max_reflectivity_dbz", "area_km2", "echo_top_km", "motion_speed_kt"):
         if col not in df.columns:
             continue
@@ -397,6 +224,33 @@ if __name__ == "__main__":
     if {"shear_0_6km_kt", "motion_speed_kt"}.issubset(df.columns):
         motion = pd.to_numeric(df["motion_speed_kt"], errors="coerce").abs().replace(0, np.nan)
         df["shear_motion_ratio"] = pd.to_numeric(df["shear_0_6km_kt"], errors="coerce") / motion
+
+    # Shared causal environment-evolution engine. This happens after the
+    # instantaneous environment-derived fields exist, and before predictor
+    # selection, so training and live inference share identical semantics.
+    df = add_environment_evolution_features(
+        df,
+        group_cols=group_cols,
+        time_col="scan_dt",
+    )
+
+    if {"max_reflectivity_dbz_rate_per_min", "cape_jkg"}.issubset(df.columns):
+        df["cape_weighted_reflectivity_growth"] = (
+            pd.to_numeric(df["max_reflectivity_dbz_rate_per_min"], errors="coerce")
+            * pd.to_numeric(df["cape_jkg"], errors="coerce").clip(lower=0)
+            / 100.0
+        )
+    if {"max_reflectivity_dbz_rate_per_min", "mean_rh_0_2km_pct"}.issubset(df.columns):
+        df["moisture_weighted_reflectivity_growth"] = (
+            pd.to_numeric(df["max_reflectivity_dbz_rate_per_min"], errors="coerce")
+            * pd.to_numeric(df["mean_rh_0_2km_pct"], errors="coerce")
+            / 100.0
+        )
+    if {"area_km2_rate_per_min", "shear_0_6km_kt"}.issubset(df.columns):
+        df["shear_weighted_area_growth"] = (
+            pd.to_numeric(df["area_km2_rate_per_min"], errors="coerce")
+            * pd.to_numeric(df["shear_0_6km_kt"], errors="coerce")
+        )
 
     for col in [
         "max_reflectivity_dbz", "mean_reflectivity_dbz", "area_km2",
