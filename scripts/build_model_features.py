@@ -9,11 +9,15 @@ from __future__ import annotations
 import argparse
 import json
 from pathlib import Path
+import sys
+
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "src"))
 
 import numpy as np
 import pandas as pd
 
-from src.snow_squall.evolution import ENVIRONMENTAL_EVOLUTION_COLUMNS, add_environment_evolution_features
+from snow_squall.evolution import ENVIRONMENTAL_EVOLUTION_COLUMNS, add_environment_evolution_features
 
 
 OPERATIONAL_LIVE_PREDICTORS = {
