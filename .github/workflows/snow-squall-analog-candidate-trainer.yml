@@ -7,6 +7,11 @@ on:
       - Snow Squall Causal Analog Gate
     types:
       - completed
+  push:
+    branches:
+      - snow-squall-model-foundation
+    paths:
+      - .github/analog-candidate-trigger
 
 permissions:
   actions: read
