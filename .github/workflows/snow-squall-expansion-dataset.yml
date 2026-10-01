@@ -111,6 +111,60 @@ jobs:
           python scripts/discover_iem_lsr_candidates.py --start-year 2002 --end-year 2026 --output-dir lsr_artifact
           python scripts/merge_snow_squall_case_sources.py --discovery discovery_artifact/snow_squall_candidates.csv --iem-lsr lsr_artifact/iem_lsr_case_clusters.csv --study data/manifests/banacos_2014_cases.csv --output-dir discovery_artifact/unified
 
+      - name: Prefer newest successful unified evidence ledger for automatic batches
+        if: github.event_name == 'workflow_dispatch' && inputs.source_expansion_run_id != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          latest="$(gh run list --workflow "Snow Squall Unified Case Ledger" --branch snow-squall-model-foundation --status success --limit 1 --json databaseId --jq '.[0].databaseId' || true)"
+          if [ -z "$latest" ] || [ "$latest" = "null" ]; then
+            echo "No successful unified case ledger available; retaining prior expansion discovery ledger."
+            exit 0
+          fi
+          rm -rf latest_ledger_artifact
+          if gh run download "$latest" --repo "$GITHUB_REPOSITORY" --name snow-squall-unified-case-ledger --dir latest_ledger_artifact; then
+            ledger="$(find latest_ledger_artifact -name snow_squall_case_ledger.csv -type f -print -quit || true)"
+            radar="$(find latest_ledger_artifact -name snow_squall_case_radar_manifest.csv -type f -print -quit || true)"
+            if [ -n "$ledger" ] && [ -n "$radar" ]; then
+              rm -rf discovery_artifact
+              mkdir -p discovery_artifact/unified
+              cp "$ledger" discovery_artifact/unified/snow_squall_case_ledger.csv
+              cp "$radar" discovery_artifact/unified/snow_squall_case_radar_manifest.csv
+              echo "Using latest unified case ledger run $latest."
+            else
+              echo "Latest unified ledger artifact lacked expected files; retaining prior discovery ledger."
+            fi
+          else
+            echo "Could not download latest unified case ledger; retaining prior discovery ledger."
+          fi
+
+      - name: Augment direct discovery with latest successful NWS text evidence
+        if: github.event_name == 'workflow_dispatch' && inputs.source_expansion_run_id == ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          nws_run="$(gh run list --workflow "Snow Squall NWS Text Review" --branch snow-squall-model-foundation --status success --limit 1 --json databaseId --jq '.[0].databaseId' || true)"
+          if [ -z "$nws_run" ] || [ "$nws_run" = "null" ]; then
+            echo "No successful NWS text review available."
+            exit 0
+          fi
+          rm -rf latest_nws_artifact
+          if gh run download "$nws_run" --repo "$GITHUB_REPOSITORY" --name snow-squall-nws-text-review --dir latest_nws_artifact; then
+            nws="$(find latest_nws_artifact -name iem_nws_text_candidates.csv -type f -print -quit || true)"
+            discovery="$(find discovery_artifact -name snow_squall_candidates.csv -type f -print -quit || true)"
+            lsr="$(find lsr_artifact -name iem_lsr_case_clusters.csv -type f -print -quit || true)"
+            if [ -n "$nws" ] && [ -n "$discovery" ] && [ -n "$lsr" ]; then
+              rm -rf discovery_artifact/unified
+              python scripts/merge_snow_squall_case_sources.py --discovery "$discovery" --iem-lsr "$lsr" --nws-text "$nws" --study data/manifests/banacos_2014_cases.csv --output-dir discovery_artifact/unified
+              echo "Augmented direct discovery ledger with NWS text review run $nws_run."
+            else
+              echo "NWS artifact or direct-discovery inputs missing; retaining original unified ledger."
+            fi
+          else
+            echo "Could not download latest NWS text artifact."
+          fi
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
