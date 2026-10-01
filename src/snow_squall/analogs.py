@@ -64,7 +64,15 @@ class AnalogLibrary:
         scaler = StandardScaler().fit(x.values)
         matrix = scaler.transform(x.values)
         cases = reference.get("case_id", pd.Series("", index=reference.index)).astype(str).to_numpy()
-        ts = pd.to_datetime(reference["scan_time_utc"], utc=True, errors="coerce").astype("int64").to_numpy()
+        times = pd.to_datetime(reference["scan_time_utc"], utc=True, errors="coerce")
+        valid_time = times.notna().to_numpy()
+        if not valid_time.any():
+            raise ValueError("Analog reference contains no valid timestamps")
+        reference = reference.loc[valid_time].copy()
+        x = x.loc[valid_time]
+        times = times.loc[valid_time]
+        cases = reference.get("case_id", pd.Series("", index=reference.index)).astype(str).to_numpy()
+        ts = times.astype("int64").to_numpy()
         targets = {}
         for h in HORIZONS:
             name = f"squall_onset_within_{h}m"

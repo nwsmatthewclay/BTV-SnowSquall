@@ -62,9 +62,16 @@ jobs:
           out.to_csv("snow_squall_model_features_with_analogs.csv", index=False)
           print(out[["analog_count","analog_case_count","analog_similarity","analog_onset_rate_15m","analog_onset_rate_30m","analog_onset_rate_45m","analog_onset_rate_60m"]].describe().to_string())
           PY
+      - name: Build frozen live/replay analog bundle
+        run: |
+          python scripts/build_analog_bundle.py
+            "${{ steps.feature.outputs.path }}"
+            --output snow_squall_analog_library.joblib
       - name: Upload analog feature population
         uses: actions/upload-artifact@v4
         with:
           name: snow-squall-analog-feature-population
           retention-days: 30
-          path: snow_squall_model_features_with_analogs.csv
+          path: |
+            snow_squall_model_features_with_analogs.csv
+            snow_squall_analog_library.joblib

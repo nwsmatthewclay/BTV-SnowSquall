@@ -24,7 +24,7 @@ def main():
     out=Path(args.output); out.parent.mkdir(parents=True,exist_ok=True); lib.save(out)
     print(f"Analog bundle: {out}")
     print(f"Reference rows: {len(df)}")
-    print(f"Reference cases: {df["case_id"].astype(str).nunique()}")
+    print(f'Reference cases: {df["case_id"].astype(str).nunique()}')
     print(f"Features: {len(lib.feature_columns)}")
 
 if __name__=="__main__": main()
