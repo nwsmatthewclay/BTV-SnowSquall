@@ -1,0 +1,62 @@
+name: Snow Squall Analog Candidate Trainer
+
+on:
+  workflow_dispatch:
+  workflow_run:
+    workflows:
+      - Snow Squall Causal Analog Gate
+    types:
+      - completed
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  train:
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: snow-squall-model-foundation
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: pip install -r requirements.txt
+      - name: Download analog feature population
+        if: github.event_name == 'workflow_run'
+        uses: actions/download-artifact@v4
+        with:
+          name: snow-squall-analog-feature-population
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          repository: ${{ github.repository }}
+          run-id: ${{ github.event.workflow_run.id }}
+          path: input
+      - name: Locate analog feature table
+        id: source
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          p="$(find input -name snow_squall_model_features_with_analogs.csv -type f -print -quit || true)"
+          if [ -z "$p" ]; then
+            run_id="$(gh run list --repo "$GITHUB_REPOSITORY" --workflow "Snow Squall Causal Analog Gate" --branch snow-squall-model-foundation --status success --limit 1 --json databaseId --jq '.[0].databaseId')"
+            test -n "$run_id" && test "$run_id" != "null"
+            gh run download "$run_id" --repo "$GITHUB_REPOSITORY" --name snow-squall-analog-feature-population --dir input
+            p="$(find input -name snow_squall_model_features_with_analogs.csv -type f -print -quit)"
+          fi
+          test -n "$p"
+          echo "path=$p" >> "$GITHUB_OUTPUT"
+      - name: Train analog candidate bundle
+        env:
+          INPUT: ${{ steps.source.outputs.path }}
+        run: |
+          python scripts/train_analog_candidate.py "$INPUT" --output-dir data/derived/analog_candidate
+      - name: Upload candidate bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: snow-squall-analog-candidate
+          retention-days: 30
+          path: data/derived/analog_candidate/
