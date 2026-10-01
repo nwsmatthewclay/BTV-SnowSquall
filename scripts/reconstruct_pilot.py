@@ -47,6 +47,23 @@ def object_geometry(mask, lat, lon, spacing_km=1.0):
     return hull.wkt, area_km2, length_km, width_km
 
 
+def object_shape_metrics(rows, cols, spacing_km=1.0):
+    """Estimate major/minor axes and orientation from an object footprint."""
+    if len(rows) < 3:
+        return np.nan, np.nan, np.nan
+    xy=np.column_stack((cols.astype(float),rows.astype(float)))
+    centered=xy-xy.mean(axis=0)
+    cov=np.cov(centered,rowvar=False)
+    if cov.shape!=(2,2) or not np.all(np.isfinite(cov)): return np.nan,np.nan,np.nan
+    eigenvalues,eigenvectors=np.linalg.eigh(cov)
+    order=np.argsort(eigenvalues)[::-1]
+    eigenvalues=np.maximum(eigenvalues[order],0.0)
+    major=4.0*np.sqrt(float(eigenvalues[0]))*spacing_km
+    minor=4.0*np.sqrt(float(eigenvalues[1]))*spacing_km
+    vec=eigenvectors[:,order[0]]
+    orientation=(np.degrees(np.arctan2(float(vec[0]),float(vec[1])))+180.0)%180.0
+    return float(major),float(minor),float(orientation)
+
 def process_volume(path: Path, tracker: CentroidTracker, radar_origin=None, previous_reflectivity=None, previous_time=None):
     radar = read_level2(path)
     apply_radar_origin(radar, radar_origin)
@@ -220,6 +237,9 @@ def main():
             continue
 
         for obj in objects:
+            rows_arr=np.asarray(obj.get("row_indices",[]),dtype=int)
+            cols_arr=np.asarray(obj.get("column_indices",[]),dtype=int)
+            major_km,minor_km,orientation_deg=object_shape_metrics(rows_arr,cols_arr,spacing_km=1.0)
             row = {
                 "radar_site": radar,
                 "source_file": str(path),
@@ -238,6 +258,10 @@ def main():
                 "area_km2": obj.get("area_km2"),
                 "length_km": obj.get("length_km"),
                 "width_km": obj.get("width_km"),
+                "shape_major_km": major_km,
+                "shape_minor_km": minor_km,
+                "orientation_deg": orientation_deg,
+                "aspect_ratio": (major_km / minor_km) if np.isfinite(major_km) and np.isfinite(minor_km) and minor_km > 0 else np.nan,
                 "geometry_wkt": obj.get("geometry_wkt"),
                 "core_fraction": float(obj["core_pixel_count"]) / max(1, int(obj["pixel_count"])),
                 "track_association_status": obj.get("track_association_status"),
