@@ -59,12 +59,13 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          set -euo pipefail
           mkdir -p data/derived/input
-          gh run download "\${{ steps.source.outputs.run_id }}" \
-            --name object-population-pilot \
-            --dir data/derived/input
+          ARTIFACT_ID="$(gh api "/repos/${GITHUB_REPOSITORY}/actions/runs/${{ steps.source.outputs.run_id }}/artifacts?per_page=100" -q '.artifacts[] | select(.name=="object-model-feature-table" and .expired==false) | .id' | head -1)"
+          test -n "${ARTIFACT_ID}"
+          curl -fsSL -H "Authorization: Bearer ${GH_TOKEN}" -H "Accept: application/vnd.github+json" -o /tmp/model_features.zip "https://api.github.com/repos/${GITHUB_REPOSITORY}/actions/artifacts/${ARTIFACT_ID}/zip"
+          unzip -q /tmp/model_features.zip -d data/derived/input
           find data/derived/input -maxdepth 4 -type f | sort
-
       - name: Verify training input
         run: |
           test -f data/derived/input/data/derived/object_model_features_pilot.csv
