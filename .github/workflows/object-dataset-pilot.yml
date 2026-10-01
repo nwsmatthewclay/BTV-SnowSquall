@@ -520,6 +520,17 @@ jobs:
         if: hashFiles('data/derived/live_tracker_state.json', 'data/derived/live_objects.geojson') != ''
         run: python scripts/audit_operational_readiness.py
 
+
+      - name: Upload lightweight model feature artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: object-model-feature-table
+          retention-days: 30
+          compression-level: 6
+          path: |
+            data/derived/object_model_features_pilot.csv
+            data/derived/object_population_pilot.csv
+
       - name: Upload object dataset pilot
         if: always()
         uses: actions/upload-artifact@v4
