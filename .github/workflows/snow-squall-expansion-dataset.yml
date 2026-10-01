@@ -155,7 +155,15 @@ jobs:
           unverified_offset="${{ inputs.unverified_offset || '0' }}"
           max_official="${{ inputs.max_official || '30' }}"
           max_unverified="${{ inputs.max_unverified || '15' }}"
-          if [ "${{ github.event_name }}" = "push" ] && [ -f .github/expansion-next-batch.json ]; then
+          # A workflow_run begins from the last archived batch state, while a
+          # manual dispatch uses its explicit offsets. This prevents the ledger-triggered
+          # expansion from re-processing yesterday's first 30/15 case batch.
+          if [ -f .github/expansion-next-batch.json ] && [ "${{ github.event_name }}" = "workflow_run" ]; then
+            official_offset="$(python -c 'import json; print(json.load(open(".github/expansion-next-batch.json"))["official_offset"])')"
+            unverified_offset="$(python -c 'import json; print(json.load(open(".github/expansion-next-batch.json"))["unverified_offset"])')"
+            max_official="$(python -c 'import json; print(json.load(open(".github/expansion-next-batch.json"))["max_official"])')"
+            max_unverified="$(python -c 'import json; print(json.load(open(".github/expansion-next-batch.json"))["max_unverified"])')"
+          elif [ "${{ github.event_name }}" = "push" ] && [ -f .github/expansion-next-batch.json ]; then
             official_offset="$(python -c 'import json; print(json.load(open(".github/expansion-next-batch.json"))["official_offset"])')"
             unverified_offset="$(python -c 'import json; print(json.load(open(".github/expansion-next-batch.json"))["unverified_offset"])')"
             max_official="$(python -c 'import json; print(json.load(open(".github/expansion-next-batch.json"))["max_official"])')"
