@@ -17,7 +17,7 @@ sys.path.insert(0, str(ROOT / "src"))
 import numpy as np
 import pandas as pd
 
-from snow_squall.evolution import ENVIRONMENTAL_EVOLUTION_COLUMNS, add_environment_evolution_features
+from snow_squall.evolution import ENVIRONMENTAL_EVOLUTION_COLUMNS, add_environment_evolution_features, add_motion_evolution_features
 
 
 OPERATIONAL_LIVE_PREDICTORS = {
@@ -65,9 +65,7 @@ OPERATIONAL_LIVE_PREDICTORS = {
     "dewpoint_2m_k", "rh_2m_pct",
 }
 
-# Environment-evolution predictors are live-compatible because the same causal
-# transform is applied by scripts/live_model_features.py.
-for _col in ENVIRONMENTAL_EVOLUTION_COLUMNS:
+# Environment-evolution predictors are live-compatible because the same causalfor _col in ENVIRONMENTAL_EVOLUTION_COLUMNS:
     if _col == "dcape_jkg":
         # DCAPE itself is live-compatible; its temporal derivatives remain
         # optional research diagnostics because provider coverage can be sparse.
@@ -78,6 +76,22 @@ for _col in ENVIRONMENTAL_EVOLUTION_COLUMNS:
         f"{_col}_change_2scan", f"{_col}_rate_2scan_per_min",
         f"{_col}_acceleration_per_min2",
     })
+
+for _name in (
+    "motion_speed_kt_delta",
+    "motion_speed_kt_rate_per_min",
+    "motion_speed_kt_change_2scan",
+    "motion_speed_kt_rate_2scan_per_min",
+    "motion_speed_kt_acceleration_per_min2",
+    "motion_turn_deg",
+    "motion_turn_rate_deg_per_min",
+    "motion_persistence_3",
+    "motion_path_length_3_km",
+    "motion_straightness_3",
+    "reflectivity_growth_per_motion",
+    "area_growth_per_motion",
+):
+    OPERATIONAL_LIVE_PREDICTORS.add(_name)
 
 TARGET_COLUMNS = {
     "squall_onset_within_15m", "squall_onset_within_30m",
@@ -237,6 +251,11 @@ def build_features(frame: pd.DataFrame) -> pd.DataFrame:
     # instantaneous environment-derived fields exist, and before predictor
     # selection, so training and live inference share identical semantics.
     df = add_environment_evolution_features(
+        df,
+        group_cols=group_cols,
+        time_col="scan_dt",
+    )
+    df = add_motion_evolution_features(
         df,
         group_cols=group_cols,
         time_col="scan_dt",
