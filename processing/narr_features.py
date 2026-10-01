@@ -58,17 +58,21 @@ def _nearest(ds, latitude, longitude):
     if not ds.data_vars:
         return None
 
-    if "latitude" in ds.coords and "longitude" in ds.coords:
-        lat = np.asarray(ds["latitude"].values, dtype=float)
-        lon = np.asarray(ds["longitude"].values, dtype=float)
-        distance = (lat - latitude) ** 2 + (
-            (lon - longitude) * np.cos(np.deg2rad(latitude))
-        ) ** 2
-        idx = np.unravel_index(np.nanargmin(distance), distance.shape)
-    elif "x" in ds.coords and "y" in ds.coords:
-        raise ValueError("NARR dataset lacks latitude/longitude coordinates")
-    else:
-        raise ValueError("NARR dataset lacks geographic coordinates")
+    cache_key=(id(ds),round(float(latitude),4),round(float(longitude),4))
+    idx=_NEAREST_INDEX_CACHE.get(cache_key)
+    if idx is None:
+        if "latitude" in ds.coords and "longitude" in ds.coords:
+            lat = np.asarray(ds["latitude"].values, dtype=float)
+            lon = np.asarray(ds["longitude"].values, dtype=float)
+            distance = (lat - latitude) ** 2 + (
+                (lon - longitude) * np.cos(np.deg2rad(latitude))
+            ) ** 2
+            idx = np.unravel_index(np.nanargmin(distance), distance.shape)
+        elif "x" in ds.coords and "y" in ds.coords:
+            raise ValueError("NARR dataset lacks latitude/longitude coordinates")
+        else:
+            raise ValueError("NARR dataset lacks geographic coordinates")
+        _NEAREST_INDEX_CACHE[cache_key]=idx
 
     variable = next(iter(ds.data_vars))
     value = np.asarray(ds[variable].values)
