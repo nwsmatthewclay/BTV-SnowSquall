@@ -26,10 +26,10 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
-          gh workflow run "Snow Squall Case Discovery" --ref snow-squall-model-foundation
-          gh workflow run "Snow Squall IEM LSR Harvest" --ref snow-squall-model-foundation
-          gh workflow run "Snow Squall NWS Text Review" --ref snow-squall-model-foundation
-          gh workflow run "Acquire Penn State Schneider 2024 Case Catalog" --ref snow-squall-model-foundation
-          gh workflow run "Object Dataset Full Expansion" --ref snow-squall-model-foundation
+          gh workflow run --repo "$GITHUB_REPOSITORY" "Snow Squall Case Discovery" --ref snow-squall-model-foundation
+          gh workflow run --repo "$GITHUB_REPOSITORY" "Snow Squall IEM LSR Harvest" --ref snow-squall-model-foundation
+          gh workflow run --repo "$GITHUB_REPOSITORY" "Snow Squall NWS Text Review" --ref snow-squall-model-foundation
+          gh workflow run --repo "$GITHUB_REPOSITORY" "Acquire Penn State Schneider 2024 Case Catalog" --ref snow-squall-model-foundation
+          gh workflow run --repo "$GITHUB_REPOSITORY" "Object Dataset Full Expansion" --ref snow-squall-model-foundation
           echo "Dispatched discovery, LSR, NWS text, PSU catalog, and full object expansion."
           echo "Snow Squall Expansion Dataset will begin automatically from the successful unified ledger."
