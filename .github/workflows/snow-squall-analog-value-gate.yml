@@ -1,0 +1,62 @@
+name: Snow Squall Analog Value Gate
+
+on:
+  workflow_dispatch:
+  workflow_run:
+    workflows:
+      - Snow Squall Causal Analog Gate
+    types:
+      - completed
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  compare:
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout foundation
+        uses: actions/checkout@v4
+        with:
+          ref: snow-squall-model-foundation
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install ML dependencies
+        run: pip install -r requirements.txt
+      - name: Download causal analog feature population
+        if: github.event_name == 'workflow_run'
+        uses: actions/download-artifact@v4
+        with:
+          name: snow-squall-analog-feature-population
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          repository: ${{ github.repository }}
+          run-id: ${{ github.event.workflow_run.id }}
+          path: analog_artifact
+      - name: Locate analog feature table
+        id: feature
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          p="$(find analog_artifact -name snow_squall_model_features_with_analogs.csv -type f -print -quit || true)"
+          if [ -z "$p" ]; then
+            run_id="$(gh run list --repo "$GITHUB_REPOSITORY" --workflow "Snow Squall Causal Analog Gate" --branch snow-squall-model-foundation --status success --limit 1 --json databaseId --jq '.[0].databaseId')"
+            test -n "$run_id" && test "$run_id" != "null"
+            gh run download "$run_id" --repo "$GITHUB_REPOSITORY" --name snow-squall-analog-feature-population --dir analog_artifact
+            p="$(find analog_artifact -name snow_squall_model_features_with_analogs.csv -type f -print -quit)"
+          fi
+          test -n "$p"
+          echo "path=$p" >> "$GITHUB_OUTPUT"
+      - name: Run fold-safe analog comparison
+        run: |
+          python scripts/compare_analog_value.py "${{ steps.feature.outputs.path }}" --output-dir data/derived/analog_value_gate
+      - name: Upload comparison
+        uses: actions/upload-artifact@v4
+        with:
+          name: snow-squall-analog-value-gate
+          retention-days: 30
+          path: data/derived/analog_value_gate/metrics.json
