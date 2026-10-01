@@ -16,6 +16,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 import pyart
+import cmweather  # Registers Py-ART/cmweather field-specific colormaps.
 
 from acquisition.level2_reader import read_level2, resolve_fields, volume_metadata
 from processing.radar_grid import grid_field_2d, grid_latlon, grid_lowest_sweep
@@ -126,7 +127,7 @@ def render(mosaic, latlon, output_path: Path):
     ax.set_xlim(float(np.nanmin(lon)), float(np.nanmax(lon)))
     ax.set_ylim(float(np.nanmin(lat)), float(np.nanmax(lat)))
 
-    cmap = pyart.graph.cm.NWSRef.copy()
+    cmap = plt.get_cmap("NWSRef").copy()
     cmap.set_bad((0, 0, 0, 0))
     ax.pcolormesh(
         lon,
