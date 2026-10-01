@@ -120,6 +120,16 @@ jobs:
             --output data/derived/national_sqw_pretraining_objects.csv \
             --error-log data/derived/national_sqw_pretraining_objects_errors.csv
 
+      - name: Audit national radar reconstruction completeness
+        run: |
+          set -euo pipefail
+          python scripts/audit_radar_reconstruction.py             data/derived/national_sqw_pretraining_objects.csv             --errors data/derived/national_sqw_pretraining_objects_errors.csv             --input-root data/raw/national_sqw_pretraining_level2             --max-failure-rate 0.20             --report data/derived/national_sqw_pretraining_radar_reconstruction_audit.json
+
+      - name: Audit national object tracking quality
+        run: |
+          set -euo pipefail
+          python scripts/audit_object_tracking.py             data/derived/national_sqw_pretraining_objects.csv             --output data/derived/national_sqw_pretraining_object_tracking_audit.json
+
       - name: Annotate object scans
         run: |
           python scripts/annotate_object_population.py \
