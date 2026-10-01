@@ -69,7 +69,7 @@ jobs:
           test -f data/derived/input/data/derived/snow_squall_model_features_cumulative.csv
           python - <<'PY'
           import pandas as pd
-          p = "data/derived/input/data/derived/object_model_features_pilot.csv"
+          p = "data/derived/input/data/derived/snow_squall_model_features_cumulative.csv"
           d = pd.read_csv(p)
           print("TRAINING INPUT RECORDS:", len(d))
           print("TRAINING INPUT COLUMNS:", len(d.columns))
@@ -80,7 +80,7 @@ jobs:
       - name: Run four-horizon event-held-out gate
         run: |
           python scripts/train_case_heldout_models.py \
-            data/derived/input/data/derived/object_model_features_pilot.csv \
+            data/derived/input/data/derived/snow_squall_model_features_cumulative.csv \
             --output-dir data/derived/model_gate
 
       - name: Upload model gate
