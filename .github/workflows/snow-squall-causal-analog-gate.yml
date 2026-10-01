@@ -1,0 +1,70 @@
+name: Snow Squall Causal Analog Gate
+
+on:
+  workflow_dispatch:
+  workflow_run:
+    workflows:
+      - Snow Squall Expansion Dataset
+    types:
+      - completed
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  analogs:
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout foundation
+        uses: actions/checkout@v4
+        with:
+          ref: snow-squall-model-foundation
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+      - name: Download expanded feature artifact
+        if: github.event_name == 'workflow_run'
+        uses: actions/download-artifact@v4
+        with:
+          name: snow-squall-expansion-feature-batch
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          repository: ${{ github.repository }}
+          run-id: ${{ github.event.workflow_run.id }}
+          path: feature_artifact
+      - name: Locate feature table
+        id: feature
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          p="$(find feature_artifact -name snow_squall_model_features_cumulative.csv -type f -print -quit || true)"
+          if [ -z "$p" ]; then
+            run_id="$(gh run list --repo "$GITHUB_REPOSITORY" --workflow "Snow Squall Expansion Dataset" --branch snow-squall-model-foundation --status success --limit 1 --json databaseId --jq '.[0].databaseId')"
+            test -n "$run_id" && test "$run_id" != "null"
+            gh run download "$run_id" --repo "$GITHUB_REPOSITORY" --name snow-squall-expansion-feature-batch --dir feature_artifact
+            p="$(find feature_artifact -name snow_squall_model_features_cumulative.csv -type f -print -quit)"
+          fi
+          test -n "$p"
+          echo "path=$p" >> "$GITHUB_OUTPUT"
+      - name: Build causal analog features
+        run: |
+          python - <<'PY'
+          import pandas as pd
+          from src.snow_squall.analogs import add_causal_analog_features
+          p="${{ steps.feature.outputs.path }}".strip()
+          df=pd.read_csv(p)
+          out=add_causal_analog_features(df, top_k=15, max_age_days=3650)
+          out.to_csv("snow_squall_model_features_with_analogs.csv", index=False)
+          print(out[["analog_count","analog_case_count","analog_similarity","analog_onset_rate_15m","analog_onset_rate_30m","analog_onset_rate_45m","analog_onset_rate_60m"]].describe().to_string())
+          PY
+      - name: Upload analog feature population
+        uses: actions/upload-artifact@v4
+        with:
+          name: snow-squall-analog-feature-population
+          retention-days: 30
+          path: snow_squall_model_features_with_analogs.csv
