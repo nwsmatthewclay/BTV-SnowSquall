@@ -112,7 +112,8 @@ jobs:
           ]
           for name, workflow, dependency_reason in gate_specs:
               check = status_gate(name, workflow)
-              if not check["ok"] and dependency_reason:
+              if dependency_reason and not check["ok"]:
+                  check["status"] = "yellow"
                   check["reason"] = dependency_reason
               checks.append(check)
 
