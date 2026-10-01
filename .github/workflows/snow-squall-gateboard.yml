@@ -53,18 +53,39 @@ jobs:
                   "--limit", "20",
                   "--json", "databaseId,status,conclusion,headSha,event,createdAt,updatedAt",
               ]))
-              completed_success = next(
+              latest_row = rows[0] if rows else None
+              latest_completed = next(
+                  (r for r in rows if r.get("status") == "completed"), None
+              )
+              latest_success = next(
                   (r for r in rows if r.get("conclusion") == "success"), None
               )
-              latest_row = rows[0] if rows else None
-              ok = bool(completed_success)
+
+              if latest_row is None:
+                  status = "yellow"
+                  ok = False
+                  reason = "no workflow run found"
+              elif latest_row.get("status") != "completed":
+                  status = "yellow"
+                  ok = False
+                  reason = f"latest run is {latest_row.get('status')}; awaiting completion"
+              elif latest_row.get("conclusion") == "success":
+                  status = "green"
+                  ok = True
+                  reason = "latest completed run succeeded"
+              else:
+                  status = "red"
+                  ok = False
+                  reason = f"latest completed run concluded {latest_row.get('conclusion')}"
+
               return {
                   "gate": name,
-                  "status": "green" if ok else "yellow",
+                  "status": status,
                   "ok": ok,
-                  "reason": "latest successful run found" if ok else "no successful run found",
+                  "reason": reason,
                   "latest_run": latest_row,
-                  "latest_success": completed_success,
+                  "latest_completed": latest_completed,
+                  "latest_success": latest_success,
               }
 
           checks = []
