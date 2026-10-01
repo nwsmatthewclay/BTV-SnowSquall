@@ -47,14 +47,15 @@ async function fetchOptionalJson(target,fallback){
 }
 
 async function getFeed(site){
-  const [geo,state,history,health,shadow]=await Promise.all([
+  const [geo,state,history,health,shadow,shadowHistory]=await Promise.all([
     fetch(feedUrl(site,"objects")).then(r=>r.ok?r.json():Promise.reject(new Error(site+" objects HTTP "+r.status))),
     fetch(feedUrl(site,"state")).then(r=>r.ok?r.json():Promise.reject(new Error(site+" state HTTP "+r.status))),
     fetchOptionalJson(feedUrl(site,"history"),[]),
     fetchOptionalJson(feedUrl(site,"health"),null),
-    fetchOptionalJson(shadowUrl(site+"_shadow.json"),null)
+    fetchOptionalJson(shadowUrl(site+"_shadow.json"),null),
+    fetchOptionalJson(shadowUrl(site+"_shadow_history.json"),[])
   ]);
-  return {geo,state,history,health,shadow};
+  return {geo,state,history,health,shadow,shadowHistory};
 }
 async function getRadarMosaic(){
   try{
