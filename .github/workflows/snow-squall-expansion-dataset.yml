@@ -328,7 +328,9 @@ jobs:
         run: |
           python acquisition/historical_level2.py \
             --manifest data/manifests/snow_squall_expansion/snow_squall_expansion_radar_manifest.csv \
-            --output data/raw/snow_squall_expansion_level2
+            --output data/raw/snow_squall_expansion_level2 \
+            --workers 16 \
+            --max-failure-rate 0.20
 
       - name: Reconstruct documented and unverified radar objects
         run: |
@@ -479,7 +481,9 @@ jobs:
             --output data/manifests/snow_squall_expansion/snow_squall_null_windows.csv
           python acquisition/historical_level2.py \
             --manifest data/manifests/snow_squall_expansion/snow_squall_null_windows.csv \
-            --output data/raw/snow_squall_expansion_null_level2
+            --output data/raw/snow_squall_expansion_null_level2 \
+            --workers 16 \
+            --max-failure-rate 0.20
           python scripts/reconstruct_pilot.py \
             --input data/raw/snow_squall_expansion_null_level2 \
             --output data/derived/snow_squall_expansion_null_objects.csv \
