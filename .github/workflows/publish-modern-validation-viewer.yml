@@ -52,7 +52,7 @@ jobs:
             echo "Downloaded lightweight validation viewer artifact."
           else
             echo "Lightweight artifact not present; using the existing independent-validation package."
-            validation_run="$(gh run list --workflow "Modern Independent Validation" --branch snow-squall-model-foundation --status success --limit 1 --json databaseId --jq '.[0].databaseId')"
+            validation_run="$(gh run list --branch snow-squall-model-foundation --status success --limit 100 --json databaseId,name --jq '[.[] | select(.name == "Modern Independent Validation")][0].databaseId')"
             test -n "${validation_run}" && test "${validation_run}" != "null"
             rm -rf incoming
             mkdir -p incoming
