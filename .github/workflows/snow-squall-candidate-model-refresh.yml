@@ -54,32 +54,25 @@ jobs:
       - name: Resolve latest archived expansion feature batch
         id: expansion
         shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
           selected=""
-          while IFS= read -r run; do
-            run_id="$(printf '%s' "${run}" | jq -r '.id')"
-            artifacts="$(gh api "/repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}/artifacts?per_page=100")"
-            count="$(printf '%s' "${artifacts}" | jq '[.artifacts[] | select(.name=="snow-squall-expansion-feature-batch" and .expired==false)] | length')"
-            if [ "${count}" -gt 0 ]; then
-              selected="${run}"
+          for run_id in $(gh run list --workflow "Snow Squall Expansion Dataset" --branch snow-squall-model-foundation --status success --limit 20 --json databaseId --jq '.[].databaseId'); do
+            echo "Checking expansion run $run_id for feature artifact..."
+            if gh run download "$run_id" --repo "$GITHUB_REPOSITORY" --name snow-squall-expansion-feature-batch --dir /tmp/expansion_probe >/dev/null 2>&1; then
+              selected="$run_id"
               break
             fi
-          done < <(
-            gh api "/repos/${GITHUB_REPOSITORY}/actions/runs?branch=snow-squall-model-foundation&per_page=100" |
-            jq -c '[.workflow_runs[]
-              | select(.name=="Snow Squall Expansion Dataset"
-                  or .name=="Object Dataset Full Expansion"
-                  or .path==".github/workflows/snow-squall-expansion-dataset.yml"
-                  or .path==".github/workflows/object-dataset-full-expansion.yml")
-              | select(.status!="in_progress")]
-              | sort_by(.id) | reverse | .[]'
-          )
-          test -n "${selected}"
-          run_id="$(printf '%s' "${selected}" | jq -r '.id')"
-          echo "run_id=${run_id}" >> "${GITHUB_OUTPUT}"
-          echo "Using archived expansion feature batch from run ${run_id}"
-
+            rm -rf /tmp/expansion_probe
+          done
+          if [ -z "$selected" ]; then
+            echo "No usable successful expansion feature batch found."
+            exit 1
+          fi
+          echo "run_id=$selected" >> "$GITHUB_OUTPUT"
+          echo "Using archived expansion feature batch from run $selected"
       - name: Download archived expansion feature batch
         run: |
           set -euo pipefail
