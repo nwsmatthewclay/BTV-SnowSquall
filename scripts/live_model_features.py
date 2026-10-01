@@ -90,6 +90,8 @@ def build_live_feature_row(
         "motion_speed_minus_radar_kt",
         "motion_direction_error_deg",
         "motion_radar_alignment",
+        "motion_axis_alignment",
+        "radar_motion_axis_alignment",
         "aspect_ratio",
         "max_reflectivity_dbz",
         "mean_reflectivity_dbz",
@@ -251,6 +253,16 @@ def build_live_feature_row(
         row["area_per_length"] = area / length
     if row.get("shear_0_6km_kt") is not None and motion not in (None, 0):
         row["shear_motion_ratio"] = row["shear_0_6km_kt"] / abs(motion)
+
+    orientation = _number(current.get("orientation_deg"))
+    motion_direction = _number(current.get("motion_direction_deg"))
+    radar_direction = _number(current.get("radar_motion_direction_deg"))
+    if orientation is not None and motion_direction is not None:
+        difference = ((motion_direction - orientation + 90.0) % 180.0) - 90.0
+        row["motion_axis_alignment"] = abs(math.cos(math.radians(difference)))
+    if orientation is not None and radar_direction is not None:
+        difference = ((radar_direction - orientation + 90.0) % 180.0) - 90.0
+        row["radar_motion_axis_alignment"] = abs(math.cos(math.radians(difference)))
 
     current_time = _utc(current.get("timestamp"))
     previous_time = _utc(previous.get("timestamp")) if previous else None

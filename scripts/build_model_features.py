@@ -22,7 +22,7 @@ from snow_squall.evolution import ENVIRONMENTAL_EVOLUTION_COLUMNS, add_environme
 
 OPERATIONAL_LIVE_PREDICTORS = {
     "area_km2", "length_km", "width_km", "aspect_ratio",
-    "motion_dir_deg", "motion_direction_deg", "motion_speed_kt", "motion_u_kt", "motion_v_kt", "radar_motion_speed_kt", "radar_motion_direction_deg", "radar_motion_u_kt", "radar_motion_v_kt", "radar_motion_direction_sin", "radar_motion_direction_cos", "radar_motion_confidence", "motion_speed_minus_radar_kt", "motion_direction_error_deg", "motion_radar_alignment",
+    "motion_dir_deg", "motion_direction_deg", "motion_speed_kt", "motion_u_kt", "motion_v_kt", "radar_motion_speed_kt", "radar_motion_direction_deg", "radar_motion_u_kt", "radar_motion_v_kt", "radar_motion_direction_sin", "radar_motion_direction_cos", "radar_motion_confidence", "motion_speed_minus_radar_kt", "motion_direction_error_deg", "motion_radar_alignment", "motion_axis_alignment", "radar_motion_axis_alignment",
     "max_reflectivity_dbz", "mean_reflectivity_dbz",
     "core_pixel_count", "pixel_count", "core_fraction",
     "track_scan_index", "track_scan_count_to_date", "track_age_min",
