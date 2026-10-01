@@ -259,10 +259,12 @@ def build_live_feature_row(
     radar_direction = _number(current.get("radar_motion_direction_deg"))
     if orientation is not None and motion_direction is not None:
         difference = ((motion_direction - orientation + 90.0) % 180.0) - 90.0
-        row["motion_axis_alignment"] = abs(math.cos(math.radians(difference)))
+        alignment = abs(math.cos(math.radians(difference)))
+        row["motion_axis_alignment"] = 0.0 if alignment < 1e-12 else (1.0 if 1.0 - alignment < 1e-12 else alignment)
     if orientation is not None and radar_direction is not None:
         difference = ((radar_direction - orientation + 90.0) % 180.0) - 90.0
-        row["radar_motion_axis_alignment"] = abs(math.cos(math.radians(difference)))
+        alignment = abs(math.cos(math.radians(difference)))
+        row["radar_motion_axis_alignment"] = 0.0 if alignment < 1e-12 else (1.0 if 1.0 - alignment < 1e-12 else alignment)
 
     current_time = _utc(current.get("timestamp"))
     previous_time = _utc(previous.get("timestamp")) if previous else None
