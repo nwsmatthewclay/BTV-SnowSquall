@@ -40,3 +40,25 @@ def test_matched_track_emits_association_diagnostics():
     assert row["track_association_gate_px"] > row["track_association_distance_px"]
     assert row["track_association_cost"] >= 0
     assert row["track_age_scans"] == 2
+
+
+def test_radar_motion_persists_in_track_velocity():
+    t=CentroidTracker()
+    radar={"radar_motion_row_per_min":0.0,"radar_motion_column_per_min":1.0,
+           "radar_motion_confidence":1.0}
+    first=t.update("2026-01-01T12:00:00Z",[obj(10,10)],radar_motion=radar)[0]
+    assert first["track_motion_source"]=="radar_prior"
+    second=t.update("2026-01-01T12:05:00Z",[obj(10,14)],radar_motion=radar)[0]
+    assert second["track_motion_source"]=="object_radar_blend"
+    assert second["track_motion_radar_weight"] > 0
+    assert second["track_velocity_column_per_min"] > 0
+
+def test_low_confidence_radar_motion_does_not_overwrite_object_motion():
+    t=CentroidTracker()
+    t.update("2026-01-01T12:00:00Z",[obj(10,10)])
+    radar={"radar_motion_row_per_min":0.0,"radar_motion_column_per_min":-10.0,
+           "radar_motion_confidence":0.0}
+    row=t.update("2026-01-01T12:05:00Z",[obj(10,12)],radar_motion=radar)[0]
+    assert row["track_motion_source"]=="object_only"
+    assert row["track_motion_radar_weight"]==0.0
+    assert row["track_velocity_column_per_min"] > 0
