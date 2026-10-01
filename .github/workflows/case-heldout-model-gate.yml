@@ -46,22 +46,24 @@ jobs:
         run: |
           set -euo pipefail
           candidate=""
-          for run in $(gh run list --branch snow-squall-model-foundation --status success --limit 30 --json databaseId,name --jq '.[] | @base64'); do
-            obj="$(printf '%s' "$run" | base64 -d)"
-            name="$(printf '%s' "$obj" | jq -r '.name')"
-            run_id="$(printf '%s' "$obj" | jq -r '.databaseId')"
-            case "$name" in
-              "Snow Squall Expansion Dataset"|"Object Dataset Full Expansion"|"Object Dataset Pilot")
-                artifact_json="$(gh api "/repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}/artifacts?per_page=100")"
-                artifact_id="$(printf '%s' "$artifact_json" | jq -r '[.artifacts[] | select(.expired==false) | select(.name=="snow-squall-expansion-feature-batch" or .name=="object-model-feature-table") | .id] | .[0]')"
-                if [ -n "$artifact_id" ] && [ "$artifact_id" != "null" ]; then
-                  candidate="$run_id|$artifact_id|$name"
-                  break
-                fi
-                ;;
-            esac
+          for workflow in object-dataset-pilot.yml snow-squall-expansion-dataset.yml object-dataset-full-expansion.yml; do
+            while IFS= read -r run; do
+              run_id="$(printf '%s' "$run" | jq -r '.databaseId')"
+              run_name="$(printf '%s' "$run" | jq -r '.name')"
+              artifact_json="$(gh api "/repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}/artifacts?per_page=100")"
+              artifact_id="$(printf '%s' "$artifact_json" | jq -r '[.artifacts[] | select(.expired==false) | select(.name=="snow-squall-expansion-feature-batch" or .name=="object-model-feature-table") | .id] | .[0]')"
+              if [ -n "$artifact_id" ] && [ "$artifact_id" != "null" ]; then
+                candidate="$run_id|$artifact_id|$run_name"
+                break 2
+              fi
+              full_id="$(printf '%s' "$artifact_json" | jq -r '[.artifacts[] | select(.expired==false) | select(.name=="object-population-pilot" or .name=="object-population-expansion") | .id] | .[0]')"
+              if [ -n "$full_id" ] && [ "$full_id" != "null" ]; then
+                candidate="$run_id|$full_id|$run_name"
+                break 2
+              fi
+            done < <(gh run list --workflow "$workflow" --branch snow-squall-model-foundation --status success --limit 20 --json databaseId,name)
           done
-          test -n "$candidate" || { echo "No usable recent feature artifact found."; exit 1; }
+          test -n "$candidate" || { echo "No usable feature artifact found."; exit 1; }
           IFS='|' read -r run_id artifact_id source_name <<< "$candidate"
           echo "run_id=$run_id" >> "$GITHUB_OUTPUT"
           echo "artifact_id=$artifact_id" >> "$GITHUB_OUTPUT"
@@ -74,6 +76,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p data/derived/input
+          echo "Downloading selected artifact; this may be large when only a full pilot artifact is available."
           curl -fsSL -H "Authorization: Bearer ${GH_TOKEN}" -H "Accept: application/vnd.github+json" -o /tmp/features.zip "https://api.github.com/repos/${GITHUB_REPOSITORY}/actions/artifacts/${{ steps.source.outputs.artifact_id }}/zip"
           unzip -q /tmp/features.zip -d data/derived/input
           find data/derived/input -type f | sort
