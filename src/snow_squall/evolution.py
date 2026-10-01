@@ -39,14 +39,16 @@ def _add_group_temporal(
 ) -> pd.DataFrame:
     out = out.copy()
     times = pd.to_datetime(out[time_col], utc=True, errors="coerce")
-    dt_min = (times - group[time_col].shift(1)).dt.total_seconds() / 60.0
+    previous_times = pd.to_datetime(group[time_col].shift(1), utc=True, errors="coerce")
+    previous2_times = pd.to_datetime(group[time_col].shift(2), utc=True, errors="coerce")
+    dt_min = (times - previous_times).dt.total_seconds() / 60.0
     continuity = dt_min.between(0, max_gap_minutes, inclusive="both")
 
     previous_dt_min = (
-        group[time_col].shift(1) - group[time_col].shift(2)
+        previous_times - previous2_times
     ).dt.total_seconds() / 60.0
     second_dt_min = (
-        times - group[time_col].shift(2)
+        times - previous2_times
     ).dt.total_seconds() / 60.0
     continuity_2 = (
         continuity
