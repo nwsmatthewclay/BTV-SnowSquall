@@ -47,10 +47,12 @@ jobs:
 
       - name: Audit four-horizon candidate package
         run: |
-          python scripts/audit_candidate_release.py
-            --schema "$(find candidate_bundle -name snow_squall_model_features_expanded.schema.json -type f -print -quit)"
-            --model-root "candidate_bundle/data/derived"
-            --prefix candidate_ensemble_refresh_
+          SCHEMA="$(find candidate_bundle -name snow_squall_model_features_expanded.schema.json -type f -print -quit)"
+          test -n "${SCHEMA}"
+          python scripts/audit_candidate_release.py \
+            --schema "${SCHEMA}" \
+            --model-root "candidate_bundle/data/derived" \
+            --prefix candidate_ensemble_refresh_ \
             --output candidate_bundle/candidate_release_audit.json
 
       - name: Upload candidate release audit
