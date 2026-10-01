@@ -126,7 +126,7 @@ jobs:
         run: |
           set -euo pipefail
           for horizon in 15 30 45 60; do
-            model_dir="model_bundle/data/derived/candidate_ensemble_refresh_${horizon}m"
+            model_dir="model_bundle/candidate_ensemble_refresh_${horizon}m"
             test -f "${model_dir}/metrics.json"
             test -f "${model_dir}/baseline_model.joblib"
             test -f "${model_dir}/probability_calibrator.joblib"
