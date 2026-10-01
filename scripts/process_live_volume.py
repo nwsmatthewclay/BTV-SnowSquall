@@ -18,6 +18,7 @@ from acquisition.level2_reader import read_level2, resolve_fields, volume_metada
 from processing.object_detector import detect_reflectivity_objects
 from processing.object_tracker import CentroidTracker
 from processing.radar_grid import grid_field_2d, grid_latlon, grid_lowest_sweep
+from processing.radar_storm_motion import attach_radar_storm_motion
 from processing.radar_features import object_field_summary, velocity_object_summary
 from processing.vertical_structure import summarize_vertical_structure
 from acquisition.rap_environment import acquire_for_radar_time
@@ -122,6 +123,29 @@ def _json_safe(value):
     if isinstance(value, np.integer):
         return int(value)
     return value
+
+def radar_motion_cache_path(state_path: Path) -> Path:
+    return state_path.with_name(state_path.stem + ".previous_reflectivity.npz")
+
+def load_previous_radar_field(state_path: Path):
+    cache = radar_motion_cache_path(state_path)
+    if not cache.exists():
+        return None, None
+    try:
+        with np.load(cache, allow_pickle=False) as data:
+            field = np.asarray(data["reflectivity"], dtype=np.float32)
+            raw = data["timestamp"]
+            timestamp = str(raw.item() if hasattr(raw, "item") else raw)
+        return field, timestamp
+    except (OSError, KeyError, ValueError, TypeError):
+        return None, None
+
+def save_previous_radar_field(state_path: Path, field, timestamp: str):
+    cache = radar_motion_cache_path(state_path)
+    tmp = cache.with_suffix(cache.suffix + ".tmp")
+    with tmp.open("wb") as handle:
+        np.savez_compressed(handle, reflectivity=np.asarray(field, dtype=np.float32), timestamp=np.asarray(timestamp))
+    tmp.replace(cache)
 
 def save_state(path: Path, state: dict, tracker: CentroidTracker):
     path.parent.mkdir(parents=True, exist_ok=True)
