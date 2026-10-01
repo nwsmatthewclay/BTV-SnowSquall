@@ -99,11 +99,38 @@ jobs:
       - name: Merge validation viewer into published site
         run: |
           set -euo pipefail
-          cp incoming/viewer/validation.html ./validation.html
-          cp incoming/viewer/validation.js ./validation.js
-          mkdir -p data/validation
-          cp incoming/viewer/data/validation/catalog.json data/validation/catalog.json
+
+          if [ -f incoming/viewer/validation.html ]; then
+            cp incoming/viewer/validation.html ./validation.html
+            cp incoming/viewer/validation.js ./validation.js
+            mkdir -p data/validation
+            cp incoming/viewer/data/validation/catalog.json data/validation/catalog.json
+          elif [ -f incoming/validation.html ]; then
+            cp incoming/validation.html ./validation.html
+            cp incoming/validation.js ./validation.js
+            mkdir -p data/validation
+            cp incoming/data/validation/catalog.json data/validation/catalog.json
+          else
+            # Fallback path intentionally keeps the existing validated viewer shell
+            # and only replaces its evidence catalog.
+            mkdir -p data/validation
+            cp incoming/viewer/data/validation/catalog.json data/validation/catalog.json
+          fi
+
           test -f ./index.html
+          test -f ./validation.html
+          test -f ./validation.js
+          test -f ./data/validation/catalog.json
+
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          catalog = json.loads(Path("data/validation/catalog.json").read_text(encoding="utf-8"))
+          assert catalog.get("cases"), "Validation catalog is empty"
+          assert catalog.get("training_eligible") is False
+          assert catalog.get("scoring_status") == "not_scored"
+          print("Validation cases:", len(catalog["cases"]))
+          PY
 
           python - <<'PY'
           from pathlib import Path
@@ -117,11 +144,10 @@ jobs:
               else:
                   text = text.replace("</header>", link + "</header>", 1)
               p.write_text(text, encoding="utf-8")
-          print("Validation link present:", 'href="validation.html"' in p.read_text(encoding="utf-8"))
+          assert 'href="validation.html"' in p.read_text(encoding="utf-8")
           PY
 
           touch .nojekyll
-          git status --short
 
       - name: Publish updated viewer branch
         run: |
