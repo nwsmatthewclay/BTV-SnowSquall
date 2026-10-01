@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>BTV Snow Squall Live Object Viewer</title>
+<title>BTV Snow Squall • Live Object Workbench</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <link rel="stylesheet" href="style.css">
 <style>
@@ -64,18 +64,37 @@
 <header>
   <div>
     <div class="eyebrow">BTV SNOW SQUALL PROJECT</div>
-    <h1>Live Snow Squall Object Viewer</h1>
+    <h1>Live Snow Squall Object Workbench</h1>
     <div id="subtitle">Loading real-time KCXX + KTYX radar objects…</div>
   </div>
   <div class="header-actions">
-    <span class="badge research">LIVE • RESEARCH</span>
+    <span class="badge research">LIVE • RESEARCH</span><span class="live-feed-badge" id="feedBadge">INITIALIZING</span>
     <a class="nav-link" href="index.html">Historical Explorer</a><a class="nav-link" href="training.html">Training Replay</a>
     <button id="refreshBtn">Refresh</button>
   </div>
 </header>
 <main class="live-main">
   <div class="live-top">
-    <section id="liveMap" aria-label="Live radar object map"></section>
+    <section id="liveMap" aria-label="Live radar object map">
+      <div class="map-hud">
+        <div class="map-hud-title"><span>RADAR OBJECT ANALYSIS</span><b id="hudScan">—</b></div>
+        <div class="map-hud-sub"><span id="hudMode">CLEAN DISPLAY</span><span>•</span><span id="hudSources">KCXX + KTYX</span><span>•</span><span id="hudObjects">0 objects</span></div>
+      </div>
+      <div class="map-display-controls" aria-label="Radar display controls">
+        <span class="control-label">DISPLAY</span>
+        <button class="display-btn active" data-radar-mode="clean">Clean</button>
+        <button class="display-btn" data-radar-mode="raw">Raw</button>
+        <button class="display-btn" data-radar-mode="qcd">NOAA QC</button>
+      </div>
+      <div class="map-legend">
+        <div class="legend-caption">REFLECTIVITY • dBZ</div>
+        <div class="legend-bar">
+          <span>12</span><i class="l12"></i><i class="l18"></i><i class="l24"></i><i class="l30"></i><i class="l35"></i><i class="l40"></i><i class="l45"></i><i class="l55"></i><i class="l65"></i><span>75+</span>
+        </div>
+        <div class="legend-note">Clean mode suppresses weak speckle and conservative low-CC non-meteorological echoes for display only.</div>
+      </div>
+      <div class="map-empty-state" id="mapEmptyState"><strong>No significant echoes</strong><span>Radar feed is healthy. Weak returns below the display threshold are intentionally muted.</span></div>
+    </section>
     <aside class="live-sidebar">
       <div class="live-status" id="overallStatus">
         <strong id="overallTitle">Loading live feeds…</strong>
@@ -83,11 +102,11 @@
       </div>
       <div class="live-grid" id="radarCards"></div>
       <div class="live-card live-mosaic-card" id="mosaicCard">
-        <h3>Live radar mosaic</h3>
+        <h3>Radar display</h3>
         <div class="live-stat"><span>Status</span><b id="mosaicStatus">Waiting for mosaic…</b></div>
         <div class="live-stat"><span>Sources</span><b id="mosaicSources">—</b></div>
         <div class="live-stat"><span>Radar time</span><b id="mosaicTime">—</b></div>
-        <div class="mosaic-note">KCXX + KTYX lowest-sweep reflectivity, common 1 km grid. Display layer only; object/model processing uses Level-II data directly.</div>
+        <div class="mosaic-note">Clean mode is a human-display product. Raw Level-II remains the scientific source for object detection and model features.</div>
       </div>
 
       <div class="section-head"><h2>Current objects</h2><span id="objectCount">0</span></div><div class="live-track-toggle"><label><input type="checkbox" id="showAllLiveTracks"> Show all tracks (research/QC)</label><span>Default: active-object tails only</span></div>
