@@ -1,0 +1,136 @@
+name: Publish Snow Squall Historical Viewer
+
+on:
+  push:
+    branches:
+      - main
+      - snow-squall-model-foundation
+    paths:
+      - viewer/*.html
+      - viewer/*.js
+      - viewer/*.css
+      - scripts/build_static_viewer.py
+      - .github/workflows/publish-historical-viewer.yml
+      - .github/archived-viewer-publish-trigger
+  workflow_run:
+    workflows:
+      - Archived Snow Squall Viewer Smoke Test
+    types:
+      - completed
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: snow-squall-viewer-pages
+  cancel-in-progress: true
+
+jobs:
+  publish:
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - name: Checkout viewer source
+        uses: actions/checkout@v4
+        with:
+          ref: snow-squall-model-foundation
+
+      - name: Resolve successful archived viewer smoke run
+        id: source
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TRIGGER_RUN_ID: ${{ github.event.workflow_run.id }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [ "${{ github.event_name }}" = "workflow_run" ]; then
+            CANDIDATE="${TRIGGER_RUN_ID}"
+          else
+            CANDIDATE=$(gh run list               --workflow "Archived Snow Squall Viewer Smoke Test"               --branch snow-squall-model-foundation               --status success               --limit 1               --json databaseId               --jq '.[0].databaseId')
+          fi
+
+          if [ -z "${CANDIDATE}" ] || [ "${CANDIDATE}" = "null" ]; then
+            echo "No successful archived-viewer smoke run is available."
+            echo "skip=true" >> "${GITHUB_OUTPUT}"
+            exit 0
+          fi
+
+          echo "Using archived-viewer smoke run ${CANDIDATE}"
+          echo "run_id=${CANDIDATE}" >> "${GITHUB_OUTPUT}"
+          echo "skip=false" >> "${GITHUB_OUTPUT}"
+
+      - name: Download validated viewer package
+        if: steps.source.outputs.skip != 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf viewer_artifact
+          mkdir -p viewer_artifact
+          gh run download "${{ steps.source.outputs.run_id }}"             --name archived-snow-squall-viewer-site             --dir viewer_artifact
+          test -f viewer_artifact/index.html
+          test -f viewer_artifact/data/catalog.json
+
+      - name: Assemble publication site
+        if: steps.source.outputs.skip != 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf _site
+          mkdir -p _site
+
+          # The smoke test has already validated the data package. Keep the
+          # version-controlled shell separate from the archived data payload.
+          cp viewer/*.html viewer/*.js viewer/*.css _site/
+          cp -R viewer_artifact/. _site/
+
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          catalog = json.loads(Path("_site/data/catalog.json").read_text(encoding="utf-8"))
+          assert catalog.get("cases"), "Published viewer catalog is empty"
+          assert catalog.get("data_status") in {"research_pilot", "research_replay"}
+          assert catalog.get("probability_status") in {"not_scored", "research_replay"}
+          print("Publication cases:", len(catalog["cases"]))
+          print("Data status:", catalog.get("data_status"))
+          print("Probability status:", catalog.get("probability_status"))
+          PY
+
+          printf 'BTV Snow Squall Historical Object Viewer\nResearch/pilot historical reconstruction only.\nNo production probability forecast is exposed.\n' > _site/README.txt
+
+      - name: Upload static viewer bundle
+        if: steps.source.outputs.skip != 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: snow-squall-historical-viewer-site
+          path: _site
+          if-no-files-found: error
+
+      - name: Configure GitHub Pages
+        id: pages_config
+        if: steps.source.outputs.skip != 'true'
+        continue-on-error: true
+        uses: actions/configure-pages@v5
+        with:
+          enablement: true
+
+      - name: Upload Pages artifact
+        if: steps.source.outputs.skip != 'true'
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+      - name: Deploy to GitHub Pages
+        if: steps.source.outputs.skip != 'true' && steps.pages_config.outcome == 'success'
+        id: deployment
+        uses: actions/deploy-pages@v4
