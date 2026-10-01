@@ -195,3 +195,30 @@ def test_json_safe_replaces_nonfinite_numbers():
     payload = _json_safe({"nan": float("nan"), "posinf": float("inf"), "neginf": float("-inf"), "ok": 1.25})
     assert payload == {"nan": None, "posinf": None, "neginf": None, "ok": 1.25}
     assert math.isfinite(payload["ok"])
+
+
+def test_live_analog_attachment_is_optional_and_causal():
+    from scripts.live_model_features import add_live_analog_features
+    from src.snow_squall.analogs import AnalogLibrary
+    history = pd.DataFrame({
+        "case_id": ["A", "B"],
+        "scan_time_utc": ["2026-01-01T12:00:00Z", "2026-01-01T13:00:00Z"],
+        "max_reflectivity_dbz": [30.0, 31.0],
+        "snsq": [1.0, 1.1],
+        "squall_onset_within_15m": [1, 0],
+        "squall_onset_within_30m": [1, 0],
+        "squall_onset_within_45m": [1, 0],
+        "squall_onset_within_60m": [1, 0],
+    })
+    lib = AnalogLibrary.fit(history)
+    live = pd.DataFrame([{
+        "timestamp": "2026-01-01T14:00:00Z",
+        "max_reflectivity_dbz": 30.5,
+        "snsq": 1.05,
+    }])
+    out = add_live_analog_features(live, lib, top_k=5)
+    assert out.iloc[0]["analog_count"] == 2
+    assert 0.0 <= out.iloc[0]["analog_onset_rate_15m"] <= 1.0
+
+    untouched = add_live_analog_features(live, None)
+    assert list(untouched.columns) == list(live.columns)

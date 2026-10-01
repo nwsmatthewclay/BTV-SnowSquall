@@ -395,6 +395,33 @@ def build_live_feature_frame(history: Iterable[dict], track_id: str | int) -> pd
     return frame
 
 
+def add_live_analog_features(frame: pd.DataFrame, analog_library, top_k: int = 15, max_age_days: float | None = 3650) -> pd.DataFrame:
+    """Attach optional causal analog features using a frozen historical library.
+
+    The library contains only archived reference states. The current live row
+    is not part of that library, so its analog outcomes cannot leak from the
+    current event. Missing/absent libraries leave the live frame unchanged.
+    """
+    if analog_library is None or frame.empty:
+        return frame.copy()
+    enriched = frame.copy()
+    query = enriched.copy()
+    if "timestamp" in query.columns and "scan_time_utc" not in query.columns:
+        query["scan_time_utc"] = query["timestamp"]
+    if "case_id" not in query.columns:
+        query["case_id"] = ""
+    analogs = analog_library.query(
+        query,
+        top_k=top_k,
+        max_age_days=max_age_days,
+        exclude_case_col="case_id",
+        time_col="scan_time_utc",
+    )
+    for col in analogs.columns:
+        enriched[col] = analogs[col].to_numpy()
+    return enriched
+
+
 def feature_coverage(frame: pd.DataFrame, predictor_columns: Iterable[str]) -> dict:
     columns = list(predictor_columns)
     if not columns:
