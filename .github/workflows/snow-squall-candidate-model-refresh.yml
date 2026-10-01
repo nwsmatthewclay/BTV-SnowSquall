@@ -4,6 +4,7 @@ on:
   workflow_run:
     workflows:
       - National SQW Radar Pretraining Pool
+      - Snow Squall Expansion Dataset
     types:
       - completed
   push:
@@ -42,7 +43,7 @@ jobs:
         run: |
           set -euo pipefail
           rm -rf national_pretrain_artifact
-          if [ "${{ github.event_name }}" = "workflow_run" ]; then
+          if [ "${{ github.event_name }}" = "workflow_run" ] && [ "${{ github.event.workflow_run.name }}" = "National SQW Radar Pretraining Pool" ]; then
             source_run="${{ github.event.workflow_run.id }}"
           else
             source_run="$(gh run list --workflow "National SQW Radar Pretraining Pool" --branch snow-squall-model-foundation --status success --limit 1 --json databaseId --jq '.[0].databaseId' || true)"
@@ -66,7 +67,12 @@ jobs:
         run: |
           set -euo pipefail
           selected=""
+          if [ "${{ github.event_name }}" = "workflow_run" ] && [ "${{ github.event.workflow_run.name }}" = "Snow Squall Expansion Dataset" ]; then
+            selected="${{ github.event.workflow_run.id }}"
+            echo "Using triggering successful expansion run $selected"
+          fi
           for run_id in $(gh run list --workflow "Snow Squall Expansion Dataset" --branch snow-squall-model-foundation --status success --limit 20 --json databaseId --jq '.[].databaseId'); do
+            [ -n "$selected" ] && break
             echo "Checking expansion run $run_id for feature artifact..."
             if gh run download "$run_id" --repo "$GITHUB_REPOSITORY" --name snow-squall-expansion-feature-batch --dir /tmp/expansion_probe >/dev/null 2>&1; then
               selected="$run_id"
@@ -119,9 +125,14 @@ jobs:
       - name: Stage national pretraining models
         run: |
           set -euo pipefail
-          root="$(find national_pretrain_artifact -type d -name 'national_sqw_weak_model_15m' -print -quit | xargs -r dirname)"
-          test -n "${root}"
-          cp -R "${root}"/national_sqw_weak_model_*m data/derived/
+          model_file="$(find national_pretrain_artifact -type f -name 'weak_pretraining_model.joblib' -print -quit)"
+          test -n "${model_file}"
+          root="$(dirname "$(dirname "${model_file}")")"
+          echo "National model artifact root: ${root}"
+          for model_dir in "${root}"/national_sqw_weak_model_*m; do
+            test -d "${model_dir}"
+            cp -R "${model_dir}" data/derived/
+          done
           for h in 15 30 45 60; do
             test -f "data/derived/national_sqw_weak_model_${h}m/weak_pretraining_model.joblib"
             test -f "data/derived/national_sqw_weak_model_${h}m/metrics.json"
