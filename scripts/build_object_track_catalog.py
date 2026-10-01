@@ -42,9 +42,14 @@ def build_track_catalog(path: Path):
         median_area = float(area.median()) if not area.dropna().empty else np.nan
         max_area = float(area.max()) if not area.dropna().empty else np.nan
         motion = pd.to_numeric(g["motion_speed_kt"], errors="coerce") if "motion_speed_kt" in g.columns else pd.Series(dtype="float64")
+        radar_motion = pd.to_numeric(g.get("radar_motion_speed_kt"), errors="coerce") if "radar_motion_speed_kt" in g.columns else pd.Series(dtype="float64")
         max_motion = float(motion.max()) if not motion.dropna().empty else np.nan
         median_motion = float(motion.median()) if not motion.dropna().empty else np.nan
         duplicate_scan_times = int(g["scan_dt"].duplicated().sum())
+        split_candidates = int(pd.Series(g.get("track_split_candidate", False)).fillna(False).astype(bool).sum())
+        merge_candidates = int(pd.Series(g.get("track_merge_candidate", False)).fillna(False).astype(bool).sum())
+        radar_conf = pd.to_numeric(g.get("radar_motion_confidence"), errors="coerce") if "radar_motion_confidence" in g.columns else pd.Series(dtype="float64")
+        direction_err = np.abs((pd.to_numeric(g.get("motion_direction_deg", g.get("motion_dir_deg")), errors="coerce") - pd.to_numeric(g.get("radar_motion_direction_deg"), errors="coerce") + 180.0) % 360.0 - 180.0) if "radar_motion_direction_deg" in g.columns else pd.Series(dtype="float64")
 
         flags = []
         if g["geometry_wkt"].isna().any() if "geometry_wkt" in g.columns else True:
@@ -63,6 +68,12 @@ def build_track_catalog(path: Path):
             flags.append("duplicate_scan_time")
         if np.isfinite(max_motion) and max_motion > 100:
             flags.append("implausible_motion_gt_100kt")
+        if split_candidates > 0:
+            flags.append("split_competition")
+        if merge_candidates > 0:
+            flags.append("merge_competition")
+        if not radar_motion.dropna().empty and float(radar_motion.notna().mean()) < 0.50:
+            flags.append("sparse_radar_motion")
 
         groups.append({
             **key_map,
@@ -79,6 +90,11 @@ def build_track_catalog(path: Path):
             "median_aspect_ratio": float(aspect.median()) if not aspect.empty else np.nan,
             "max_motion_speed_kt": max_motion,
             "median_motion_speed_kt": median_motion,
+            "max_radar_motion_speed_kt": float(radar_motion.max()) if not radar_motion.dropna().empty else np.nan,
+            "median_radar_motion_confidence": float(radar_conf.median()) if not radar_conf.dropna().empty else np.nan,
+            "median_object_radar_direction_error_deg": float(direction_err.median()) if not direction_err.dropna().empty else np.nan,
+            "split_candidate_scans": split_candidates,
+            "merge_candidate_scans": merge_candidates,
             "duplicate_scan_times": duplicate_scan_times,
             "track_quality": (
                 "short" if len(g) < 3 else

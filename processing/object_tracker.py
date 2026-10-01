@@ -109,6 +109,16 @@ class CentroidTracker:
         objects=list(objects)
         if not objects: return []
         track_ids=sorted(self.tracks); assignments={}; used=set(); matched_track_ids=set()
+        candidate_counts = np.zeros(len(objects), dtype=int)
+        candidate_track_counts = np.zeros(len(track_ids), dtype=int) if track_ids else np.zeros(0, dtype=int)
+        if track_ids:
+            for ti, tid in enumerate(track_ids):
+                for oi, obj in enumerate(objects):
+                    value = self._cost(self.tracks[tid], obj, timestamp, radar_motion)
+                    if np.isfinite(value):
+                        candidate_counts[oi] += 1
+                        candidate_track_counts[ti] += 1
+
         if track_ids:
             cost=np.full((len(track_ids),len(objects)),np.inf,dtype=float)
             for ti,tid in enumerate(track_ids):
@@ -135,6 +145,10 @@ class CentroidTracker:
             track.last_time=timestamp; track.row=measured_row; track.column=measured_col
             track.age_scans+=1; track.missed_scans=0; track.area_km2=self._area(obj); track.max_reflectivity_dbz=self._z(obj)
             obj["track_association_status"]="matched"
+            obj["track_competing_track_count"] = int(candidate_counts[object_index])
+            obj["track_competing_object_count"] = int(candidate_track_counts[track_ids.index(tid)]) if track_ids else 0
+            obj["track_merge_candidate"] = bool(candidate_counts[object_index] > 1)
+            obj["track_split_candidate"] = bool(candidate_track_counts[track_ids.index(tid)] > 1)
             obj["track_association_distance_px"]=float(association_distance)
             obj["track_association_gate_px"]=float(gate)
             obj["track_association_cost"]=float(cost_value)
@@ -152,6 +166,10 @@ class CentroidTracker:
             tid=self.next_id; self.next_id+=1
             self.tracks[tid]=Track(tid,timestamp,float(obj["row_centroid"]),float(obj["column_centroid"]),area_km2=self._area(obj),max_reflectivity_dbz=self._z(obj))
             obj["track_association_status"]="new"; obj["track_association_distance_px"]=float("nan"); obj["track_association_gate_px"]=float("nan"); obj["track_association_cost"]=float("nan"); obj["track_age_scans"]=1; obj["track_missed_scans"]=0
+            obj["track_competing_track_count"] = int(candidate_counts[oi]) if oi < len(candidate_counts) else 0
+            obj["track_competing_object_count"] = 0
+            obj["track_merge_candidate"] = bool(obj["track_competing_track_count"] > 1)
+            obj["track_split_candidate"] = False
             if radar_motion:
                 obj["radar_motion_speed_kt"]=radar_motion.get("radar_motion_speed_kt"); obj["radar_motion_direction_deg"]=radar_motion.get("radar_motion_direction_deg"); obj["radar_motion_confidence"]=radar_motion.get("radar_motion_confidence")
             assignments[oi]=tid
