@@ -128,7 +128,7 @@ jobs:
       - name: Compare model families on common held-out folds
         run: |
           set -euo pipefail
-          python scripts/evaluate_model_families.py \
+          python scripts/model_family_compare.py \
             "${{ steps.feature_table.outputs.path }}" \
             --output-dir data/derived/model_family_comparison
 
