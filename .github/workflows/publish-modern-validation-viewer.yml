@@ -44,27 +44,39 @@ jobs:
           fi
 
       - name: Download lightweight validation viewer artifact
+        id: lightweight
+        continue-on-error: true
+        uses: actions/download-artifact@v4
+        with:
+          name: modern-validation-viewer
+          path: incoming
+          repository: ${{ github.repository }}
+          github-token: ${{ github.token }}
+          run-id: ${{ steps.source.outputs.run_id }}
+
+      - name: Download independent validation fallback
+        if: steps.lightweight.outcome != 'success'
+        uses: actions/download-artifact@v4
+        with:
+          name: modern-independent-validation
+          path: independent_validation
+          repository: ${{ github.repository }}
+          github-token: ${{ github.token }}
+          run-id: 36775386531
+
+      - name: Build fallback validation viewer catalog
+        if: steps.lightweight.outcome != 'success'
         run: |
           set -euo pipefail
           rm -rf incoming
-          mkdir -p incoming
-          if gh run download "${{ steps.source.outputs.run_id }}" --name modern-validation-viewer --dir incoming; then
-            echo "Downloaded lightweight validation viewer artifact."
-          else
-            echo "Lightweight artifact not present; using the existing independent-validation package."
-            validation_run="$(gh api "/repos/$GITHUB_REPOSITORY/actions/runs?branch=snow-squall-model-foundation&per_page=100" --jq '[.workflow_runs[] | select(.name == "Modern Independent Validation" and .conclusion == "success")][0].id')"
-            test -n "${validation_run}" && test "${validation_run}" != "null"
-            rm -rf incoming
-            mkdir -p incoming
-            gh run download "${validation_run}" --name modern-independent-validation --dir incoming
-            test -f incoming/data/derived/modern_validation_case_summary.csv
-            mkdir -p incoming/viewer/data/validation
-            python - <<'PY'
+          mkdir -p incoming/viewer/data/validation
+          test -f independent_validation/data/derived/modern_validation_case_summary.csv
+          python - <<'PY'
           import csv
           import json
           from pathlib import Path
 
-          src = Path("incoming/data/derived/modern_validation_case_summary.csv")
+          src = Path("independent_validation/data/derived/modern_validation_case_summary.csv")
           with src.open(newline="", encoding="utf-8") as f:
               records = list(csv.DictReader(f))
           payload = {
@@ -79,8 +91,10 @@ jobs:
               json.dumps(payload, indent=2) + "\n", encoding="utf-8"
           )
           PY
-          fi
 
+      - name: Validate validation viewer payload
+        run: |
+          set -euo pipefail
           test -f incoming/viewer/data/validation/catalog.json
       - name: Merge validation viewer into published site
         run: |
