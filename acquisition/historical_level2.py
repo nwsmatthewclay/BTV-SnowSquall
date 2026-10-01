@@ -149,7 +149,7 @@ def _download_one(client, radar: str, key: str, timestamp: datetime, output: Pat
     return 1
 
 
-def download_manifest(rows, output: Path, workers: int = 8) -> int:
+def download_manifest(rows, output: Path, workers: int = 8, max_failure_rate: float = 0.20) -> int:
     if not rows:
         return 0
 
@@ -165,7 +165,8 @@ def download_manifest(rows, output: Path, workers: int = 8) -> int:
         print(f"{row_id}: {matched} archive volumes in requested windows")
 
     downloaded = 0
-    failed = 0
+    already_present = 0
+    failures = []
     with ThreadPoolExecutor(max_workers=workers) as pool:
         futures = {
             pool.submit(
@@ -181,15 +182,34 @@ def download_manifest(rows, output: Path, workers: int = 8) -> int:
         for future in as_completed(futures):
             radar, key = futures[future]
             try:
-                downloaded += future.result()
-            except (BotoCoreError, OSError, Exception):
-                failed += 1
-                raise
+                result = future.result()
+                if result:
+                    downloaded += 1
+                else:
+                    already_present += 1
+            except Exception as exc:
+                failures.append({
+                    "radar_site": radar,
+                    "archive_key": key,
+                    "error_type": type(exc).__name__,
+                    "error_message": str(exc),
+                })
+                print(f"DOWNLOAD FAILED {radar} {key}: {type(exc).__name__}: {exc}")
 
+    target_count = len(targets)
+    failure_rate = len(failures) / target_count if target_count else 0.0
     print(
         f"Downloaded {downloaded} new Level-II volumes; "
-        f"{len(targets) - downloaded} already existed; failed={failed}."
+        f"{already_present} already existed; failed={len(failures)}; "
+        f"failure_rate={failure_rate:.1%}."
     )
+    if failures:
+        print("Recoverable download failures were recorded above; rerun can retry them.")
+    if failure_rate > max_failure_rate:
+        raise RuntimeError(
+            f"Level-II download failure rate {failure_rate:.1%} exceeds "
+            f"configured maximum {max_failure_rate:.1%}"
+        )
     return downloaded
 
 
@@ -205,6 +225,12 @@ def main() -> None:
         default=8,
         help="Concurrent Level-II downloads (capped at 16).",
     )
+    parser.add_argument(
+        "--max-failure-rate",
+        type=float,
+        default=0.20,
+        help="Maximum fraction of requested archive volumes allowed to fail before aborting.",
+    )
     args = parser.parse_args()
 
     with open(args.manifest, newline="", encoding="utf-8") as fh:
@@ -213,7 +239,14 @@ def main() -> None:
     rows = filter_manifest_rows(rows, case_id=args.case_id, radar_site=args.radar_site)
     output = Path(args.output)
     output.mkdir(parents=True, exist_ok=True)
-    downloaded = download_manifest(rows, output, workers=args.workers)
+    if not 0.0 <= args.max_failure_rate <= 1.0:
+        raise SystemExit("--max-failure-rate must be between 0 and 1")
+    downloaded = download_manifest(
+        rows,
+        output,
+        workers=args.workers,
+        max_failure_rate=args.max_failure_rate,
+    )
 
     print(f"Downloaded {downloaded} new Level-II volumes.")
 
