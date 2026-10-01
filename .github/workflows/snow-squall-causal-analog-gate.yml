@@ -17,6 +17,10 @@ permissions:
   actions: read
   contents: read
 
+concurrency:
+  group: snow-squall-causal-analog-gate
+  cancel-in-progress: true
+
 jobs:
   analogs:
     if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
