@@ -9,6 +9,8 @@ on:
     branches:
       - main
       - snow-squall-model-foundation
+    paths-ignore:
+      - '.github/*-trigger'
   pull_request:
   workflow_dispatch:
 
