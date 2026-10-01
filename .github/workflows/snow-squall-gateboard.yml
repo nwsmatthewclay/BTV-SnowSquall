@@ -86,6 +86,8 @@ jobs:
               ("archived_replay_smoke", "Snow Squall Archived Replay Smoke"),
               ("live_object_worker", "Snow Squall Live Object Worker Test"),
               ("live_shadow", "Publish Live Snow Squall Model Shadow"),
+              ("case_heldout_model_gate", "Case-Held-Out Model Gate"),
+              ("candidate_model_release_audit", "Candidate Model Release Audit"),
           ]:
               checks.append(status_gate(name, workflow))
 
