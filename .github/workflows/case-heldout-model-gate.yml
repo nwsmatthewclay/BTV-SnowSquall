@@ -97,11 +97,16 @@ jobs:
         id: feature_table
         run: |
           set -euo pipefail
-          path="$(find data/derived/input -type f \( -name 'snow_squall_model_features_cumulative.csv' -o -name 'object_model_features_pilot.csv' -o -name 'object_model_features_expansion.csv' \) | head -1)"
+          path=""
+          rebuilt="$(find data/derived/input -type f -name 'rebuilt_model_features.csv' | head -1)"
+          if [ -n "$rebuilt" ]; then
+            path="$rebuilt"
+          else
+            path="$(find data/derived/input -type f \( -name 'snow_squall_model_features_cumulative.csv' -o -name 'object_model_features_pilot.csv' -o -name 'object_model_features_expansion.csv' \) | head -1)"
+          fi
           test -n "$path"
           echo "path=$path" >> "$GITHUB_OUTPUT"
           echo "Training feature table: $path"
-
       - name: Verify training input
         run: |
           test -f "${{ steps.feature_table.outputs.path }}"
