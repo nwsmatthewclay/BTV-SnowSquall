@@ -19,6 +19,7 @@ from processing.object_tracker import CentroidTracker
 from processing.radar_grid import grid_field_2d, grid_latlon, grid_lowest_sweep
 from processing.radar_sites import apply_radar_origin, radar_origin_for_site
 from processing.motion import add_motion_features
+from processing.radar_storm_motion import attach_radar_storm_motion
 from processing.radar_features import object_field_summary, velocity_object_summary
 from processing.vertical_structure import summarize_vertical_structure
 
@@ -46,7 +47,7 @@ def object_geometry(mask, lat, lon, spacing_km=1.0):
     return hull.wkt, area_km2, length_km, width_km
 
 
-def process_volume(path: Path, tracker: CentroidTracker, radar_origin=None):
+def process_volume(path: Path, tracker: CentroidTracker, radar_origin=None, previous_reflectivity=None, previous_time=None):
     radar = read_level2(path)
     apply_radar_origin(radar, radar_origin)
     fields = resolve_fields(radar)
@@ -86,7 +87,13 @@ def process_volume(path: Path, tracker: CentroidTracker, radar_origin=None):
     objects = detect_reflectivity_objects(data)
     meta = volume_metadata(radar, path)
     timestamp = meta["scan_time_utc"]
-    tracked = tracker.update(timestamp, objects)
+    radar_motion = None
+    if previous_reflectivity is not None and previous_time is not None:
+        prev_dt = (pd.to_datetime(timestamp, utc=True) - pd.to_datetime(previous_time, utc=True)).total_seconds() / 60.0
+        radar_motion = attach_radar_storm_motion(
+            previous_reflectivity, data, prev_dt, spacing_km=1.0
+        )
+    tracked = tracker.update(timestamp, objects, radar_motion=radar_motion)
 
     reader_backend = meta.get("reader_backend")
     for obj in tracked:
@@ -158,7 +165,7 @@ def process_volume(path: Path, tracker: CentroidTracker, radar_origin=None):
                         )
                     )
 
-    return tracked
+    return tracked, data, timestamp
 
 
 def main():
@@ -187,6 +194,7 @@ def main():
     trackers = {}
     rows = []
     errors = []
+    previous_fields = {}
 
     for path in files:
         radar = path.parts[-3] if len(path.parts) >= 3 else "UNKNOWN"
@@ -194,7 +202,13 @@ def main():
 
         try:
             radar_origin = radar_origin_for_site(radar)
-            objects = process_volume(path, tracker, radar_origin=radar_origin)
+            result = process_volume(
+                path, tracker, radar_origin=radar_origin,
+                previous_reflectivity=previous_fields.get(radar, (None, None))[0],
+                previous_time=previous_fields.get(radar, (None, None))[1],
+            )
+            objects, current_reflectivity, current_timestamp = result
+            previous_fields[radar] = (current_reflectivity, current_timestamp)
         except Exception as exc:
             errors.append({
                 "radar_site": radar,
@@ -233,7 +247,7 @@ def main():
                 "zdr_gradient_dbkm", "rhohv_mean", "rhohv_max", "rhohv_p90",
                 "rhohv_min", "kdp_mean_degkm", "kdp_p90_degkm",
                 "velocity_mean_kt", "velocity_std_kt", "velocity_p90_abs_kt",
-                "velocity_gradient_ktkm",
+                "velocity_gradient_ktkm", "radar_motion_speed_kt", "radar_motion_direction_deg", "radar_motion_confidence",
             )
             for key in derived_keys:
                 row[key] = obj.get(key)
