@@ -100,15 +100,26 @@ def evaluate(df: pd.DataFrame, target: str, predictors: list[str]) -> dict:
         train_mask = ~test_mask
         if y.loc[train_mask].nunique() < 2 or y.loc[test_mask].nunique() < 2:
             continue
+        # Drop predictors with no observed values in this training fold.
+        # They cannot contribute and should not be handed to the imputer as
+        # an all-missing column. This is especially important for era-dependent
+        # dual-pol and provider-dependent environmental fields.
+        fold_predictors = [
+            p for p in predictors
+            if work.loc[train_mask, p].notna().any()
+        ]
+        if not fold_predictors:
+            continue
         model = fit_pipeline()
-        model.fit(work.loc[train_mask, predictors], y.loc[train_mask])
-        p = model.predict_proba(work.loc[test_mask, predictors])[:, 1]
+        model.fit(work.loc[train_mask, fold_predictors], y.loc[train_mask])
+        p = model.predict_proba(work.loc[test_mask, fold_predictors])[:, 1]
         yt = y.loc[test_mask]
         fold_rows.append({
             "fold": i,
             "n_train": int(train_mask.sum()),
             "n_test": int(test_mask.sum()),
             "test_cases": int(len(set(groups.loc[test_mask]))),
+            "predictor_count": len(fold_predictors),
             "roc_auc": float(roc_auc_score(yt, p)),
             "pr_auc": float(average_precision_score(yt, p)),
             "brier": float(brier_score_loss(yt, p)),
@@ -156,14 +167,16 @@ def main():
         predictors = choose_predictors(df, target)
         result = evaluate(df, target, predictors)
         result["target"] = target
+        result["predictors_with_any_data"] = int(sum(df[p].notna().any() for p in predictors))
         summaries[str(h)] = result
 
         y = as_binary(df[target])
         valid = y.notna()
         if y.loc[valid].nunique() >= 2:
             model = fit_pipeline()
-            model.fit(df.loc[valid, predictors], y.loc[valid].astype(int))
-            final_models[str(h)] = {"model": model, "predictors": predictors}
+            final_predictors = [p for p in predictors if df.loc[valid, p].notna().any()]
+            model.fit(df.loc[valid, final_predictors], y.loc[valid].astype(int))
+            final_models[str(h)] = {"model": model, "predictors": final_predictors}
 
     with (out / "metrics.json").open("w") as f:
         json.dump(summaries, f, indent=2)
