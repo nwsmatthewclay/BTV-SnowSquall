@@ -133,41 +133,54 @@ function renderMap(summary){
       if(r.track_id==null||r.centroid_lat==null||r.centroid_lon==null)return;
       (grouped[String(r.track_id)]??=[]).push(r);
     });
-    const activeTrackIds=new Set((x.features||[]).map(f=>String((f.properties||{}).track_id)));
+    const activeIds=new Set((x.features||[]).map(f=>String((f.properties||{}).track_id)));
     Object.entries(grouped).forEach(([id,rows])=>{
-      if(!showAllLiveTracks&&!activeTrackIds.has(id))return;
-      rows.sort((a,b)=>String(a.timestamp).localeCompare(String(b.timestamp)));
+      const active=activeIds.has(id);
       const selectedTrack=selected&&selected.radar_site===x.site&&String(selected.track_id)===id;
+      if(!showAllLiveTracks && !active && !selectedTrack)return;
+      rows.sort((a,b)=>String(a.timestamp).localeCompare(String(b.timestamp)));
       const count=selectedTrack?12:(showAllLiveTracks?8:4);
-      const coords=rows.slice(-count).map(r=>[Number(r.centroid_lat),Number(r.centroid_lon)])
-        .filter(v=>v.every(Number.isFinite));
+      const coords=rows.slice(-count).map(r=>[Number(r.centroid_lat),Number(r.centroid_lon)]).filter(v=>v.every(Number.isFinite));
       if(coords.length<2)return;
       L.polyline(coords,{
-        color:selectedTrack?"#ffffff":"#8795a3",
+        color:selectedTrack?"#ffffff":"#8b98a4",
         weight:selectedTrack?4:1.5,
-        opacity:selectedTrack?.9:(showAllLiveTracks?.30:.24),
-        dashArray:selectedTrack?null:"4 5",
+        opacity:selectedTrack?.95:(showAllLiveTracks?.30:.20),
+        dashArray:selectedTrack?null:"5 6",
         interactive:false
       }).addTo(layers[x.site]);
     });
     (x.features||[]).forEach(f=>{
       const p=f.properties||{};
-      const isSelected=selected&&selected.track_id===p.track_id&&selected.radar_site===p.radar_site;
+      const id=String(p.track_id??"—");
+      const isSelected=selected&&String(selected.track_id)===id&&selected.radar_site===x.site;
+      const fill=objectColor(p);
       const layer=L.geoJSON(f,{style:{
-        color:isSelected?"#ffffff":objectColor(p),
-        fillColor:objectColor(p),
-        fillOpacity:isSelected?.48:.24,
-        weight:isSelected?3:2
+        color:isSelected?"#ffffff":fill,
+        fillColor:fill,
+        fillOpacity:isSelected?.50:.18,
+        weight:isSelected?3:1.5
       }}).addTo(layers[x.site]);
-      layer.eachLayer(g=>{
-        const b=g.getBounds?.();
-        if(b&&b.isValid())bounds.push(b);
-      });
       layer.bindTooltip(
-        x.site+" • Track "+esc(p.track_id)+" • "+num(p.max_reflectivity_dbz)+" dBZ • "+num(p.motion_speed_kt)+" kt",
-        {sticky:true}
+        "<b>"+esc(x.site)+" • Track "+esc(id)+"</b><br>"+
+        num(p.max_reflectivity_dbz)+" dBZ • "+num(p.area_km2)+" km² • "+num(p.motion_speed_kt)+" kt",
+        {sticky:true,direction:"top"}
       );
       layer.on("click",()=>selectObject({...p,radar_site:x.site}));
+      if(p.centroid_lat!=null&&p.centroid_lon!=null){
+        const label=L.marker([Number(p.centroid_lat),Number(p.centroid_lon)],{
+          icon:L.divIcon({
+            className:"live-object-label-wrap",
+            iconSize:null,
+            iconAnchor:[0,0],
+            html:"<div class='live-object-label "+(isSelected?"selected":"")+"'>"+esc(x.site)+"-"+esc(id)+"</div>"
+          }),
+          interactive:false
+        }).addTo(layers[x.site]);
+        label.bringToFront();
+      }
+      const b=layer.getBounds?.();
+      if(b&&b.isValid())bounds.push(b);
     });
   });
   if(bounds.length&&!hasInitialExtent){
@@ -177,7 +190,6 @@ function renderMap(summary){
     hasInitialExtent=true;
   }
 }
-
 function renderObjectList(summary){
   let all=[];
   summary.filter(x=>!x.error).forEach(x=>(x.features||[]).forEach(f=>all.push({...f.properties,radar_site:x.site,source_kind:"current"})));
@@ -420,4 +432,4 @@ const liveTrackToggle=document.getElementById("showAllLiveTracks");
 if(liveTrackToggle)liveTrackToggle.onchange=e=>{showAllLiveTracks=e.target.checked;renderMap(Object.values(datasets))};
 document.getElementById("refreshBtn").onclick=refresh;
 refresh();
-refreshTimer=setInterval(refresh,120000);
+refreshTimer=setInterval(refresh,60000);
