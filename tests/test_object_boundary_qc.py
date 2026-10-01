@@ -6,7 +6,9 @@ from scripts.build_object_track_catalog import build_track_catalog
 def test_detector_marks_boundary_touching_object():
     field=np.zeros((30,30),dtype=float)
     field[0:6,0:5]=30.0
-    objs=detect_reflectivity_objects(field)
+    from processing.object_detector import ObjectDetectionConfig
+    config=ObjectDetectionConfig(close_iterations=0,open_iterations=0,fill_holes=False)
+    objs=detect_reflectivity_objects(field,config)
     assert len(objs)==1
     assert objs[0]['touches_grid_edge'] is True
 
