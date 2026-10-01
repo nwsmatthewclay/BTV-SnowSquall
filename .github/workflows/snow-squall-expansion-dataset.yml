@@ -1,6 +1,11 @@
 name: Snow Squall Expansion Dataset
 
 on:
+  workflow_run:
+    workflows:
+      - Snow Squall Unified Case Ledger
+    types:
+      - completed
   workflow_dispatch:
     inputs:
       archive_override:
@@ -45,7 +50,7 @@ concurrency:
 
 jobs:
   expand:
-    if: inputs.archive_override == true
+    if: (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success') || (github.event_name == 'workflow_dispatch' && inputs.archive_override == true)
     runs-on: ubuntu-latest
     timeout-minutes: 360
     env:
@@ -591,7 +596,7 @@ jobs:
           official_batch = int('${{ steps.batch.outputs.max_official }}')
           review_batch = int('${{ steps.batch.outputs.max_unverified }}')
           state = {
-              'auto_continue': False,
+              'auto_continue': True,
               'batch_rows': {'official': official_count, 'review': review_count},
               'batch_size': {'official': official_batch, 'review': review_batch},
               'current_offsets': {'official': official_offset, 'review': review_offset},

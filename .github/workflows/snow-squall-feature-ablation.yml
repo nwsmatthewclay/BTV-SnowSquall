@@ -1,0 +1,68 @@
+name: Snow Squall Feature Ablation Gate
+
+on:
+  workflow_run:
+    workflows:
+      - Snow Squall Expansion Dataset
+    types:
+      - completed
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: read
+
+concurrency:
+  group: snow-squall-feature-ablation
+  cancel-in-progress: false
+
+jobs:
+  ablation:
+    if: (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success') || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout model foundation
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.ref }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install ML dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+      - name: Download triggering expansion feature batch
+        if: github.event_name == 'workflow_run'
+        uses: actions/download-artifact@v4
+        with:
+          name: snow-squall-expansion-feature-batch
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          repository: ${{ github.repository }}
+          run-id: ${{ github.event.workflow_run.id }}
+          path: feature_artifact
+      - name: Locate feature table
+        id: feature
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          p="$(find feature_artifact -name 'snow_squall_model_features_cumulative.csv' -type f -print -quit || true)"
+          if [ -z "$p" ]; then
+            run_id="$(gh run list --workflow "Snow Squall Expansion Dataset" --branch snow-squall-model-foundation --status success --limit 1 --json databaseId --jq '.[0].databaseId')"
+            test -n "$run_id" && test "$run_id" != "null"
+            gh run download "$run_id" --name snow-squall-expansion-feature-batch --dir feature_artifact
+            p="$(find feature_artifact -name 'snow_squall_model_features_cumulative.csv' -type f -print -quit)"
+          fi
+          test -n "$p"
+          echo "path=$p" >> "$GITHUB_OUTPUT"
+          echo "Feature table: $p"
+      - name: Run common-population feature ablation
+        run: |
+          python scripts/feature_ablation.py "${{ steps.feature.outputs.path }}" --output-dir data/derived/feature_ablation
+      - name: Upload ablation report
+        uses: actions/upload-artifact@v4
+        with:
+          name: snow-squall-feature-ablation
+          path: data/derived/feature_ablation/metrics.json

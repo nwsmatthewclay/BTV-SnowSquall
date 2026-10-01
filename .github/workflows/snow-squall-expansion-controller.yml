@@ -63,6 +63,7 @@ jobs:
           fi
           gh workflow run "Snow Squall Expansion Dataset" \
             --ref snow-squall-model-foundation \
+            -f archive_override=true \
             -f official_offset="$official_next" \
             -f unverified_offset="$review_next" \
             -f max_official="$max_official" \

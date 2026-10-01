@@ -27,13 +27,20 @@ class Track:
     velocity_column: float = 0.0
     area_km2: float | None = None
     max_reflectivity_dbz: float | None = None
+    missed_scans: int = 0
 
 
 @dataclass(frozen=True)
 class TrackerConfig:
-    # The old 35-pixel gate was too permissive for 1-km grids and 5–10 min scans.
+    # Use both a physical speed gate and an absolute pixel cap. A fixed pixel
+    # radius can be too permissive on fast scans and too restrictive on long gaps.
     max_pixel_distance: float = 18.0
+    grid_spacing_km: float = 1.0
+    max_motion_kt: float = 75.0
+    min_gate_distance_km: float = 4.0
     max_time_gap_minutes: float = 10.0
+    max_missed_scans: int = 1
+    max_area_ratio: float = 16.0
     prediction_weight: float = 0.72
     size_weight: float = 0.16
     intensity_weight: float = 0.12
@@ -97,13 +104,27 @@ class CentroidTracker:
             track.column + track.velocity_column * dt,
         )
 
+    def _association_gate_pixels(self, timestamp, previous):
+        dt = min(
+            self.config.max_time_gap_minutes,
+            max(0.1, self._dt_minutes(timestamp, previous)),
+        )
+        max_distance_km = max(
+            self.config.min_gate_distance_km,
+            self.config.max_motion_kt * 0.514444 * (dt / 60.0),
+        )
+        return min(
+            self.config.max_pixel_distance,
+            max_distance_km / max(self.config.grid_spacing_km, 0.01),
+        )
+
     def _cost(self, track, obj, timestamp):
         pred_row, pred_col = self._predicted_position(track, timestamp)
         distance = hypot(obj["row_centroid"] - pred_row, obj["column_centroid"] - pred_col)
+        gate_pixels = self._association_gate_pixels(timestamp, track.last_time)
 
-        # Tight physical gate. Prediction is allowed to move the center, but a
-        # new object cannot jump arbitrarily far simply because another track exists.
-        if distance > self.config.max_pixel_distance:
+        # A track must remain within a physically plausible displacement window.
+        if distance > gate_pixels:
             return np.inf
 
         track_area = max(1.0, float(track.area_km2 or 1.0))
@@ -115,7 +136,11 @@ class CentroidTracker:
         else:
             intensity_cost = min(1.0, abs(self._z(obj) - track.max_reflectivity_dbz) / 20.0)
 
-        position_cost = distance / self.config.max_pixel_distance
+        area_ratio = max(obj_area / track_area, track_area / obj_area)
+        if area_ratio > self.config.max_area_ratio:
+            return np.inf
+
+        position_cost = distance / max(gate_pixels, 1e-6)
         return (
             self.config.prediction_weight * position_cost
             + self.config.size_weight * size_cost
@@ -132,6 +157,7 @@ class CentroidTracker:
         track_ids = sorted(self.tracks)
         assignments = {}
         used = set()
+        matched_track_ids = set()
 
         if track_ids:
             cost = np.full((len(track_ids), len(objects)), np.inf, dtype=float)
@@ -143,13 +169,12 @@ class CentroidTracker:
             if finite.any():
                 # Hungarian assignment may use the large sentinel for invalid
                 # cells; only accept genuinely finite, gated pairs afterwards.
-                rows, cols = np.where(finite.any(axis=1)[:, None] & finite.any(axis=0)[None, :])
-                if len(rows) and len(cols):
-                    row_ind, col_ind = linear_sum_assignment(np.where(finite, cost, 1e6))
-                    for r, c in zip(row_ind, col_ind):
-                        if np.isfinite(cost[r, c]):
-                            assignments[int(c)] = track_ids[int(r)]
-                            used.add(int(c))
+                row_ind, col_ind = linear_sum_assignment(np.where(finite, cost, 1e6))
+                for r, c in zip(row_ind, col_ind):
+                    if np.isfinite(cost[r, c]):
+                        assignments[int(c)] = track_ids[int(r)]
+                        used.add(int(c))
+                        matched_track_ids.add(track_ids[int(r)])
 
         for object_index, tid in assignments.items():
             obj = objects[object_index]
@@ -168,8 +193,15 @@ class CentroidTracker:
             track.row = measured_row
             track.column = measured_col
             track.age_scans += 1
+            track.missed_scans = 0
             track.area_km2 = self._area(obj)
             track.max_reflectivity_dbz = self._z(obj)
+
+        for tid, track in list(self.tracks.items()):
+            if tid not in matched_track_ids and tid in self.tracks:
+                track.missed_scans = getattr(track, "missed_scans", 0) + 1
+                if track.missed_scans > self.config.max_missed_scans:
+                    del self.tracks[tid]
 
         for object_index, obj in enumerate(objects):
             if object_index in used:
@@ -202,6 +234,7 @@ class CentroidTracker:
                     "velocity_column": track.velocity_column,
                     "area_km2": track.area_km2,
                     "max_reflectivity_dbz": track.max_reflectivity_dbz,
+                    "missed_scans": getattr(track, "missed_scans", 0),
                 }
                 for tid, track in self.tracks.items()
             },
@@ -225,5 +258,6 @@ class CentroidTracker:
                 velocity_column=float(raw.get("velocity_column", 0.0)),
                 area_km2=raw.get("area_km2"),
                 max_reflectivity_dbz=raw.get("max_reflectivity_dbz"),
+                missed_scans=int(raw.get("missed_scans", 0)),
             )
         return tracker
