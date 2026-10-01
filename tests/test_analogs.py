@@ -1,3 +1,4 @@
+import numpy as np
 import pandas as pd
 
 from src.snow_squall.analogs import AnalogLibrary, add_causal_analog_features
@@ -84,3 +85,26 @@ def test_library_handles_sparse_fields_and_serializes(tmp_path):
     query = loaded.query(d.iloc[[1]], top_k=5)
     assert path.exists()
     assert query.iloc[0]["analog_count"] == 2
+
+
+def test_analogs_handle_mixed_identifier_dtypes_and_missing_case_ids():
+    d = pd.DataFrame({
+        "case_id": [101.0, np.nan, 202.0, 303.0],
+        "null_id": [np.nan, "N1", np.nan, np.nan],
+        "population_id": [np.nan, np.nan, np.nan, np.nan],
+        "scan_time_utc": [
+            "2026-01-01T12:00:00Z",
+            "2026-01-02T12:00:00Z",
+            "2026-01-03T12:00:00Z",
+            "2026-01-04T12:00:00Z",
+        ],
+        "max_reflectivity_dbz": [30, 31, 32, 33],
+        "snsq": [1.0, 1.1, 1.2, 1.3],
+        "squall_onset_within_15m": [1, 0, 1, 0],
+        "squall_onset_within_30m": [1, 0, 1, 0],
+        "squall_onset_within_45m": [1, 0, 1, 0],
+        "squall_onset_within_60m": [1, 0, 1, 0],
+    })
+    out = add_causal_analog_features(d, top_k=3)
+    assert len(out) == len(d)
+    assert out["analog_count"].notna().all()
