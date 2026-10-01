@@ -1,0 +1,59 @@
+name: Snow Squall Object Tracking Audit
+
+on:
+  workflow_dispatch:
+  workflow_run:
+    workflows:
+      - Snow Squall Expansion Dataset
+    types:
+      - completed
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  audit:
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: snow-squall-model-foundation
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: pip install -r requirements.txt
+      - name: Download expansion feature artifact
+        if: github.event_name == 'workflow_run'
+        uses: actions/download-artifact@v4
+        with:
+          name: snow-squall-expansion-feature-batch
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          repository: ${{ github.repository }}
+          run-id: ${{ github.event.workflow_run.id }}
+          path: input
+      - name: Locate object table
+        id: source
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          p="$(find input -type f \( -name 'snow_squall_model_features_cumulative.csv' -o -name 'object_model_features_expanded.csv' \) -print -quit || true)"
+          if [ -z "$p" ]; then
+            run_id="$(gh run list --repo "$GITHUB_REPOSITORY" --workflow "Snow Squall Expansion Dataset" --branch snow-squall-model-foundation --status success --limit 1 --json databaseId --jq '.[0].databaseId')"
+            test -n "$run_id" && test "$run_id" != "null"
+            gh run download "$run_id" --repo "$GITHUB_REPOSITORY" --name snow-squall-expansion-feature-batch --dir input
+            p="$(find input -type f \( -name 'snow_squall_model_features_cumulative.csv' -o -name 'object_model_features_expanded.csv' \) -print -quit)"
+          fi
+          test -n "$p"
+          echo "path=$p" >> "$GITHUB_OUTPUT"
+      - name: Run object tracking audit
+        run: python scripts/audit_object_tracking.py "${{ steps.source.outputs.path }}" --output data/derived/object_tracking_audit/metrics.json
+      - name: Upload audit
+        uses: actions/upload-artifact@v4
+        with:
+          name: snow-squall-object-tracking-audit
+          retention-days: 30
+          path: data/derived/object_tracking_audit/metrics.json
