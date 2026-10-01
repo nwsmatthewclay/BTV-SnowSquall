@@ -194,7 +194,8 @@ def add_motion_evolution_features(
         turn / dt.replace(0, np.nan)
     ).where(contiguous)
 
-    prev_turn = out["motion_turn_deg"].shift(1)
+    prev_prev_direction = pd.to_numeric(group["motion_dir_deg"].shift(2), errors="coerce")
+    prev_turn = _signed_angle_delta_deg(prev_direction, prev_prev_direction).where(contiguous2)
     # A mean cosine of recent turn angles: 1 = straight, 0 = highly variable.
     turn_rad = np.deg2rad(pd.concat([turn, prev_turn], axis=1))
     out["motion_persistence_3"] = (
