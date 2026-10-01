@@ -141,6 +141,7 @@ def build_live_feature_row(
     for key in (
         "mlcape_jkg",
         "mlcin_jkg",
+        "dcape_jkg",
         "mucape_jkg",
         "mucin_jkg",
         "pwat_mm",
@@ -222,24 +223,6 @@ def build_live_feature_row(
     if row.get("shear_0_6km_kt") is not None and motion not in (None, 0):
         row["shear_motion_ratio"] = row["shear_0_6km_kt"] / abs(motion)
 
-    if row.get("max_reflectivity_dbz_rate_per_min") is not None and row.get("cape_jkg") is not None:
-        row["cape_weighted_reflectivity_growth"] = (
-            row["max_reflectivity_dbz_rate_per_min"]
-            * max(0.0, row["cape_jkg"])
-            / 100.0
-        )
-    if row.get("max_reflectivity_dbz_rate_per_min") is not None and row.get("mean_rh_0_2km_pct") is not None:
-        row["moisture_weighted_reflectivity_growth"] = (
-            row["max_reflectivity_dbz_rate_per_min"]
-            * row["mean_rh_0_2km_pct"]
-            / 100.0
-        )
-    if row.get("area_km2_rate_per_min") is not None and row.get("shear_0_6km_kt") is not None:
-        row["shear_weighted_area_growth"] = (
-            row["area_km2_rate_per_min"]
-            * row["shear_0_6km_kt"]
-        )
-
     current_time = _utc(current.get("timestamp"))
     previous_time = _utc(previous.get("timestamp")) if previous else None
     dt_min = None
@@ -289,6 +272,24 @@ def build_live_feature_row(
             displacement = 6371.0 * 2.0 * math.asin(min(1.0, math.sqrt(a)))
             row["centroid_displacement_km"] = displacement
             row["motion_speed_kmh"] = displacement / dt_min * 60.0
+
+    if row.get("max_reflectivity_dbz_rate_per_min") is not None and row.get("cape_jkg") is not None:
+        row["cape_weighted_reflectivity_growth"] = (
+            row["max_reflectivity_dbz_rate_per_min"]
+            * max(0.0, row["cape_jkg"])
+            / 100.0
+        )
+    if row.get("max_reflectivity_dbz_rate_per_min") is not None and row.get("mean_rh_0_2km_pct") is not None:
+        row["moisture_weighted_reflectivity_growth"] = (
+            row["max_reflectivity_dbz_rate_per_min"]
+            * row["mean_rh_0_2km_pct"]
+            / 100.0
+        )
+    if row.get("area_km2_rate_per_min") is not None and row.get("shear_0_6km_kt") is not None:
+        row["shear_weighted_area_growth"] = (
+            row["area_km2_rate_per_min"]
+            * row["shear_0_6km_kt"]
+        )
 
     if track_count is not None:
         row["track_scan_count_to_date"] = int(track_count)
