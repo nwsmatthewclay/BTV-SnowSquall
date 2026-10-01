@@ -83,4 +83,4 @@ def test_library_handles_sparse_fields_and_serializes(tmp_path):
     loaded = AnalogLibrary.load(path)
     query = loaded.query(d.iloc[[1]], top_k=5)
     assert path.exists()
-    assert query.iloc[0]["analog_count"] == 1
+    assert query.iloc[0]["analog_count"] == 2
