@@ -82,6 +82,13 @@
         <span id="overallText">Checking KCXX and KTYX.</span>
       </div>
       <div class="live-grid" id="radarCards"></div>
+      <div class="live-card live-mosaic-card" id="mosaicCard">
+        <h3>Live radar mosaic</h3>
+        <div class="live-stat"><span>Status</span><b id="mosaicStatus">Waiting for mosaic…</b></div>
+        <div class="live-stat"><span>Sources</span><b id="mosaicSources">—</b></div>
+        <div class="live-stat"><span>Radar time</span><b id="mosaicTime">—</b></div>
+        <div class="mosaic-note">KCXX + KTYX lowest-sweep reflectivity, common 1 km grid. Display layer only; object/model processing uses Level-II data directly.</div>
+      </div>
 
       <div class="section-head"><h2>Current objects</h2><span id="objectCount">0</span></div>
       <div class="live-object-list" id="objectList"></div>
@@ -112,6 +119,6 @@
   </section>
 </main>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<script src="live.js"></script>
+<script src="live.js?v=20261001-01"></script>
 </body>
 </html>
