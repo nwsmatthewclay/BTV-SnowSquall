@@ -42,6 +42,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
+      - name: Checkout model foundation
+        uses: actions/checkout@v4
+        with:
+          ref: snow-squall-model-foundation
       - name: Dispatch resumed expansion from newest unified ledger
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
