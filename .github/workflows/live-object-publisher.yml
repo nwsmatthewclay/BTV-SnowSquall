@@ -15,6 +15,7 @@ on:
       - scripts/audit_operational_readiness.py
       - scripts/live_healthcheck.py
       - .github/workflows/live-object-publisher.yml
+      - .github/live-object-trigger
 
 permissions:
   contents: write
