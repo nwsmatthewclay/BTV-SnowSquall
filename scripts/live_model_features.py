@@ -10,6 +10,8 @@ from typing import Iterable
 
 import pandas as pd
 
+from snow_squall.evolution import add_environment_evolution_features
+
 
 LIVE_TO_MODEL = {
     "reflectivity_max_dbz": "max_reflectivity_dbz",
@@ -348,7 +350,18 @@ def build_live_feature_frame(history: Iterable[dict], track_id: str | int) -> pd
 
         features.append(row)
 
-    return pd.DataFrame(features)
+    frame = pd.DataFrame(features)
+    if frame.empty:
+        return frame
+
+    # Apply exactly the same causal environmental-evolution transform used by
+    # historical training. The live frame is already restricted to one track.
+    frame = add_environment_evolution_features(
+        frame,
+        group_cols=["track_id"],
+        time_col="timestamp",
+    )
+    return frame
 
 
 def feature_coverage(frame: pd.DataFrame, predictor_columns: Iterable[str]) -> dict:
