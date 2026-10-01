@@ -247,7 +247,7 @@ def main():
                 "zdr_gradient_dbkm", "rhohv_mean", "rhohv_max", "rhohv_p90",
                 "rhohv_min", "kdp_mean_degkm", "kdp_p90_degkm",
                 "velocity_mean_kt", "velocity_std_kt", "velocity_p90_abs_kt",
-                "velocity_gradient_ktkm", "radar_motion_speed_kt", "radar_motion_direction_deg", "radar_motion_confidence",
+                "velocity_gradient_ktkm", "radar_motion_speed_kt", "radar_motion_direction_deg", "radar_motion_u_kt", "radar_motion_v_kt", "radar_motion_confidence",
             )
             for key in derived_keys:
                 row[key] = obj.get(key)

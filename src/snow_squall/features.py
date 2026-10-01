@@ -17,7 +17,7 @@ BASE_FEATURES = [
     "velocity_delta_0_6km_kt","zdr_mean_db","rhohv_mean","kdp_mean_degkm",
     "mrms_reflectivity_dbz","mrms_precip_rate","mrms_snow_rate",
     "object_growth_pct_10min","reflectivity_change_db_10min",
-    "echo_top_change_km_10min","motion_speed_kt","motion_direction_deg","radar_motion_speed_kt","radar_motion_direction_deg","radar_motion_confidence","area_km2","length_km","width_km"
+    "echo_top_change_km_10min","motion_speed_kt","motion_direction_deg","radar_motion_speed_kt","radar_motion_direction_deg","radar_motion_u_kt","radar_motion_v_kt","radar_motion_confidence","area_km2","length_km","width_km"
 ]
 
 def add_derived_features(df: pd.DataFrame) -> pd.DataFrame:

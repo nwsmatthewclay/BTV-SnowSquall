@@ -459,6 +459,8 @@ def process_volume(
             "motion_direction_deg": direction_deg,
             "radar_motion_speed_kt": obj.get("radar_motion_speed_kt"),
             "radar_motion_direction_deg": obj.get("radar_motion_direction_deg"),
+            "radar_motion_u_kt": obj.get("radar_motion_u_kt"),
+            "radar_motion_v_kt": obj.get("radar_motion_v_kt"),
             "radar_motion_confidence": obj.get("radar_motion_confidence"),
             "age_scans": age_scans,
             "reflectivity_trend_dbz_per_hr": z_trend,

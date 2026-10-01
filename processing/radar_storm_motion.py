@@ -75,6 +75,8 @@ def estimate_radar_storm_motion(previous, current, dt_minutes, spacing_km=1.0,
         "radar_motion_distance_km": distance_km,
         "radar_motion_speed_kt": float(speed_kt),
         "radar_motion_direction_deg": float(direction),
+        "radar_motion_u_kt": float(u_east / 1.852),
+        "radar_motion_v_kt": float(v_north / 1.852),
         "radar_motion_confidence": confidence,
     }
 
@@ -87,5 +89,7 @@ def attach_radar_storm_motion(previous, current, dt_minutes, spacing_km=1.0, **k
         "radar_motion_distance_km": np.nan,
         "radar_motion_speed_kt": np.nan,
         "radar_motion_direction_deg": np.nan,
+        "radar_motion_u_kt": np.nan,
+        "radar_motion_v_kt": np.nan,
         "radar_motion_confidence": 0.0,
     }
