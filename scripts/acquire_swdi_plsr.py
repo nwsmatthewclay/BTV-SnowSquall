@@ -15,6 +15,7 @@ import argparse
 import io
 import json
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import timedelta
 from pathlib import Path
 
@@ -171,21 +172,31 @@ def main() -> None:
     parser.add_argument("--cases", required=True)
     parser.add_argument("--output", required=True)
     parser.add_argument("--status", required=True)
+    parser.add_argument("--workers", type=int, default=6)
     args = parser.parse_args()
 
-    cases = pd.read_csv(args.cases)
+    cases = pd.read_csv(args.cases).drop_duplicates("case_id")
     frames = []
     statuses = []
+    workers = max(1, min(int(args.workers), 12))
 
-    for _, case in cases.drop_duplicates("case_id").iterrows():
-        frame, status = acquire_case(case)
-        statuses.append(status)
-        if not frame.empty:
-            frames.append(frame)
-        print(
-            f"{status['case_id']}: {status['status']} "
-            f"({status['record_count']} records)"
-        )
+    # PLSR requests are independent by case. Run them concurrently while
+    # keeping a bounded worker count so SWDI is not hammered by the batch.
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        futures = {pool.submit(acquire_case, row): str(row["case_id"]) for _, row in cases.iterrows()}
+        results = []
+        for future in as_completed(futures):
+            results.append(futures[future],)
+        for case_result in results:
+            frame, status = case_result.result()
+            statuses.append(status)
+            if not frame.empty:
+                frames.append(frame)
+            print(
+                f"{status['case_id']}: {status['status']} "
+                f"({status['record_count']} records)"
+            )
+    statuses.sort(key=lambda s: s['case_id'])
 
     result = pd.concat(frames, ignore_index=True) if frames else pd.DataFrame()
     output = Path(args.output)
