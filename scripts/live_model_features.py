@@ -6,7 +6,12 @@ earlier observations for the same track. Unavailable fields remain null.
 from __future__ import annotations
 
 import math
+import sys
+from pathlib import Path
 from typing import Iterable
+
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "src"))
 
 import pandas as pd
 
