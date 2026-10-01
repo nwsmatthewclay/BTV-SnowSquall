@@ -356,6 +356,21 @@ jobs:
             data/derived/snow_squall_unverified_objects.csv
             data/derived/snow_squall_training_objects.csv
 
+      - name: Build synchronized event radar + environment archive
+        run: |
+          python scripts/build_event_archive.py \
+            --cases data/manifests/snow_squall_expansion/snow_squall_expansion_cases.csv \
+            --raw-root data/raw/snow_squall_expansion_level2 \
+            --output-dir data/archive/snow_squall_events \
+            --rap-dir data/raw/RAP_event_archive \
+            --ruc-dir data/raw/RUC_event_archive
+      - name: Upload compact event radar-environment library
+        uses: actions/upload-artifact@v4
+        with:
+          name: snow-squall-event-radar-environment-library
+          retention-days: 30
+          path: data/archive/snow_squall_events
+
       - name: Build supervised historical environment and labels
         run: |
           python scripts/build_historical_dataset.py \

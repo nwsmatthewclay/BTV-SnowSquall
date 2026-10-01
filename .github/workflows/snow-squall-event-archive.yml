@@ -1,0 +1,89 @@
+name: Snow Squall Event Radar-Environment Archive
+
+on:
+  workflow_dispatch:
+    inputs:
+      cases:
+        description: "Case manifest CSV path"
+        required: false
+        default: "data/manifests/snow_squall_expansion/snow_squall_expansion_cases.csv"
+      raw_root:
+        description: "Level-II root"
+        required: false
+        default: "data/raw/snow_squall_expansion_level2"
+  workflow_run:
+    workflows:
+      - Snow Squall Expansion Dataset
+    types:
+      - completed
+
+permissions:
+  actions: read
+  contents: read
+
+concurrency:
+  group: snow-squall-event-archive
+  cancel-in-progress: false
+
+jobs:
+  archive:
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    env:
+      PYTHONUNBUFFERED: "1"
+      PYTHONPATH: ${{ github.workspace }}
+    steps:
+      - name: Checkout current model foundation
+        uses: actions/checkout@v4
+        with:
+          ref: snow-squall-model-foundation
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install scientific dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt -r requirements-science.txt
+      - name: Prepare source case manifest
+        if: github.event_name == 'workflow_run'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          mkdir -p source_artifact
+          gh run download "${{ github.event.workflow_run.id }}" --repo "$GITHUB_REPOSITORY" --name snow-squall-expansion-research-package --dir source_artifact
+          cases="$(find source_artifact -name snow_squall_expansion_cases.csv -type f -print -quit)"
+          test -n "$cases"
+          mkdir -p data/manifests/snow_squall_expansion
+          cp "$cases" data/manifests/snow_squall_expansion/snow_squall_expansion_cases.csv
+      - name: Reacquire Level-II for triggering batch
+        if: github.event_name == 'workflow_run'
+        run: |
+          set -euo pipefail
+          manifest="$(find source_artifact -name snow_squall_expansion_radar_manifest.csv -type f -print -quit)"
+          test -n "$manifest"
+          python acquisition/historical_level2.py --manifest "$manifest" --output data/raw/snow_squall_expansion_level2
+      - name: Validate manual source paths
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          test -s "${{ inputs.cases }}"
+          test -d "${{ inputs.raw_root }}"
+      - name: Build synchronized archive
+        run: |
+          python scripts/build_event_archive.py             --cases "${{ inputs.cases || 'data/manifests/snow_squall_expansion/snow_squall_expansion_cases.csv' }}"             --raw-root "${{ inputs.raw_root || 'data/raw/snow_squall_expansion_level2' }}"             --output-dir data/archive/snow_squall_events             --rap-dir data/raw/RAP_event_archive             --ruc-dir data/raw/RUC_event_archive
+      - name: Upload event radar-environment library
+        uses: actions/upload-artifact@v4
+        with:
+          name: snow-squall-event-radar-environment-library
+          retention-days: 30
+          path: data/archive/snow_squall_events
+      - name: Upload archive QA
+        uses: actions/upload-artifact@v4
+        with:
+          name: snow-squall-event-archive-qc
+          retention-days: 30
+          path: |
+            data/archive/snow_squall_events/archive_summary.json
+            data/archive/snow_squall_events/event_archive_qc.csv
+            data/archive/snow_squall_events/event_scan_manifest.csv
