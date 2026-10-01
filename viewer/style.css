@@ -86,15 +86,15 @@ footer{height:60px;padding:7px 15px;background:#101923;border-top:1px solid var(
 .live-object-label.selected{border-color:#fff;color:#fff;box-shadow:0 0 0 1px rgba(255,255,255,.25),0 2px 7px rgba(0,0,0,.5)}
 
 /* Forecaster workspace layout: map first, detail drawer second, no horizontal expansion. */
-.live-main{grid-template-rows:minmax(0,1fr) minmax(250px,30vh);height:calc(100vh - 68px);min-width:0;min-height:0;overflow:hidden}
-.live-top{grid-template-columns:minmax(0,1fr) 390px;min-width:0;min-height:0;overflow:hidden}
+.live-main{grid-template-rows:minmax(0,1fr) minmax(230px,25vh);height:calc(100vh - 68px);min-width:0;min-height:0;overflow:hidden}
+.live-top{grid-template-columns:minmax(0,1fr) 330px;min-width:0;min-height:0;overflow:hidden}
 #liveMap{min-width:0;min-height:0;height:100%}
-.live-sidebar{min-width:0;max-width:390px;padding:10px;overflow-y:auto;overflow-x:hidden}
+.live-sidebar{min-width:0;max-width:330px;padding:10px;overflow-y:auto;overflow-x:hidden}
 .live-grid{gap:6px}
 .live-card{min-width:0}
 .live-status{margin-top:6px}
 .live-object-list{max-height:210px;overflow:auto}
-.detail-drawer{grid-template-columns:minmax(300px,360px) minmax(0,1fr);min-width:0;min-height:0;overflow:hidden}
+.detail-drawer{grid-template-columns:minmax(280px,330px) minmax(0,1fr);min-width:0;min-height:0;overflow:hidden}
 .detail-summary,.detail-history{min-width:0;min-height:0}
 .detail-summary{padding:10px 12px;overflow:auto}
 .detail-history{padding:10px 12px;overflow:auto}
