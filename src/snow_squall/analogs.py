@@ -70,11 +70,19 @@ def _group_keys(reference: pd.DataFrame) -> np.ndarray:
     for case_id, null_value, pop_value, row_id in zip(
         case, null_id, population, reference.index
     ):
-        if case_id and case_id.lower() not in {"nan", "none"}:
+        # Be defensive against mixed CSV dtypes: pandas may materialize an
+        # identifier as a Python float when the column contains missing values.
+        case_id = "" if pd.isna(case_id) else str(case_id).strip()
+        null_value = "" if pd.isna(null_value) else str(null_value).strip()
+        pop_value = "" if pd.isna(pop_value) else str(pop_value).strip()
+        case_key = case_id.lower()
+        null_key = null_value.lower()
+        pop_key = pop_value.lower()
+        if case_id and case_key not in {"nan", "none"}:
             keys.append("case:" + case_id)
-        elif null_value and null_value.lower() not in {"nan", "none"}:
+        elif null_value and null_key not in {"nan", "none"}:
             keys.append("null:" + null_value)
-        elif pop_value and pop_value.lower() not in {"nan", "none"}:
+        elif pop_value and pop_key not in {"nan", "none"}:
             keys.append("pop:" + pop_value)
         else:
             keys.append("row:" + str(row_id))
