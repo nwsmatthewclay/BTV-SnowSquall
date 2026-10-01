@@ -265,6 +265,14 @@ jobs:
           print('Unverified cases:',len(unverified))
           PY
 
+      - name: Download expanded Level-II radar immediately
+        run: |
+          python acquisition/historical_level2.py \
+            --manifest data/manifests/snow_squall_expansion/snow_squall_expansion_radar_manifest.csv \
+            --output data/raw/snow_squall_expansion_level2 \
+            --workers 16 \
+            --max-failure-rate 0.20
+
       - name: Acquire ASOS/METAR observations
         run: |
           python acquisition/asos_iem.py \
@@ -323,14 +331,6 @@ jobs:
             --cases data/manifests/snow_squall_expansion/snow_squall_expansion_cases.csv \
             --output data/derived/snow_squall_expansion_plsr.csv \
             --status data/derived/snow_squall_expansion_plsr_status.json
-
-      - name: Download expanded Level-II radar
-        run: |
-          python acquisition/historical_level2.py \
-            --manifest data/manifests/snow_squall_expansion/snow_squall_expansion_radar_manifest.csv \
-            --output data/raw/snow_squall_expansion_level2 \
-            --workers 16 \
-            --max-failure-rate 0.20
 
       - name: Reconstruct documented and unverified radar objects
         run: |
