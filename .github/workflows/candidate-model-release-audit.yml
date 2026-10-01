@@ -2,6 +2,16 @@ name: Candidate Model Release Audit
 
 on:
   workflow_dispatch:
+  workflow_run:
+    workflows:
+      - Snow Squall Candidate Model Refresh
+    types:
+      - completed
+  push:
+    branches:
+      - snow-squall-model-foundation
+    paths:
+      - .github/candidate-release-audit-trigger
 
 permissions:
   actions: read
@@ -9,6 +19,7 @@ permissions:
 
 jobs:
   audit:
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
