@@ -23,8 +23,8 @@ permissions:
   actions: read
 
 concurrency:
-  group: snow-squall-viewer-pages
-  cancel-in-progress: true
+  group: snow-squall-viewer-pages-publish
+  cancel-in-progress: false
 
 jobs:
   publish:
@@ -90,7 +90,7 @@ jobs:
           # Preserve the newest modern-validation review page when republishing
           # the historical explorer so either viewer lane can update independently.
           if git fetch origin gh-pages --quiet 2>/dev/null; then
-            if git cat-file -e origin/gh-pages:validation.html 2>/dev/null; then
+            if git cat-file -e origin/gh-pages:validation.html 2>/dev/null &&                git cat-file -e origin/gh-pages:validation.js 2>/dev/null &&                git cat-file -e origin/gh-pages:data/validation/catalog.json 2>/dev/null; then
               git show origin/gh-pages:validation.html > _site/validation.html
               git show origin/gh-pages:validation.js > _site/validation.js
               mkdir -p _site/data/validation
