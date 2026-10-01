@@ -49,4 +49,24 @@ def add_motion_features(frame, group_col="object_id"):
     out["motion_u_kt"] = out["motion_speed_kt"] * np.sin(direction_rad)
     out["motion_v_kt"] = out["motion_speed_kt"] * np.cos(direction_rad)
 
+    if "radar_motion_speed_kt" in out.columns:
+        radar_speed = pd.to_numeric(out["radar_motion_speed_kt"], errors="coerce")
+        out["motion_speed_minus_radar_kt"] = out["motion_speed_kt"] - radar_speed
+    if "radar_motion_direction_deg" in out.columns:
+        radar_dir = pd.to_numeric(out["radar_motion_direction_deg"], errors="coerce")
+        out["motion_direction_error_deg"] = (
+            (out["motion_direction_deg"] - radar_dir + 180.0) % 360.0 - 180.0
+        ).abs()
+    if {"motion_u_kt","motion_v_kt","radar_motion_u_kt","radar_motion_v_kt"}.issubset(out.columns):
+        denom = (
+            np.hypot(out["motion_u_kt"], out["motion_v_kt"])
+            * np.hypot(out["radar_motion_u_kt"], out["radar_motion_v_kt"])
+        )
+        out["motion_radar_alignment"] = (
+            (
+                out["motion_u_kt"] * out["radar_motion_u_kt"]
+                + out["motion_v_kt"] * out["radar_motion_v_kt"]
+            ) / denom.replace(0, np.nan)
+        )
+
     return out.drop(columns=["prev_lat", "prev_lon", "prev_time", "_motion_group"])
