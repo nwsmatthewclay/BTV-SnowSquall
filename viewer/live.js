@@ -6,7 +6,7 @@ const layers={KCXX:L.layerGroup().addTo(map),KTYX:L.layerGroup().addTo(map)};
 const radarLocations={KCXX:[44.511,-73.166],KTYX:[43.756,-75.680]};
 const LIVE_BASE="https://raw.githubusercontent.com/nwsmatthewclay/BTV-SnowSquall/snow-squall-live-data/viewer/data/live/";
 const SHADOW_BASE="https://raw.githubusercontent.com/nwsmatthewclay/BTV-SnowSquall/snow-squall-shadow-data/viewer/data/shadow/";
-let datasets={},selected=null,refreshTimer=null,hasInitialExtent=false,radarMosaicLayer=L.layerGroup().addTo(map),projectionLayer=L.layerGroup().addTo(map),radarMosaic=null,showAllLiveTracks=false,radarMode="clean",qcdRadarLayer=null;
+let datasets={},selected=null,refreshTimer=null,hasInitialExtent=false,radarMosaicLayer=L.layerGroup().addTo(map),radarMosaic=null,radarMode="clean",qcdRadarLayer=null;
 
 const num=(v,d=1)=>v==null||Number.isNaN(Number(v))?"—":Number(v).toFixed(d);
 const fmt=t=>t?new Date(t).toLocaleString(undefined,{month:"short",day:"numeric",hour:"numeric",minute:"2-digit",second:"2-digit"}):"—";
@@ -185,124 +185,54 @@ function snowSquallColor(prob){
   if(prob<.80)return "#f39b2f";
   return "#ef625f";
 }
-function snowSquallProbabilityLabel(prob){
-  return prob==null?"SS —":"SS "+(prob*100).toFixed(0)+"%";
+function probabilityLabel(prob){
+  return prob==null?"—":(Number(prob)*100).toFixed(0)+"%";
 }
 function evolutionSignal(p){
-  const rp=shadowProbabilities(p);
-  const vals=[rp[15],rp[30],rp[45],rp[60]].filter(Number.isFinite);
+  const vals=[15,30,45,60].map(h=>shadowProbabilities(p)[h]).filter(Number.isFinite);
   if(vals.length>=2){
     const delta=vals[vals.length-1]-vals[0];
-    if(delta>=.05)return {label:"EXPECTED STRENGTHENING",short:"RISING"};
-    if(delta<=-.05)return {label:"EXPECTED WEAKENING",short:"FALLING"};
-    return {label:"EXPECTED STEADY",short:"STEADY"};
+    if(delta>=.05)return {label:"Increasing probability",short:"RISING"};
+    if(delta<=-.05)return {label:"Decreasing probability",short:"FALLING"};
+    return {label:"Little probability change",short:"STEADY"};
   }
   const z=Number(p.reflectivity_trend_dbz_per_hr),g=Number(p.area_growth_fraction);
-  if((Number.isFinite(z)&&z>=3)||(Number.isFinite(g)&&g>=.08))return {label:"OBSERVED STRENGTHENING",short:"RISING"};
-  if((Number.isFinite(z)&&z<=-3)||(Number.isFinite(g)&&g<=-.08))return {label:"OBSERVED WEAKENING",short:"FALLING"};
-  if(Number.isFinite(z)||Number.isFinite(g))return {label:"OBSERVED STEADY",short:"STEADY"};
-  return {label:"EVOLUTION UNKNOWN",short:"UNKNOWN"};
-}
-function destinationPoint(lat,lon,bearingDeg,distanceKm){
-  const R=6371.0088,br=Number(bearingDeg)*Math.PI/180,dr=Number(distanceKm)/R;
-  const p1=Number(lat)*Math.PI/180,l1=Number(lon)*Math.PI/180;
-  const p2=Math.asin(Math.sin(p1)*Math.cos(dr)+Math.cos(p1)*Math.sin(dr)*Math.cos(br));
-  const l2=l1+Math.atan2(Math.sin(br)*Math.sin(dr)*Math.cos(p1),Math.cos(dr)-Math.sin(p1)*Math.sin(p2));
-  return [p2*180/Math.PI,((l2*180/Math.PI+540)%360)-180];
-}
-function projectionPoints(p,maxMinutes){
-  const lat=Number(p.centroid_lat),lon=Number(p.centroid_lon),speed=Number(p.motion_speed_kt),bearing=Number(p.motion_direction_deg??p.motion_dir_deg);
-  if(![lat,lon,speed,bearing].every(Number.isFinite)||speed<=0)return [];
-  return [15,30,45,60].filter(m=>m<=maxMinutes).map(minutes=>{
-    const km=speed*1.852*minutes/60,pt=destinationPoint(lat,lon,bearing,km);
-    return {minutes,lat:pt[0],lon:pt[1]};
-  });
-}
-function objectRadiusMeters(p){
-  const size=Math.max(Number(p.length_km)||0,Number(p.width_km)||0);
-  return Math.max(2500,Math.min(10000,(size||5)*500));
-}
-function addForwardProjection(p,isSelected){
-  const pts=projectionPoints(p,isSelected||showAllLiveTracks?60:30);
-  if(!pts.length)return;
-  const origin=[Number(p.centroid_lat),Number(p.centroid_lon)],prob=shadowProbability(p),color=snowSquallColor(prob);
-  const line=[origin,...pts.map(x=>[x.lat,x.lon])];
-  L.polyline(line,{
-    color:isSelected?"#ffffff":color,
-    weight:isSelected?4:2.5,
-    opacity:isSelected?.95:.78,
-    dashArray:isSelected?null:"6 5",
-    interactive:false
-  }).addTo(projectionLayer);
-  pts.forEach((pt,idx)=>{
-    L.circleMarker([pt.lat,pt.lon],{
-      radius:isSelected?(idx===pts.length-1?6:4):3.5,
-      color:isSelected?"#ffffff":color,
-      weight:isSelected?2:1,
-      fillColor:color,
-      fillOpacity:.78,
-      interactive:false
-    }).addTo(projectionLayer);
-  });
-  if(isSelected){
-    L.marker([pts[0].lat,pts[0].lon],{
-      icon:L.divIcon({className:"projection-label-wrap",iconSize:null,iconAnchor:[0,0],
-        html:"<div class='projection-label'>+15m</div>"}),
-      interactive:false
-    }).addTo(projectionLayer);
-    if(pts[1]){
-      L.marker([pts[1].lat,pts[1].lon],{
-        icon:L.divIcon({className:"projection-label-wrap",iconSize:null,iconAnchor:[0,0],
-          html:"<div class='projection-label'>+30m</div>"}),
-        interactive:false
-      }).addTo(projectionLayer);
-    }
-    L.marker([Number(p.centroid_lat),Number(p.centroid_lon)],{
-      icon:L.divIcon({className:"snow-squall-prob-label-wrap",iconSize:null,iconAnchor:[0,0],
-        html:"<div class='snow-squall-prob-label' style='border-color:"+color+"'>"+snowSquallProbabilityLabel(prob)+"</div>"}),
-      interactive:false
-    }).addTo(projectionLayer).bringToFront();
-  }
+  if((Number.isFinite(z)&&z>=3)||(Number.isFinite(g)&&g>=.08))return {label:"Radar echo strengthening",short:"RISING"};
+  if((Number.isFinite(z)&&z<=-3)||(Number.isFinite(g)&&g<=-.08))return {label:"Radar echo weakening",short:"FALLING"};
+  if(Number.isFinite(z)||Number.isFinite(g))return {label:"Radar echo relatively steady",short:"STEADY"};
+  return {label:"Evolution not yet established",short:"UNKNOWN"};
 }
 function renderMap(summary){
   Object.values(layers).forEach(l=>l.clearLayers());
-  projectionLayer.clearLayers();
   const bounds=[];
   summary.filter(x=>!x.error).forEach(x=>{
     (x.features||[]).forEach(f=>{
       const p=f.properties||{},id=String(p.track_id??"—");
       const isSelected=selected&&String(selected.track_id)===id&&selected.radar_site===x.site;
-      const probe={...p,radar_site:x.site},prob=shadowProbability(probe),color=snowSquallColor(prob),signal=evolutionSignal(probe);
+      const probe={...p,radar_site:x.site},prob=shadowProbability(probe),color=snowSquallColor(prob);
       const shape=L.geoJSON(f,{style:{
         color:isSelected?"#ffffff":color,
         fillColor:color,
-        fillOpacity:isSelected?.30:.12,
+        fillOpacity:isSelected?.35:.18,
         weight:isSelected?3:1.5
       }}).addTo(layers[x.site]);
       shape.bindTooltip(
-        "<b>"+esc(x.site)+" • Track "+esc(id)+"</b><br>"+
-        esc(snowSquallProbabilityLabel(prob))+" • "+esc(signal.short)+"<br>"+
-        num(p.motion_speed_kt)+" kt @ "+num(p.motion_direction_deg??p.motion_dir_deg,0)+"°",
+        "<b>"+esc(x.site)+" • Object "+esc(id)+"</b><br>"+
+        "Snow Squall probability: "+esc(probabilityLabel(prob))+"<br>"+
+        "Evolution: "+esc(evolutionSignal(probe).short),
         {sticky:true,direction:"top"}
       );
       shape.on("click",()=>selectObject({...p,radar_site:x.site}));
-      if(p.centroid_lat!=null&&p.centroid_lon!=null){
-        L.circle([Number(p.centroid_lat),Number(p.centroid_lon)],{
-          radius:objectRadiusMeters(p),
-          color:isSelected?"#ffffff":color,
-          weight:isSelected?3:2,
-          fillColor:color,
-          fillOpacity:isSelected?.06:.03,
-          interactive:false
-        }).addTo(layers[x.site]);
-      }
-      addForwardProjection(probe,isSelected);
       if(isSelected&&p.centroid_lat!=null&&p.centroid_lon!=null){
         L.marker([Number(p.centroid_lat),Number(p.centroid_lon)],{
-          icon:L.divIcon({className:"live-object-label-wrap",iconSize:null,iconAnchor:[0,0],
-            html:"<div class='live-object-label selected'>"+esc(x.site)+"-"+esc(id)+"</div>"}),
+          icon:L.divIcon({
+            className:"live-object-label-wrap",
+            iconSize:null,
+            iconAnchor:[0,0],
+            html:"<div class='live-object-label selected'>"+esc(x.site)+" • "+esc(id)+"</div>"
+          }),
           interactive:false
-        }).addTo(layers[x.site]).bringToFront();
+        }).addTo(layers[x.site]);
       }
       const b=shape.getBounds?.();
       if(b&&b.isValid())bounds.push(b);
@@ -371,222 +301,129 @@ function shadowGrid(record){
     const p=probs[String(h)];
     const fraction=coverage[String(h)]?.fraction;
     const err=errors[String(h)];
-    const sub=err?"error":(fraction==null?"coverage —":(Number(fraction)*100<80?"warming up • coverage "+(Number(fraction)*100).toFixed(0)+"%":"coverage "+(Number(fraction)*100).toFixed(0)+"%"));
-    return "<div class='shadow-cell'><span>"+h+" min</span><b>"+(p==null?(err?"ERROR":"—"):""+(Number(p)*100).toFixed(1)+"%")+"</b><span>"+esc(sub)+"</span></div>";
-  }).join("")+"</div>";
-}
-
-function renderShadowCard(summary){
-  const box=document.getElementById("shadowCardBody");
-  if(!box)return;
-  const rows=summary.filter(x=>x.shadow).map(x=>({
-    site:x.site,
-    updated:x.shadow.updated_utc,
-    scored:Number(x.shadow.scored_object_count||0),
-    total:Number(x.shadow.current_object_count||0),
-    status:x.shadow.operational_release_status||"unknown"
-  }));
-  if(!rows.length){
-    box.innerHTML="<div class='shadow-note'>No published shadow feed is available yet.</div>";
+    const sub=err?"error":(fractfunction renderObjectList(summary){
+  let all=[];
+  summary.filter(x=>!x.error).forEach(x=>(x.features||[]).forEach(f=>all.push({...f.properties,radar_site:x.site,source_kind:"current"})));
+  all.sort((a,b)=>Number(shadowProbability(b)||0)-Number(shadowProbability(a)||0));
+  let usingHistory=false;
+  if(!all.length){
+    usingHistory=true;
+    summary.filter(x=>!x.error).forEach(x=>{
+      const latestByObject=new Map();
+      (x.history||[]).forEach(r=>{
+        if(r.track_id==null)return;
+        const id=String(r.track_id),prior=latestByObject.get(id);
+        if(!prior||String(r.timestamp)>String(prior.timestamp))latestByObject.set(id,r);
+      });
+      latestByObject.forEach(r=>all.push({...r,radar_site:x.site,source_kind:"recent"}));
+    });
+    all.sort((a,b)=>String(b.timestamp||"").localeCompare(String(a.timestamp||"")));
+  }
+  document.getElementById("objectCount").textContent=String(all.length)+(usingHistory?" recent":" active");
+  if(!all.length){
+    document.getElementById("objectList").innerHTML="<div class='live-card'>No current or recent objects are available.</div>";
     return;
   }
-  box.innerHTML=rows.map(row=>
-    "<div class='live-stat'><span>"+esc(row.site)+"</span><b>"+row.scored+" / "+row.total+" scored</b></div>"+
-    "<div class='live-stat'><span>Updated</span><b>"+esc(fmt(row.updated))+"</b></div>"+
-    "<div class='live-stat'><span>Status</span><b>"+esc(row.status)+"</b></div>"
-  ).join("")+
-    "<div class='shadow-note'>The operational object feed remains probability-free. Scores shown here come from the isolated research shadow branch.</div>";
+  document.getElementById("objectList").innerHTML=all.slice(0,20).map(p=>{
+    const score=shadowProbability(p),color=snowSquallColor(score),state=evolutionSignal(p);
+    return "<div class='live-object "+(selected&&selected.track_id===p.track_id&&selected.radar_site===p.radar_site?"selected":"")+"' data-id='"+esc(p.radar_site+"|"+p.track_id)+"'>"+
+      "<div class='title'>"+esc(p.radar_site)+" • Object "+esc(p.track_id)+" <span class='chip'>"+esc(state.short)+"</span></div>"+
+      "<div class='sub'>"+esc(fmt(p.timestamp))+"</div>"+
+      "<div class='chips'><span class='chip' style='border:1px solid "+color+"'>Snow Squall "+probabilityLabel(score)+"</span><span class='chip'>"+num(p.max_reflectivity_dbz)+" dBZ</span><span class='chip'>"+num(p.area_km2)+" km²</span></div></div>";
+  }).join("");
+  document.querySelectorAll(".live-object").forEach(el=>el.onclick=()=>{
+    const [site,id]=el.dataset.id.split("|");
+    const item=all.find(p=>p.radar_site===site&&String(p.track_id)===String(id));
+    if(item)selectObject(item);
+  });
 }
-function renderEnvironment(fields){
-  const env=fields||{};
-  const rows=[
-    ["SBCAPE","cape_jkg",v=>num(v,0)+" J/kg"],
-    ["SBCIN","cin_jkg",v=>num(v,0)+" J/kg"],
-    ["MLCAPE","mlcape_jkg",v=>num(v,0)+" J/kg"],
-    ["MLCIN","mlcin_jkg",v=>num(v,0)+" J/kg"],
-    ["MUCAPE","mucape_jkg",v=>num(v,0)+" J/kg"],
-    ["PWAT","pwat_mm",v=>num(v,1)+" mm"],
-    ["0–1 km SRH","srh01_m2s2",v=>num(v,0)+" m²/s²"],
-    ["0–6 km shear","shear_0_6km_ms",v=>num(ktFromMs(v),1)+" kt"],
-    ["2 m temp","temperature_2m_k",v=>num(cFromK(v),1)+" °C"],
-    ["2 m dewpoint","dewpoint_2m_k",v=>num(cFromK(v),1)+" °C"],
-    ["Surface gust","gust_ms",v=>num(ktFromMs(v),1)+" kt"],
-    ["SNSQ","snsq",v=>num(v,2)],
-    ["SNSQ 0–2 km RH","mean_rh_0_2km_pct",v=>num(v,0)+"%"],
-    ["SNSQ Δθe 0–2 km","thetae_delta_0_2km_k",v=>num(v,1)+" K"],
-    ["SNSQ 0–2 km wind","mean_wind_0_2km_ms",v=>num(ktFromMs(v),1)+" kt"],
-    ["2 m wet-bulb","wetbulb_2m_c",v=>num(v,1)+" °C"],
-  ];
-  return "<div class='live-env-grid'>"+rows.map(([label,key,format])=>{
-    const value=env[key];
-    return "<div class='env-item'><span>"+label+"</span><b>"+(value==null?"—":format(value))+"</b></div>";
-  }).join("")+"</div>";
-}
-
-function lifecycleState(p){const signal=evolutionSignal(p);const age=Number(p?.age_scans||0);if(age<=2&&signal.short==="UNKNOWN")return "NEW";if(signal.short==="RISING")return "STRENGTHENING";if(signal.short==="FALLING")return "WEAKENING";return "STEADY";}
-function liveSpark(rows,key,label,unit){const vals=rows.map(r=>Number(r[key])).filter(Number.isFinite);if(!vals.length)return "<div class='live-spark-row'><span>"+label+"</span><div class='trend-empty'>No data</div></div>";const W=300,H=58,P=7,min=Math.min(...vals),max=Math.max(...vals),range=Math.max(max-min,.1),pts=rows.map((r,i)=>{const v=Number(r[key]);return Number.isFinite(v)?{i,v}:null}).filter(Boolean),x=i=>P+(rows.length===1?0:i*(W-2*P)/Math.max(1,rows.length-1)),y=v=>(H-P)-(v-min)/range*(H-2*P),path=pts.map((pt,i)=>(i?"L":"M")+x(pt.i).toFixed(1)+" "+y(pt.v).toFixed(1)).join(" "),last=pts[pts.length-1],digits=label==="Max Z"?0:1;return "<div class='live-spark-row'><div class='live-spark-label'><span>"+label+"</span><b>"+num(last.v,digits)+" "+unit+"</b></div><svg class='live-spark' viewBox='0 0 "+W+" "+H+"'><line x1='"+P+"' y1='"+(H-P)+"' x2='"+(W-P)+"' y2='"+(H-P)+"' class='trend-axis'/><path d='"+path+"' class='trend-path'/><circle cx='"+x(last.i).toFixed(1)+"' cy='"+y(last.v).toFixed(1)+"' r='3.5' class='trend-current'/></svg></div>";}
-function renderLiveTrend(p){const box=document.getElementById("liveTrend");if(!box)return;if(!p){box.innerHTML="<div class='history-empty'>Select a live object to see its evolution.</div>";return;}const rows=(datasets[p.radar_site]?.history||[]).filter(r=>String(r.track_id)===String(p.track_id)).sort((a,b)=>String(a.timestamp).localeCompare(String(b.timestamp)));if(!rows.length){box.innerHTML="<div class='history-empty'>No retained history for this object.</div>";return;}box.innerHTML="<div class='live-trend-head'><span>Track "+esc(p.track_id)+"</span><b>"+lifecycleState(p)+"</b><small>"+rows.length+" retained scans</small></div>"+liveSpark(rows,"max_reflectivity_dbz","Max Z","dBZ")+liveSpark(rows,"area_km2","Area","km²")+liveSpark(rows,"motion_speed_kt","Motion","kt");const scored=(datasets[p.radar_site]?.shadowHistory||[]).filter(r=>String(r.track_id)===String(p.track_id)).sort((a,b)=>String(a.timestamp).localeCompare(String(b.timestamp))),latest=scored.at(-1),any=scored.some(r=>Object.values(r.research_probabilities||{}).some(v=>v!=null));if(any){box.innerHTML+="<div class='live-prob-trend'><div class='live-trend-head'><span>Research probability evolution</span><b>RESEARCH ONLY</b></div><div class='live-prob-grid'>"+[["15 min",latest?.research_probabilities?.["15"]],["30 min",latest?.research_probabilities?.["30"]],["45 min",latest?.research_probabilities?.["45"]],["60 min",latest?.research_probabilities?.["60"]]].map(x=>"<div><span>"+x[0]+"</span><b>"+(x[1]==null?"—":(Number(x[1])*100).toFixed(1)+"%")+"</b></div>").join("")+"</div><div class='mosaic-note'>Latest available shadow score. Early scans may be unscored while temporal predictors warm up.</div></div>";}}
-function renderSelectedHistory(p){
-  const box=document.getElementById("liveHistory");
-  const count=document.getElementById("liveTrackCount");
-  if(!p){
-    count.textContent="—";
-    box.innerHTML="<div class='history-empty'>Select a current object to see its scan-to-scan history.</div>";
-    return;
-  }
-  const summary=datasets[p.radar_site];
-  const rows=(summary?.history||[])
+function evolutionRows(p){
+  const rows=(datasets[p.radar_site]?.history||[])
     .filter(r=>String(r.track_id)===String(p.track_id))
     .sort((a,b)=>String(a.timestamp).localeCompare(String(b.timestamp)));
-  count.textContent=rows.length+" scans";
-  if(!rows.length){
-    box.innerHTML="<div class='history-empty'>No persisted history is available for this track yet.</div>";
+  if(p.timestamp&&!rows.some(r=>String(r.timestamp)===String(p.timestamp))) rows.push(p);
+  return rows;
+}
+function probabilityHistory(p,rows){
+  const records=(datasets[p.radar_site]?.shadowHistory||[])
+    .filter(r=>String(r.track_id)===String(p.track_id))
+    .sort((a,b)=>String(a.timestamp).localeCompare(String(b.timestamp)));
+  const points=records.map(r=>{
+    const rp=r.research_probabilities||{};
+    const v=rp["30"]??r.probability_30min;
+    return {timestamp:r.timestamp,value:Number.isFinite(Number(v))?Number(v):null};
+  }).filter(x=>x.value!=null);
+  const current=shadowProbability(p);
+  if(current!=null&&!points.some(x=>String(x.timestamp)===String(p.timestamp)))points.push({timestamp:p.timestamp,value:current});
+  return points;
+}
+function probabilityChart(points){
+  if(!points.length)return "<div class='history-empty'>Snow Squall probability history is not available for this object yet.</div>";
+  const W=700,H=210,P=28,min=0,max=1,innerW=W-2*P,innerH=H-2*P;
+  const x=i=>P+(points.length===1?innerW/2:i*innerW/(points.length-1));
+  const y=v=>(H-P)-v*innerH;
+  const path=points.map((pt,i)=>(i?"L":"M")+x(i).toFixed(1)+" "+y(pt.value).toFixed(1)).join(" ");
+  const ticks=[0,.25,.5,.75,1];
+  return "<svg class='evolution-chart' viewBox='0 0 "+W+" "+H+" aria-label='Snow Squall probability evolution'>"+
+    ticks.map(v=>"<line x1='"+P+"' y1='"+y(v)+"' x2='"+(W-P)+"' y2='"+y(v)+"' class='chart-grid'/><text x='"+(P-6)+"' y='"+(y(v)+3)+"' text-anchor='end' class='chart-label'>"+(v*100).toFixed(0)+"%</text>").join("")+
+    "<path d='"+path+"' class='probability-path'/>"+
+    points.map((pt,i)=>"<circle cx='"+x(i)+"' cy='"+y(pt.value)+"' r='4' class='probability-point'><title>"+fmt(pt.timestamp)+" • "+(pt.value*100).toFixed(1)+"%</title></circle>").join("")+
+    (points.length>1?"<text x='"+P+"' y='"+(H-5)+"' class='chart-label'>"+esc(fmt(points[0].timestamp))+"</text><text x='"+(W-P)+"' y='"+(H-5)+"' text-anchor='end' class='chart-label'>"+esc(fmt(points[points.length-1].timestamp))+"</text>":"")+
+    "</svg>";
+}
+function renderLiveTrend(p){
+  const box=document.getElementById("liveTrend");
+  if(!box)return;
+  if(!p){
+    box.innerHTML="<div class='history-empty'>Select a live object to see its evolution.</div>";
     return;
   }
-  const currentTimestamp=p.timestamp;
-  box.innerHTML="<div class='history-scroll'><table class='history-table'><thead><tr>"+
-    "<th>Time</th><th>Max Z</th><th>Area</th><th>L × W</th><th>Motion</th><th>Z trend</th><th>Env</th>"+
-    "</tr></thead><tbody>"+
-    rows.map(r=>{
-      const current=String(r.timestamp)===String(currentTimestamp)?" class='current'":"";
-      return "<tr"+current+" data-ts='"+esc(r.timestamp)+"'>"+
-        "<td>"+esc(fmt(r.timestamp))+"</td>"+
-        "<td>"+num(r.max_reflectivity_dbz)+" dBZ</td>"+
-        "<td>"+num(r.area_km2)+" km²</td>"+
-        "<td>"+num(r.length_km)+" × "+num(r.width_km)+" km</td>"+
-        "<td>"+num(r.motion_speed_kt)+" kt</td>"+
-        "<td>"+num(r.reflectivity_trend_dbz_per_hr)+" dBZ/hr</td>"+
-        "<td>"+esc(r.environment_status||"—")+"</td>"+
-      "</tr>";
-    }).join("")+
-    "</tbody></table></div>";
-}
-
-function trackerQcMarkup(p){
-  const score=p.track_quality_score==null?"—":num(p.track_quality_score,0);
-  const tier=p.track_quality_tier||p.track_quality_gate||"—";
-  const conf=p.track_association_confidence==null?"—":num(p.track_association_confidence,2);
-  const margin=p.track_association_margin==null?"—":num(p.track_association_margin,2);
-  const amb=p.track_association_ambiguous===true||p.track_association_ambiguous==="True"?"YES":"NO";
-  const vel=p.track_velocity_mismatch_kt==null?"—":num(p.track_velocity_mismatch_kt,1)+" kt";
-  const radar=p.track_radar_motion_mismatch_kt==null?"—":num(p.track_radar_motion_mismatch_kt,1)+" kt";
-  const gap=p.track_gap_recovered===true||p.track_gap_recovered==="True"?"YES":"NO";
-  return "<div class='live-card tracker-qc-live'><h3>Tracker QC <span class='chip'>"+esc(tier)+"</span></h3><div class='tracker-qc-grid'>"+
-    [["Quality",score],["Assoc. confidence",conf],["Ambiguous match",amb],["Assoc. margin",margin],["Velocity mismatch",vel],["Radar-motion mismatch",radar],["Gap recovered",gap],["QC flags",p.track_quality_flags||"none"]]
-    .map(x=>"<div class='tracker-qc-cell'><span>"+x[0]+"</span><b>"+esc(x[1])+"</b></div>").join("")+
-    "</div><div class='tracker-qc-note'>Tracking diagnostics only; QC status does not determine meteorological truth.</div></div>";
+  const rows=evolutionRows(p);
+  const probs=probabilityHistory(p,rows);
+  const signal=evolutionSignal(p),score=shadowProbability(p),color=snowSquallColor(score);
+  box.innerHTML=
+    "<div class='evolution-header'><div><span>OBJECT "+esc(p.track_id)+" • "+esc(p.radar_site)+"</span><b>"+esc(signal.label)+"</b></div><span>"+rows.length+" observations</span></div>"+
+    "<div class='probability-readout'><div class='probability-readout-head'><span>SNOW SQUALL PROBABILITY</span><b style='color:"+color+"'>"+probabilityLabel(score)+"</b></div>"+
+      "<div class='probability-grid'>"+[15,30,45,60].map(h=>{
+        const v=shadowProbabilities(p)[h];
+        return "<div class='probability-cell'><span>"+h+" min</span><b>"+probabilityLabel(v)+"</b></div>";
+      }).join("")+"</div>"+
+      "<div class='probability-note'>Research shadow score; operational probability remains gated during model validation.</div></div>"+
+    "<div class='evolution-chart-card'><div class='evolution-chart-head'><span>30-minute Snow Squall probability through object lifetime</span><b>"+esc(signal.short)+"</b></div>"+probabilityChart(probs)+"</div>"+
+    "<div class='trend-set'>"+
+      liveSpark(rows,"max_reflectivity_dbz","Max Z","dBZ")+
+      liveSpark(rows,"area_km2","Area","km²")+
+      liveSpark(rows,"motion_speed_kt","Motion","kt")+
+    "</div>";
 }
 function selectObject(p){
   selected=p;
-  document.getElementById("selectionState").textContent="Selected: "+p.radar_site+" track "+p.track_id;
-
+  document.getElementById("selectionState").textContent="Selected: "+p.radar_site+" object "+p.track_id;
   const env=p.environment||{};
   const nested=env.fields||{};
   const envFields={
     ...nested,
-    cape_jkg: nested.cape_jkg?.value ?? p.cape_jkg,
-    cin_jkg: nested.cin_jkg?.value ?? p.cin_jkg,
-    mlcape_jkg: nested.mlcape_jkg?.value ?? p.mlcape_jkg,
-    mlcin_jkg: nested.mlcin_jkg?.value ?? p.mlcin_jkg,
-    mucape_jkg: nested.mucape_jkg?.value ?? p.mucape_jkg,
-    pwat_mm: nested.pwat_mm?.value ?? p.pwat_mm,
-    srh01_m2s2: nested.srh01_m2s2?.value ?? p.srh01_m2s2,
-    shear_0_6km_ms: nested.shear_0_6km_ms?.value ?? p.shear_0_6km_ms,
-    temperature_2m_k: nested.temperature_2m_k?.value ?? p.temperature_2m_k,
-    dewpoint_2m_k: nested.dewpoint_2m_k?.value ?? p.dewpoint_2m_k,
-    gust_ms: nested.gust_ms?.value ?? p.gust_ms,
-    visibility_m: nested.visibility_m?.value ?? p.visibility_m
+    cape_jkg:nested.cape_jkg?.value??p.cape_jkg,
+    cin_jkg:nested.cin_jkg?.value??p.cin_jkg,
+    mlcape_jkg:nested.mlcape_jkg?.value??p.mlcape_jkg,
+    mlcin_jkg:nested.mlcin_jkg?.value??p.mlcin_jkg,
+    mucape_jkg:nested.mucape_jkg?.value??p.mucape_jkg,
+    pwat_mm:nested.pwat_mm?.value??p.pwat_mm,
+    srh01_m2s2:nested.srh01_m2s2?.value??p.srh01_m2s2,
+    shear_0_6km_ms:nested.shear_0_6km_ms?.value??p.shear_0_6km_ms,
+    temperature_2m_k:nested.temperature_2m_k?.value??p.temperature_2m_k,
+    dewpoint_2m_k:nested.dewpoint_2m_k?.value??p.dewpoint_2m_k,
+    gust_ms:nested.gust_ms?.value??p.gust_ms
   };
-  const envSource=env.source||p.environment_source||"—";
-  const envStatus=p.environment_status||env.status||"—";
-  const motionDir=p.motion_direction_deg ?? p.motion_dir_deg;
+  const score=shadowProbability(p),color=snowSquallColor(score),signal=evolutionSignal(p);
   document.getElementById("selectedSummary").innerHTML=
-    "<div class='live-stat'><span>Radar</span><b>"+esc(p.radar_site)+"</b></div>"+
-    "<div class='live-stat'><span>Track</span><b>"+esc(p.track_id)+"</b></div>"+
-    "<div class='live-stat'><span>Time</span><b>"+esc(fmt(p.timestamp))+"</b></div>"+
+    "<div class='selected-object-head'><div><div class='detail-title'>"+esc(p.radar_site)+" • Object "+esc(p.track_id)+"</div><div class='detail-sub'>"+esc(fmt(p.timestamp))+"</div></div>"+
+    "<div class='selected-probability' style='border-color:"+color+"'><span>Snow Squall</span><b>"+probabilityLabel(score)+"</b></div></div>"+
+    "<div class='live-stat'><span>Evolution</span><b>"+esc(signal.label)+"</b></div>"+
     "<div class='live-stat'><span>Max Z</span><b>"+num(p.max_reflectivity_dbz)+" dBZ</b></div>"+
-    "<div class='live-stat'><span>Mean Z</span><b>"+num(p.mean_reflectivity_dbz)+" dBZ</b></div>"+
     "<div class='live-stat'><span>Area</span><b>"+num(p.area_km2)+" km²</b></div>"+
-    "<div class='live-stat'><span>Shape</span><b>"+num(p.length_km)+" × "+num(p.width_km)+" km</b></div>"+
-    "<div class='live-stat'><span>Motion</span><b>"+num(p.motion_speed_kt)+" kt @ "+num(motionDir,0)+"°</b></div>"+
-    "<div class='live-stat'><span>Age</span><b>"+(p.age_scans==null?"—":esc(p.age_scans+" scans"))+"</b></div>"+
-    "<div class='live-stat'><span>Z trend</span><b>"+num(p.reflectivity_trend_dbz_per_hr)+" dBZ/hr</b></div>"+
-    "<div class='live-stat'><span>Environment</span><b>"+esc(envSource)+" • "+esc(envStatus)+"</b></div>"+
-    renderEnvironment(envFields)+
-    "<div class='live-card forward-forecast-card'><h3>Forward motion &amp; evolution</h3>"+
-    "<div class='forecast-row'><span>Current motion</span><b>"+num(p.motion_speed_kt)+" kt @ "+num(motionDir,0)+"°</b></div>"+
-    "<div class='forecast-row'><span>30-min Snow Squall probability</span><b>"+snowSquallProbabilityLabel(shadowProbability(p))+"</b></div>"+
-    "<div class='forecast-row'><span>Evolution signal</span><b>"+esc(evolutionSignal(p).label)+"</b></div></div>"+
-    
-    "<div class='live-card'><h3>Live research shadow</h3>"+shadowGrid(shadowRecord(p.radar_site,p.track_id))+
-    "<div class='shadow-note'>Candidate model scored this live object separately from the operational feed. Research only.</div></div>"+
-    "<div class='live-stat'><span>Data quality</span><b>"+esc(p.data_quality||"—")+"</b></div>";
-  renderSelectedHistory(p);
+    "<div class='live-stat'><span>Motion</span><b>"+num(p.motion_speed_kt)+" kt @ "+num(p.motion_direction_deg??p.motion_dir_deg,0)+"°</b></div>"+
+    renderEnvironment(envFields);
   renderLiveTrend(p);
 }
 
-async function refresh(){
-  document.getElementById("overallTitle").textContent="Refreshing live feeds…";
-  document.getElementById("overallText").textContent="Fetching latest persisted KCXX/KTYX objects and histories.";
-  try{
-    const sites=["KCXX","KTYX"];
-    const mosaicPromise=getRadarMosaic();
-    const results=await Promise.all(sites.map(async site=>{
-      try{
-        return summarize(site,await getFeed(site));
-      }catch(err){
-        return {site,error:String(err.message||err),features:[],history:[],state:{},geo:{},good:false};
-      }
-    }));
-    const summary=results;
-    datasets=Object.fromEntries(summary.map(x=>[x.site,x]));
-    renderRadarMosaic(await mosaicPromise);
-    renderRadarCards(summary);
-    renderShadowCard(summary);
-    renderMap(summary);
-    renderObjectList(summary);
-
-    if(selected){
-      const latest=summary
-        .flatMap(x=>(x.features||[]).map(f=>({...f.properties,radar_site:x.site})))
-        .find(p=>p.radar_site===selected.radar_site&&String(p.track_id)===String(selected.track_id));
-      if(latest)selectObject(latest);
-      else renderSelectedHistory(selected);
-    }
-
-    const degraded=summary.filter(x=>x.error||!x.good);
-    const allObjects=summary.reduce((n,x)=>n+x.features.length,0);
-    const hudScan=document.getElementById("hudScan");
-    const hudSources=document.getElementById("hudSources");
-    const hudObjects=document.getElementById("hudObjects");
-    const feedBadge=document.getElementById("feedBadge");
-    const empty=document.getElementById("mapEmptyState");
-    if(hudScan)hudScan.textContent=fmt(summary.map(x=>x.last).filter(Boolean).sort().at(-1));
-    if(hudSources)hudSources.textContent=summary.filter(x=>!x.error).map(x=>x.site).join(" + ")||"NO DATA";
-    if(hudObjects)hudObjects.textContent=allObjects+" objects";
-    if(feedBadge)feedBadge.textContent=degraded.length?"DEGRADED":"HEALTHY";
-    if(empty){
-      empty.classList.toggle("visible",allObjects===0);
-      empty.querySelector("strong").textContent=degraded.length?"Radar data unavailable":"No significant echoes";
-      empty.querySelector("span").textContent=degraded.length?"Waiting for a valid radar product.":"Radar feed is healthy. Weak returns below the display threshold are intentionally muted.";
-    }
-    document.getElementById("overallTitle").textContent=degraded.length?"Live feed degraded":"Live feeds healthy";
-    document.getElementById("overallText").textContent=degraded.length?
-      degraded.map(x=>x.site+" "+(x.error?"unavailable":"stale")).join(", ")+" • "+allObjects+" current objects":
-      "KCXX/KTYX current object feeds • "+allObjects+" candidate objects • live research shadow "+summary.reduce((n,x)=>n+(x.shadow?.scored_object_count||0),0)+" scored";
-    document.getElementById("overallStatus").classList.toggle("degraded",degraded.length>0);
-    document.getElementById("subtitle").textContent="Last successful refresh: "+fmt(new Date().toISOString());
-  }catch(err){
-    document.getElementById("overallTitle").textContent="Live feed unavailable";
-    document.getElementById("overallText").textContent=String(err);
-    document.getElementById("overallStatus").classList.add("degraded");
-  }
-}
-
-addRadarMarkers();
-const liveTrackToggle=document.getElementById("showAllLiveTracks");
-if(liveTrackToggle)liveTrackToggle.onchange=e=>{showAllLiveTracks=e.target.checked;renderMap(Object.values(datasets))};
-document.getElementById("refreshBtn").onclick=refresh;
-document.querySelectorAll(".display-btn").forEach(btn=>btn.onclick=()=>setRadarMode(btn.dataset.radarMode));
-refresh();
-refreshTimer=setInterval(refresh,60000);
