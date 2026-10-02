@@ -241,11 +241,31 @@ jobs:
             data/derived/null_object_scans_annotated.csv \
             --output data/derived/null_object_tracks.csv
 
-      - name: Build unified dataset
+      - name: Apply clean track-quality gate
+        run: |
+          set -euo pipefail
+          python scripts/track_quality_gate.py \
+            data/derived/positive_object_labeled.csv \
+            --catalog data/derived/positive_object_tracks.csv \
+            --output data/derived/positive_object_labeled_clean.csv \
+            --review-output data/derived/positive_object_labeled_review.csv \
+            --annotated-output data/derived/positive_object_labeled_track_qc.csv \
+            --audit-output data/derived/positive_track_quality_audit.json \
+            --min-score 75
+          python scripts/track_quality_gate.py \
+            data/derived/null_object_environment.csv \
+            --catalog data/derived/null_object_tracks.csv \
+            --output data/derived/null_object_environment_clean.csv \
+            --review-output data/derived/null_object_environment_review.csv \
+            --annotated-output data/derived/null_object_environment_track_qc.csv \
+            --audit-output data/derived/null_track_quality_audit.json \
+            --min-score 75
+
+      - name: Build clean unified dataset
         run: |
           python scripts/build_unified_object_dataset.py \
-            data/derived/positive_object_labeled.csv \
-            data/derived/null_object_environment.csv \
+            data/derived/positive_object_labeled_clean.csv \
+            data/derived/null_object_environment_clean.csv \
             --output data/derived/object_population_expansion.csv
 
       - name: Build causal model features
@@ -369,6 +389,10 @@ jobs:
             data/derived/positive_object_scans_annotated.csv
             data/derived/positive_object_environment.csv
             data/derived/positive_object_labeled.csv
+            data/derived/positive_object_labeled_clean.csv
+            data/derived/positive_object_labeled_review.csv
+            data/derived/positive_object_labeled_track_qc.csv
+            data/derived/positive_track_quality_audit.json
             data/derived/positive_object_tracks.csv
             data/derived/null_object_scans.csv
             data/derived/null_object_scans_errors.csv
@@ -377,6 +401,10 @@ jobs:
             data/derived/null_environment_audit.json
             data/derived/null_object_scans_annotated.csv
             data/derived/null_object_environment.csv
+            data/derived/null_object_environment_clean.csv
+            data/derived/null_object_environment_review.csv
+            data/derived/null_object_environment_track_qc.csv
+            data/derived/null_track_quality_audit.json
             data/derived/null_object_tracks.csv
             data/derived/null_window_activity.csv
             data/derived/object_population_expansion.csv
