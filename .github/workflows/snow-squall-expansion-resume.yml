@@ -26,6 +26,7 @@ on:
   push:
     branches:
       - snow-squall-model-foundation
+      - tracker-quality-v1
     paths:
       - .github/expansion-resume-trigger
 
@@ -45,7 +46,7 @@ jobs:
       - name: Checkout model foundation
         uses: actions/checkout@v4
         with:
-          ref: snow-squall-model-foundation
+          ref: tracker-quality-v1
       - name: Dispatch resumed expansion from newest unified ledger
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -60,7 +61,7 @@ jobs:
           echo "Using unified ledger run $source_run"
           gh workflow run "Snow Squall Expansion Dataset" \
             --repo "$GITHUB_REPOSITORY" \
-            --ref snow-squall-model-foundation \
+            --ref tracker-quality-v1 \
             -f archive_override=true \
             -f official_offset="$official_offset" \
             -f unverified_offset="$unverified_offset" \
