@@ -21,6 +21,12 @@ on:
       - tests/test_object_tracker*.py
       - tests/test_object_track_catalog*.py
       - tests/test_track_quality_gate.py
+      - tests/test_track_validation_summary.py
+      - tests/test_audit_candidate_release.py
+      - scripts/build_track_validation_summary.py
+      - scripts/audit_candidate_release.py
+      - .github/workflows/snow-squall-real-case-tracker-validation.yml
+      - .github/workflows/snow-squall-candidate-release-gate.yml
       - tests/test_track_identity.py
       - tests/test_track_quality_feature_parity.py
 
