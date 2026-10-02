@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - tracker-quality-v1
+  pull_request:
+    branches:
+      - snow-squall-model-foundation
     paths:
       - processing/object_tracker.py
       - scripts/build_object_track_catalog.py
