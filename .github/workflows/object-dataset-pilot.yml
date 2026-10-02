@@ -352,9 +352,27 @@ jobs:
           python scripts/build_object_track_catalog.py data/derived/positive_object_scans_annotated.csv --output data/derived/positive_object_tracks.csv
           python scripts/build_object_track_catalog.py data/derived/null_object_scans_annotated.csv --output data/derived/null_object_tracks.csv
 
-      - name: Build unified object dataset
+      - name: Apply clean track-quality gate to labeled populations
         run: |
-          python scripts/build_unified_object_dataset.py             data/derived/positive_object_labeled.csv             data/derived/null_object_environment.csv             --null-activity data/derived/null_window_activity.csv             --output data/derived/object_population_pilot.csv
+          set -euo pipefail
+          python scripts/track_quality_gate.py             data/derived/positive_object_labeled.csv             --catalog data/derived/positive_object_tracks.csv             --output data/derived/positive_object_labeled_clean.csv             --review-output data/derived/positive_object_labeled_review.csv             --annotated-output data/derived/positive_object_labeled_track_qc.csv             --audit-output data/derived/positive_track_quality_audit.json             --min-score 75
+          python scripts/track_quality_gate.py             data/derived/null_object_environment.csv             --catalog data/derived/null_object_tracks.csv             --output data/derived/null_object_environment_clean.csv             --review-output data/derived/null_object_environment_review.csv             --annotated-output data/derived/null_object_environment_track_qc.csv             --audit-output data/derived/null_track_quality_audit.json             --min-score 75
+          python - <<'PY'
+          import pandas as pd
+          for kind in ("positive", "null"):
+              audit = pd.read_json(
+                  f"data/derived/{kind}_track_quality_audit.json",
+                  typ="series",
+              )
+              print(f"{kind}: input tracks={audit['input_tracks']}, "
+                    f"accepted tracks={audit['accepted_tracks']}, "
+                    f"accepted object scans={audit['accepted_object_scans']}, "
+                    f"accepted row fraction={audit['accepted_row_fraction']:.3f}")
+          PY
+
+      - name: Build clean unified object dataset
+        run: |
+          python scripts/build_unified_object_dataset.py             data/derived/positive_object_labeled_clean.csv             data/derived/null_object_environment_clean.csv             --null-activity data/derived/null_window_activity.csv             --output data/derived/object_population_pilot.csv
 
       - name: Audit unified 12-case dataset
         run: |
@@ -476,7 +494,7 @@ jobs:
 
       - name: Build historical viewer data package
         run: |
-          python scripts/build_static_viewer.py             --objects data/derived/positive_object_labeled.csv             --cases data/manifests/banacos_positive_pilot.csv             --output-dir data/derived/viewer             --frames-root data/derived/viewer \
+          python scripts/build_static_viewer.py             --objects data/derived/positive_object_labeled_clean.csv             --cases data/manifests/banacos_positive_pilot.csv             --output-dir data/derived/viewer             --frames-root data/derived/viewer \
              --model-summary data/derived/baseline_horizon_summary.json \
              --model-root data/derived
 
@@ -549,6 +567,10 @@ jobs:
             data/derived/positive_object_scans_annotated.csv
             data/derived/positive_object_environment.csv
             data/derived/positive_object_labeled.csv
+            data/derived/positive_object_labeled_clean.csv
+            data/derived/positive_object_labeled_review.csv
+            data/derived/positive_object_labeled_track_qc.csv
+            data/derived/positive_track_quality_audit.json
             data/derived/positive_object_tracks.csv
             data/derived/positive_event_association_diagnostics.json
             data/derived/null_object_scans.csv
@@ -556,6 +578,10 @@ jobs:
             data/derived/null_radar_reconstruction_audit.json
             data/derived/null_object_scans_annotated.csv
             data/derived/null_object_environment.csv
+            data/derived/null_object_environment_clean.csv
+            data/derived/null_object_environment_review.csv
+            data/derived/null_object_environment_track_qc.csv
+            data/derived/null_track_quality_audit.json
             data/derived/null_object_tracks.csv
             data/derived/null_window_activity.csv
             data/derived/null_window_coverage.json

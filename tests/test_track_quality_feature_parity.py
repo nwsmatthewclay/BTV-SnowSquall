@@ -6,13 +6,20 @@ def test_track_quality_diagnostics_propagate():
     row=build_live_feature_row({
       "timestamp":"2026-01-01T12:05:00Z","track_id":"1",
       "track_association_distance_px":2.0,"track_association_gate_px":10.0,
-      "track_association_cost":0.2,"track_age_scans":4,"track_missed_scans":0,
+      "track_association_cost":0.2,"track_association_normalized_distance":0.2,
+      "track_association_margin":0.15,"track_association_confidence":0.9,
+      "track_association_ambiguous":False,"track_velocity_mismatch_kt":5.0,
+      "track_radar_motion_mismatch_kt":4.0,"track_time_since_previous_min":5.0,
+      "track_gap_recovered":False,"track_age_scans":4,"track_missed_scans":0,
       "track_competing_track_count":1,"track_competing_object_count":2,
       "track_merge_candidate":True,"track_split_candidate":True,
       "max_reflectivity_dbz":35.0,"mean_reflectivity_dbz":28.0,
       "area_km2":20.0,"length_km":8.0
     })
     assert row["track_association_distance_px"]==2.0
+    assert row["track_association_confidence"]==0.9
+    assert row["track_velocity_mismatch_kt"]==5.0
+    assert row["track_gap_recovered"] == 0.0
     assert row["track_merge_candidate"] == 1.0
 
 def test_historical_builder_keeps_track_quality_fields():

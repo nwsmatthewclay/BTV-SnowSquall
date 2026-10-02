@@ -10,26 +10,186 @@
     "data_quality"
   ],
   "properties": {
-    "track_id": {"type": "string"},
-    "timestamp": {"type": "string", "format": "date-time"},
+    "track_id": {
+      "type": "string"
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time"
+    },
     "geometry": {
       "type": "object",
-      "required": ["type", "coordinates"],
+      "required": [
+        "type",
+        "coordinates"
+      ],
       "properties": {
-        "type": {"const": "Polygon"},
-        "coordinates": {"type": "array"}
+        "type": {
+          "const": "Polygon"
+        },
+        "coordinates": {
+          "type": "array"
+        }
       }
     },
-    "probability_15min": {"type": ["number", "null"], "minimum": 0, "maximum": 1},
-    "probability_30min": {"type": ["number", "null"], "minimum": 0, "maximum": 1},
-    "probability_45min": {"type": ["number", "null"], "minimum": 0, "maximum": 1},
-    "probability_60min": {"type": ["number", "null"], "minimum": 0, "maximum": 1},
-    "probability_trend": {"type": "string", "enum": ["rising", "steady", "falling", "unknown"]},
-    "age_min": {"type": ["number", "null"]},
-    "motion_dir_deg": {"type": ["number", "null"]},
-    "motion_speed_kt": {"type": ["number", "null"]},
-    "drivers": {"type": "array", "items": {"type": "string"}},
-    "data_quality": {"type": "string", "enum": ["good", "degraded", "poor"]},
-    "model_version": {"type": "string"}
+    "probability_15min": {
+      "type": [
+        "number",
+        "null"
+      ],
+      "minimum": 0,
+      "maximum": 1
+    },
+    "probability_30min": {
+      "type": [
+        "number",
+        "null"
+      ],
+      "minimum": 0,
+      "maximum": 1
+    },
+    "probability_45min": {
+      "type": [
+        "number",
+        "null"
+      ],
+      "minimum": 0,
+      "maximum": 1
+    },
+    "probability_60min": {
+      "type": [
+        "number",
+        "null"
+      ],
+      "minimum": 0,
+      "maximum": 1
+    },
+    "probability_trend": {
+      "type": "string",
+      "enum": [
+        "rising",
+        "steady",
+        "falling",
+        "unknown"
+      ]
+    },
+    "age_min": {
+      "type": [
+        "number",
+        "null"
+      ]
+    },
+    "motion_dir_deg": {
+      "type": [
+        "number",
+        "null"
+      ]
+    },
+    "motion_speed_kt": {
+      "type": [
+        "number",
+        "null"
+      ]
+    },
+    "drivers": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "data_quality": {
+      "type": "string",
+      "enum": [
+        "good",
+        "degraded",
+        "poor"
+      ]
+    },
+    "model_version": {
+      "type": "string"
+    },
+    "track_association_status": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "track_association_cost": {
+      "type": [
+        "number",
+        "null"
+      ]
+    },
+    "track_association_confidence": {
+      "type": [
+        "number",
+        "null"
+      ],
+      "minimum": 0,
+      "maximum": 1
+    },
+    "track_association_ambiguous": {
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "track_velocity_mismatch_kt": {
+      "type": [
+        "number",
+        "null"
+      ]
+    },
+    "track_radar_motion_mismatch_kt": {
+      "type": [
+        "number",
+        "null"
+      ]
+    },
+    "track_time_since_previous_min": {
+      "type": [
+        "number",
+        "null"
+      ],
+      "minimum": 0
+    },
+    "track_gap_recovered": {
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "track_quality_score": {
+      "type": [
+        "number",
+        "null"
+      ],
+      "minimum": 0,
+      "maximum": 100
+    },
+    "track_quality_tier": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "enum": [
+        "pass",
+        "review",
+        "reject",
+        null
+      ]
+    },
+    "track_quality_gate": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "enum": [
+        "pass",
+        "review",
+        "reject",
+        null
+      ]
+    }
   }
 }

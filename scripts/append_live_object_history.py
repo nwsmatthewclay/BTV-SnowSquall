@@ -19,6 +19,10 @@ CSV_FIELDS = [
     "length_km", "width_km", "aspect_ratio", "orientation_deg",
     "max_reflectivity_dbz", "mean_reflectivity_dbz", "core_pixel_count",
     "core_fraction", "motion_speed_kt", "motion_dir_deg",
+    "track_association_normalized_distance", "track_association_margin",
+    "track_association_confidence", "track_association_ambiguous",
+    "track_velocity_mismatch_kt", "track_radar_motion_mismatch_kt",
+    "track_time_since_previous_min", "track_gap_recovered",
     "age_scans", "reflectivity_trend_dbz_per_hr", "area_growth_fraction",
     "environment_status", "environment_source", "environment_valid_time_utc",
     "echo_top_km", "top_minus_base_km", "vertical_reflectivity_gradient", "vertical_valid_points",
@@ -61,7 +65,11 @@ def flatten(feature, source_file):
         "pixel_count", "area_km2", "length_km", "width_km", "aspect_ratio",
         "orientation_deg", "max_reflectivity_dbz", "mean_reflectivity_dbz",
         "core_pixel_count", "core_fraction", "motion_speed_kt",
-        "motion_dir_deg", "age_scans", "reflectivity_trend_dbz_per_hr",
+        "motion_dir_deg", "track_association_normalized_distance",
+        "track_association_margin", "track_association_confidence",
+        "track_association_ambiguous", "track_velocity_mismatch_kt",
+        "track_radar_motion_mismatch_kt", "track_time_since_previous_min",
+        "track_gap_recovered", "age_scans", "reflectivity_trend_dbz_per_hr",
         "area_growth_fraction", "environment_status", "data_quality",
         "model_version",
         "echo_top_km", "top_minus_base_km", "vertical_reflectivity_gradient", "vertical_valid_points",
@@ -108,14 +116,22 @@ def append_history(geojson_path: Path, jsonl_path: Path, csv_path: Path):
                 try:
                     item = json.loads(line)
                     existing_keys.add(
-                        (item.get("timestamp"), str(item.get("track_id")))
+                        (
+                            item.get("timestamp"),
+                            str(item.get("radar_site")),
+                            str(item.get("track_id")),
+                        )
                     )
                 except json.JSONDecodeError:
                     continue
 
     new_rows = [
         row for row in rows
-        if (row["timestamp"], str(row["track_id"])) not in existing_keys
+        if (
+            row["timestamp"],
+            str(row.get("radar_site")),
+            str(row["track_id"]),
+        ) not in existing_keys
     ]
 
     if new_rows:

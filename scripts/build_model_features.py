@@ -140,6 +140,19 @@ NON_PREDICTOR_COLUMNS = TARGET_COLUMNS | {
     "future_information_policy", "supervision_class", "population_track_key", "geometry_wkt", "truth_tier", "evidence_weight",
     "centroid_lat", "centroid_lon", "radar_lat", "radar_lon",
     "station_lat", "station_lon", "grid_x_km", "grid_y_km", "touches_grid_edge",
+    # Track-association diagnostics are retained for QC but excluded from the
+    # first baseline predictor population. They measure tracker confidence and
+    # ambiguity rather than meteorological signal.
+    "track_association_distance_px", "track_association_gate_px",
+    "track_association_cost", "track_association_normalized_distance",
+    "track_association_margin", "track_association_confidence",
+    "track_association_ambiguous", "track_velocity_mismatch_kt",
+    "track_radar_motion_mismatch_kt", "track_time_since_previous_min",
+    "track_gap_recovered", "track_competing_track_count",
+    "track_competing_object_count", "track_merge_candidate",
+    "track_split_candidate",
+    "track_quality_score", "track_quality_tier",
+    "track_quality_gate", "track_quality_flags",
 }
 
 
