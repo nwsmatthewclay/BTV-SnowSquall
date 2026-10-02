@@ -58,11 +58,15 @@ jobs:
             data/derived/null_object_scans.csv \
             --output data/derived/null_object_tracks.csv
 
+      - name: Apply null track-quality gate
+        run: |
+          python scripts/track_quality_gate.py             data/derived/null_object_scans.csv             --catalog data/derived/null_object_tracks.csv             --output data/derived/null_object_scans_clean.csv             --review-output data/derived/null_object_scans_review.csv             --annotated-output data/derived/null_object_scans_track_qc.csv             --audit-output data/derived/null_track_quality_audit.json             --min-score 75
+
       - name: Summarize null population
         run: |
           python - <<'PY'
           import pandas as pd
-          scans = pd.read_csv('data/derived/null_object_scans.csv')
+          scans = pd.read_csv('data/derived/null_object_scans_clean.csv')
           tracks = pd.read_csv('data/derived/null_object_tracks.csv')
           print('NULL OBJECT SCANS:', len(scans))
           print('NULL TRACKS:', len(tracks))
@@ -87,4 +91,8 @@ jobs:
             data/manifests/banacos_null_windows_pilot.csv
             data/derived/null_object_scans.csv
             data/derived/null_object_tracks.csv
+            data/derived/null_object_scans_clean.csv
+            data/derived/null_object_scans_review.csv
+            data/derived/null_object_scans_track_qc.csv
+            data/derived/null_track_quality_audit.json
             data/raw/null_level2
