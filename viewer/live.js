@@ -6,7 +6,7 @@ const layers={KCXX:L.layerGroup().addTo(map),KTYX:L.layerGroup().addTo(map)};
 const radarLocations={KCXX:[44.511,-73.166],KTYX:[43.756,-75.680]};
 const LIVE_BASE="https://raw.githubusercontent.com/nwsmatthewclay/BTV-SnowSquall/snow-squall-live-data/viewer/data/live/";
 const SHADOW_BASE="https://raw.githubusercontent.com/nwsmatthewclay/BTV-SnowSquall/snow-squall-shadow-data/viewer/data/shadow/";
-let datasets={},selected=null,refreshTimer=null,hasInitialExtent=false,radarMosaicLayer=L.layerGroup().addTo(map),radarMosaic=null,showAllLiveTracks=false,radarMode="clean",qcdRadarLayer=null;
+let datasets={},selected=null,refreshTimer=null,hasInitialExtent=false,radarMosaicLayer=L.layerGroup().addTo(map),projectionLayer=L.layerGroup().addTo(map),radarMosaic=null,showAllLiveTracks=false,radarMode="clean",qcdRadarLayer=null;
 
 const num=(v,d=1)=>v==null||Number.isNaN(Number(v))?"—":Number(v).toFixed(d);
 const fmt=t=>t?new Date(t).toLocaleString(undefined,{month:"short",day:"numeric",hour:"numeric",minute:"2-digit",second:"2-digit"}):"—";
@@ -160,74 +160,151 @@ function renderRadarCards(summary){
   }).join("");
 }
 
-function objectColor(p){
-  const z=Number(p.max_reflectivity_dbz);
-  if(z>=45)return "#ff6b6b";
-  if(z>=35)return "#ffd166";
-  return "#57bbff";
+function shadowProbability(p){
+  const shadow=shadowRecord(p.radar_site,p.track_id);
+  const rp=shadow?.research_probabilities||{};
+  const v30=rp["30"]??p.probability_30min;
+  const v15=rp["15"]??p.probability_15min;
+  return Number.isFinite(Number(v30))?Number(v30):(Number.isFinite(Number(v15))?Number(v15):null);
 }
-
+function shadowProbabilities(p){
+  const shadow=shadowRecord(p.radar_site,p.track_id);
+  const rp=shadow?.research_probabilities||{};
+  const out={};
+  [15,30,45,60].forEach(h=>{
+    const v=rp[String(h)]??p["probability_"+h+"min"];
+    out[h]=Number.isFinite(Number(v))?Number(v):null;
+  });
+  return out;
+}
+function snowSquallColor(prob){
+  if(prob==null)return "#8b98a4";
+  if(prob<.20)return "#55b7ff";
+  if(prob<.40)return "#4fd1c5";
+  if(prob<.60)return "#f5d66b";
+  if(prob<.80)return "#f39b2f";
+  return "#ef625f";
+}
+function snowSquallProbabilityLabel(prob){
+  return prob==null?"SS —":"SS "+(prob*100).toFixed(0)+"%";
+}
+function evolutionSignal(p){
+  const rp=shadowProbabilities(p);
+  const vals=[rp[15],rp[30],rp[45],rp[60]].filter(Number.isFinite);
+  if(vals.length>=2){
+    const delta=vals[vals.length-1]-vals[0];
+    if(delta>=.05)return {label:"EXPECTED STRENGTHENING",short:"RISING"};
+    if(delta<=-.05)return {label:"EXPECTED WEAKENING",short:"FALLING"};
+    return {label:"EXPECTED STEADY",short:"STEADY"};
+  }
+  const z=Number(p.reflectivity_trend_dbz_per_hr),g=Number(p.area_growth_fraction);
+  if((Number.isFinite(z)&&z>=3)||(Number.isFinite(g)&&g>=.08))return {label:"OBSERVED STRENGTHENING",short:"RISING"};
+  if((Number.isFinite(z)&&z<=-3)||(Number.isFinite(g)&&g<=-.08))return {label:"OBSERVED WEAKENING",short:"FALLING"};
+  if(Number.isFinite(z)||Number.isFinite(g))return {label:"OBSERVED STEADY",short:"STEADY"};
+  return {label:"EVOLUTION UNKNOWN",short:"UNKNOWN"};
+}
+function destinationPoint(lat,lon,bearingDeg,distanceKm){
+  const R=6371.0088,br=Number(bearingDeg)*Math.PI/180,dr=Number(distanceKm)/R;
+  const p1=Number(lat)*Math.PI/180,l1=Number(lon)*Math.PI/180;
+  const p2=Math.asin(Math.sin(p1)*Math.cos(dr)+Math.cos(p1)*Math.sin(dr)*Math.cos(br));
+  const l2=l1+Math.atan2(Math.sin(br)*Math.sin(dr)*Math.cos(p1),Math.cos(dr)-Math.sin(p1)*Math.sin(p2));
+  return [p2*180/Math.PI,((l2*180/Math.PI+540)%360)-180];
+}
+function projectionPoints(p,maxMinutes){
+  const lat=Number(p.centroid_lat),lon=Number(p.centroid_lon),speed=Number(p.motion_speed_kt),bearing=Number(p.motion_direction_deg??p.motion_dir_deg);
+  if(![lat,lon,speed,bearing].every(Number.isFinite)||speed<=0)return [];
+  return [15,30,45,60].filter(m=>m<=maxMinutes).map(minutes=>{
+    const km=speed*1.852*minutes/60,pt=destinationPoint(lat,lon,bearing,km);
+    return {minutes,lat:pt[0],lon:pt[1]};
+  });
+}
+function objectRadiusMeters(p){
+  const size=Math.max(Number(p.length_km)||0,Number(p.width_km)||0);
+  return Math.max(2500,Math.min(10000,(size||5)*500));
+}
+function addForwardProjection(p,isSelected){
+  const pts=projectionPoints(p,isSelected||showAllLiveTracks?60:30);
+  if(!pts.length)return;
+  const origin=[Number(p.centroid_lat),Number(p.centroid_lon)],prob=shadowProbability(p),color=snowSquallColor(prob);
+  const line=[origin,...pts.map(x=>[x.lat,x.lon])];
+  L.polyline(line,{
+    color:isSelected?"#ffffff":color,
+    weight:isSelected?4:2.5,
+    opacity:isSelected?.95:.78,
+    dashArray:isSelected?null:"6 5",
+    interactive:false
+  }).addTo(projectionLayer);
+  pts.forEach((pt,idx)=>{
+    L.circleMarker([pt.lat,pt.lon],{
+      radius:isSelected?(idx===pts.length-1?6:4):3.5,
+      color:isSelected?"#ffffff":color,
+      weight:isSelected?2:1,
+      fillColor:color,
+      fillOpacity:.78,
+      interactive:false
+    }).addTo(projectionLayer);
+  });
+  if(isSelected){
+    L.marker([pts[0].lat,pts[0].lon],{
+      icon:L.divIcon({className:"projection-label-wrap",iconSize:null,iconAnchor:[0,0],
+        html:"<div class='projection-label'>+15m</div>"}),
+      interactive:false
+    }).addTo(projectionLayer);
+    if(pts[1]){
+      L.marker([pts[1].lat,pts[1].lon],{
+        icon:L.divIcon({className:"projection-label-wrap",iconSize:null,iconAnchor:[0,0],
+          html:"<div class='projection-label'>+30m</div>"}),
+        interactive:false
+      }).addTo(projectionLayer);
+    }
+    L.marker([Number(p.centroid_lat),Number(p.centroid_lon)],{
+      icon:L.divIcon({className:"snow-squall-prob-label-wrap",iconSize:null,iconAnchor:[0,0],
+        html:"<div class='snow-squall-prob-label' style='border-color:"+color+"'>"+snowSquallProbabilityLabel(prob)+"</div>"}),
+      interactive:false
+    }).addTo(projectionLayer).bringToFront();
+  }
+}
 function renderMap(summary){
   Object.values(layers).forEach(l=>l.clearLayers());
+  projectionLayer.clearLayers();
   const bounds=[];
   summary.filter(x=>!x.error).forEach(x=>{
-    const grouped={};
-    (x.history||[]).forEach(r=>{
-      if(r.track_id==null||r.centroid_lat==null||r.centroid_lon==null)return;
-      (grouped[String(r.track_id)]??=[]).push(r);
-    });
-    const activeIds=new Set((x.features||[]).map(f=>String((f.properties||{}).track_id)));
-    Object.entries(grouped).forEach(([id,rows])=>{
-      const active=activeIds.has(id);
-      const selectedTrack=selected&&selected.radar_site===x.site&&String(selected.track_id)===id;
-      if(!showAllLiveTracks && !active && !selectedTrack)return;
-      rows.sort((a,b)=>String(a.timestamp).localeCompare(String(b.timestamp)));
-      // Do not draw tails for one-scan/noisy objects. This is the primary
-      // protection against the dense "spaghetti" display seen in live QC.
-      const ageScans=Number((x.features||[]).find(f=>String(f.properties?.track_id)===id)?.properties?.age_scans||0);
-      if(!selectedTrack && ageScans<2)return;
-      const count=selectedTrack?18:(showAllLiveTracks?8:5);
-      const coords=rows.slice(-count).map(r=>[Number(r.centroid_lat),Number(r.centroid_lon)]).filter(v=>v.every(Number.isFinite));
-      if(coords.length<2)return;
-      L.polyline(coords,{
-        color:selectedTrack?"#ffffff":"#8b98a4",
-        weight:selectedTrack?4:1.5,
-        opacity:selectedTrack?.95:(showAllLiveTracks?.30:.20),
-        dashArray:selectedTrack?null:"5 6",
-        interactive:false
-      }).addTo(layers[x.site]);
-    });
     (x.features||[]).forEach(f=>{
-      const p=f.properties||{};
-      const id=String(p.track_id??"—");
+      const p=f.properties||{},id=String(p.track_id??"—");
       const isSelected=selected&&String(selected.track_id)===id&&selected.radar_site===x.site;
-      const fill=objectColor(p);
-      const layer=L.geoJSON(f,{style:{
-        color:isSelected?"#ffffff":fill,
-        fillColor:fill,
-        fillOpacity:isSelected?.50:.18,
+      const probe={...p,radar_site:x.site},prob=shadowProbability(probe),color=snowSquallColor(prob),signal=evolutionSignal(probe);
+      const shape=L.geoJSON(f,{style:{
+        color:isSelected?"#ffffff":color,
+        fillColor:color,
+        fillOpacity:isSelected?.30:.12,
         weight:isSelected?3:1.5
       }}).addTo(layers[x.site]);
-      layer.bindTooltip(
+      shape.bindTooltip(
         "<b>"+esc(x.site)+" • Track "+esc(id)+"</b><br>"+
-        num(p.max_reflectivity_dbz)+" dBZ • "+num(p.area_km2)+" km² • "+num(p.motion_speed_kt)+" kt",
+        esc(snowSquallProbabilityLabel(prob))+" • "+esc(signal.short)+"<br>"+
+        num(p.motion_speed_kt)+" kt @ "+num(p.motion_direction_deg??p.motion_dir_deg,0)+"°",
         {sticky:true,direction:"top"}
       );
-      layer.on("click",()=>selectObject({...p,radar_site:x.site}));
-      // Labels are useful for the selected object but overwhelm the map when
-      // every candidate is labeled. Keep the workspace visually sparse.
-      if(isSelected && p.centroid_lat!=null&&p.centroid_lon!=null){
+      shape.on("click",()=>selectObject({...p,radar_site:x.site}));
+      if(p.centroid_lat!=null&&p.centroid_lon!=null){
+        L.circle([Number(p.centroid_lat),Number(p.centroid_lon)],{
+          radius:objectRadiusMeters(p),
+          color:isSelected?"#ffffff":color,
+          weight:isSelected?3:2,
+          fillColor:color,
+          fillOpacity:isSelected?.06:.03,
+          interactive:false
+        }).addTo(layers[x.site]);
+      }
+      addForwardProjection(probe,isSelected);
+      if(isSelected&&p.centroid_lat!=null&&p.centroid_lon!=null){
         L.marker([Number(p.centroid_lat),Number(p.centroid_lon)],{
-          icon:L.divIcon({
-            className:"live-object-label-wrap",
-            iconSize:null,
-            iconAnchor:[0,0],
-            html:"<div class='live-object-label selected'>"+esc(x.site)+"-"+esc(id)+"</div>"
-          }),
+          icon:L.divIcon({className:"live-object-label-wrap",iconSize:null,iconAnchor:[0,0],
+            html:"<div class='live-object-label selected'>"+esc(x.site)+"-"+esc(id)+"</div>"}),
           interactive:false
         }).addTo(layers[x.site]).bringToFront();
       }
-      const b=layer.getBounds?.();
+      const b=shape.getBounds?.();
       if(b&&b.isValid())bounds.push(b);
     });
   });
@@ -238,11 +315,11 @@ function renderMap(summary){
     hasInitialExtent=true;
   }
 }
+
 function renderObjectList(summary){
   let all=[];
   summary.filter(x=>!x.error).forEach(x=>(x.features||[]).forEach(f=>all.push({...f.properties,radar_site:x.site,source_kind:"current"})));
-  all.sort((a,b)=>Number(b.max_reflectivity_dbz||0)-Number(a.max_reflectivity_dbz||0));
-
+  all.sort((a,b)=>Number(shadowProbability(b)||0)-Number(shadowProbability(a)||0));
   let usingHistory=false;
   if(!all.length){
     usingHistory=true;
@@ -250,34 +327,25 @@ function renderObjectList(summary){
       const latestByTrack=new Map();
       (x.history||[]).forEach(r=>{
         if(r.track_id==null)return;
-        const id=String(r.track_id);
-        const prior=latestByTrack.get(id);
-        if(!prior || String(r.timestamp)>String(prior.timestamp)) latestByTrack.set(id,r);
+        const id=String(r.track_id),prior=latestByTrack.get(id);
+        if(!prior||String(r.timestamp)>String(prior.timestamp))latestByTrack.set(id,r);
       });
       latestByTrack.forEach(r=>all.push({...r,radar_site:x.site,source_kind:"recent"}));
     });
     all.sort((a,b)=>String(b.timestamp||"").localeCompare(String(a.timestamp||"")));
   }
-
-  // Current objects are the operational map inventory. Retained history is
-  // shown only when there are no current objects, and is explicitly marked.
   document.getElementById("objectCount").textContent=String(all.length)+(usingHistory?" recent":" active");
   if(!all.length){
     document.getElementById("objectList").innerHTML="<div class='live-card'>No current or recent tracked objects are available.</div>";
     return;
   }
-
   document.getElementById("objectList").innerHTML=all.slice(0,20).map(p=>{
-    const shadow=shadowRecord(p.radar_site,p.track_id);
-    const rp=shadow?.research_probabilities||{};
-    const score=rp["15"];
-    const state=lifecycleState(p);
+    const score=shadowProbability(p),state=lifecycleState(p),signal=evolutionSignal(p),color=snowSquallColor(score);
     return "<div class='live-object "+(selected&&selected.track_id===p.track_id&&selected.radar_site===p.radar_site?"selected":"")+"' data-id='"+esc(p.radar_site+"|"+p.track_id)+"'>"+
-    "<div class='title'>"+esc(p.radar_site)+" • Track "+esc(p.track_id)+" <span class='chip'>"+esc(state)+"</span><span class='chip'>"+(p.source_kind==="recent"?"RECENT":"ACTIVE")+"</span></div>"+
-    "<div class='sub'>"+esc(fmt(p.timestamp))+(p.source_kind==="recent"?" • latest retained track sample":"")+"</div>"+
-    "<div class='chips'><span class='chip'>"+num(p.max_reflectivity_dbz)+" dBZ</span><span class='chip'>"+num(p.motion_speed_kt)+" kt</span><span class='chip'>"+num(p.area_km2)+" km²</span>"+(score==null?"":"<span class='chip research-chip'>15m "+(Number(score)*100).toFixed(0)+"% RESEARCH</span>")+"<span class='chip'>"+esc(p.data_quality||"—")+"</span></div></div>";
+      "<div class='title'>"+esc(p.radar_site)+" • Track "+esc(p.track_id)+" <span class='chip'>"+esc(state)+"</span><span class='chip'>"+(p.source_kind==="recent"?"RECENT":"ACTIVE")+"</span></div>"+
+      "<div class='sub'>"+esc(fmt(p.timestamp))+(p.source_kind==="recent"?" • latest retained track sample":"")+"</div>"+
+      "<div class='chips'><span class='chip' style='border:1px solid "+color+"'>"+esc(snowSquallProbabilityLabel(score))+"</span><span class='chip'>"+num(p.motion_speed_kt)+" kt @ "+num(p.motion_direction_deg??p.motion_dir_deg,0)+"°</span><span class='chip'>"+esc(signal.short)+"</span><span class='chip'>"+num(p.max_reflectivity_dbz)+" dBZ</span></div></div>";
   }).join("");
-
   document.querySelectorAll(".live-object").forEach(el=>el.onclick=()=>{
     const [site,id]=el.dataset.id.split("|");
     const item=all.find(p=>p.radar_site===site&&String(p.track_id)===String(id));
@@ -355,7 +423,7 @@ function renderEnvironment(fields){
   }).join("")+"</div>";
 }
 
-function lifecycleState(p){const age=Number(p?.age_scans||0),trend=Number(p?.reflectivity_trend_dbz_per_hr);if(age<=2)return "NEW";if(Number.isFinite(trend)&&trend>=3)return "INTENSIFYING";if(Number.isFinite(trend)&&trend<=-3)return "WEAKENING";return "STEADY";}
+function lifecycleState(p){const signal=evolutionSignal(p);const age=Number(p?.age_scans||0);if(age<=2&&signal.short==="UNKNOWN")return "NEW";if(signal.short==="RISING")return "STRENGTHENING";if(signal.short==="FALLING")return "WEAKENING";return "STEADY";}
 function liveSpark(rows,key,label,unit){const vals=rows.map(r=>Number(r[key])).filter(Number.isFinite);if(!vals.length)return "<div class='live-spark-row'><span>"+label+"</span><div class='trend-empty'>No data</div></div>";const W=300,H=58,P=7,min=Math.min(...vals),max=Math.max(...vals),range=Math.max(max-min,.1),pts=rows.map((r,i)=>{const v=Number(r[key]);return Number.isFinite(v)?{i,v}:null}).filter(Boolean),x=i=>P+(rows.length===1?0:i*(W-2*P)/Math.max(1,rows.length-1)),y=v=>(H-P)-(v-min)/range*(H-2*P),path=pts.map((pt,i)=>(i?"L":"M")+x(pt.i).toFixed(1)+" "+y(pt.v).toFixed(1)).join(" "),last=pts[pts.length-1],digits=label==="Max Z"?0:1;return "<div class='live-spark-row'><div class='live-spark-label'><span>"+label+"</span><b>"+num(last.v,digits)+" "+unit+"</b></div><svg class='live-spark' viewBox='0 0 "+W+" "+H+"'><line x1='"+P+"' y1='"+(H-P)+"' x2='"+(W-P)+"' y2='"+(H-P)+"' class='trend-axis'/><path d='"+path+"' class='trend-path'/><circle cx='"+x(last.i).toFixed(1)+"' cy='"+y(last.v).toFixed(1)+"' r='3.5' class='trend-current'/></svg></div>";}
 function renderLiveTrend(p){const box=document.getElementById("liveTrend");if(!box)return;if(!p){box.innerHTML="<div class='history-empty'>Select a live object to see its evolution.</div>";return;}const rows=(datasets[p.radar_site]?.history||[]).filter(r=>String(r.track_id)===String(p.track_id)).sort((a,b)=>String(a.timestamp).localeCompare(String(b.timestamp)));if(!rows.length){box.innerHTML="<div class='history-empty'>No retained history for this object.</div>";return;}box.innerHTML="<div class='live-trend-head'><span>Track "+esc(p.track_id)+"</span><b>"+lifecycleState(p)+"</b><small>"+rows.length+" retained scans</small></div>"+liveSpark(rows,"max_reflectivity_dbz","Max Z","dBZ")+liveSpark(rows,"area_km2","Area","km²")+liveSpark(rows,"motion_speed_kt","Motion","kt");const scored=(datasets[p.radar_site]?.shadowHistory||[]).filter(r=>String(r.track_id)===String(p.track_id)).sort((a,b)=>String(a.timestamp).localeCompare(String(b.timestamp))),latest=scored.at(-1),any=scored.some(r=>Object.values(r.research_probabilities||{}).some(v=>v!=null));if(any){box.innerHTML+="<div class='live-prob-trend'><div class='live-trend-head'><span>Research probability evolution</span><b>RESEARCH ONLY</b></div><div class='live-prob-grid'>"+[["15 min",latest?.research_probabilities?.["15"]],["30 min",latest?.research_probabilities?.["30"]],["45 min",latest?.research_probabilities?.["45"]],["60 min",latest?.research_probabilities?.["60"]]].map(x=>"<div><span>"+x[0]+"</span><b>"+(x[1]==null?"—":(Number(x[1])*100).toFixed(1)+"%")+"</b></div>").join("")+"</div><div class='mosaic-note'>Latest available shadow score. Early scans may be unscored while temporal predictors warm up.</div></div>";}}
 function renderSelectedHistory(p){
@@ -445,6 +513,11 @@ function selectObject(p){
     "<div class='live-stat'><span>Z trend</span><b>"+num(p.reflectivity_trend_dbz_per_hr)+" dBZ/hr</b></div>"+
     "<div class='live-stat'><span>Environment</span><b>"+esc(envSource)+" • "+esc(envStatus)+"</b></div>"+
     renderEnvironment(envFields)+
+    "<div class='live-card forward-forecast-card'><h3>Forward motion &amp; evolution</h3>"+
+    "<div class='forecast-row'><span>Current motion</span><b>"+num(p.motion_speed_kt)+" kt @ "+num(motionDir,0)+"°</b></div>"+
+    "<div class='forecast-row'><span>30-min Snow Squall probability</span><b>"+snowSquallProbabilityLabel(shadowProbability(p))+"</b></div>"+
+    "<div class='forecast-row'><span>Evolution signal</span><b>"+esc(evolutionSignal(p).label)+"</b></div></div>"+
+    
     "<div class='live-card'><h3>Live research shadow</h3>"+shadowGrid(shadowRecord(p.radar_site,p.track_id))+
     "<div class='shadow-note'>Candidate model scored this live object separately from the operational feed. Research only.</div></div>"+
     "<div class='live-stat'><span>Data quality</span><b>"+esc(p.data_quality||"—")+"</b></div>";
