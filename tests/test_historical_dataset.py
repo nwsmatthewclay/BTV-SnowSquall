@@ -63,7 +63,9 @@ def test_environment_boundary_rejects_future_analysis():
 
     with pytest.raises(ValueError, match="future RUC environment analysis"):
         extract_features("RUC", None, 44.0, -73.0, radar_time, future)
-\n\ndef test_environment_attachment_records_provider_failure_instead_of_aborting(tmp_path, monkeypatch):
+
+
+def test_environment_attachment_records_provider_failure_instead_of_aborting(tmp_path, monkeypatch):
     from scripts import build_historical_dataset as mod
 
     objects = tmp_path / "objects.csv"
