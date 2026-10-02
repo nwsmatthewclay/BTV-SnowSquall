@@ -45,8 +45,16 @@ jobs:
               print('Historical expansion is archived; controller will not dispatch another batch.')
               raise SystemExit(0)
           no_new = s.get('batch_rows',{}).get('official',0) == 0 and s.get('batch_rows',{}).get('review',0) == 0
+          clean = s.get('clean_population', {})
+          no_clean_tracks = (
+              int(clean.get('positive_tracks', 0))
+              + int(clean.get('null_tracks', 0))
+          ) == 0
           if no_new:
               print('No new cases in this batch; stopping.')
+              raise SystemExit(0)
+          if no_clean_tracks:
+              print('No tracks passed the clean quality gate; stopping automatic expansion.')
               raise SystemExit(0)
           if s['next_official_offset'] >= s['max_automatic_official'] and s['next_unverified_offset'] >= s['max_automatic_unverified']:
               print('Automatic batch cap reached; stopping.')
