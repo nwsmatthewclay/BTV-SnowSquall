@@ -175,14 +175,21 @@ def build_audit(
         else {}
     )
 
+    accepted_track_count = (
+        int(_keys(accepted).nunique())
+        if len(accepted)
+        else 0
+    )
+    pass_tier_count = (
+        int(original_catalog["quality_tier"].eq("pass").sum())
+        if "quality_tier" in original_catalog.columns
+        else 0
+    )
     return {
         "input_tracks": int(len(original_catalog)),
         "input_object_scans": int(len(original_objects)),
-        "accepted_tracks": int(
-            original_catalog["quality_tier"].eq("pass").sum()
-        )
-        if "quality_tier" in original_catalog.columns
-        else 0,
+        "pass_tier_tracks": pass_tier_count,
+        "accepted_tracks": accepted_track_count,
         "accepted_object_scans": int(len(accepted)),
         "track_tiers": track_tiers,
         "object_scan_tiers": row_tiers,
