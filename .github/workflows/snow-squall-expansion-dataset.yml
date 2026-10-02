@@ -6,6 +6,11 @@ on:
       - Snow Squall Unified Case Ledger
     types:
       - completed
+  push:
+    branches:
+      - snow-squall-model-foundation
+    paths:
+      - .github/expansion-retry-trigger
   workflow_dispatch:
     inputs:
       archive_override:
@@ -55,7 +60,7 @@ concurrency:
 
 jobs:
   expand:
-    if: (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success') || (github.event_name == 'workflow_dispatch' && inputs.archive_override == true)
+    if: (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success') || (github.event_name == 'push') || (github.event_name == 'workflow_dispatch' && inputs.archive_override == true)
     runs-on: ubuntu-latest
     timeout-minutes: 360
     env:

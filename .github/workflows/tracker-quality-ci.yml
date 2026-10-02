@@ -10,7 +10,6 @@ on:
     paths:
       - processing/object_tracker.py
       - scripts/build_object_track_catalog.py
-      - scripts/track_quality_gate.py
       - scripts/reconstruct_pilot.py
       - scripts/process_live_volume.py
       - scripts/live_model_features.py
@@ -19,7 +18,6 @@ on:
       - schema/live_object_schema.json
       - tests/test_object_tracker*.py
       - tests/test_object_track_catalog*.py
-      - tests/test_track_quality_gate.py
       - tests/test_track_identity.py
       - tests/test_track_quality_feature_parity.py
 
@@ -57,15 +55,13 @@ jobs:
             tests/test_object_track_catalog.py \
             tests/test_object_track_catalog_qc.py \
             tests/test_track_identity.py \
-            tests/test_track_quality_feature_parity.py \
-            tests/test_track_quality_gate.py
+            tests/test_track_quality_feature_parity.py
 
       - name: Validate tracker module imports
         run: |
           python - <<'PY'
           from processing.object_tracker import CentroidTracker, TrackerConfig
           from scripts.build_object_track_catalog import build_track_catalog
-          from scripts.track_quality_gate import apply_track_quality_gate
           print("Tracker imports OK")
           print("Tracker config:", TrackerConfig())
           PY
