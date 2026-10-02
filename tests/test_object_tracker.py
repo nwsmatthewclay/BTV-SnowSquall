@@ -5,6 +5,18 @@ def obj(row, col, area=25, z=35):
     return {"row_centroid":row,"column_centroid":col,"pixel_count":int(area),
             "area_km2":float(area),"max_reflectivity_dbz":float(z)}
 
+def test_tracker_id_overrides_detector_frame_local_id():
+    t=CentroidTracker()
+    first_input=obj(10,10)
+    first_input["object_id"]="detector-7"
+    first=t.update("2026-01-01T12:00:00Z",[first_input])[0]["object_id"]
+    second_input=obj(10,11)
+    second_input["object_id"]="detector-1"
+    second=t.update("2026-01-01T12:05:00Z",[second_input])[0]["object_id"]
+    assert first == 1
+    assert second == first
+
+
 def test_time_scaled_gate_rejects_unrealistic_fast_scan_jump():
     t=CentroidTracker()
     first=t.update("2026-01-01T12:00:00Z",[obj(10,10)])[0]["object_id"]
