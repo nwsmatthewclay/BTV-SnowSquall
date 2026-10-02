@@ -862,6 +862,16 @@ jobs:
             data/derived/snow_squall_national_pretraining_feature_summary.json
             data/derived/next_expansion_batch.json
             data/derived/snow_squall_expansion_provenance.json
+            data/derived/snow_squall_training_tracks.csv
+            data/derived/snow_squall_expansion_null_tracks.csv
+            data/derived/snow_squall_training_labeled_clean.csv
+            data/derived/snow_squall_training_labeled_review.csv
+            data/derived/snow_squall_training_labeled_track_qc.csv
+            data/derived/snow_squall_training_track_quality_audit.json
+            data/derived/snow_squall_expansion_null_environment_clean.csv
+            data/derived/snow_squall_expansion_null_environment_review.csv
+            data/derived/snow_squall_expansion_null_environment_track_qc.csv
+            data/derived/snow_squall_expansion_null_track_quality_audit.json
             data/manifests/snow_squall_expansion/snow_squall_expansion_cases.csv
             data/manifests/snow_squall_expansion/snow_squall_verified_cases.csv
       - name: Upload lightweight live-model bundle
