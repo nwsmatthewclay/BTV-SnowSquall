@@ -76,7 +76,9 @@ def object_shape_metrics(rows, cols, lat, lon, spacing_km=1.0):
     return major, minor, angle_deg
 
 
-def motion_from_positions(previous, current_lat, current_lon, current_time):
+def motion_from_positions(
+    previous, current_lat, current_lon, current_time, max_speed_kt=75.0
+):
     if not previous or current_lat is None or current_lon is None:
         return None, None
     try:
@@ -93,6 +95,10 @@ def motion_from_positions(previous, current_lat, current_lon, current_time):
         a = sin(dlat / 2) ** 2 + cos(lat1) * cos(lat2) * sin(dlon / 2) ** 2
         distance_km = 6371.0088 * 2 * asin(sqrt(a))
         speed_kt = distance_km / dt_hours / 1.852
+        # Defense-in-depth: never publish physically implausible object motion
+        # even if a stale/corrupt position pair slips through the state bridge.
+        if not np.isfinite(speed_kt) or speed_kt > float(max_speed_kt):
+            return None, None
 
         y = sin(dlon) * cos(lat2)
         x = cos(lat1) * sin(lat2) - sin(lat1) * cos(lat2) * cos(dlon)
