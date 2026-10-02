@@ -37,7 +37,15 @@ def choose_case(scan_time, cases):
     return min(candidates, key=lambda item: item[0])
 
 
-def enrich(input_csv: Path, output_csv: Path, cases_csv: Path, rap_dir: Path, ruc_dir: Path, allow_temporal_case_inference: bool = False):
+def enrich(
+    input_csv: Path,
+    output_csv: Path,
+    cases_csv: Path,
+    rap_dir: Path,
+    ruc_dir: Path,
+    narr_dir: Path | None = None,
+    allow_temporal_case_inference: bool = False,
+):
     objects = pd.read_csv(input_csv)
     objects["scan_dt"] = pd.to_datetime(objects["scan_time_utc"], utc=True, errors="coerce")
     objects = objects.dropna(subset=["scan_dt"]).copy()
@@ -106,28 +114,43 @@ def enrich(input_csv: Path, output_csv: Path, cases_csv: Path, rap_dir: Path, ru
 
         hour_key = environment_cache_key(scan_time)
         if hour_key not in cache:
-            cache[hour_key] = acquire_for_radar_time(
-                scan_time,
-                rap_dir=rap_dir,
-                ruc_dir=ruc_dir,
-                max_age_minutes=180,
-            )
+            try:
+                cache[hour_key] = acquire_for_radar_time(
+                    scan_time,
+                    rap_dir=rap_dir,
+                    ruc_dir=ruc_dir,
+                    narr_dir=narr_dir,
+                    max_age_minutes=180,
+                )
+            except Exception as exc:
+                cache[hour_key] = None
+                cache[f"{hour_key}:error"] = f"{type(exc).__name__}: {exc}"
 
         acquired = cache[hour_key]
         if acquired is None:
             row["environment_status"] = "unavailable"
+            row["environment_error"] = cache.get(
+                f"{hour_key}:error",
+                "no acceptable historical analysis found within age limit",
+            )
             rows.append(row)
             continue
 
         provider, match, environment_path = acquired
-        environment = extract_features(
-            provider,
-            environment_path,
-            float(lat),
-            float(lon),
-            scan_time,
-            expected_valid_time=match.valid_time,
-        )
+        try:
+            environment = extract_features(
+                provider,
+                environment_path,
+                float(lat),
+                float(lon),
+                scan_time,
+                expected_valid_time=match.valid_time,
+            )
+        except Exception as exc:
+            row["environment_status"] = "unavailable"
+            row["environment_error"] = f"{type(exc).__name__}: {exc}"
+            rows.append(row)
+            continue
 
         row["environment_status"] = environment.get("status", "partial")
         row["environment_source"] = provider
@@ -162,6 +185,7 @@ def main():
     parser.add_argument("--cases", default="data/manifests/banacos_2014_cases.csv")
     parser.add_argument("--rap-dir", default="data/raw/RAP")
     parser.add_argument("--ruc-dir", default="data/raw/RUC")
+    parser.add_argument("--narr-dir", default="data/raw/NARR")
     parser.add_argument("--allow-temporal-case-inference", action="store_true", help="Opt in to time-based case assignment when case_id is absent.")
     args = parser.parse_args()
     enrich(
@@ -170,6 +194,7 @@ def main():
         Path(args.cases),
         Path(args.rap_dir),
         Path(args.ruc_dir),
+        narr_dir=Path(args.narr_dir),
         allow_temporal_case_inference=args.allow_temporal_case_inference,
     )
 

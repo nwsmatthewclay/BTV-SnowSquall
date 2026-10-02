@@ -63,3 +63,43 @@ def test_environment_boundary_rejects_future_analysis():
 
     with pytest.raises(ValueError, match="future RUC environment analysis"):
         extract_features("RUC", None, 44.0, -73.0, radar_time, future)
+\n\ndef test_environment_attachment_records_provider_failure_instead_of_aborting(tmp_path, monkeypatch):
+    from scripts import build_historical_dataset as mod
+
+    objects = tmp_path / "objects.csv"
+    cases = tmp_path / "cases.csv"
+    output = tmp_path / "out.csv"
+
+    import pandas as pd
+    pd.DataFrame([{
+        "case_id": "CASE1",
+        "scan_time_utc": "2006-02-24T15:10:00Z",
+        "radar_site": "KCXX",
+        "object_id": 1,
+        "centroid_lat": 44.47,
+        "centroid_lon": -73.15,
+    }]).to_csv(objects, index=False)
+    pd.DataFrame([{
+        "case_id": "CASE1",
+        "event_start_utc": "2006-02-24T15:10:00Z",
+        "source_study": "test",
+        "observing_station": "KBTV",
+        "peak_wind_kt": 30,
+        "min_visibility_km": 0.2,
+        "hybrid_case": False,
+        "lat": 44.47,
+        "lon": -73.15,
+    }]).to_csv(cases, index=False)
+
+    def boom(*args, **kwargs):
+        raise RuntimeError("synthetic provider failure")
+
+    monkeypatch.setattr(mod, "acquire_for_radar_time", boom)
+    mod.enrich(
+        objects, output, cases,
+        tmp_path / "RAP", tmp_path / "RUC", tmp_path / "NARR"
+    )
+    result = pd.read_csv(output)
+    assert len(result) == 1
+    assert result.loc[0, "environment_status"] == "unavailable"
+    assert "synthetic provider failure" in result.loc[0, "environment_error"]
