@@ -95,11 +95,11 @@ function renderObjects(ts){
       color:selected?"#ffffff":color,fillColor:color,fillOpacity:selected?.30:.12,weight:selected?3:1.5
     }}).addTo(objectsLayer);
     layer.bindTooltip(
-      "Track "+esc(p.object_id)+" • "+(prob==null?"SS —":"SS "+(prob*100).toFixed(0)+"%")+" • "+evolution+"<br>"+
+      "Object "+esc(p.object_id)+" • "+(prob==null?"SS —":"SS "+(prob*100).toFixed(0)+"%")+" • "+evolution+"<br>"+
       num(p.motion_speed_kt)+" kt @ "+num(p.motion_direction_deg,0)+"°",
       {sticky:true}
     );
-    layer.bindPopup("<b>"+p.case_id+" • "+p.radar_site+"</b><br>Track "+esc(p.object_id)+"<br>"+fmtUtc(p.timestamp));
+    layer.bindPopup("<b>"+p.case_id+" • "+p.radar_site+"</b><br>Object "+esc(p.object_id)+"<br>"+fmtUtc(p.timestamp));
     layer.on("click",()=>selectObject(f));
     if(p.centroid_lat!=null&&p.centroid_lon!=null){
       const radius=Math.max(2500,Math.min(10000,(Math.max(Number(p.length_km)||0,Number(p.width_km)||0)||5)*500));
@@ -111,7 +111,7 @@ function renderObjects(ts){
   renderObjectList(ts);
 }
 
-function renderObjectList(ts){const box=document.getElementById("objectList"),count=document.getElementById("currentObjectCount");if(!box||!count)return;const rows=featuresAt(ts).slice().sort((a,b)=>Number(b.properties.max_reflectivity_dbz||0)-Number(a.properties.max_reflectivity_dbz||0));count.textContent=String(rows.length);if(!rows.length){box.innerHTML="<div class='history-empty'>No tracked objects at this scan.</div>";return}box.innerHTML=rows.map(f=>{const p=f.properties,selected=selectedKey===p.track_key;return "<button type='button' class='object-row"+(selected?" selected":"")+"' data-track='"+esc(p.track_key)+"'><span class='object-row-main'><b>Track "+esc(p.object_id)+"</b><span>"+num(p.max_reflectivity_dbz)+" dBZ • "+num(p.area_km2)+" km²</span></span><span class='object-row-sub'>"+num(p.motion_speed_kt)+" kt • "+esc(p.environment_status||"environment —")+"</span></button>"}).join("");box.querySelectorAll("[data-track]").forEach(btn=>{btn.onclick=()=>{const f=featuresAt(ts).find(x=>x.properties.track_key===btn.dataset.track);if(f)selectObject(f)}})}
+function renderObjectList(ts){const box=document.getElementById("objectList"),count=document.getElementById("currentObjectCount");if(!box||!count)return;const rows=featuresAt(ts).slice().sort((a,b)=>Number(b.properties.max_reflectivity_dbz||0)-Number(a.properties.max_reflectivity_dbz||0));count.textContent=String(rows.length);if(!rows.length){box.innerHTML="<div class='history-empty'>No objects at this scan.</div>";return}box.innerHTML=rows.map(f=>{const p=f.properties,selected=selectedKey===p.track_key;return "<button type='button' class='object-row"+(selected?" selected":"")+"' data-track='"+esc(p.track_key)+"'><span class='object-row-main'><b>Object "+esc(p.object_id)+"</b><span>"+num(p.max_reflectivity_dbz)+" dBZ • "+num(p.area_km2)+" km²</span></span><span class='object-row-sub'>"+num(p.motion_speed_kt)+" kt • "+esc(p.environment_status||"environment —")+"</span></button>"}).join("");box.querySelectorAll("[data-track]").forEach(btn=>{btn.onclick=()=>{const f=featuresAt(ts).find(x=>x.properties.track_key===btn.dataset.track);if(f)selectObject(f)}})}
 function selectObject(f){selectedKey=f.properties.track_key;const b=document.getElementById("analogsBtn");b.disabled=false;b.onclick=()=>window.open("analogs.html?case="+catalog.cases.indexOf(current)+"&track="+encodeURIComponent(f.properties.track_key),"_blank");render()}
 function trendSvg(rows,key,label,unit,activeIndex){
   const raw=rows.map(r=>Number(r.properties[key]));
@@ -136,7 +136,7 @@ function renderTrackTrend(){
   let activeIndex=rows.findIndex(r=>r.properties.timestamp===activeTs);
   if(activeIndex<0)activeIndex=rows.map(r=>r.properties.timestamp).reduce((best,ts,i)=>ts<=activeTs?i:best,-1);
   if(activeIndex<0)activeIndex=0;
-  box.innerHTML="<div class='trend-note'>Track "+esc(rows[0].properties.object_id)+" • "+rows.length+" scans • cursor marks the current replay time</div>"+
+  box.innerHTML="<div class='trend-note'>Object "+esc(rows[0].properties.object_id)+" • "+rows.length+" scans • cursor marks the current replay time</div>"+
     trendSvg(rows,"max_reflectivity_dbz","Max Z","dBZ",activeIndex)+
     trendSvg(rows,"area_km2","Area","km²",activeIndex)+
     trendSvg(rows,"motion_speed_kt","Motion","kt",activeIndex);
@@ -206,7 +206,7 @@ function renderProbabilityEvolution(){
   });
   const has=points.some(x=>x.values.some(v=>Number.isFinite(v)));
   if(!has){
-    box.innerHTML="<div class='history-empty'>This track has no attached research score history.</div>";
+    box.innerHTML="<div class='history-empty'>This object has no attached research score history.</div>";
     return;
   }
 
@@ -281,30 +281,7 @@ function renderResearchProbabilities(p){
   }).join("")+"</div><div class='research-prob-note'>This is an out-of-fold research result for historical replay only. It is not an operational probability or warning recommendation.</div>";
 }
 
-function renderTrackerQc(p){
-  const box=document.getElementById("trackerQc");
-  if(!box)return;
-  const score=p.track_quality_score==null?"—":num(p.track_quality_score,0);
-  const tier=p.track_quality_tier||p.track_quality_gate||"—";
-  const conf=p.track_association_confidence==null?"—":num(p.track_association_confidence,2);
-  const margin=p.track_association_margin==null?"—":num(p.track_association_margin,2);
-  const amb=p.track_association_ambiguous===true||p.track_association_ambiguous==="True"?"YES":"NO";
-  const vel=p.track_velocity_mismatch_kt==null?"—":num(p.track_velocity_mismatch_kt,1)+" kt";
-  const radar=p.track_radar_motion_mismatch_kt==null?"—":num(p.track_radar_motion_mismatch_kt,1)+" kt";
-  const gap=p.track_gap_recovered===true||p.track_gap_recovered==="True"?"YES":"NO";
-  const cls=tier==="pass"?"pass":(tier==="review"?"review":"reject");
-  box.querySelector(".tracker-qc-grid").innerHTML=[
-    ["Quality",score+(tier==="—"?"":" • "+tier),cls],
-    ["Assoc. confidence",conf,""],
-    ["Ambiguous match",amb,amb==="YES"?"warn":""],
-    ["Assoc. margin",margin,""],
-    ["Velocity mismatch",vel,Number(p.track_velocity_mismatch_kt||0)>45?"warn":""],
-    ["Radar-motion mismatch",radar,Number(p.track_radar_motion_mismatch_kt||0)>50?"warn":""],
-    ["Gap recovered",gap,gap==="YES"?"warn":""],
-    ["QC flags",p.track_quality_flags||"none",""]
-  ].map(x=>"<div class='tracker-qc-cell "+x[2]+"'><span>"+x[0]+"</span><b>"+esc(x[1])+"</b></div>").join("");
-}
-function updateSelection(){const same=features.filter(x=>x.properties.track_key===selectedKey);const exact=same.find(x=>x.properties.timestamp===times[currentIndex]);const prior=[...same].filter(x=>x.properties.timestamp<=times[currentIndex]).sort((a,b)=>a.properties.timestamp.localeCompare(b.properties.timestamp)).pop();const f=exact||prior||same[0],p=f?.properties;if(!p){setText("objectTitle","Select a storm object");setText("objectTime","—");setText("selectionState","No object selected");document.getElementById("metrics").innerHTML="";document.getElementById("environment").innerHTML="";setText("envSource","—");setText("outcome","Select an object to inspect its historical context.");renderTrackHistory();renderResearchProbabilities(null);renderProbabilityEvolution();return;}setText("selectionState","Selected");setText("objectTitle","Track "+p.object_id+" • "+p.radar_site);renderTrackerQc(p);renderResearchProbabilities(p);renderProbabilityEvolution();setText("objectTime",fmtTime(p.timestamp)+" • "+fmtUtc(p.timestamp));document.getElementById("metrics").innerHTML=[["Max Z",num(p.max_reflectivity_dbz)+" dBZ"],["Mean Z",num(p.mean_reflectivity_dbz)+" dBZ"],["Area",num(p.area_km2)+" km²"],["Length",num(p.length_km)+" km"],["Width",num(p.width_km)+" km"],["Aspect",num(p.aspect_ratio)],["Motion",num(p.motion_speed_kt)+" kt"],["Direction",num(p.motion_direction_deg,0)+"°"],["Z trend",num(p.reflectivity_trend_dbz_per_hr)+" dBZ/hr"],["Age",p.age_scans==null?"—":p.age_scans+" scans"],["Core fraction",p.core_fraction==null?"—":num(p.core_fraction*100)+"%"]].map(x=>"<div class='metric'><span>"+x[0]+"</span><b>"+x[1]+"</b></div>").join("");const e=p.environment||{};document.getElementById("environment").innerHTML=[["SBCAPE","sbcape_jkg"],["SBCIN","sbcin_jkg"],["MLCAPE","mlcape_jkg"],["MLCIN","mlcin_jkg"],["MUCAPE","mucape_jkg"],["DCAPE","dcape_jkg"],["PWAT","pwat_mm"],["LCL","lcl_m"],["RH 0–2 km","rh_0_2km_pct"],["0–1 km wind","wind_0_1km_kt"],["0–3 km wind","wind_0_3km_kt"],["0–1 km shear","shear_0_1km_kt"],["0–3 km shear","shear_0_3km_kt"],["0–6 km shear","shear_0_6km_kt"],["0–3 km lapse","lapse_rate_0_3km_c_km"],["0–7.5 km lapse","lapse_rate_0_7_5km_c_km"],["WB 0–3 km","wet_bulb_0_3km_c"],["0–1 km SRH","srh01_m2s2"],["SNSQ","snsq"]].map(x=>"<div class='env-item'><span>"+x[0]+"</span><b>"+formatEnv(e,x[1])+"</b></div>").join("");setText("envSource",p.environment_source?p.environment_source+" • "+num(p.environment_age_minutes,0)+" min old":"Unavailable");const associated=p.track_event_associated===true||p.track_event_associated==="True",relation=p.case_time_relation||"unclassified",out=document.getElementById("outcome");out.className="outcome "+(associated?"positive":"");out.innerHTML=associated?"<b>Associated with documented case context.</b><br>"+relation+". Published onset: "+fmtUtc(current.event_start_utc)+".<br><span class='truth-subnote'>Association is research context, not verified object-level truth.</span>":"<b>Case-context object.</b><br>Not treated as final object-level truth. Relation: "+relation+".";renderTrackHistory();renderTrackTrend()}
+function updateSelection(){const same=features.filter(x=>x.properties.track_key===selectedKey);const exact=same.find(x=>x.properties.timestamp===times[currentIndex]);const prior=[...same].filter(x=>x.properties.timestamp<=times[currentIndex]).sort((a,b)=>a.properties.timestamp.localeCompare(b.properties.timestamp)).pop();const f=exact||prior||same[0],p=f?.properties;if(!p){setText("objectTitle","Select a storm object");setText("objectTime","—");setText("selectionState","No object selected");document.getElementById("metrics").innerHTML="";document.getElementById("environment").innerHTML="";setText("envSource","—");setText("outcome","Select an object to inspect its historical context.");renderTrackHistory();renderResearchProbabilities(null);renderProbabilityEvolution();return;}setText("selectionState","Selected");setText("objectTitle","Object "+p.object_id+" • "+p.radar_site);renderResearchProbabilities(p);renderProbabilityEvolution();setText("objectTime",fmtTime(p.timestamp)+" • "+fmtUtc(p.timestamp));document.getElementById("metrics").innerHTML=[["Max Z",num(p.max_reflectivity_dbz)+" dBZ"],["Mean Z",num(p.mean_reflectivity_dbz)+" dBZ"],["Area",num(p.area_km2)+" km²"],["Length",num(p.length_km)+" km"],["Width",num(p.width_km)+" km"],["Aspect",num(p.aspect_ratio)],["Motion",num(p.motion_speed_kt)+" kt"],["Direction",num(p.motion_direction_deg,0)+"°"],["Z trend",num(p.reflectivity_trend_dbz_per_hr)+" dBZ/hr"],["Age",p.age_scans==null?"—":p.age_scans+" scans"],["Core fraction",p.core_fraction==null?"—":num(p.core_fraction*100)+"%"]].map(x=>"<div class='metric'><span>"+x[0]+"</span><b>"+x[1]+"</b></div>").join("");const e=p.environment||{};document.getElementById("environment").innerHTML=[["SBCAPE","sbcape_jkg"],["SBCIN","sbcin_jkg"],["MLCAPE","mlcape_jkg"],["MLCIN","mlcin_jkg"],["MUCAPE","mucape_jkg"],["DCAPE","dcape_jkg"],["PWAT","pwat_mm"],["LCL","lcl_m"],["RH 0–2 km","rh_0_2km_pct"],["0–1 km wind","wind_0_1km_kt"],["0–3 km wind","wind_0_3km_kt"],["0–1 km shear","shear_0_1km_kt"],["0–3 km shear","shear_0_3km_kt"],["0–6 km shear","shear_0_6km_kt"],["0–3 km lapse","lapse_rate_0_3km_c_km"],["0–7.5 km lapse","lapse_rate_0_7_5km_c_km"],["WB 0–3 km","wet_bulb_0_3km_c"],["0–1 km SRH","srh01_m2s2"],["SNSQ","snsq"]].map(x=>"<div class='env-item'><span>"+x[0]+"</span><b>"+formatEnv(e,x[1])+"</b></div>").join("");setText("envSource",p.environment_source?p.environment_source+" • "+num(p.environment_age_minutes,0)+" min old":"Unavailable");const associated=p.track_event_associated===true||p.track_event_associated==="True",relation=p.case_time_relation||"unclassified",out=document.getElementById("outcome");out.className="outcome "+(associated?"positive":"");out.innerHTML=associated?"<b>Associated with documented case context.</b><br>"+relation+". Published onset: "+fmtUtc(current.event_start_utc)+".<br><span class='truth-subnote'>Association is research context, not verified object-level truth.</span>":"<b>Case-context object.</b><br>Not treated as final object-level truth. Relation: "+relation+".";renderTrackHistory();renderTrackTrend()}
 function advance(step){if(!times.length)return;currentIndex=(currentIndex+step+times.length)%times.length;render()}
 function tick(){if(!playing)return;advance(1);timer=setTimeout(tick,700)}
 function togglePlay(){playing=!playing;setText("playBtn",playing?"❚❚ Pause":"▶ Play");if(playing)tick();else clearTimeout(timer)}
