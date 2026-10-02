@@ -138,3 +138,19 @@ footer{height:60px;padding:7px 15px;background:#101923;border-top:1px solid var(
 .leaflet-control-attribution{background:rgba(9,16,24,.72)!important;color:#7f95a8!important}
 .leaflet-control-attribution a{color:#89bde0!important}
 @media(max-width:900px){.map-legend{width:225px;right:8px;bottom:8px}.map-hud{left:8px;top:8px}.map-display-controls{left:8px;top:86px}.live-feed-badge{display:none}}
+
+/* Tracker-quality diagnostics */
+.tracker-qc-card{margin-top:10px;padding:9px 10px;background:#111c26;border:1px solid #304757;border-radius:7px}
+.tracker-qc-card .section-head{margin:0 0 6px}
+.tracker-qc-card .section-head span{font-size:9px;color:#7f95a9}
+.tracker-qc-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:5px}
+.tracker-qc-cell{background:#162431;border:1px solid #263847;border-radius:5px;padding:6px 7px;min-width:0}
+.tracker-qc-cell span{display:block;color:#8298aa;font-size:9px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tracker-qc-cell b{display:block;color:#f2f7fb;font-size:11px;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tracker-qc-cell.pass b{color:#9ee1bf}
+.tracker-qc-cell.review b{color:#f1cf8b}
+.tracker-qc-cell.reject b{color:#f39b9b}
+.tracker-qc-cell.warn{border-color:#614f34;background:#211d15}
+.tracker-qc-note{margin-top:6px;color:#748a9d;font-size:9px;line-height:1.3}
+.tracker-qc-live{margin-top:8px}
+.tracker-qc-live h3{display:flex;justify-content:space-between;align-items:center}
