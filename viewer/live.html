@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>BTV Snow Squall • Live Object Workbench</title>
+<title>BTV Snow Squall • Live Object Explorer</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <link rel="stylesheet" href="style.css?v=20261001-04">
 <style>
@@ -64,7 +64,7 @@
 <header>
   <div>
     <div class="eyebrow">BTV SNOW SQUALL PROJECT</div>
-    <h1>Live Snow Squall Object Workbench</h1>
+    <h1>Live Snow Squall Object Explorer</h1>
     <div id="subtitle">Loading real-time KCXX + KTYX radar objects…</div>
   </div>
   <div class="header-actions">
@@ -77,7 +77,7 @@
   <div class="live-top">
     <section id="liveMap" aria-label="Live radar object map">
       <div class="map-hud">
-        <div class="map-hud-title"><span>RADAR OBJECT / FORWARD PROJECTION</span><b id="hudScan">—</b></div>
+        <div class="map-hud-title"><span>CURRENT RADAR OBJECTS</span><b id="hudScan">—</b></div>
         <div class="map-hud-sub"><span id="hudMode">CLEAN DISPLAY</span><span>•</span><span id="hudSources">KCXX + KTYX</span><span>•</span><span id="hudObjects">0 objects</span></div>
       </div>
       <div class="map-display-controls" aria-label="Radar display controls">
@@ -93,7 +93,7 @@
         </div>
         <div class="legend-note">Clean mode suppresses weak speckle and conservative low-CC non-meteorological echoes for display only.</div>
       </div>
-      <div class="probability-legend"><div class="legend-caption">SNOW SQUALL PROBABILITY • 30 MIN</div><div class="probability-scale"><span style="--p:#55b7ff">0–20%</span><span style="--p:#4fd1c5">20–40%</span><span style="--p:#f5d66b">40–60%</span><span style="--p:#f39b2f">60–80%</span><span style="--p:#ef625f">80%+</span></div><div class="legend-note">Ring color uses the research shadow score when available. Gray = no score.</div></div>
+      
       <div class="map-empty-state" id="mapEmptyState"><strong>No significant echoes</strong><span>Radar feed is healthy. Weak returns below the display threshold are intentionally muted.</span></div>
     </section>
     <aside class="live-sidebar">
@@ -110,7 +110,7 @@
         <div class="mosaic-note">Clean mode is a human-display product. Raw Level-II remains the scientific source for object detection and model features.</div>
       </div>
 
-      <div class="section-head"><h2>Current objects</h2><span id="objectCount">0</span></div><div class="live-track-toggle"><label><input type="checkbox" id="showAllLiveTracks"> Show all tracks (research/QC)</label><span>Default: active-object tails only</span></div>
+      <div class="section-head"><h2>Current objects</h2><span id="objectCount">0</span></div>
       <div class="live-object-list" id="objectList"></div>
 
       <div class="section-head compact"><h3>Model status</h3></div>
@@ -126,22 +126,19 @@
     </aside>
   </div>
 
-  <section class="detail-drawer" aria-label="Selected object details">
+  <section class="detail-drawer" aria-label="Selected object evolution">
     <div class="detail-summary" id="selectedSummary">
-      <div class="detail-placeholder">Select a live storm object to load its evolving diagnostics and live research shadow score below the map.</div>
+      <div class="detail-placeholder">Select a live storm object to load its Snow Squall probability and observed evolution.</div>
     </div>
     <div class="detail-history">
-      <div class="section-head compact"><h3>Scan-to-scan object evolution</h3><span id="selectionState">None</span><span id="liveTrackCount">—</span></div>
-      <div id="liveHistory" class="track-history">
-        <div class="history-empty">Select a current object to see its scan-by-scan history.</div>
-      </div>
+      <div class="section-head compact"><h3>Object evolution</h3><span id="selectionState">None</span></div>
       <div id="liveTrend" class="track-trend">
-        <div class="history-empty">Select a live object to see intensity, size, motion, and probability evolution.</div>
+        <div class="history-empty">Select a live object to plot Snow Squall probability, reflectivity, and object size through time.</div>
       </div>
     </div>
   </section>
 </main>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<script src="live.js?v=20261001-10"></script>
+<script src="live.js?v=20261001-11"></script>
 </body>
 </html>
