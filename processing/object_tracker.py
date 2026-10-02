@@ -215,7 +215,17 @@ class CentroidTracker:
             if radar_motion:
                 obj["radar_motion_speed_kt"]=radar_motion.get("radar_motion_speed_kt"); obj["radar_motion_direction_deg"]=radar_motion.get("radar_motion_direction_deg"); obj["radar_motion_confidence"]=radar_motion.get("radar_motion_confidence")
             assignments[oi]=tid
-        return [{"object_id":assignments[i],**obj} for i,obj in enumerate(objects)]
+        output=[]
+        for i,obj in enumerate(objects):
+            row=dict(obj)
+            # Detector object_id is scan-local. Promote the tracker-assigned
+            # identity to object_id and preserve the original as a diagnostic.
+            detector_id=row.get("object_id")
+            row["detector_object_id"]=detector_id
+            row["object_id"]=assignments[i]
+            row["track_id"]=assignments[i]
+            output.append(row)
+        return output
 
     def to_state(self):
         return {"next_id":self.next_id,"tracks":{str(tid):{"object_id":track.object_id,"last_time":self._as_datetime(track.last_time).isoformat(),"row":track.row,"column":track.column,"age_scans":track.age_scans,"velocity_row":track.velocity_row,"velocity_column":track.velocity_column,"area_km2":track.area_km2,"max_reflectivity_dbz":track.max_reflectivity_dbz,"missed_scans":track.missed_scans} for tid,track in self.tracks.items()}}

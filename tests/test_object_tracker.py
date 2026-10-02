@@ -62,3 +62,33 @@ def test_low_confidence_radar_motion_does_not_overwrite_object_motion():
     assert row["track_motion_source"]=="object_only"
     assert row["track_motion_radar_weight"]==0.0
     assert row["track_velocity_column_per_min"] > 0
+
+
+def test_tracker_identity_overrides_scan_local_detector_id():
+    t = CentroidTracker()
+    first = t.update(
+        "2026-01-01T12:00:00Z",
+        [{"object_id": 1, **obj(10, 10)}],
+    )[0]
+    second = t.update(
+        "2026-01-01T12:05:00Z",
+        [{"object_id": 7, **obj(10, 11)}],
+    )[0]
+    assert second["object_id"] == first["object_id"]
+    assert second["track_id"] == first["track_id"]
+    assert first["detector_object_id"] == 1
+    assert second["detector_object_id"] == 7
+
+
+def test_tracker_new_object_gets_unique_track_identity():
+    t = CentroidTracker()
+    first = t.update(
+        "2026-01-01T12:00:00Z",
+        [{"object_id": 1, **obj(10, 10)}],
+    )[0]
+    second = t.update(
+        "2026-01-01T12:05:00Z",
+        [{"object_id": 1, **obj(10, 30)}],
+    )[0]
+    assert second["object_id"] != first["object_id"]
+    assert second["track_id"] != first["track_id"]
