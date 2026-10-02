@@ -1,28 +1,145 @@
 <!doctype html>
 <html lang="en">
 <head>
-<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>BTV Snow Squall Historical Explorer</title>
-<link rel="icon" href="favicon.svg" type="image/svg+xml"><link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"><link rel="stylesheet" href="style.css">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>BTV Snow Squall Monitor • Historical</title>
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<link rel="stylesheet" href="style.css?v=20261001-14">
 </head>
-<body>
-<header><div><div class="eyebrow">BTV SNOW SQUALL PROJECT</div><h1>Historical Storm Explorer</h1><div id="subtitle">Loading historical pilot data…</div></div>
-<div class="header-actions"><span class="badge research">RESEARCH PILOT • OBJECT EVOLUTION</span><a class="nav-link" href="training.html">Training Replay</a><a class="nav-link" href="validation.html">Independent Validation</a><a class="nav-link" href="live.html">Live Objects</a><button id="analogsBtn" disabled>Historical Analogs</button><button id="detailsBtn">Data Status</button></div></header>
-<main><section id="map"></section><aside id="panel">
-<div class="control-block"><label for="caseSelect">Historical case</label><select id="caseSelect"></select></div>
-<div class="case-card"><div class="case-title" id="caseTitle">Loading…</div><div class="case-meta" id="caseMeta">—</div><div class="case-grid" id="caseGrid"></div><div class="truth-banner">CASE CONTEXT ONLY <span>Historical object detections are not final object-level truth.</span></div></div>
-<div class="radar-control"><div><span>Radar opacity</span><b id="radarOpacityValue">78%</b></div><input id="radarOpacity" type="range" min="0" max="100" value="78"><div class="radar-status" id="radarStatus">Historical Level-II reflectivity reconstruction</div></div>
-<div class="object-control"><div class="object-control-head"><div><span>Storm objects at scan</span><b id="currentObjectCount">0</b></div><label><input id="allTracksToggle" type="checkbox"> Show all objects</label></div><div class="object-control-note">Object identity is the replay entity. Select an object to inspect its evolution over time.</div><div class="object-list" id="objectList"><div class="history-empty">Loading current objects…</div></div></div>
-<div class="radar-legend"><div class="legend-title">Radar context</div><div class="radar-legend-text">Reflectivity (dBZ) • reconstructed Level-II background</div><div class="radar-legend-note">The upstream reconstruction color table is retained; this image is display context, not the model input.</div></div>
-<div class="model-card" id="modelCard"><div class="section-head compact"><h3>Learned-model verification</h3><span id="modelStatusBadge">NOT AVAILABLE</span></div><div id="modelSummary">No trained candidate metrics are embedded in this viewer build yet.</div></div>
-<div class="section-head"><h2>Object Diagnostics</h2><span id="selectionState">No object selected</span></div>
-<div class="selected-card"><div class="selected-title" id="objectTitle">Select a storm object</div><div class="selected-sub" id="objectTime">—</div></div><div class="metric-grid id="metrics"></div><div class="research-probability" id="researchProbability"><div class="section-head compact"><h3>Learned-model replay</h3><span>OOF / RESEARCH</span></div><div id="researchProbabilityBody">No out-of-fold probabilities embedded in this build.</div></div>
-<div class="section-head compact"><h3>Object evolution</h3><span id="trackCount">—</span></div><div class="track-history" id="trackHistory"><div class="history-empty">Select a storm object to see its scan-to-scan evolution.</div></div>
-<div class="section-head compact"><h3>Object trend window</h3></div><div class="track-trend" id="trackTrend"><div class="history-empty">Select a storm object to see intensity, size, and motion trends.</div></div><div class="section-head compact"><h3>Environment</h3><span id="envSource">—</span></div><div class="env-grid" id="environment"></div>
-<div class="section-head compact"><h3>Historical outcome context</h3></div><div class="outcome" id="outcome">Select an object to inspect its historical context.</div>
-<div class="legend"><span><i class="swatch object"></i>Detected object</span><span><i class="swatch track"></i>Object track</span><span><i class="swatch onset"></i>Published onset context</span></div>
-</aside></main>
-<footer><div class="timeline-head"><span id="timelineTime">—</span><div><button id="prevBtn">◀</button><button id="playBtn">▶ Play</button><button id="nextBtn">▶</button></div></div><input id="slider" type="range" min="0" max="0" value="0"></footer>
-<div id="modal" class="modal hidden"><div class="modal-card"><button id="closeModal" class="modal-close">×</button><h2>Viewer Data Status</h2><p id="statusText">—</p><div class="status-list" id="statusList"></div></div></div>
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script><script src="app.js?v=20261001-06"></script>
-</body></html>
+<body class="index-v2">
+<header class="ss-header">
+  <div class="ss-brand">
+    <div class="ss-brand-mark">❄</div>
+    <div>
+      <div class="ss-brand-title">BTV Snow Squall Monitor</div>
+      <div class="ss-brand-sub" id="subtitle">Historical Case Explorer</div>
+    </div>
+  </div>
+  <nav class="ss-nav" aria-label="Primary">
+    <a href="live.html">Live View</a>
+    <a class="active" href="./">Historical</a>
+    <a href="validation.html">Model Performance</a>
+    <a href="training.html">Training Replay</a>
+    <button id="detailsBtn">About / Data Status</button>
+  </nav>
+  <div class="ss-clock">
+    <div id="timelineTime">Historical Replay</div>
+    <span class="ss-live-dot"></span><span>RESEARCH • CASE REPLAY</span>
+  </div>
+</header>
+
+<main class="index-v2-main">
+  <section class="index-v2-top">
+    <section class="index-v2-map-shell">
+      <div id="map"></div>
+      <div class="map-case-hud">
+        <div class="map-case-label">HISTORICAL CASE</div>
+        <select id="caseSelect" aria-label="Historical case"></select>
+        <div class="map-case-meta">
+          <span id="radarStatus">Loading radar…</span>
+          <span id="radarOpacityValue">78%</span>
+        </div>
+        <input id="radarOpacity" type="range" min="0" max="100" value="78" aria-label="Radar opacity">
+      </div>
+      <div class="probability-legend-v2">
+        <div class="legend-title-v2">Snow Squall Probability</div>
+        <div><i class="prob-high"></i><span>≥ 80%</span></div>
+        <div><i class="prob-mid-high"></i><span>60–80%</span></div>
+        <div><i class="prob-mid"></i><span>40–60%</span></div>
+        <div><i class="prob-low"></i><span>20–40%</span></div>
+        <div><i class="prob-very-low"></i><span>&lt; 20%</span></div>
+      </div>
+      <div class="map-radar-tag">Radar: <b id="mapRadarSite">—</b></div>
+    </section>
+
+    <aside id="panel" class="index-v2-panel">
+      <div class="selected-panel-head">
+        <div>
+          <div class="selected-title-v2" id="objectTitle">Select an Object</div>
+          <div class="selected-sub-v2" id="objectTime">Choose a radar object from the map or cards below.</div>
+        </div>
+        <span class="probability-badge-v2" id="selectionState">No Selection</span>
+      </div>
+
+      <div class="case-quick-grid" id="caseGrid"></div>
+      <div id="researchProbability" class="research-probability-v2">
+        <div id="researchProbabilityBody">
+          <div class="probability-empty-v2">No out-of-fold research probability is attached to this scan.</div>
+        </div>
+      </div>
+
+      <div class="evolution-panel-v2">
+        <div class="evolution-panel-head">
+          <span>Object Evolution (Last 60 Minutes)</span>
+          <span id="trackCount">—</span>
+        </div>
+        <div id="probabilityEvolutionBody">
+          <div class="probability-empty-v2">Select a storm object to plot its evolution.</div>
+        </div>
+      </div>
+
+      <div class="metric-grid-v2" id="metrics"></div>
+
+      <div class="index-v2-secondary">
+        <div class="section-head compact"><h3>Environment</h3><span id="envSource">—</span></div>
+        <div class="env-grid" id="environment"></div>
+        <div class="section-head compact"><h3>Historical Outcome Context</h3></div>
+        <div class="outcome" id="outcome">Select an object to inspect its historical context.</div>
+        <div id="trackHistory" class="track-history"></div>
+        <div id="trackTrend" class="track-trend"></div>
+        <div id="modelCard" class="model-card">
+          <div class="section-head compact"><h3>Learned-model verification</h3><span id="modelStatusBadge">NOT AVAILABLE</span></div>
+          <div id="modelSummary"></div>
+        </div>
+      </div>
+    </aside>
+  </section>
+
+  <section class="index-v2-objects">
+    <div class="objects-head-v2">
+      <div>
+        <h2>All Detected Objects <span>(Current Scan)</span></h2>
+        <div class="objects-sub-v2" id="objectSubtitle">Select an object to inspect evolution through time.</div>
+      </div>
+      <div class="objects-head-actions">
+        <span>Sort by:</span>
+        <select id="objectSortV2" aria-label="Object sort">
+          <option value="probability">Probability</option>
+          <option value="reflectivity">Reflectivity</option>
+        </select>
+        <span class="scan-count-v2"><b id="currentObjectCount">0</b> objects</span>
+      </div>
+    </div>
+    <div class="object-list-v2" id="objectList">
+      <div class="history-empty">Loading current objects…</div>
+    </div>
+    <input id="allTracksToggle" type="checkbox" hidden>
+  </section>
+</main>
+
+<footer class="index-v2-footer">
+  <div class="timeline-controls-v2">
+    <button id="prevBtn" aria-label="Previous scan">◀</button>
+    <button id="playBtn">▶ Play</button>
+    <button id="nextBtn" aria-label="Next scan">▶</button>
+  </div>
+  <input id="slider" type="range" min="0" max="0" value="0" aria-label="Historical time slider">
+</footer>
+
+<div id="modal" class="modal hidden">
+  <div class="modal-card">
+    <button id="closeModal" class="modal-close">×</button>
+    <h2>Viewer Data Status</h2>
+    <p id="statusText">—</p>
+    <div class="status-list" id="statusList"></div>
+  </div>
+</div>
+
+<button id="analogsBtn" class="hidden" aria-hidden="true">Historical Analogs</button>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="app.js?v=20261001-07"></script>
+</body>
+</html>
