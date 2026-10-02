@@ -323,12 +323,13 @@ class CentroidTracker:
         track_counts = np.sum(np.isfinite(cost), axis=1).astype(int)
         return object_counts, track_counts
 
-    def _association_confidence(self, chosen_cost, alternatives):
-        finite = sorted(
-            float(value) for value in np.asarray(alternatives).ravel()
-            if np.isfinite(value)
-        )
-        second = finite[1] if len(finite) > 1 else None
+    def _association_confidence(self, chosen_cost, alternatives, chosen_index=None):
+        finite = [
+            float(value)
+            for i, value in enumerate(np.asarray(alternatives).ravel())
+            if np.isfinite(value) and (chosen_index is None or i != chosen_index)
+        ]
+        second = min(finite) if finite else None
         margin = (
             float(second - chosen_cost)
             if second is not None
@@ -461,6 +462,7 @@ class CentroidTracker:
             confidence, margin = self._association_confidence(
                 cost_value,
                 alternatives,
+                chosen_index=track_ids.index(tid),
             )
             object_competition = int(candidate_counts[object_index])
             track_competition = int(
