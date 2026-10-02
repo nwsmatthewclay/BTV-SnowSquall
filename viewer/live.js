@@ -394,6 +394,20 @@ function renderSelectedHistory(p){
     "</tbody></table></div>";
 }
 
+function trackerQcMarkup(p){
+  const score=p.track_quality_score==null?"—":num(p.track_quality_score,0);
+  const tier=p.track_quality_tier||p.track_quality_gate||"—";
+  const conf=p.track_association_confidence==null?"—":num(p.track_association_confidence,2);
+  const margin=p.track_association_margin==null?"—":num(p.track_association_margin,2);
+  const amb=p.track_association_ambiguous===true||p.track_association_ambiguous==="True"?"YES":"NO";
+  const vel=p.track_velocity_mismatch_kt==null?"—":num(p.track_velocity_mismatch_kt,1)+" kt";
+  const radar=p.track_radar_motion_mismatch_kt==null?"—":num(p.track_radar_motion_mismatch_kt,1)+" kt";
+  const gap=p.track_gap_recovered===true||p.track_gap_recovered==="True"?"YES":"NO";
+  return "<div class='live-card tracker-qc-live'><h3>Tracker QC <span class='chip'>"+esc(tier)+"</span></h3><div class='tracker-qc-grid'>"+
+    [["Quality",score],["Assoc. confidence",conf],["Ambiguous match",amb],["Assoc. margin",margin],["Velocity mismatch",vel],["Radar-motion mismatch",radar],["Gap recovered",gap],["QC flags",p.track_quality_flags||"none"]]
+    .map(x=>"<div class='tracker-qc-cell'><span>"+x[0]+"</span><b>"+esc(x[1])+"</b></div>").join("")+
+    "</div><div class='tracker-qc-note'>Tracking diagnostics only; QC status does not determine meteorological truth.</div></div>";
+}
 function selectObject(p){
   selected=p;
   document.getElementById("selectionState").textContent="Selected: "+p.radar_site+" track "+p.track_id;
