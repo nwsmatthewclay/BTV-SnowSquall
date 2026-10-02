@@ -156,8 +156,8 @@ footer{height:60px;padding:7px 15px;background:#101923;border-top:1px solid var(
 .tracker-qc-live h3{display:flex;justify-content:space-between;align-items:center}
 
 /* Forward Snow Squall projection display */
-.probability-legend{position:absolute;left:14px;bottom:14px;z-index:900;width:290px;padding:8px 10px;background:rgba(8,15,22,.92);border:1px solid rgba(89,122,147,.65);border-radius:7px;box-shadow:0 8px 25px rgba(0,0,0,.28);backdrop-filter:blur(4px)}
-.probability-scale{display:grid;grid-template-columns:repeat(5,1fr);gap:3px;margin-top:5px}
+.historical-map-legend,.probability-legend{position:absolute;left:14px;bottom:14px;z-index:900;width:290px;padding:8px 10px;background:rgba(8,15,22,.92);border:1px solid rgba(89,122,147,.65);border-radius:7px;box-shadow:0 8px 25px rgba(0,0,0,.28);backdrop-filter:blur(4px)}
+.historical-map-legend{right:14px;bottom:14px;width:290px}.probability-scale{display:grid;grid-template-columns:repeat(5,1fr);gap:3px;margin-top:5px}
 .probability-scale span{display:block;text-align:center;padding:4px 2px;border-radius:3px;background:color-mix(in srgb,var(--p) 24%,#101923);border:1px solid var(--p);color:#e9f2f7;font-size:8px;font-weight:800}
 .forward-forecast-card{margin-top:8px;border-color:#3c5769}
 .forward-forecast-card h3{display:flex;justify-content:space-between;align-items:center}
