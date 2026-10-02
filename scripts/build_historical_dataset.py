@@ -43,8 +43,8 @@ def enrich(
     cases_csv: Path,
     rap_dir: Path,
     ruc_dir: Path,
-    narr_dir: Path | None = None,
     allow_temporal_case_inference: bool = False,
+    narr_dir: Path | None = None,
 ):
     objects = pd.read_csv(input_csv)
     objects["scan_dt"] = pd.to_datetime(objects["scan_time_utc"], utc=True, errors="coerce")
@@ -168,6 +168,12 @@ def enrich(
     result = pd.DataFrame(rows)
     result = result.sort_values(["scan_dt", "radar_site", "object_id"])
     result.drop(columns=["scan_dt"], inplace=True, errors="ignore")
+    if "environment_source" not in result.columns:
+        result["environment_source"] = pd.NA
+    if "environment_error" not in result.columns:
+        result["environment_error"] = pd.NA
+    if "environment_status" not in result.columns:
+        result["environment_status"] = "unavailable"
     output_csv.parent.mkdir(parents=True, exist_ok=True)
     result.to_csv(output_csv, index=False)
 
@@ -194,8 +200,8 @@ def main():
         Path(args.cases),
         Path(args.rap_dir),
         Path(args.ruc_dir),
-        narr_dir=Path(args.narr_dir),
         allow_temporal_case_inference=args.allow_temporal_case_inference,
+        narr_dir=Path(args.narr_dir),
     )
 
 

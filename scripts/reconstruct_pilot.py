@@ -251,6 +251,9 @@ def _process_radar_files(radar: str, files: list[Path]):
                 ),
                 "geometry_wkt": obj.get("geometry_wkt"),
                 "core_fraction": float(obj["core_pixel_count"]) / max(1, int(obj["pixel_count"])),
+                "track_id": obj.get("track_id", obj.get("object_id")),
+                "detector_object_id": obj.get("detector_object_id", obj.get("object_id")),
+
                 "reflectivity_gradient_p90_dbkm": obj.get("reflectivity_gradient_p90_dbkm"),
                 "gradient_fraction_above_5dbkm": obj.get("gradient_fraction_above_5dbkm"),
                 "background_reflectivity_dbz": obj.get("background_reflectivity_dbz"),
