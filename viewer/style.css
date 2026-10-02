@@ -168,3 +168,42 @@ footer{height:60px;padding:7px 15px;background:#101923;border-top:1px solid var(
 .projection-label{white-space:nowrap;background:rgba(9,16,24,.88);border:1px solid #527087;color:#dcecff;border-radius:4px;padding:2px 5px;font:700 8px/1 system-ui,-apple-system,sans-serif;transform:translate(-50%,-125%)}
 .snow-squall-prob-label{white-space:nowrap;background:rgba(9,16,24,.94);border:2px solid #8b98a4;color:#fff;border-radius:999px;padding:3px 7px;font:850 10px/1 system-ui,-apple-system,sans-serif;transform:translate(-50%,-175%);box-shadow:0 2px 8px rgba(0,0,0,.45)}
 @media(max-width:900px){.probability-legend{left:8px;bottom:8px;width:260px}.probability-scale span{font-size:7px}}
+
+/* Object evolution workspace */
+.selected-object-head{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:7px}
+.selected-probability{min-width:92px;padding:7px 9px;border:2px solid #8b98a4;border-radius:8px;background:#121e29;text-align:center}
+.selected-probability span{display:block;color:#8ea1b4;font-size:8px;text-transform:uppercase;letter-spacing:.08em}
+.selected-probability b{display:block;color:#fff;font-size:19px;line-height:1.05;margin-top:2px}
+.evolution-header{display:flex;justify-content:space-between;align-items:end;gap:12px;padding-bottom:7px;border-bottom:1px solid #263847}
+.evolution-header>div{display:flex;flex-direction:column;gap:2px}
+.evolution-header span{color:#8297a8;font-size:9px;letter-spacing:.07em;text-transform:uppercase}
+.evolution-header b{color:#dfeaf1;font-size:14px}
+.evolution-header>span{font-size:9px;color:#71869a}
+.probability-readout{margin-top:8px;padding:9px 10px;background:#121e29;border:1px solid #31495b;border-radius:7px}
+.probability-readout-head{display:flex;justify-content:space-between;align-items:center}
+.probability-readout-head span{font-size:9px;color:#9fb2c1;letter-spacing:.08em;font-weight:800}
+.probability-readout-head b{font-size:20px;line-height:1}
+.probability-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:5px;margin-top:7px}
+.probability-cell{background:#172633;border:1px solid #2a4558;border-radius:5px;padding:7px 4px;text-align:center}
+.probability-cell span{display:block;color:#8195a7;font-size:9px}
+.probability-cell b{display:block;color:#fff;font-size:14px;margin-top:2px}
+.probability-note{margin-top:7px;color:#73899b;font-size:9px;line-height:1.3}
+.evolution-chart-card{margin-top:8px;padding:8px 9px;background:#111c26;border:1px solid #263847;border-radius:7px}
+.evolution-chart-head{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.evolution-chart-head span{color:#a7b9c7;font-size:10px}
+.evolution-chart-head b{font-size:9px;color:#cfe2ee}
+.evolution-chart{display:block;width:100%;height:190px;margin-top:6px;background:#0d171f;border:1px solid #223342;border-radius:5px}
+.chart-grid{stroke:#2a3b48;stroke-width:1}
+.probability-path{fill:none;stroke:#8bd0f1;stroke-width:3;stroke-linecap:round;stroke-linejoin:round}
+.probability-point{fill:#fff;stroke:#8bd0f1;stroke-width:2}
+.trend-set{margin-top:8px;padding:8px 9px;background:#111c26;border:1px solid #263847;border-radius:7px}
+.live-spark-row{display:grid;grid-template-columns:72px minmax(0,1fr);gap:7px;align-items:center;margin:6px 0}
+.live-spark-label{display:flex;flex-direction:column;gap:1px}
+.live-spark-label span{font-size:9px;color:#8ea1b4;text-transform:uppercase}
+.live-spark-label b{font-size:10px;color:#fff}
+.live-spark{width:100%;height:58px;background:#0e1821;border:1px solid #223342;border-radius:4px}
+@media(max-width:900px){
+  .probability-grid{grid-template-columns:repeat(2,1fr)}
+  .selected-object-head{align-items:flex-start}
+  .selected-probability{min-width:82px}
+}
