@@ -787,9 +787,41 @@ jobs:
           review_offset = int('${{ steps.batch.outputs.unverified_offset }}')
           official_batch = int('${{ steps.batch.outputs.max_official }}')
           review_batch = int('${{ steps.batch.outputs.max_unverified }}')
+
+          def load_audit(path):
+              p = Path(path)
+              if not p.exists():
+                  return {}
+              return json.loads(p.read_text())
+
+          positive_qc = load_audit(
+              'data/derived/snow_squall_training_track_quality_audit.json'
+          )
+          null_qc = load_audit(
+              'data/derived/snow_squall_expansion_null_track_quality_audit.json'
+          )
+          clean_object_rows = int(positive_qc.get('accepted_object_scans', 0))
+          clean_null_rows = int(null_qc.get('accepted_object_scans', 0))
+          clean_tracks = int(positive_qc.get('accepted_tracks', 0))
+          clean_null_tracks = int(null_qc.get('accepted_tracks', 0))
+          auto_continue = bool(
+              official_count + review_count > 0
+              and (clean_object_rows + clean_null_rows > 0)
+          )
+
           state = {
-              'auto_continue': True,
+              'auto_continue': auto_continue,
+              'stop_reason': (
+                  None if auto_continue
+                  else 'no_new_cases_or_no_clean_tracks'
+              ),
               'batch_rows': {'official': official_count, 'review': review_count},
+              'clean_population': {
+                  'positive_tracks': clean_tracks,
+                  'positive_object_scans': clean_object_rows,
+                  'null_tracks': clean_null_tracks,
+                  'null_object_scans': clean_null_rows,
+              },
               'batch_size': {'official': official_batch, 'review': review_batch},
               'current_offsets': {'official': official_offset, 'review': review_offset},
               'next_official_offset': official_offset + official_count,
