@@ -6,7 +6,7 @@ const layers={KCXX:L.layerGroup().addTo(map),KTYX:L.layerGroup().addTo(map)};
 const radarLocations={KCXX:[44.511,-73.166],KTYX:[43.756,-75.680]};
 const LIVE_BASE="https://raw.githubusercontent.com/nwsmatthewclay/BTV-SnowSquall/snow-squall-live-data/viewer/data/live/";
 const SHADOW_BASE="https://raw.githubusercontent.com/nwsmatthewclay/BTV-SnowSquall/snow-squall-shadow-data/viewer/data/shadow/";
-let datasets={},selected=null,refreshTimer=null,hasInitialExtent=false,radarMosaicLayer=L.layerGroup().addTo(map),radarMosaic=null,showAllLiveTracks=false,radarMode="clean",qcdRadarLayer=null;
+let datasets={},selected=null,refreshTimer=null,hasInitialExtent=false,radarMosaicLayer=L.layerGroup().addTo(map),radarMosaic=null,radarMode="clean",qcdRadarLayer=null;
 
 const num=(v,d=1)=>v==null||Number.isNaN(Number(v))?"—":Number(v).toFixed(d);
 const fmt=t=>t?new Date(t).toLocaleString(undefined,{month:"short",day:"numeric",hour:"numeric",minute:"2-digit",second:"2-digit"}):"—";
@@ -171,61 +171,16 @@ function renderMap(summary){
   Object.values(layers).forEach(l=>l.clearLayers());
   const bounds=[];
   summary.filter(x=>!x.error).forEach(x=>{
-    const grouped={};
-    (x.history||[]).forEach(r=>{
-      if(r.track_id==null||r.centroid_lat==null||r.centroid_lon==null)return;
-      (grouped[String(r.track_id)]??=[]).push(r);
-    });
-    const activeIds=new Set((x.features||[]).map(f=>String((f.properties||{}).track_id)));
-    Object.entries(grouped).forEach(([id,rows])=>{
-      const active=activeIds.has(id);
-      const selectedTrack=selected&&selected.radar_site===x.site&&String(selected.track_id)===id;
-      if(!showAllLiveTracks && !active && !selectedTrack)return;
-      rows.sort((a,b)=>String(a.timestamp).localeCompare(String(b.timestamp)));
-      // Do not draw tails for one-scan/noisy objects. This is the primary
-      // protection against the dense "spaghetti" display seen in live QC.
-      const ageScans=Number((x.features||[]).find(f=>String(f.properties?.track_id)===id)?.properties?.age_scans||0);
-      if(!selectedTrack && ageScans<2)return;
-      const count=selectedTrack?18:(showAllLiveTracks?8:5);
-      const coords=rows.slice(-count).map(r=>[Number(r.centroid_lat),Number(r.centroid_lon)]).filter(v=>v.every(Number.isFinite));
-      if(coords.length<2)return;
-      L.polyline(coords,{
-        color:selectedTrack?"#ffffff":"#8b98a4",
-        weight:selectedTrack?4:1.5,
-        opacity:selectedTrack?.95:(showAllLiveTracks?.30:.20),
-        dashArray:selectedTrack?null:"5 6",
-        interactive:false
-      }).addTo(layers[x.site]);
-    });
     (x.features||[]).forEach(f=>{
       const p=f.properties||{};
       const id=String(p.track_id??"—");
       const isSelected=selected&&String(selected.track_id)===id&&selected.radar_site===x.site;
       const fill=objectColor(p);
-      const layer=L.geoJSON(f,{style:{
-        color:isSelected?"#ffffff":fill,
-        fillColor:fill,
-        fillOpacity:isSelected?.50:.18,
-        weight:isSelected?3:1.5
-      }}).addTo(layers[x.site]);
-      layer.bindTooltip(
-        "<b>"+esc(x.site)+" • Track "+esc(id)+"</b><br>"+
-        num(p.max_reflectivity_dbz)+" dBZ • "+num(p.area_km2)+" km² • "+num(p.motion_speed_kt)+" kt",
-        {sticky:true,direction:"top"}
-      );
+      const layer=L.geoJSON(f,{style:{color:isSelected?"#ffffff":fill,fillColor:fill,fillOpacity:isSelected?.50:.18,weight:isSelected?3:1.5}}).addTo(layers[x.site]);
+      layer.bindTooltip("<b>"+esc(x.site)+" • Object "+esc(id)+"</b><br>"+num(p.max_reflectivity_dbz)+" dBZ • "+num(p.area_km2)+" km² • "+num(p.motion_speed_kt)+" kt",{sticky:true,direction:"top"});
       layer.on("click",()=>selectObject({...p,radar_site:x.site}));
-      // Labels are useful for the selected object but overwhelm the map when
-      // every candidate is labeled. Keep the workspace visually sparse.
-      if(isSelected && p.centroid_lat!=null&&p.centroid_lon!=null){
-        L.marker([Number(p.centroid_lat),Number(p.centroid_lon)],{
-          icon:L.divIcon({
-            className:"live-object-label-wrap",
-            iconSize:null,
-            iconAnchor:[0,0],
-            html:"<div class='live-object-label selected'>"+esc(x.site)+"-"+esc(id)+"</div>"
-          }),
-          interactive:false
-        }).addTo(layers[x.site]).bringToFront();
+      if(isSelected&&p.centroid_lat!=null&&p.centroid_lon!=null){
+        L.marker([Number(p.centroid_lat),Number(p.centroid_lon)],{icon:L.divIcon({className:"live-object-label-wrap",iconSize:null,iconAnchor:[0,0],html:"<div class='live-object-label selected'>"+esc(x.site)+"-"+esc(id)+"</div>"}),interactive:false}).addTo(layers[x.site]).bringToFront();
       }
       const b=layer.getBounds?.();
       if(b&&b.isValid())bounds.push(b);

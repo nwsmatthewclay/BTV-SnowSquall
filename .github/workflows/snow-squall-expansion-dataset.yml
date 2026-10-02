@@ -1,6 +1,11 @@
 name: Snow Squall Expansion Dataset
 
 on:
+  workflow_run:
+    workflows:
+      - Snow Squall Unified Case Ledger
+    types:
+      - completed
   workflow_dispatch:
     inputs:
       archive_override:
