@@ -151,6 +151,8 @@ NON_PREDICTOR_COLUMNS = TARGET_COLUMNS | {
     "track_gap_recovered", "track_competing_track_count",
     "track_competing_object_count", "track_merge_candidate",
     "track_split_candidate",
+    "track_quality_score", "track_quality_tier",
+    "track_quality_gate", "track_quality_flags",
 }
 
 
