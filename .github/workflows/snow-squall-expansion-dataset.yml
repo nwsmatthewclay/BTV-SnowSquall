@@ -553,11 +553,45 @@ jobs:
             --manifest data/manifests/snow_squall_expansion/snow_squall_null_windows.csv \
             --output data/derived/snow_squall_expansion_null_activity.csv
 
-      - name: Build unified expanded training dataset
+      - name: Build expansion track catalogs and apply quality gate
+        run: |
+          set -euo pipefail
+          python scripts/build_object_track_catalog.py \
+            data/derived/snow_squall_training_labeled.csv \
+            --output data/derived/snow_squall_training_tracks.csv
+          python scripts/build_object_track_catalog.py \
+            data/derived/snow_squall_expansion_null_environment.csv \
+            --output data/derived/snow_squall_expansion_null_tracks.csv
+          python scripts/track_quality_gate.py \
+            data/derived/snow_squall_training_labeled.csv \
+            --catalog data/derived/snow_squall_training_tracks.csv \
+            --output data/derived/snow_squall_training_labeled_clean.csv \
+            --review-output data/derived/snow_squall_training_labeled_review.csv \
+            --annotated-output data/derived/snow_squall_training_labeled_track_qc.csv \
+            --audit-output data/derived/snow_squall_training_track_quality_audit.json \
+            --min-score 75
+          python scripts/track_quality_gate.py \
+            data/derived/snow_squall_expansion_null_environment.csv \
+            --catalog data/derived/snow_squall_expansion_null_tracks.csv \
+            --output data/derived/snow_squall_expansion_null_environment_clean.csv \
+            --review-output data/derived/snow_squall_expansion_null_environment_review.csv \
+            --annotated-output data/derived/snow_squall_expansion_null_environment_track_qc.csv \
+            --audit-output data/derived/snow_squall_expansion_null_track_quality_audit.json \
+            --min-score 75
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          for kind in ("training", "expansion_null"):
+              p = Path(f"data/derived/snow_squall_{kind}_track_quality_audit.json")
+              print(p.name)
+              print(json.dumps(json.loads(p.read_text()), indent=2))
+          PY
+
+      - name: Build clean unified expanded training dataset
         run: |
           python scripts/build_unified_object_dataset.py \
-            data/derived/snow_squall_training_labeled.csv \
-            data/derived/snow_squall_expansion_null_environment.csv \
+            data/derived/snow_squall_training_labeled_clean.csv \
+            data/derived/snow_squall_expansion_null_environment_clean.csv \
             --null-activity data/derived/snow_squall_expansion_null_activity.csv \
             --output data/derived/snow_squall_object_population_expanded.csv \
             --dataset-version object_population_expanded_v2
