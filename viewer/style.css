@@ -154,3 +154,17 @@ footer{height:60px;padding:7px 15px;background:#101923;border-top:1px solid var(
 .tracker-qc-note{margin-top:6px;color:#748a9d;font-size:9px;line-height:1.3}
 .tracker-qc-live{margin-top:8px}
 .tracker-qc-live h3{display:flex;justify-content:space-between;align-items:center}
+
+/* Forward Snow Squall projection display */
+.probability-legend{position:absolute;left:14px;bottom:14px;z-index:900;width:290px;padding:8px 10px;background:rgba(8,15,22,.92);border:1px solid rgba(89,122,147,.65);border-radius:7px;box-shadow:0 8px 25px rgba(0,0,0,.28);backdrop-filter:blur(4px)}
+.probability-scale{display:grid;grid-template-columns:repeat(5,1fr);gap:3px;margin-top:5px}
+.probability-scale span{display:block;text-align:center;padding:4px 2px;border-radius:3px;background:color-mix(in srgb,var(--p) 24%,#101923);border:1px solid var(--p);color:#e9f2f7;font-size:8px;font-weight:800}
+.forward-forecast-card{margin-top:8px;border-color:#3c5769}
+.forward-forecast-card h3{display:flex;justify-content:space-between;align-items:center}
+.forecast-row{display:flex;justify-content:space-between;gap:8px;padding:4px 0;border-bottom:1px solid rgba(53,73,88,.35);font-size:10px;color:#9db0bf}
+.forecast-row:last-child{border-bottom:0}
+.forecast-row b{text-align:right;color:#f2f7fb}
+.projection-label-wrap,.snow-squall-prob-label-wrap{background:transparent;border:0}
+.projection-label{white-space:nowrap;background:rgba(9,16,24,.88);border:1px solid #527087;color:#dcecff;border-radius:4px;padding:2px 5px;font:700 8px/1 system-ui,-apple-system,sans-serif;transform:translate(-50%,-125%)}
+.snow-squall-prob-label{white-space:nowrap;background:rgba(9,16,24,.94);border:2px solid #8b98a4;color:#fff;border-radius:999px;padding:3px 7px;font:850 10px/1 system-ui,-apple-system,sans-serif;transform:translate(-50%,-175%);box-shadow:0 2px 8px rgba(0,0,0,.45)}
+@media(max-width:900px){.probability-legend{left:8px;bottom:8px;width:260px}.probability-scale span{font-size:7px}}
