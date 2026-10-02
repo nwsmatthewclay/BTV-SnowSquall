@@ -19,7 +19,7 @@ from processing.object_detector import (
 @dataclass(frozen=True)
 class DetectionConfig:
     reflectivity_threshold_dbz: float = 20.0
-    core_threshold_dbz: float = 35.0
+    core_threshold_dbz: float = 30.0
     min_area_km2: float = 4.0
     spacing_km: float = 1.0
     connectivity: int = 2

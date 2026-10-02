@@ -7,10 +7,17 @@ from scipy import ndimage
 
 @dataclass(frozen=True)
 class ObjectDetectionConfig:
-    threshold_dbz: float = 25.0
-    core_threshold_dbz: float = 35.0
-    min_pixels: int = 24
-    max_pixels: int = 12000
+    # Snow-squall candidate threshold follows published convective-snow
+    # detection work: Z >= 20 dBZ plus a sharp reflectivity gradient.
+    threshold_dbz: float = 20.0
+    core_threshold_dbz: float = 30.0
+    min_pixels: int = 4
+    max_pixels: int = 3000
+    gradient_threshold_dbkm: float = 5.0
+    min_gradient_fraction: float = 0.03
+    min_gradient_pixels: int = 4
+    min_background_contrast_db: float = 3.0
+    background_ring_pixels: int = 3
     connectivity: int = 2
     smooth_sigma: float = 0.8
     close_iterations: int = 1
@@ -91,6 +98,13 @@ def detect_reflectivity_objects(reflectivity, config=ObjectDetectionConfig()):
     raw_mask = finite & (arr >= config.threshold_dbz)
     work=np.where(finite,arr,np.nanmedian(arr[finite]))
     work=ndimage.gaussian_filter(work,sigma=config.smooth_sigma)
+
+    # A broad, relatively uniform snow shield is not treated as a candidate
+    # merely because it exceeds the Z threshold. Sharp gradients identify the
+    # narrow precipitation enhancements that are most relevant to squalls.
+    gradient = np.hypot(
+        *np.gradient(work, 1.0, edge_order=1)
+    )
     mask=finite&(work>=config.threshold_dbz)
     structure=ndimage.generate_binary_structure(2,config.connectivity)
     if config.close_iterations:
@@ -134,6 +148,55 @@ def detect_reflectivity_objects(reflectivity, config=ObjectDetectionConfig()):
             valid_values=values[np.isfinite(values)]
             if valid_values.size==0:
                 continue
+
+            piece_gradient = gradient[piece]
+            piece_gradient = piece_gradient[np.isfinite(piece_gradient)]
+            gradient_fraction = (
+                float(np.mean(piece_gradient >= config.gradient_threshold_dbkm))
+                if piece_gradient.size else 0.0
+            )
+            gradient_p90 = (
+                float(np.percentile(piece_gradient,90))
+                if piece_gradient.size else np.nan
+            )
+
+            # Compare the object to a small surrounding ring. This suppresses
+            # broad uniform echoes while retaining embedded convective cells or
+            # narrow bands that may not have very high absolute reflectivity.
+            dilated = ndimage.binary_dilation(
+                piece,
+                iterations=max(1,int(config.background_ring_pixels)),
+            )
+            ring = dilated & ~piece & finite
+            ring_values = arr[ring]
+            ring_values = ring_values[np.isfinite(ring_values)]
+            background_dbz = (
+                float(np.median(ring_values))
+                if ring_values.size else np.nan
+            )
+            object_median_dbz = float(np.median(valid_values))
+            contrast_db = (
+                object_median_dbz - background_dbz
+                if np.isfinite(background_dbz) else np.nan
+            )
+
+            gradient_good = (
+                int(np.sum(piece_gradient >= config.gradient_threshold_dbkm))
+                >= max(
+                    config.min_gradient_pixels,
+                    int(np.ceil(len(xx) * config.min_gradient_fraction)),
+                )
+            )
+            contrast_good = (
+                np.isfinite(contrast_db)
+                and contrast_db >= config.min_background_contrast_db
+            )
+            core_good = int(np.sum(valid_values >= config.core_threshold_dbz)) >= 2
+
+            # Candidate generation only: event truth remains downstream.
+            if not (gradient_good or contrast_good or core_good):
+                continue
+
             objects.append({
                 "object_id":next_id,
                 "pixel_count":int(len(xx)),
@@ -142,6 +205,10 @@ def detect_reflectivity_objects(reflectivity, config=ObjectDetectionConfig()):
                 "max_reflectivity_dbz":float(np.nanmax(valid_values)),
                 "mean_reflectivity_dbz":float(np.nanmean(valid_values)),
                 "core_pixel_count":int(np.sum(valid_values>=config.core_threshold_dbz)),
+                "reflectivity_gradient_p90_dbkm":gradient_p90,
+                "gradient_fraction_above_5dbkm":gradient_fraction,
+                "background_reflectivity_dbz":background_dbz,
+                "reflectivity_contrast_db":contrast_db,
                 "touches_grid_edge":bool(yy.min()==0 or xx.min()==0 or yy.max()==arr.shape[0]-1 or xx.max()==arr.shape[1]-1),
                 "row_indices":yy.tolist(),
                 "column_indices":xx.tolist(),
