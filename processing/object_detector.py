@@ -54,6 +54,17 @@ def _core_seed_split(component, field, config):
     if len(seeds) < 2:
         return [component]
 
+    # Preserve a clearly elongated, laterally extensive band as one object.
+    # Multiple embedded cores are useful features, but turning the band into
+    # Voronoi fragments creates artificial object identities and hurts tracking.
+    cy, cx = np.where(component)
+    if len(cx) >= 3:
+        bbox_h = float(np.max(cy) - np.min(cy) + 1)
+        bbox_w = float(np.max(cx) - np.min(cx) + 1)
+        bbox_aspect = max(bbox_h, bbox_w) / max(1.0, min(bbox_h, bbox_w))
+        if max(bbox_h, bbox_w) >= 15.0 and bbox_aspect >= 3.0:
+            return [component]
+
     # Keep only genuinely separated cores. Without this guard, a broad snow
     # squall band containing several nearby threshold-crossing pixels can be
     # partitioned into many artificial Voronoi fragments that then become
@@ -193,6 +204,17 @@ def detect_reflectivity_objects(reflectivity, config=ObjectDetectionConfig()):
             )
             core_good = int(np.sum(valid_values >= config.core_threshold_dbz)) >= 2
 
+            bbox_h = int(np.max(yy) - np.min(yy) + 1)
+            bbox_w = int(np.max(xx) - np.min(xx) + 1)
+            bbox_aspect_ratio = (
+                max(bbox_h, bbox_w) / max(1.0, min(bbox_h, bbox_w))
+            )
+            object_mode = (
+                "band"
+                if max(bbox_h, bbox_w) >= 15 and bbox_aspect_ratio >= 3.0
+                else "cell_cluster"
+            )
+
             # Candidate generation only: event truth remains downstream.
             if not (gradient_good or contrast_good or core_good):
                 continue
@@ -209,6 +231,8 @@ def detect_reflectivity_objects(reflectivity, config=ObjectDetectionConfig()):
                 "gradient_fraction_above_5dbkm":gradient_fraction,
                 "background_reflectivity_dbz":background_dbz,
                 "reflectivity_contrast_db":contrast_db,
+                "bbox_aspect_ratio":float(bbox_aspect_ratio),
+                "object_mode":object_mode,
                 "touches_grid_edge":bool(yy.min()==0 or xx.min()==0 or yy.max()==arr.shape[0]-1 or xx.max()==arr.shape[1]-1),
                 "row_indices":yy.tolist(),
                 "column_indices":xx.tolist(),

@@ -79,3 +79,26 @@ def test_separated_cores_split_inside_one_broad_band():
         ),
     )
     assert len(objects) == 2
+
+
+def test_elongated_band_with_multiple_cores_stays_one_object():
+    field = np.full((80, 120), 10.0)
+    field[36:43, 10:110] = 23.0
+    field[38:41, 18:28] = 35.0
+    field[38:41, 82:92] = 36.0
+    objects = detect_reflectivity_objects(
+        field,
+        ObjectDetectionConfig(
+            threshold_dbz=20.0,
+            core_threshold_dbz=30.0,
+            min_pixels=4,
+            max_pixels=3000,
+            close_iterations=0,
+            open_iterations=0,
+            fill_holes=False,
+            min_peak_separation_px=8,
+        ),
+    )
+    assert len(objects) == 1
+    assert objects[0]["object_mode"] == "band"
+    assert objects[0]["bbox_aspect_ratio"] >= 3.0
