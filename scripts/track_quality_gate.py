@@ -45,7 +45,11 @@ def _keys(frame: pd.DataFrame) -> pd.Series:
         else:
             series = series.fillna("__NA__").astype(str)
         parts.append(column + "=" + series)
-    return parts[0].str.cat(parts[1:], sep="|") if len(parts) > 1 else parts[0]
+
+    result = parts[0]
+    for part in parts[1:]:
+        result = result.str.cat(part, sep="|")
+    return result
 
 
 def apply_track_quality_gate(
@@ -58,72 +62,95 @@ def apply_track_quality_gate(
     catalog_frame = catalog.copy()
 
     if catalog_frame.empty:
-        object_frame["track_quality_score"] = 0.0
-        object_frame["track_quality_tier"] = "reject"
-        object_frame["track_quality_gate"] = "reject"
-        return object_frame, catalog_frame
+        enriched = object_frame.copy()
+        enriched["track_quality_score"] = 0.0
+        enriched["track_quality_tier"] = "reject"
+        enriched["track_quality_gate"] = "reject"
+        enriched["track_quality_flags"] = "empty_track_catalog"
+        return (
+            enriched.iloc[0:0].copy(),
+            enriched.copy(),
+            enriched,
+            catalog_frame,
+        )
 
     object_frame["_track_key"] = _keys(object_frame)
     catalog_frame["_track_key"] = _keys(catalog_frame)
 
-    selected = catalog_frame[
-        (
-            catalog_frame["quality_score"].ge(float(min_score))
-            & catalog_frame["quality_tier"].eq("pass")
+    if catalog_frame["_track_key"].duplicated().any():
+        duplicates = int(catalog_frame["_track_key"].duplicated().sum())
+        raise ValueError(
+            f"Track catalog contains {duplicates} duplicate identity keys."
         )
+
+    selected_keys = set(
+        catalog_frame.loc[
+            (
+                catalog_frame["quality_score"].ge(float(min_score))
+                & catalog_frame["quality_tier"].eq("pass")
+            )
+            | (
+                bool(allow_review)
+                & catalog_frame["quality_tier"].eq("review")
+            ),
+            "_track_key",
+        ]
+    )
+
+    status_map = catalog_frame.set_index("_track_key")[
+        ["quality_score", "quality_tier", "qc_flags"]
+    ].to_dict("index")
+
+    annotations = object_frame["_track_key"].map(status_map)
+
+    def get_value(item, key, default):
+        return (
+            item.get(key, default)
+            if isinstance(item, dict)
+            else default
+        )
+
+    enriched = object_frame.drop(columns=["_track_key"]).copy()
+    enriched["track_quality_score"] = annotations.map(
+        lambda item: get_value(item, "quality_score", 0.0)
+    ).astype(float)
+    enriched["track_quality_tier"] = annotations.map(
+        lambda item: get_value(item, "quality_tier", "reject")
+    )
+    enriched["track_quality_flags"] = annotations.map(
+        lambda item: get_value(item, "qc_flags", "track_not_in_catalog")
+    )
+    enriched["track_quality_gate"] = "reject"
+    known = annotations.notna()
+    enriched.loc[
+        known & object_frame["_track_key"].isin(selected_keys),
+        "track_quality_gate",
+    ] = "pass"
+    if allow_review:
+        enriched.loc[
+            known & enriched["track_quality_tier"].eq("review"),
+            "track_quality_gate",
+        ] = "review"
+
+    accepted = enriched.loc[
+        enriched["track_quality_gate"].eq("pass")
         | (
-            bool(allow_review)
-            & catalog_frame["quality_tier"].eq("review")
+            allow_review
+            & enriched["track_quality_gate"].eq("review")
+        )
+    ].copy()
+    rejected = enriched.loc[
+        ~(
+            enriched["track_quality_gate"].eq("pass")
+            | (
+                allow_review
+                & enriched["track_quality_gate"].eq("review")
+            )
         )
     ].copy()
 
-    status_map = catalog_frame.set_index("_track_key")[
-        ["quality_score", "quality_tier", "qc_status", "qc_flags"]
-    ].to_dict("index")
-
-    def annotate(row):
-        info = status_map.get(
-            row["_track_key"],
-            {
-                "quality_score": 0.0,
-                "quality_tier": "reject",
-                "qc_status": "reject",
-                "qc_flags": "track_not_in_catalog",
-            },
-        )
-        return pd.Series(
-            {
-                "track_quality_score": info["quality_score"],
-                "track_quality_tier": info["quality_tier"],
-                "track_quality_gate": (
-                    "pass"
-                    if (
-                        info["quality_tier"] == "pass"
-                        and float(info["quality_score"]) >= min_score
-                    )
-                    or (
-                        allow_review
-                        and info["quality_tier"] == "review"
-                    )
-                    else "reject"
-                ),
-                "track_quality_flags": info["qc_flags"],
-            }
-        )
-
-    annotations = object_frame.apply(annotate, axis=1)
-    enriched = pd.concat([object_frame.drop(columns=["_track_key"]), annotations], axis=1)
-
-    selected_keys = set(selected["_track_key"])
-    pass_mask = enriched.apply(
-        lambda row: _keys(pd.DataFrame([row])).iloc[0] in selected_keys,
-        axis=1,
-    )
-    accepted = enriched.loc[pass_mask].copy()
-    rejected = enriched.loc[~pass_mask].copy()
-
-    catalog_frame = catalog_frame.drop(columns=["_track_key"])
-    return accepted, rejected, enriched, catalog_frame
+    catalog_clean = catalog_frame.drop(columns=["_track_key"])
+    return accepted, rejected, enriched, catalog_clean
 
 
 def build_audit(
@@ -142,6 +169,12 @@ def build_audit(
         if "track_quality_tier" in enriched.columns
         else {}
     )
+    gate_tiers = (
+        enriched["track_quality_gate"].value_counts().to_dict()
+        if "track_quality_gate" in enriched.columns
+        else {}
+    )
+
     return {
         "input_tracks": int(len(original_catalog)),
         "input_object_scans": int(len(original_objects)),
@@ -153,6 +186,7 @@ def build_audit(
         "accepted_object_scans": int(len(accepted)),
         "track_tiers": track_tiers,
         "object_scan_tiers": row_tiers,
+        "gate_tiers": gate_tiers,
         "accepted_row_fraction": (
             float(len(accepted) / len(original_objects))
             if len(original_objects)
@@ -165,10 +199,26 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("input_csv")
     parser.add_argument("--catalog", default=None)
-    parser.add_argument("--output", required=True, help="Accepted/pass object scans.")
-    parser.add_argument("--review-output", default=None, help="Review/reject object scans.")
-    parser.add_argument("--annotated-output", default=None, help="All object scans with track-QC annotations.")
-    parser.add_argument("--catalog-output", default=None, help="Rewritten/enriched track catalog.")
+    parser.add_argument(
+        "--output",
+        required=True,
+        help="Accepted/pass object scans.",
+    )
+    parser.add_argument(
+        "--review-output",
+        default=None,
+        help="Review/reject object scans.",
+    )
+    parser.add_argument(
+        "--annotated-output",
+        default=None,
+        help="All object scans with track-QC annotations.",
+    )
+    parser.add_argument(
+        "--catalog-output",
+        default=None,
+        help="Rewritten/enriched track catalog.",
+    )
     parser.add_argument("--audit-output", default=None)
     parser.add_argument("--min-score", type=float, default=75.0)
     parser.add_argument(
@@ -183,7 +233,9 @@ def main():
     catalog_path = (
         Path(args.catalog)
         if args.catalog
-        else input_path.with_name(f"{input_path.stem}_tracks.csv")
+        else input_path.with_name(
+            f"{input_path.stem}_tracks.csv"
+        )
     )
 
     if args.catalog:
