@@ -188,6 +188,24 @@ function snowSquallColor(prob){
 function probabilityLabel(prob){
   return prob==null?"—":(Number(prob)*100).toFixed(0)+"%";
 }
+const MAX_OBJECT_MOTION_KT=75.0;
+function validMotionSpeed(p){
+  const speed=Number(p.motion_speed_kt);
+  const age=Number(p.age_scans);
+  if(Number.isFinite(speed)&&speed>=0&&speed<=MAX_OBJECT_MOTION_KT&&(!Number.isFinite(age)||age>1)) return speed;
+  const radar=Number(p.radar_motion_speed_kt);
+  if(Number.isFinite(radar)&&radar>=0&&radar<=MAX_OBJECT_MOTION_KT) return radar;
+  return null;
+}
+function motionReadout(p){
+  const speed=validMotionSpeed(p);
+  if(speed==null)return "—";
+  const rawAge=Number(p.age_scans);
+  const objectSpeed=Number(p.motion_speed_kt);
+  const usedRadar=!Number.isFinite(objectSpeed)||objectSpeed<0||objectSpeed>MAX_OBJECT_MOTION_KT||(Number.isFinite(rawAge)&&rawAge<=1);
+  const dir=usedRadar?Number(p.radar_motion_direction_deg):Number(p.motion_direction_deg??p.motion_dir_deg);
+  return Number.isFinite(dir)?num(speed)+" kt @ "+num(dir,0)+"°"+(usedRadar?" • radar motion":"") : num(speed)+" kt";
+}
 function evolutionSignal(p){
   const vals=[15,30,45,60].map(h=>shadowProbabilities(p)[h]).filter(Number.isFinite);
   if(vals.length>=2){
@@ -340,8 +358,11 @@ function shadowGrid(record){
 function evolutionRows(p){
   const rows=(datasets[p.radar_site]?.history||[])
     .filter(r=>String(r.track_id)===String(p.track_id))
-    .sort((a,b)=>String(a.timestamp).localeCompare(String(b.timestamp)));
-  if(p.timestamp&&!rows.some(r=>String(r.timestamp)===String(p.timestamp))) rows.push(p);
+    .sort((a,b)=>String(a.timestamp).localeCompare(String(b.timestamp)))
+    .map(r=>({...r,motion_speed_kt:validMotionSpeed(r)}));
+  if(p.timestamp&&!rows.some(r=>String(r.timestamp)===String(p.timestamp))){
+    rows.push({...p,motion_speed_kt:validMotionSpeed(p)});
+  }
   return rows;
 }
 function probabilityHistory(p,rows){
