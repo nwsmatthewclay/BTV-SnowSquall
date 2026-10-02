@@ -41,6 +41,14 @@ dualpol_1_0km,dualpol,float,1 km dual-pol signature,true,dualpol_era_dependent
 dualpol_2_0km,dualpol,float,2 km dual-pol signature,true,dualpol_era_dependent
 dualpol_3_0km,dualpol,float,3 km dual-pol signature,true,dualpol_era_dependent
 dualpol_4_0km,dualpol,float,4 km dual-pol signature,true,dualpol_era_dependent
+reflectivity_gradient_p90_dbkm,geometry,float,90th percentile horizontal reflectivity gradient inside candidate object,true,radar_available
+gradient_fraction_above_5dbkm,geometry,float,Fraction of object pixels with reflectivity gradient at or above 5 dB/km,true,radar_available
+background_reflectivity_dbz,geometry,float,Median reflectivity in local surrounding background ring,true,radar_available
+reflectivity_contrast_db,geometry,float,Object median reflectivity minus local background reflectivity,true,radar_available
+bbox_aspect_ratio,geometry,float,Bounding-box aspect ratio used to distinguish elongated bands from compact clusters,true,radar_available
+object_mode,geometry,string,Band or compact cell-cluster candidate geometry class,true,radar_available
+detector_object_id,identity,string,Scan-local detector component identifier preserved separately from tracked object ID,true,radar_available
+track_id,identity,string,Stable tracker identity for the radar object,true,radar_available
 mrms_reflectivity_dbz,mrms,float,MRMS reflectivity,true,modern_2014_plus
 mrms_precip_type,mrms,string,MRMS precipitation type,true,modern_2014_plus
 mrms_precip_rate,mrms,float,MRMS precipitation rate,true,modern_2014_plus
