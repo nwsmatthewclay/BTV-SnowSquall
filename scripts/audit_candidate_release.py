@@ -101,7 +101,7 @@ def audit(
 
     validation_summary = None
     if validation_root is None:
-        warnings.append("independent_validation_not_supplied")
+        failures.append("independent_validation_not_supplied")
     else:
         metrics_path = validation_root / "validation_metrics.json"
         if not metrics_path.exists():
@@ -113,7 +113,7 @@ def audit(
             for horizon in HORIZONS:
                 item = validation_summary.get(str(horizon), {})
                 if not item:
-                    warnings.append(
+                    failures.append(
                         f"independent_validation_horizon_missing_{horizon}m"
                     )
 
