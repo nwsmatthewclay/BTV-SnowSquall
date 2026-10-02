@@ -7,8 +7,8 @@
 </head>
 <body>
 <header><div><div class="eyebrow">BTV SNOW SQUALL PROJECT</div><h1>Historical Storm Explorer</h1><div id="subtitle">Loading historical pilot data…</div></div>
-<div class="header-actions"><span class="badge research">RESEARCH PILOT</span><a class="nav-link" href="training.html">Training Replay</a><a class="nav-link" href="validation.html">Independent Validation</a><a class="nav-link" href="live.html">Live Objects</a><button id="analogsBtn" disabled>Historical Analogs</button><button id="detailsBtn">Data Status</button></div></header>
-<main><section id="map"></section><aside id="panel">
+<div class="header-actions"><span class="badge research">RESEARCH PILOT • FORWARD TRACKING</span><a class="nav-link" href="training.html">Training Replay</a><a class="nav-link" href="validation.html">Independent Validation</a><a class="nav-link" href="live.html">Live Objects</a><button id="analogsBtn" disabled>Historical Analogs</button><button id="detailsBtn">Data Status</button></div></header>
+<main><section id="map"><div class="historical-map-legend"><div class="legend-caption">SNOW SQUALL PROBABILITY • 30 MIN</div><div class="probability-scale"><span style="--p:#55b7ff">0–20%</span><span style="--p:#4fd1c5">20–40%</span><span style="--p:#f5d66b">40–60%</span><span style="--p:#f39b2f">60–80%</span><span style="--p:#ef625f">80%+</span></div><div class="legend-note">Selected object projects forward from current motion. Ring color uses research probability when embedded; gray = no score.</div></div></section><aside id="panel">
 <div class="control-block"><label for="caseSelect">Historical case</label><select id="caseSelect"></select></div>
 <div class="case-card"><div class="case-title" id="caseTitle">Loading…</div><div class="case-meta" id="caseMeta">—</div><div class="case-grid" id="caseGrid"></div><div class="truth-banner">CASE CONTEXT ONLY <span>Historical object detections are not final object-level truth.</span></div></div>
 <div class="radar-control"><div><span>Radar opacity</span><b id="radarOpacityValue">78%</b></div><input id="radarOpacity" type="range" min="0" max="100" value="78"><div class="radar-status" id="radarStatus">Historical Level-II reflectivity reconstruction</div></div>
@@ -25,5 +25,5 @@
 </aside></main>
 <footer><div class="timeline-head"><span id="timelineTime">—</span><div><button id="prevBtn">◀</button><button id="playBtn">▶ Play</button><button id="nextBtn">▶</button></div></div><input id="slider" type="range" min="0" max="0" value="0"></footer>
 <div id="modal" class="modal hidden"><div class="modal-card"><button id="closeModal" class="modal-close">×</button><h2>Viewer Data Status</h2><p id="statusText">—</p><div class="status-list" id="statusList"></div></div></div>
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script><script src="app.js?v=20261001-03"></script>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script><script src="app.js?v=20261001-04"></script>
 </body></html>
