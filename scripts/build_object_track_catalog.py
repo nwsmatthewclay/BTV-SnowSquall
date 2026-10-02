@@ -166,8 +166,12 @@ def _quality_score(
     return score, tier, flags
 
 
-def build_track_catalog(path: Path):
-    df = pd.read_csv(path)
+def build_track_catalog(path):
+    """Build a track catalog from a CSV path or an in-memory DataFrame."""
+    if isinstance(path, pd.DataFrame):
+        df = path.copy()
+    else:
+        df = pd.read_csv(path)
     if df.empty:
         return pd.DataFrame()
 
@@ -388,11 +392,10 @@ def build_track_catalog(path: Path):
                 ),
                 "quality_score": float(score),
                 "quality_tier": quality_tier,
-                "qc_status": (
-                    "pass" if quality_tier == "pass" else
-                    "reject" if quality_tier == "reject" else
-                    "review"
-                ),
+                # Preserve the legacy QC contract: any flagged track is
+                # review-worthy. The stricter quality_tier below is the clean
+                # training gate used by downstream workflows.
+                "qc_status": "review" if quality_flags else "pass",
                 "qc_flags": ";".join(dict.fromkeys(quality_flags)),
                 "organization_label": "unlabeled",
                 "impact_label": "unlabeled",
