@@ -20,7 +20,7 @@ async function fetchJson(url){
 const RESEARCH_RELEASE_STATUS = "candidate_only_not_operational";
 const map=L.map("map",{zoomControl:true,preferCanvas:true}).setView([44.2,-73.1],8);
 L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{maxZoom:12,attribution:"© OpenStreetMap contributors"}).addTo(map);
-const radarLayer=L.layerGroup().addTo(map),objectsLayer=L.layerGroup().addTo(map),tracksLayer=L.layerGroup().addTo(map),projectionLayer=L.layerGroup().addTo(map);
+const radarLayer=L.layerGroup().addTo(map),objectsLayer=L.layerGroup().addTo(map);
 let catalog=null,current=null,features=[],times=[],currentIndex=0,playing=false,timer=null,selectedKey=null,showAllTracks=false;
 const isTrainingPage=document.body.dataset.mode==="training";
 const radarLocations={KCXX:[44.511,-73.166],KTYX:[43.756,-75.680],KBTV:[44.472,-73.154]};
@@ -78,48 +78,13 @@ function historicalEvolution(p){
     const d=probs[probs.length-1]-probs[0];
     if(d>=.05)return "RISING";
     if(d<=-.05)return "FALLING";
-    return "STEADY";
   }
   const z=Number(p.reflectivity_trend_dbz_per_hr),g=Number(p.area_growth_fraction);
   if((Number.isFinite(z)&&z>=3)||(Number.isFinite(g)&&g>=.08))return "RISING";
   if((Number.isFinite(z)&&z<=-3)||(Number.isFinite(g)&&g<=-.08))return "FALLING";
-  if(Number.isFinite(z)||Number.isFinite(g))return "STEADY";
-  return "UNKNOWN";
+  return "STEADY";
 }
-function historicalDestination(lat,lon,bearingDeg,distanceKm){
-  const R=6371.0088,br=Number(bearingDeg)*Math.PI/180,dr=Number(distanceKm)/R;
-  const p1=Number(lat)*Math.PI/180,l1=Number(lon)*Math.PI/180;
-  const p2=Math.asin(Math.sin(p1)*Math.cos(dr)+Math.cos(p1)*Math.sin(dr)*Math.cos(br));
-  const l2=l1+Math.atan2(Math.sin(br)*Math.sin(dr)*Math.cos(p1),Math.cos(dr)-Math.sin(p1)*Math.sin(p2));
-  return [p2*180/Math.PI,((l2*180/Math.PI+540)%360)-180];
-}
-function historicalProjection(p,maxMinutes){
-  const lat=Number(p.centroid_lat),lon=Number(p.centroid_lon),speed=Number(p.motion_speed_kt),bearing=Number(p.motion_direction_deg);
-  if(![lat,lon,speed,bearing].every(Number.isFinite)||speed<=0)return [];
-  return [15,30,45,60].filter(m=>m<=maxMinutes).map(minutes=>{
-    const km=speed*1.852*minutes/60,pt=historicalDestination(lat,lon,bearing,km);
-    return {minutes,lat:pt[0],lon:pt[1]};
-  });
-}
-function renderTracks(ts){
-  tracksLayer.clearLayers();
-  projectionLayer.clearLayers();
-  const selected=selectedKey;
-  if(!selected)return;
-  const f=features.filter(x=>x.properties.track_key===selected)
-    .filter(x=>x.properties.timestamp<=ts)
-    .sort((a,b)=>a.properties.timestamp.localeCompare(b.properties.timestamp))
-    .pop();
-  if(!f)return;
-  const p=f.properties,pts=historicalProjection(p,60);
-  if(!pts.length)return;
-  const line=[[Number(p.centroid_lat),Number(p.centroid_lon)],...pts.map(x=>[x.lat,x.lon])];
-  const prob=historicalProbability(p),color=historicalColor(prob);
-  L.polyline(line,{color:"#ffffff",weight:4,opacity:.95,interactive:false}).addTo(projectionLayer);
-  pts.forEach((pt,idx)=>L.circleMarker([pt.lat,pt.lon],{
-    radius:idx===pts.length-1?6:4,color:"#ffffff",weight:2,fillColor:color,fillOpacity:.78,interactive:false
-  }).addTo(projectionLayer));
-}
+function renderTracks(ts){}
 
 function renderObjects(ts){
   objectsLayer.clearLayers();
@@ -189,7 +154,7 @@ function renderTrackHistory(){
     .sort((a,b)=>a.properties.timestamp.localeCompare(b.properties.timestamp));
   setText("trackCount",same.length+" scans");
   if(!same.length){
-    box.innerHTML="<div class='history-empty'>No track history is available for this object.</div>";
+    box.innerHTML="<div class='history-empty'>No object evolution history is available for this object.</div>";
     return;
   }
   const activeTs=times[currentIndex];
