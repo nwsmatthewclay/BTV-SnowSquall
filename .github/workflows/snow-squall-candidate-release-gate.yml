@@ -1,0 +1,122 @@
+name: Snow Squall Candidate Release Gate
+
+on:
+  workflow_dispatch:
+  workflow_run:
+    workflows:
+      - Modern Snow Squall Independent Validation
+    types:
+      - completed
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  candidate-gate:
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      PYTHONPATH: ${{ github.workspace }}
+      PYTHONUNBUFFERED: '1'
+    steps:
+      - name: Checkout model foundation
+        uses: actions/checkout@v4
+        with:
+          ref: snow-squall-model-foundation
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install -r requirements-science.txt
+
+      - name: Locate latest successful expansion run
+        id: expansion
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          run_id="$(gh run list --workflow "Snow Squall Expansion Dataset" --branch snow-squall-model-foundation --status success --limit 10 --json databaseId --jq '.[0].databaseId')"
+          test -n "$run_id" && test "$run_id" != "null"
+          echo "run_id=$run_id" >> "$GITHUB_OUTPUT"
+          echo "Latest expansion run: $run_id"
+
+      - name: Download expansion model and feature artifacts
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          mkdir -p expansion_artifact models
+          gh run download "${{ steps.expansion.outputs.run_id }}" --name snow-squall-expansion-feature-batch --dir expansion_artifact
+          gh run download "${{ steps.expansion.outputs.run_id }}" --name snow-squall-live-model-bundles --dir models
+
+      - name: Locate expansion package
+        id: package
+        run: |
+          set -euo pipefail
+          features="$(find expansion_artifact -name 'snow_squall_model_features_cumulative.csv' -print -quit)"
+          schema="$(find expansion_artifact -name 'snow_squall_model_features_expanded.schema.json' -print -quit)"
+          track_qc="$(find expansion_artifact -name 'snow_squall_training_track_quality_audit.json' -print -quit)"
+          model_root="$(find models -type d -name 'candidate_ensemble_expansion_15m' -print -quit | xargs -r dirname)"
+          test -n "$features"
+          test -n "$schema"
+          test -n "$track_qc"
+          test -n "$model_root"
+          echo "features=$features" >> "$GITHUB_OUTPUT"
+          echo "schema=$schema" >> "$GITHUB_OUTPUT"
+          echo "track_qc=$track_qc" >> "$GITHUB_OUTPUT"
+          echo "model_root=$model_root" >> "$GITHUB_OUTPUT"
+
+      - name: Download independent validation artifact
+        if: github.event_name == 'workflow_run'
+        uses: actions/download-artifact@v4
+        with:
+          name: modern-snow-squall-independent-validation
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          repository: ${{ github.repository }}
+          run-id: ${{ github.event.workflow_run.id }}
+          path: validation
+
+      - name: Locate validation metrics
+        id: validation
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          root=""
+          if [ -d validation ]; then
+            root="$(find validation -type f -name 'validation_metrics.json' -print -quit | xargs -r dirname)"
+          fi
+          if [ -z "$root" ]; then
+            validation_run="$(gh run list --workflow "Modern Snow Squall Independent Validation" --branch snow-squall-model-foundation --status success --limit 1 --json databaseId --jq '.[0].databaseId' || true)"
+            if [ -n "$validation_run" ] && [ "$validation_run" != "null" ]; then
+              rm -rf validation
+              gh run download "$validation_run" --name modern-snow-squall-independent-validation --dir validation
+              root="$(find validation -type f -name 'validation_metrics.json' -print -quit | xargs -r dirname)"
+            fi
+          fi
+          echo "root=$root" >> "$GITHUB_OUTPUT"
+
+      - name: Audit candidate release package
+        run: |
+          python scripts/audit_candidate_release.py \
+            --schema "${{ steps.package.outputs.schema }}" \
+            --model-root "${{ steps.package.outputs.model_root }}" \
+            --prefix candidate_ensemble_expansion_ \
+            --validation-root "${{ steps.validation.outputs.root }}" \
+            --output data/derived/candidate_release_gate.json
+
+      - name: Upload release-gate report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: snow-squall-candidate-release-gate
+          retention-days: 30
+          path: data/derived/candidate_release_gate.json
