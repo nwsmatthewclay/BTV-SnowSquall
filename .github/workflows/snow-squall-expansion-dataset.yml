@@ -58,10 +58,10 @@ jobs:
       PYTHONUNBUFFERED: '1'
 
     steps:
-      - name: Checkout current model foundation
+      - name: Checkout tracker-quality model candidate
         uses: actions/checkout@v4
         with:
-          ref: snow-squall-model-foundation
+          ref: tracker-quality-v1
 
       - name: Expansion runner heartbeat
         run: |
