@@ -116,14 +116,22 @@ def append_history(geojson_path: Path, jsonl_path: Path, csv_path: Path):
                 try:
                     item = json.loads(line)
                     existing_keys.add(
-                        (item.get("timestamp"), str(item.get("track_id")))
+                        (
+                            item.get("timestamp"),
+                            str(item.get("radar_site")),
+                            str(item.get("track_id")),
+                        )
                     )
                 except json.JSONDecodeError:
                     continue
 
     new_rows = [
         row for row in rows
-        if (row["timestamp"], str(row["track_id"])) not in existing_keys
+        if (
+            row["timestamp"],
+            str(row.get("radar_site")),
+            str(row["track_id"]),
+        ) not in existing_keys
     ]
 
     if new_rows:
