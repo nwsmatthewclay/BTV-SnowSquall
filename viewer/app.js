@@ -31,7 +31,22 @@ const setText=(id,v)=>{const el=document.getElementById(id);if(el)el.textContent
 const esc=v=>String(v??"—").replace(/[&<>"\']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[m]));
 const envValue=(e,key)=>e&&e[key]?e[key].value:null;
 const formatEnv=(e,key)=>{const v=envValue(e,key);if(v==null)return"—";const u=e[key].units||"";return num(v,1)+(u?" "+u:"")};
-function renderCaseInfo(){const c=current;setText("caseTitle",c?c.case_id+" • "+c.radar_site:"No case");setText("caseMeta",c?(c.source_study||"Historical study")+" • "+c.first_scan_utc?.slice(0,16)+" to "+c.last_scan_utc?.slice(0,16):"—");document.getElementById("caseGrid").innerHTML=[["Event onset",fmtUtc(c?.event_start_utc)],["Station",c?.observing_station||"—"],["Peak wind",c?.peak_wind_kt==null?"—":num(c.peak_wind_kt)+" kt"],["Min visibility",c?.min_visibility_km==null?"—":num(c.min_visibility_km)+" km"],["Tracks",c?.track_count??"—"],["Scans",c?.scan_count??"—"],["Radar frames",c?.radar_frames?.length??0]].map(x=>"<div><span>"+x[0]+"</span><b>"+x[1]+"</b></div>").join("");setText("subtitle",c?c.case_id+" • "+c.radar_site+" • "+c.status:"Loading historical pilot data…")}
+function renderCaseInfo(){
+  const c=current;
+  setText("caseTitle",c?c.case_id+" • "+c.radar_site:"No case");
+  setText("caseMeta",c?(c.source_study||"Historical study")+" • "+c.first_scan_utc?.slice(0,16)+" to "+c.last_scan_utc?.slice(0,16):"—");
+  document.getElementById("caseGrid").innerHTML=[
+    ["Event onset",fmtUtc(c?.event_start_utc)],
+    ["Station",c?.observing_station||"—"],
+    ["Peak wind",c?.peak_wind_kt==null?"—":num(c.peak_wind_kt)+" kt"],
+    ["Min visibility",c?.min_visibility_km==null?"—":num(c.min_visibility_km)+" km"],
+    ["Objects",c?.track_count??"—"],
+    ["Scans",c?.scan_count??"—"]
+  ].map(x=>"<div><span>"+x[0]+"</span><b>"+x[1]+"</b></div>").join("");
+  setText("subtitle",c?c.case_id+" • "+c.radar_site+" • "+c.status:"Loading historical pilot data…");
+  setText("mapRadarSite",c?.radar_site||"—");
+  setText("objectSubtitle",c?c.case_id+" • "+(c.source_study||"historical study")+" • select an object to inspect evolution through time.":"Select an object to inspect evolution through time.");
+}
 function renderModelSummary(){
   const box=document.getElementById("modelSummary");
   const badge=document.getElementById("modelStatusBadge");
@@ -61,8 +76,20 @@ function featuresAt(ts){return features.filter(f=>f.properties.timestamp===ts)}
 function render(){if(!times.length)return;const ts=times[currentIndex];setText("timelineTime",fmtTime(ts)+" • "+fmtUtc(ts));document.getElementById("slider").value=currentIndex;renderRadar(ts);renderTracks(ts);renderObjects(ts);updateSelection()}
 function renderRadar(ts){radarLayer.clearLayers();const frames=current?.radar_frames||[],bounds=current?.radar_bounds;if(!frames.length||!bounds){setText("radarStatus","No reconstructed radar frame loaded");return}const exact=frames.find(f=>f.timestamp===ts);const frame=exact||[...frames].reverse().find(f=>f.timestamp<ts);if(!frame){setText("radarStatus","No frame at or before current time");return}const opacity=Number(document.getElementById("radarOpacity")?.value||78)/100;L.imageOverlay("data/"+frame.file,bounds,{opacity,interactive:false,attribution:"Historical Level-II reflectivity reconstruction"}).addTo(radarLayer);setText("radarStatus","Frame: "+fmtUtc(frame.timestamp)+(exact?"":" • prior available scan"))}
 function historicalProbability(p){
-  const vals=[p.probability_30min,p.probability_15min].map(Number).filter(Number.isFinite);
-  return vals.length?vals[0]:null;
+  const values=p?.research_probabilities||{};
+  const candidates=[
+    Number(p?.probability_30min),
+    Number(p?.probability_15min),
+    Number(values["30min"]),
+    Number(values["15min"])
+  ].filter(Number.isFinite);
+  return candidates.length?candidates[0]:null;
+}
+function historicalMotion(p){
+  const speed=Number(p?.motion_speed_kt),age=Number(p?.age_scans);
+  if(!Number.isFinite(speed)||speed<0||speed>75)return null;
+  if(Number.isFinite(age)&&age<=1)return null;
+  return speed;
 }
 function historicalColor(prob){
   if(prob==null)return "#8b98a4";
@@ -96,7 +123,7 @@ function renderObjects(ts){
     }}).addTo(objectsLayer);
     layer.bindTooltip(
       "Object "+esc(p.object_id)+" • "+(prob==null?"SS —":"SS "+(prob*100).toFixed(0)+"%")+" • "+evolution+"<br>"+
-      num(p.motion_speed_kt)+" kt @ "+num(p.motion_direction_deg,0)+"°",
+      num(historicalMotion(p))+" kt @ "+num(p.motion_direction_deg,0)+"°",
       {sticky:true}
     );
     layer.bindPopup("<b>"+p.case_id+" • "+p.radar_site+"</b><br>Object "+esc(p.object_id)+"<br>"+fmtUtc(p.timestamp));
@@ -111,10 +138,34 @@ function renderObjects(ts){
   renderObjectList(ts);
 }
 
-function renderObjectList(ts){const box=document.getElementById("objectList"),count=document.getElementById("currentObjectCount");if(!box||!count)return;const rows=featuresAt(ts).slice().sort((a,b)=>Number(b.properties.max_reflectivity_dbz||0)-Number(a.properties.max_reflectivity_dbz||0));count.textContent=String(rows.length);if(!rows.length){box.innerHTML="<div class='history-empty'>No objects at this scan.</div>";return}box.innerHTML=rows.map(f=>{const p=f.properties,selected=selectedKey===p.track_key;return "<button type='button' class='object-row"+(selected?" selected":"")+"' data-track='"+esc(p.track_key)+"'><span class='object-row-main'><b>Object "+esc(p.object_id)+"</b><span>"+num(p.max_reflectivity_dbz)+" dBZ • "+num(p.area_km2)+" km²</span></span><span class='object-row-sub'>"+num(p.motion_speed_kt)+" kt • "+esc(p.environment_status||"environment —")+"</span></button>"}).join("");box.querySelectorAll("[data-track]").forEach(btn=>{btn.onclick=()=>{const f=featuresAt(ts).find(x=>x.properties.track_key===btn.dataset.track);if(f)selectObject(f)}})}
+function renderObjectList(ts){
+  const box=document.getElementById("objectList"),count=document.getElementById("currentObjectCount");
+  if(!box||!count)return;
+  const sort=document.getElementById("objectSortV2")?.value||"probability";
+  const rows=featuresAt(ts).slice().sort((a,b)=>{
+    if(sort==="reflectivity")return Number(b.properties.max_reflectivity_dbz||0)-Number(a.properties.max_reflectivity_dbz||0);
+    return Number(historicalProbability(b.properties)||0)-Number(historicalProbability(a.properties)||0);
+  });
+  count.textContent=String(rows.length);
+  if(!rows.length){box.innerHTML="<div class='history-empty'>No objects at this scan.</div>";return}
+  const frame=(current?.radar_frames||[]).find(f=>f.timestamp===ts)||[...(current?.radar_frames||[])].reverse().find(f=>f.timestamp<ts);
+  const thumb=frame?.file?"data/"+frame.file:"";
+  box.innerHTML=rows.map(f=>{
+    const p=f.properties,selected=selectedKey===p.track_key,prob=historicalProbability(p),color=historicalColor(prob),evolution=historicalEvolution(p);
+    const level=prob==null?"No Score":prob>=.80?"High":prob>=.40?"Medium":"Low";
+    const motion=historicalMotion(p);
+    const thumbStyle=thumb?" style=\"background-image:url('"+esc(thumb)+"')\"":"";
+    return "<button type='button' class='object-card-v2"+(selected?" selected":"")+"' data-track='"+esc(p.track_key)+"'>"+
+      "<div class='object-card-thumb'"+thumbStyle+"><span class='object-card-ring' style='border-color:"+color+"'></span></div>"+
+      "<div class='object-card-copy'><div class='object-card-top'><b>ID "+esc(p.object_id)+"</b><strong style='color:"+color+"'>"+(prob==null?"—":(prob*100).toFixed(0)+"%")+"</strong><span class='object-severity' style='border-color:"+color+";color:"+color+"'>"+level+"</span></div>"+
+      "<div class='object-card-metrics'><span>"+num(p.max_reflectivity_dbz,0)+" dBZ</span><span>"+num(p.area_km2,0)+" km²</span><span>"+(motion==null?"—":num(motion,0)+" kt")+"</span></div>"+
+      "<div class='object-card-evolution'>"+evolution+"</div></div></button>";
+  }).join("");
+  box.querySelectorAll("[data-track]").forEach(btn=>{btn.onclick=()=>{const f=featuresAt(ts).find(x=>x.properties.track_key===btn.dataset.track);if(f)selectObject(f)}})
+}
 function selectObject(f){selectedKey=f.properties.track_key;const b=document.getElementById("analogsBtn");b.disabled=false;b.onclick=()=>window.open("analogs.html?case="+catalog.cases.indexOf(current)+"&track="+encodeURIComponent(f.properties.track_key),"_blank");render()}
 function trendSvg(rows,key,label,unit,activeIndex){
-  const raw=rows.map(r=>Number(r.properties[key]));
+  const raw=rows.map(r=>key==="motion_speed_kt"?Number(historicalMotion(r.properties)):Number(r.properties[key]));
   const vals=raw.filter(Number.isFinite);
   if(!vals.length)return "<div class='trend-row'><span>"+label+"</span><div class='trend-empty'>No data</div></div>";
   const W=250,H=54,P=8,min=Math.min(...vals),max=Math.max(...vals),range=Math.max(max-min,0.1);
@@ -270,15 +321,25 @@ function renderResearchProbabilities(p){
   if(!box)return;
   const values=p?.research_probabilities||{};
   const horizons=["15min","30min","45min","60min"];
-  const available=horizons.filter(h=>values[h]!=null);
-  if(!available.length){
-    box.innerHTML="<div class='history-empty'>No out-of-fold research probability is attached to this scan.</div>";
+  const currentCandidates=horizons.map(h=>Number(values[h])).filter(Number.isFinite);
+  const current=currentCandidates.length?Number(values["30min"]??values["15min"]):null;
+  if(current==null){
+    box.innerHTML="<div class='probability-empty-v2'>No out-of-fold research probability is attached to this scan.</div>";
     return;
   }
-  box.innerHTML="<div class='research-prob-grid'>"+horizons.map(h=>{
-    const v=values[h];
-    return "<div class='research-prob-cell'><span>"+h.replace("min"," min")+"</span><b>"+(v==null?"—":(Number(v)*100).toFixed(1)+"%")+"</b></div>";
-  }).join("")+"</div><div class='research-prob-note'>This is an out-of-fold research result for historical replay only. It is not an operational probability or warning recommendation.</div>";
+  const level=current>=.80?"High Probability":current>=.60?"Elevated Probability":current>=.40?"Moderate Probability":"Low Probability";
+  const color=historicalColor(current);
+  box.innerHTML=
+    "<div class='current-probability-v2'>"+
+      "<div class='current-probability-main'><span>Current Probability</span><b style='color:"+color+"'>"+(current*100).toFixed(0)+"%</b></div>"+
+      "<div class='probability-level-v2' style='border-color:"+color+";color:"+color+"'>"+level+"</div>"+
+      "<div class='horizon-grid-v2'>"+horizons.map(h=>{
+        const v=Number(values[h]);
+        const vc=Number.isFinite(v)?historicalColor(v):"#7e8e9e";
+        return "<div class='horizon-card-v2'><span>"+h.replace("min"," min")+"</span><b style='color:"+vc+"'>"+(Number.isFinite(v)?(v*100).toFixed(0)+"%":"—")+"</b></div>";
+      }).join("")+"</div>"+
+    "</div>"+
+    "<div class='research-prob-note'>Research / out-of-fold replay only. This is not an operational probability or warning recommendation.</div>";
 }
 
 function updateSelection(){const same=features.filter(x=>x.properties.track_key===selectedKey);const exact=same.find(x=>x.properties.timestamp===times[currentIndex]);const prior=[...same].filter(x=>x.properties.timestamp<=times[currentIndex]).sort((a,b)=>a.properties.timestamp.localeCompare(b.properties.timestamp)).pop();const f=exact||prior||same[0],p=f?.properties;if(!p){setText("objectTitle","Select a storm object");setText("objectTime","—");setText("selectionState","No object selected");document.getElementById("metrics").innerHTML="";document.getElementById("environment").innerHTML="";setText("envSource","—");setText("outcome","Select an object to inspect its historical context.");renderTrackHistory();renderResearchProbabilities(null);renderProbabilityEvolution();return;}setText("selectionState","Selected");setText("objectTitle","Object "+p.object_id+" • "+p.radar_site);renderResearchProbabilities(p);renderProbabilityEvolution();setText("objectTime",fmtTime(p.timestamp)+" • "+fmtUtc(p.timestamp));document.getElementById("metrics").innerHTML=[["Max Z",num(p.max_reflectivity_dbz)+" dBZ"],["Mean Z",num(p.mean_reflectivity_dbz)+" dBZ"],["Area",num(p.area_km2)+" km²"],["Length",num(p.length_km)+" km"],["Width",num(p.width_km)+" km"],["Aspect",num(p.aspect_ratio)],["Motion",num(p.motion_speed_kt)+" kt"],["Direction",num(p.motion_direction_deg,0)+"°"],["Z trend",num(p.reflectivity_trend_dbz_per_hr)+" dBZ/hr"],["Age",p.age_scans==null?"—":p.age_scans+" scans"],["Core fraction",p.core_fraction==null?"—":num(p.core_fraction*100)+"%"]].map(x=>"<div class='metric'><span>"+x[0]+"</span><b>"+x[1]+"</b></div>").join("");const e=p.environment||{};document.getElementById("environment").innerHTML=[["SBCAPE","sbcape_jkg"],["SBCIN","sbcin_jkg"],["MLCAPE","mlcape_jkg"],["MLCIN","mlcin_jkg"],["MUCAPE","mucape_jkg"],["DCAPE","dcape_jkg"],["PWAT","pwat_mm"],["LCL","lcl_m"],["RH 0–2 km","rh_0_2km_pct"],["0–1 km wind","wind_0_1km_kt"],["0–3 km wind","wind_0_3km_kt"],["0–1 km shear","shear_0_1km_kt"],["0–3 km shear","shear_0_3km_kt"],["0–6 km shear","shear_0_6km_kt"],["0–3 km lapse","lapse_rate_0_3km_c_km"],["0–7.5 km lapse","lapse_rate_0_7_5km_c_km"],["WB 0–3 km","wet_bulb_0_3km_c"],["0–1 km SRH","srh01_m2s2"],["SNSQ","snsq"]].map(x=>"<div class='env-item'><span>"+x[0]+"</span><b>"+formatEnv(e,x[1])+"</b></div>").join("");setText("envSource",p.environment_source?p.environment_source+" • "+num(p.environment_age_minutes,0)+" min old":"Unavailable");const associated=p.track_event_associated===true||p.track_event_associated==="True",relation=p.case_time_relation||"unclassified",out=document.getElementById("outcome");out.className="outcome "+(associated?"positive":"");out.innerHTML=associated?"<b>Associated with documented case context.</b><br>"+relation+". Published onset: "+fmtUtc(current.event_start_utc)+".<br><span class='truth-subnote'>Association is research context, not verified object-level truth.</span>":"<b>Case-context object.</b><br>Not treated as final object-level truth. Relation: "+relation+".";renderTrackHistory();renderTrackTrend()}
