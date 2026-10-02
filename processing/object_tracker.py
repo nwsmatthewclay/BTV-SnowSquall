@@ -614,8 +614,11 @@ class CentroidTracker:
             obj.pop("_observed_velocity_row_per_min", None)
             obj.pop("_observed_velocity_column_per_min", None)
 
+        # Detector object IDs are frame-local labels. They must never override
+        # the persistent IDs assigned by this tracker, or the live history can
+        # associate unrelated objects across scans and create absurd motion.
         return [
-            {"object_id": assignments[i], **obj}
+            {**obj, "object_id": assignments[i]}
             for i, obj in enumerate(objects)
         ]
 
