@@ -1,0 +1,104 @@
+name: Snow Squall Real-Case Tracker Validation
+
+on:
+  workflow_dispatch:
+  workflow_run:
+    workflows:
+      - Object Dataset Pilot
+    types:
+      - completed
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  validate:
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      PYTHONPATH: ${{ github.workspace }}
+      PYTHONUNBUFFERED: '1'
+    steps:
+      - name: Checkout tracker branch
+        uses: actions/checkout@v4
+        with:
+          ref: tracker-quality-v1
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install -r requirements-science.txt
+
+      - name: Download pilot artifact
+        if: github.event_name == 'workflow_run'
+        uses: actions/download-artifact@v4
+        with:
+          name: object-population-pilot
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          repository: ${{ github.repository }}
+          run-id: ${{ github.event.workflow_run.id }}
+          path: input
+
+      - name: Locate historical tracker tables
+        id: source
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            run_id="$(gh run list --workflow "Object Dataset Pilot" --branch tracker-quality-v1 --status success --limit 1 --json databaseId --jq '.[0].databaseId')"
+            test -n "$run_id" && test "$run_id" != "null"
+            rm -rf input
+            gh run download "$run_id" --repo "$GITHUB_REPOSITORY" --name object-population-pilot --dir input
+          fi
+          objects="$(find input -name 'positive_object_labeled_track_qc.csv' -print -quit || true)"
+          tracks="$(find input -name 'positive_object_tracks.csv' -print -quit || true)"
+          test -n "$objects"
+          test -n "$tracks"
+          echo "objects=$objects" >> "$GITHUB_OUTPUT"
+          echo "tracks=$tracks" >> "$GITHUB_OUTPUT"
+
+      - name: Build tracker diagnostics
+        run: |
+          python scripts/audit_object_tracking.py \
+            "${{ steps.source.outputs.objects }}" \
+            --output data/derived/real_case_tracker_audit.json
+          python scripts/build_track_validation_summary.py \
+            --objects "${{ steps.source.outputs.objects }}" \
+            --tracks "${{ steps.source.outputs.tracks }}" \
+            --output data/derived/real_case_tracker_summary.json
+
+      - name: Assert real-case tracker report is populated
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          report=json.loads(Path('data/derived/real_case_tracker_audit.json').read_text())
+          summary=json.loads(Path('data/derived/real_case_tracker_summary.json').read_text())
+          assert report.get('records',0) > 0
+          assert report.get('tracks',0) > 0
+          assert summary.get('case_count',0) > 0
+          print(json.dumps(report, indent=2))
+          print(json.dumps(summary, indent=2))
+          PY
+
+      - name: Upload real-case tracker validation
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: snow-squall-real-case-tracker-validation
+          retention-days: 30
+          path: |
+            data/derived/real_case_tracker_audit.json
+            data/derived/real_case_tracker_summary.json
+            input/**/positive_object_labeled_track_qc.csv
+            input/**/positive_object_tracks.csv
+          if-no-files-found: warn
