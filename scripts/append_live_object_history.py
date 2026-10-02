@@ -88,6 +88,25 @@ def flatten(feature, source_file):
         if key in fields:
             row[key] = _clean(fields[key])
 
+    # Guard historical records too: first-scan objects have no observed
+    # displacement, and object motion above the tracker physical ceiling is
+    # invalid for the live Snow Squall product.
+    motion = row.get("motion_speed_kt")
+    age = row.get("age_scans")
+    try:
+        invalid_motion = (
+            motion is not None
+            and (
+                float(motion) > 75.0
+                or (age is not None and float(age) <= 1.0)
+            )
+        )
+    except (TypeError, ValueError):
+        invalid_motion = True
+    if invalid_motion:
+        row["motion_speed_kt"] = None
+        row["motion_dir_deg"] = None
+
     # Labels are deliberately empty until a separate historical labeling pass.
     row["label_status"] = "unlabeled"
     row["snow_squall_outcome"] = None
