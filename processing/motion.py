@@ -14,6 +14,9 @@ def _haversine_km(lat1, lon1, lat2, lon2):
     return 2.0 * r * np.arcsin(np.sqrt(a))
 
 
+MAX_PLAUSIBLE_MOTION_KT = 75.0
+
+
 def add_motion_features(frame, group_col="object_id"):
     """Add past-to-current motion only; isolate simultaneous radar sites."""
     out = frame.copy()
@@ -37,14 +40,33 @@ def add_motion_features(frame, group_col="object_id"):
         out["prev_lat"], out["prev_lon"], out["centroid_lat"], out["centroid_lon"]
     )
     out["motion_distance_km"] = distance_km.where(dt_min > 0)
-    out["motion_speed_kt"] = (distance_km / (dt_min / 60.0) / 1.852).where(dt_min > 0)
+    raw_speed = (distance_km / (dt_min / 60.0) / 1.852).where(dt_min > 0)
+    out["motion_speed_kt_raw"] = raw_speed
+    out["motion_qc_status"] = np.select(
+        [
+            dt_min.le(0),
+            raw_speed.gt(MAX_PLAUSIBLE_MOTION_KT),
+        ],
+        [
+            "invalid_time_order",
+            "implausible_displacement",
+        ],
+        default="ok",
+    )
+    # Never feed an impossible centroid jump into a model or viewer as if it
+    # were real object motion. Preserve the raw diagnostic separately.
+    out["motion_speed_kt"] = raw_speed.where(
+        raw_speed.le(MAX_PLAUSIBLE_MOTION_KT)
+    )
 
     lat1 = np.radians(out["prev_lat"])
     lat2 = np.radians(out["centroid_lat"])
     dlon = np.radians(out["centroid_lon"] - out["prev_lon"])
     y = np.sin(dlon) * np.cos(lat2)
     x = np.cos(lat1) * np.sin(lat2) - np.sin(lat1) * np.cos(lat2) * np.cos(dlon)
-    out["motion_direction_deg"] = (np.degrees(np.arctan2(y, x)) + 360.0) % 360.0
+    out["motion_direction_deg"] = (
+        (np.degrees(np.arctan2(y, x)) + 360.0) % 360.0
+    ).where(out["motion_speed_kt"].notna())
     direction_rad = np.radians(out["motion_direction_deg"])
     out["motion_u_kt"] = out["motion_speed_kt"] * np.sin(direction_rad)
     out["motion_v_kt"] = out["motion_speed_kt"] * np.cos(direction_rad)
