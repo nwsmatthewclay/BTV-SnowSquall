@@ -8,7 +8,7 @@ const LIVE_BASE="https://raw.githubusercontent.com/nwsmatthewclay/BTV-SnowSquall
 const SHADOW_BASE="https://raw.githubusercontent.com/nwsmatthewclay/BTV-SnowSquall/snow-squall-shadow-data/viewer/data/shadow/";
 let datasets={},selected=null,refreshTimer=null,hasInitialExtent=false,radarMosaicLayer=L.layerGroup().addTo(map),radarMosaic=null,radarMode="clean",qcdRadarLayer=null;
 
-const num=(v,d=1)=>v==null||Number.isNaN(Number(v))?"—":Number(v).toFixed(d);
+const num=(v,d=1)=>v==null||Number.isNaN(Number(v))?"—":Number(v).toFixed(d); const shadowScoreFor=(p)=>{const r=shadowRecord(p.radar_site,p.track_id)?.research_probabilities||{};const v=r["15"]??r["15min"];return Number.isFinite(Number(v))?Number(v):null;};
 const fmt=t=>t?new Date(t).toLocaleString(undefined,{month:"short",day:"numeric",hour:"numeric",minute:"2-digit",second:"2-digit"}):"—";
 const ageMinutes=t=>t?Math.max(0,(Date.now()-new Date(t).getTime())/60000):Infinity;
 const esc=s=>String(s??"—").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[m]));
@@ -196,7 +196,7 @@ function renderMap(summary){
 function renderObjectList(summary){
   let all=[];
   summary.filter(x=>!x.error).forEach(x=>(x.features||[]).forEach(f=>all.push({...f.properties,radar_site:x.site,source_kind:"current"})));
-  all.sort((a,b)=>Number(b.max_reflectivity_dbz||0)-Number(a.max_reflectivity_dbz||0));
+  all.sort((a,b)=>{const as=shadowScoreFor(a),bs=shadowScoreFor(b);if(as!=null||bs!=null)return (bs??-1)-(as??-1);return Number(b.candidate_rank_score??-1)-Number(a.candidate_rank_score??-1)||Number(b.max_reflectivity_dbz||0)-Number(a.max_reflectivity_dbz||0);});
 
   let usingHistory=false;
   if(!all.length){
@@ -230,7 +230,7 @@ function renderObjectList(summary){
     return "<div class='live-object "+(selected&&selected.track_id===p.track_id&&selected.radar_site===p.radar_site?"selected":"")+"' data-id='"+esc(p.radar_site+"|"+p.track_id)+"'>"+
     "<div class='title'>"+esc(p.radar_site)+" • Track "+esc(p.track_id)+" <span class='chip'>"+esc(state)+"</span><span class='chip'>"+(p.source_kind==="recent"?"RECENT":"ACTIVE")+"</span></div>"+
     "<div class='sub'>"+esc(fmt(p.timestamp))+(p.source_kind==="recent"?" • latest retained track sample":"")+"</div>"+
-    "<div class='chips'><span class='chip'>"+num(p.max_reflectivity_dbz)+" dBZ</span><span class='chip'>"+num(p.motion_speed_kt)+" kt</span><span class='chip'>"+num(p.area_km2)+" km²</span>"+(score==null?"":"<span class='chip research-chip'>15m "+(Number(score)*100).toFixed(0)+"% RESEARCH</span>")+"<span class='chip'>"+esc(p.data_quality||"—")+"</span></div></div>";
+    "<div class='chips'><span class='chip'>"+num(p.max_reflectivity_dbz)+" dBZ</span><span class='chip'>"+num(p.motion_speed_kt)+" kt</span><span class='chip'>"+num(p.area_km2)+" km²</span>"+(p.candidate_rank_score==null?"":"<span class='chip'>Rank "+Number(p.candidate_rank_score).toFixed(0)+"</span>")+(score==null?"":"<span class='chip research-chip'>15m "+(Number(score)*100).toFixed(0)+"% RESEARCH</span>")+"<span class='chip'>"+esc(p.data_quality||"—")+"</span></div></div>";
   }).join("");
 
   document.querySelectorAll(".live-object").forEach(el=>el.onclick=()=>{
@@ -380,6 +380,7 @@ function selectObject(p){
     "<div class='live-stat'><span>Max Z</span><b>"+num(p.max_reflectivity_dbz)+" dBZ</b></div>"+
     "<div class='live-stat'><span>Mean Z</span><b>"+num(p.mean_reflectivity_dbz)+" dBZ</b></div>"+
     "<div class='live-stat'><span>Area</span><b>"+num(p.area_km2)+" km²</b></div>"+
+    "<div class='live-stat'><span>Candidate rank</span><b>"+(p.candidate_rank_score==null?"—":Number(p.candidate_rank_score).toFixed(0)+"/100")+"</b></div>"+
     "<div class='live-stat'><span>Shape</span><b>"+num(p.length_km)+" × "+num(p.width_km)+" km</b></div>"+
     "<div class='live-stat'><span>Motion</span><b>"+num(p.motion_speed_kt)+" kt @ "+num(motionDir,0)+"°</b></div>"+
     "<div class='live-stat'><span>Age</span><b>"+(p.age_scans==null?"—":esc(p.age_scans+" scans"))+"</b></div>"+
