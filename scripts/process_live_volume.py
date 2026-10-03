@@ -496,18 +496,23 @@ def process_volume(
 
     # Optional learned-model scoring is deliberately opt-in and release-gated
     # for live execution. Archived replay may explicitly score candidate bundles.
-    model_runtimes = (
-        ModelRuntime.load_horizon_set(model_dir)
-        if model_dir and any((Path(model_dir) / name).exists() for name in (
+    model_runtimes = {}
+    if model_dir:
+        root = Path(model_dir)
+        if any((root / name).exists() for name in (
             "candidate_ensemble_refresh_15m", "candidate_ensemble_expansion_15m",
             "baseline_refresh_15m", "baseline_expansion_15m",
-        ))
-        else ({ModelRuntime.load(model_dir).horizon_minutes: ModelRuntime.load(model_dir)} if model_dir and ModelRuntime.load(model_dir).model is not None else {})
-    )
+        )):
+            model_runtimes = ModelRuntime.load_horizon_set(root)
+        else:
+            single = ModelRuntime.load(root)
+            if single.model is not None and single.horizon_minutes in {15, 30, 45, 60}:
+                model_runtimes[single.horizon_minutes] = single
     model_scored = False
     model_errors = {}
     probability_mode = "none"
     model_versions = {}
+    raw_probability_by_feature = {}
     if features and model_runtimes:
         prior_rows_by_track = {}
         prior_path = history_jsonl_path or Path("data/derived/live_object_history.jsonl")
@@ -540,11 +545,38 @@ def process_volume(
                     if score_mode != "candidate_blocked":
                         probability_mode = score_mode
                     if scores is not None and scores:
-                        feature[f"probability_{horizon}min"] = float(scores[0])
-                        feature["probability_trend"] = "scored"
-                        model_scored = True
+                    value = float(scores[0])
+                    feature[f"probability_{horizon}min_raw"] = value
+                    raw_probability_by_feature.setdefault(id(feature), {})[str(horizon)] = value
+                    feature["probability_trend"] = "scored"
+                    model_scored = True
                 except Exception as exc:
                     model_errors[f"{track_id}:{horizon}"] = f"{type(exc).__name__}: {exc}"
+
+    # Keep the independently trained horizon outputs available for diagnosis,
+    # but expose a monotone cumulative sequence to replay/viewer consumers.
+    # This is a presentation constraint, not a retraining step.
+    from scripts.probability_postprocess import monotone_cumulative_probabilities
+    if raw_probability_by_feature:
+        for feature in features:
+            raw = raw_probability_by_feature.get(id(feature), {})
+            if not raw:
+                continue
+            projected = monotone_cumulative_probabilities(raw)
+            for key, value in projected.get("cumulative", {}).items():
+                feature[f"probability_{int(key)}min"] = float(value)
+            feature["research_probabilities_raw"] = {
+                f"{int(k)}min": float(v) for k, v in raw.items()
+            }
+            feature["research_probabilities"] = {
+                f"{int(k)}min": float(v)
+                for k, v in projected.get("cumulative", {}).items()
+            }
+            feature["research_interval_probabilities"] = {
+                f"{int(k)}min": float(v)
+                for k, v in projected.get("interval", {}).items()
+            }
+            feature["probability_projection"] = "isotonic_non_decreasing_horizon"
 
     result = {
         "type": "FeatureCollection",
