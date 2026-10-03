@@ -26,8 +26,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
-      GH_TOKEN: \${{ secrets.GITHUB_TOKEN }}
-      PYTHONPATH: \${{ github.workspace }}
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      PYTHONPATH: ${{ github.workspace }}
       PYTHONUNBUFFERED: "1"
 
     steps:
@@ -48,8 +48,8 @@ jobs:
         id: model
         run: |
           set -euo pipefail
-          if [ "\${{ github.event_name }}" = "workflow_run" ]; then
-            run_id="\${{ github.event.workflow_run.id }}"
+          if [ "${{ github.event_name }}" = "workflow_run" ]; then
+            run_id="${{ github.event.workflow_run.id }}"
           else
             run_id="$(gh run list \
               --workflow "Snow Squall Expansion Dataset" \
@@ -65,7 +65,7 @@ jobs:
       - name: Download candidate model bundle
         run: |
           set -euo pipefail
-          gh run download "\${{ steps.model.outputs.run_id }}" \
+          gh run download "${{ steps.model.outputs.run_id }}" \
             --name snow-squall-live-model-bundles \
             --dir model_bundle
           test -d model_bundle
