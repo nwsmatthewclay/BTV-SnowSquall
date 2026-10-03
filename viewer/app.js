@@ -93,12 +93,16 @@ function cellOutlinePoints(p){
   }
   if(Number(p.is_band)===1 || p.object_mode==="band"){
     major=Math.min(45,Math.max(3,major));
+    const width=0.7;
     const angle=(Number(p.orientation_deg)||0)*Math.PI/180;
-    const east=(major/2)*Math.sin(angle);
-    const north=(major/2)*Math.cos(angle);
-    const dLat=north/111;
-    const dLon=east/(111*Math.max(0.2,Math.cos(lat*Math.PI/180)));
-    return [[lat-dLat,lon-dLon],[lat+dLat,lon+dLon]];
+    const nx=Math.cos(angle), ny=-Math.sin(angle);
+    const ax=(major/2)*Math.sin(angle), ay=(major/2)*Math.cos(angle);
+    const wx=(width/2)*nx, wy=(width/2)*ny;
+    const corners=[[lat-(ay+wy)/111,lon-(ax+wx)/(111*Math.max(0.2,Math.cos(lat*Math.PI/180)))],
+      [lat-(ay-wy)/111,lon-(ax-wx)/(111*Math.max(0.2,Math.cos(lat*Math.PI/180)))],
+      [lat+(ay-wy)/111,lon+(ax-wx)/(111*Math.max(0.2,Math.cos(lat*Math.PI/180)))],
+      [lat+(ay+wy)/111,lon+(ax+wx)/(111*Math.max(0.2,Math.cos(lat*Math.PI/180)))]];
+    return corners;
   }
   if(!Number.isFinite(minor)||minor<=0)minor=Math.max(1,major*0.45);
   major=Math.min(35,Math.max(1.5,major));
@@ -125,7 +129,7 @@ function renderObjects(ts){
     const points=cellOutlinePoints(p);
     if(points.length<3)return;
     const outline=selected?"#ffffff":"#61b7e8";
-    const layer=L.polyline(points,{
+    const layer=L.polygon(points,{fillOpacity:0,
       color:outline,
       weight:selected?2.8:1.7,
       opacity:selected?.98:.86,
