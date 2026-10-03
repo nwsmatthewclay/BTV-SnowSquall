@@ -71,6 +71,14 @@ def build_live_feature_row(
         previous = flatten_environment(previous)
 
     row = {"timestamp": current.get("timestamp"), "track_id": current.get("track_id")}
+    for key in (
+        "environment_source",
+        "environment_status",
+        "environment_source_valid_time_utc",
+        "environment_age_minutes",
+        "environment_missing_fields",
+    ):
+        row[key] = current.get(key)
 
     # Keep the live adapter's motion vocabulary structurally identical to the
     # historical builder even when a given scan has no prior displacement or
