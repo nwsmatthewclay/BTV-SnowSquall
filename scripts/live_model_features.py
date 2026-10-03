@@ -89,6 +89,8 @@ def build_live_feature_row(
         "length_km",
         "width_km",
         "aspect_ratio",
+        "bbox_aspect_ratio",
+        "object_mode",
         "orientation_deg",
         "motion_dir_deg",
         "motion_direction_deg",
