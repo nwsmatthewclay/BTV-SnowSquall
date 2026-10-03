@@ -151,6 +151,7 @@ def enrich(
         except Exception as exc:
             row["environment_status"] = "unavailable"
             row["environment_error"] = f"{type(exc).__name__}: {exc}"
+            row.update(environment_contract_status({}))
             rows.append(row)
             continue
 
