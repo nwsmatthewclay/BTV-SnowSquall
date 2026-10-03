@@ -30,6 +30,21 @@ velocity_mean_kt,kinematics,float,Mean lowest-sweep radial velocity over candida
 velocity_std_kt,kinematics,float,Radial-velocity texture standard deviation,true,radar_available
 velocity_p90_abs_kt,kinematics,float,90th percentile absolute radial velocity,true,radar_available
 velocity_gradient_ktkm,kinematics,float,Mean radial-velocity spatial gradient magnitude,true,radar_available
+velocity_gradient_p90_ktkm,kinematics,float,90th percentile base radial-velocity gradient over candidate object,true,radar_available
+velocity_background_kt,kinematics,float,Median base radial velocity in local object background ring,true,radar_available
+velocity_contrast_kt,kinematics,float,Absolute object/background base radial-velocity contrast,true,radar_available
+velocity_rescue,kinematics,float,Flag that coherent base velocity contributed to candidate generation,true,radar_available
+base_reflectivity_mean_dbz,radar_context,float,Mean reflectivity over the full lowest-sweep radar analysis grid,true,radar_available
+base_reflectivity_max_dbz,radar_context,float,Maximum reflectivity over the full lowest-sweep radar analysis grid,true,radar_available
+base_reflectivity_p90_dbz,radar_context,float,90th percentile reflectivity over the full lowest-sweep radar analysis grid,true,radar_available
+base_reflectivity_valid_fraction,radar_context,float,Fraction of lowest-sweep radar grid with valid reflectivity,true,radar_available
+base_velocity_mean_kt,radar_context,float,Mean base radial velocity over the full lowest-sweep radar analysis grid,true,radar_available
+base_velocity_std_kt,radar_context,float,Standard deviation of base radial velocity over the full lowest-sweep radar analysis grid,true,radar_available
+base_velocity_p90_abs_kt,radar_context,float,90th percentile absolute base radial velocity over the full lowest-sweep radar analysis grid,true,radar_available
+base_velocity_valid_fraction,radar_context,float,Fraction of lowest-sweep radar grid with valid base velocity,true,radar_available
+scan_has_reflectivity,radar_context,boolean,Successful lowest-sweep reflectivity context available for scan,true,radar_available
+scan_has_base_velocity,radar_context,boolean,Successful lowest-sweep base velocity context available for scan,true,radar_available
+detected_object_count,radar_context,int,Number of non-context candidate objects detected on the scan,true,radar_available
 vertical_valid_points,vertical,int,Number of native radar profile points above reflectivity threshold,true,radar_available
 zdr_gradient_dbkm,dualpol,float,ZDR gradient,true,dualpol_era_dependent
 rhohv_mean,dualpol,float,Mean correlation coefficient,true,dualpol_era_dependent
