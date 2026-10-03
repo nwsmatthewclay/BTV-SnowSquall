@@ -155,9 +155,13 @@ def main():
                 obj_id=props.get("object_id")
                 if obj_id is None:
                     obj_id=props.get("track_id")
+                try:
+                    ts_key=pd.to_datetime(ts,utc=True).isoformat()
+                except Exception:
+                    ts_key=str(ts)
                 rp=props.get("research_probabilities") or {}
                 if rp:
-                    replay_probabilities[(str(props.get("radar_site")),str(obj_id),str(ts))]=rp
+                    replay_probabilities[(str(props.get("radar_site")),str(obj_id),ts_key)]=rp
                     replay_scored_rows += 1
 
     catalog=[]
@@ -173,7 +177,7 @@ def main():
             except Exception:
                 continue
             props=object_properties(row, research_probabilities)
-            replay_key=(str(row.get("radar_site")),str(row.get("object_id")),row["scan_time_utc"].isoformat())
+            replay_key=(str(row.get("radar_site")),str(row.get("object_id")),pd.to_datetime(row["scan_time_utc"],utc=True).isoformat())
             if replay_key in replay_probabilities:
                 props["research_probabilities"]=replay_probabilities[replay_key]
                 props["research_probability_source"]="historical_live_scorer"
