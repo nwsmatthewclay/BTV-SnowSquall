@@ -26,6 +26,11 @@ class ObjectDetectionConfig:
     split_merged: bool = True
     preserve_boundary_components: bool = True
     min_peak_separation_px: int = 8
+    # Secondary dynamical evidence. Thresholds are in knots after conversion
+    # from the native Level-II radial-velocity field.
+    velocity_rescue_reflectivity_dbz: float = 15.0
+    velocity_rescue_contrast_kt: float = 8.0
+    velocity_rescue_gradient_ktkm: float = 6.0
     # Velocity is secondary evidence. It may rescue a modest-reflectivity
     # enhancement only when the lowest-sweep radial-velocity field is coherent.
     velocity_rescue_reflectivity_dbz: float = 15.0
@@ -124,7 +129,42 @@ def detect_reflectivity_objects(reflectivity, config=ObjectDetectionConfig(), ve
     gradient = np.hypot(
         *np.gradient(work, 1.0, edge_order=1)
     )
-    if velocity_arr is not None:
+
+    # Base velocity is a secondary signal. Convert once to knots so all
+    # velocity thresholds and diagnostics use the same units as the model.
+    velocity_arr_kt = None
+    velocity_gradient = None
+    velocity_rescue = np.zeros_like(arr, dtype=bool)
+    if velocity is not None:
+        velocity_arr = np.asarray(velocity, dtype=float)
+        if velocity_arr.shape != arr.shape:
+            raise ValueError("velocity must have the same grid shape as reflectivity")
+        velocity_finite = np.isfinite(velocity_arr)
+        if velocity_finite.any():
+            velocity_arr_kt = velocity_arr * 1.94384449244
+            velocity_work = np.where(
+                velocity_finite,
+                velocity_arr_kt,
+                np.nanmedian(velocity_arr_kt[velocity_finite]),
+            )
+            velocity_work = ndimage.gaussian_filter(
+                velocity_work, sigma=config.smooth_sigma
+            )
+            velocity_gradient = np.hypot(
+                *np.gradient(velocity_work, 1.0, edge_order=1)
+            )
+            local_velocity = ndimage.median_filter(
+                velocity_work, size=5, mode="nearest"
+            )
+            velocity_contrast_map = np.abs(velocity_work - local_velocity)
+            velocity_rescue = (
+                finite
+                & (arr >= config.velocity_rescue_reflectivity_dbz)
+                & (velocity_contrast_map >= config.velocity_rescue_contrast_kt)
+                & (velocity_gradient >= config.velocity_rescue_gradient_ktkm)
+            )
+
+    if velocity_arr_kt is not None:
         mask = finite & (
             (work >= config.threshold_dbz)
             | velocity_rescue
@@ -218,6 +258,49 @@ def detect_reflectivity_objects(reflectivity, config=ObjectDetectionConfig(), ve
             )
             core_good = int(np.sum(valid_values >= config.core_threshold_dbz)) >= 2
 
+            velocity_values = (
+                velocity_arr_kt[piece]
+                if velocity_arr_kt is not None else np.asarray([], dtype=float)
+            )
+            velocity_values = velocity_values[np.isfinite(velocity_values)]
+            velocity_mean_kt = float(np.mean(velocity_values)) if velocity_values.size else np.nan
+            velocity_std_kt = float(np.std(velocity_values)) if velocity_values.size else np.nan
+            velocity_p90_abs_kt = (
+                float(np.percentile(np.abs(velocity_values), 90))
+                if velocity_values.size else np.nan
+            )
+            velocity_gradient_values = (
+                velocity_gradient[piece]
+                if velocity_gradient is not None else np.asarray([], dtype=float)
+            )
+            velocity_gradient_values = velocity_gradient_values[np.isfinite(velocity_gradient_values)]
+            velocity_gradient_p90_ktkm = (
+                float(np.percentile(velocity_gradient_values, 90))
+                if velocity_gradient_values.size else np.nan
+            )
+            velocity_background_kt = np.nan
+            velocity_contrast_kt = np.nan
+            if velocity_arr_kt is not None:
+                velocity_dilated = ndimage.binary_dilation(
+                    piece,
+                    iterations=max(1, int(config.background_ring_pixels)),
+                )
+                velocity_ring = (
+                    velocity_dilated & ~piece & np.isfinite(velocity_arr_kt)
+                )
+                velocity_ring_values = velocity_arr_kt[velocity_ring]
+                velocity_ring_values = velocity_ring_values[np.isfinite(velocity_ring_values)]
+                if velocity_ring_values.size and velocity_values.size:
+                    velocity_background_kt = float(np.median(velocity_ring_values))
+                    velocity_contrast_kt = float(
+                        abs(np.median(velocity_values) - velocity_background_kt)
+                    )
+            velocity_good = bool(
+                np.mean(velocity_rescue[piece]) >= 0.20
+                if velocity_arr_kt is not None and len(xx)
+                else False
+            )
+
             bbox_h = int(np.max(yy) - np.min(yy) + 1)
             bbox_w = int(np.max(xx) - np.min(xx) + 1)
             bbox_aspect_ratio = (
@@ -230,7 +313,9 @@ def detect_reflectivity_objects(reflectivity, config=ObjectDetectionConfig(), ve
             )
 
             # Candidate generation only: event truth remains downstream.
-            if not (gradient_good or contrast_good or core_good):
+            # Velocity may rescue modest reflectivity, but cannot create an
+            # object without at least a precipitation signal (>=15 dBZ).
+            if not (gradient_good or contrast_good or core_good or velocity_good):
                 continue
 
             objects.append({
@@ -247,6 +332,13 @@ def detect_reflectivity_objects(reflectivity, config=ObjectDetectionConfig(), ve
                 "reflectivity_contrast_db":contrast_db,
                 "bbox_aspect_ratio":float(bbox_aspect_ratio),
                 "object_mode":object_mode,
+                "velocity_mean_kt":velocity_mean_kt,
+                "velocity_std_kt":velocity_std_kt,
+                "velocity_p90_abs_kt":velocity_p90_abs_kt,
+                "velocity_gradient_p90_ktkm":velocity_gradient_p90_ktkm,
+                "velocity_background_kt":velocity_background_kt,
+                "velocity_contrast_kt":velocity_contrast_kt,
+                "velocity_rescue":velocity_good,
                 "touches_grid_edge":bool(yy.min()==0 or xx.min()==0 or yy.max()==arr.shape[0]-1 or xx.max()==arr.shape[1]-1),
                 "row_indices":yy.tolist(),
                 "column_indices":xx.tolist(),
