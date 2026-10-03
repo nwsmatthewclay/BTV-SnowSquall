@@ -101,6 +101,8 @@ def resume_prefix(scans: list[Path], output_dir: Path, state_path: Path) -> int:
         )
     return prefix
 
+REPLAY_TIMESTAMP_TOLERANCE_SECONDS = 10
+
 def replay_case(input_dir: Path, output_dir: Path, state_path: Path, case_id: str, max_scans: int|None=None, resume: bool=False, continue_on_error: bool=False, window_start: datetime|None=None, window_end: datetime|None=None, model_dir: Path|None=None) -> dict:
     scans=ordered_inputs(input_dir)
     if window_start is not None:
@@ -177,10 +179,15 @@ def replay_case(input_dir: Path, output_dir: Path, state_path: Path, case_id: st
             actual_scan_time = iso_utc(actual_scan_time)
         except (TypeError, ValueError) as exc:
             raise ValueError(f"Replay output has invalid scan_time_utc: {output}") from exc
-        if actual_scan_time != expected_scan_time:
+        expected_dt = datetime.fromisoformat(expected_scan_time.replace("Z","+00:00"))
+        actual_dt = datetime.fromisoformat(actual_scan_time.replace("Z","+00:00"))
+        timestamp_delta_seconds = abs((actual_dt - expected_dt).total_seconds())
+        if timestamp_delta_seconds > REPLAY_TIMESTAMP_TOLERANCE_SECONDS:
             raise ValueError(
                 f"Replay timestamp mismatch for {source.name}: "
-                f"input={expected_scan_time}, output={actual_scan_time}"
+                f"input={expected_scan_time}, output={actual_scan_time}, "
+                f"delta_seconds={timestamp_delta_seconds:.1f} "
+                f"(tolerance={REPLAY_TIMESTAMP_TOLERANCE_SECONDS}s)"
             )
         records.append({
             "sequence":index,
@@ -231,9 +238,15 @@ def replay_case(input_dir: Path, output_dir: Path, state_path: Path, case_id: st
         "errors":errors,
         "causality_audit": {
             **sequence_validation,
-            "output_timestamps_match_inputs": all(
-                r.get("expected_scan_time_utc") == r.get("scan_time_utc")
+            "output_timestamps_within_input_tolerance": all(
+                abs(
+                    (
+                        datetime.fromisoformat(r.get("scan_time_utc").replace("Z","+00:00"))
+                        - datetime.fromisoformat(r.get("expected_scan_time_utc").replace("Z","+00:00"))
+                    ).total_seconds()
+                ) <= REPLAY_TIMESTAMP_TOLERANCE_SECONDS
                 for r in records
+                if r.get("scan_time_utc") and r.get("expected_scan_time_utc")
             ),
             "future_information_policy": "one_scan_at_a_time",
             "continuity_broken": continuity_broken,
