@@ -13,7 +13,20 @@ from scripts.probability_postprocess import monotone_cumulative_probabilities
 
 HORIZONS = (15, 30, 45, 60)
 SITES = ("KCXX", "KTYX")
-MIN_FEATURE_COVERAGE = 0.80
+MIN_FEATURE_COVERAGE = 0.40
+MIN_INSTANTANEOUS_FEATURES = {
+    "max_reflectivity_dbz",
+    "mean_reflectivity_dbz",
+    "area_km2",
+    "length_km",
+    "width_km",
+    "core_pixel_count",
+    "bbox_aspect_ratio",
+    "reflectivity_gradient_p90_dbkm",
+    "gradient_fraction_above_5dbkm",
+    "background_reflectivity_dbz",
+    "reflectivity_contrast_db",
+}
 
 
 def read_json(path: Path, default):
@@ -106,9 +119,25 @@ def score_site(site: str, live_root: Path, model_root: Path) -> tuple[dict, list
             runtime = runtimes[horizon]
             coverage = feature_coverage(frame.tail(1), runtime.feature_columns)
             record["feature_coverage"][str(horizon)] = coverage
-            if coverage["fraction"] < MIN_FEATURE_COVERAGE:
-                record["score_errors"][str(horizon)] = "low_feature_coverage:{:.3f}".format(coverage["fraction"])
+            available_instantaneous = [
+                c for c in MIN_INSTANTANEOUS_FEATURES
+                if c in frame.columns and frame.tail(1)[c].notna().any()
+            ]
+            if (
+                coverage["fraction"] < MIN_FEATURE_COVERAGE
+                or len(available_instantaneous) < 6
+            ):
+                record["score_errors"][str(horizon)] = (
+                    "low_feature_coverage:{:.3f}".format(coverage["fraction"])
+                    if coverage["fraction"] < MIN_FEATURE_COVERAGE
+                    else "insufficient_instantaneous_object_features"
+                )
                 continue
+            record.setdefault("coverage_class", {})[str(horizon)] = (
+                "evolution_enhanced"
+                if coverage["fraction"] >= 0.70
+                else "initial_object_state"
+            )
             try:
                 score = runtime.score_candidate(frame.tail(1))
                 if score:
