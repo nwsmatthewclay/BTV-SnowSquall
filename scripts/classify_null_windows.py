@@ -26,13 +26,14 @@ def classify(objects: pd.DataFrame, manifest: pd.DataFrame | None = None) -> pd.
     d["core_pixel_count"] = pd.to_numeric(
         d.get("core_pixel_count"), errors="coerce"
     )
+    detected = d.loc[~d["context_only"].astype(bool)].copy()
     grouped = (
-        d.dropna(subset=["null_id"])
+        detected.dropna(subset=["null_id"])
         .groupby("null_id", dropna=False)
         .agg(
             radar_count=("radar_site", "nunique"),
-            object_records=("object_id", lambda s: int((~d.loc[s.index, "context_only"].astype(bool)).sum())),
-            unique_objects=("object_id", lambda s: int(d.loc[s.index].loc[~d.loc[s.index, "context_only"].astype(bool), "object_id"].nunique())),
+            object_records=("object_id", "count"),
+            unique_objects=("object_id", "nunique"),
             scan_count=("scan_time_utc", "nunique"),
             max_reflectivity_dbz=("max_reflectivity_dbz", "max"),
             max_core_pixels=("core_pixel_count", "max"),
