@@ -445,7 +445,15 @@ async function refresh(){
       degraded.map(x=>x.site+" "+(x.error?"unavailable":"stale")).join(", ")+" • "+allObjects+" current objects":
       "KCXX/KTYX current object feeds • "+allObjects+" candidate objects • live research shadow "+summary.reduce((n,x)=>n+(x.shadow?.scored_object_count||0),0)+" scored";
     document.getElementById("overallStatus").classList.toggle("degraded",degraded.length>0);
-    document.getElementById("subtitle").textContent="Last successful refresh: "+fmt(new Date().toISOString());
+    const latestRadarTime=summary.map(x=>x.last).filter(Boolean).sort().at(-1);
+    const latestRadarAge=latestRadarTime?ageMinutes(latestRadarTime):Infinity;
+    document.getElementById("subtitle").textContent=latestRadarTime
+      ?"Radar: "+fmt(latestRadarTime)+" • "+(Number.isFinite(latestRadarAge)?num(latestRadarAge,1)+" min old":"age unknown")
+      :"Radar time unavailable";
+    const footerTime=document.getElementById("footerRefreshTime");
+    if(footerTime)footerTime.textContent="Page "+fmt(new Date().toISOString());
+    const footerBtn=document.getElementById("footerRefreshBtn");
+    if(footerBtn)footerBtn.disabled=false;
   }catch(err){
     document.getElementById("overallTitle").textContent="Live feed unavailable";
     document.getElementById("overallText").textContent=String(err);
@@ -457,6 +465,8 @@ addRadarMarkers();
 const liveTrackToggle=document.getElementById("showAllLiveTracks");
 if(liveTrackToggle)liveTrackToggle.onchange=e=>{showAllLiveTracks=e.target.checked;renderMap(Object.values(datasets))};
 document.getElementById("refreshBtn").onclick=refresh;
+const footerRefreshBtn=document.getElementById("footerRefreshBtn");
+if(footerRefreshBtn)footerRefreshBtn.onclick=refresh;
 document.querySelectorAll(".display-btn").forEach(btn=>btn.onclick=()=>setRadarMode(btn.dataset.radarMode));
 refresh();
 refreshTimer=setInterval(refresh,60000);
