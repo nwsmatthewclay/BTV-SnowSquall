@@ -28,7 +28,7 @@ def test_live_product_marks_edge_objects(monkeypatch, tmp_path):
     )
     monkeypatch.setattr(
         "scripts.process_live_volume.detect_reflectivity_objects",
-        lambda data: [{
+        lambda data, velocity=None: [{
             "object_id": 1, "pixel_count": 4, "max_reflectivity_dbz": 30.0,
             "mean_reflectivity_dbz": 25.0, "core_pixel_count": 0,
             "row_centroid": 0.5, "column_centroid": 0.5,
