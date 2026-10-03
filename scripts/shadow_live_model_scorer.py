@@ -6,29 +6,16 @@ import json
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-from scripts.live_model_features import build_live_feature_frame, feature_coverage
+from scripts.live_model_features import build_live_feature_frame
 from snow_squall.environment_contract import assess_environment
+from scripts.model_scoring_contract import assess_model_input_readiness, MIN_FEATURE_COVERAGE
 from scripts.add_national_pretraining_features import augment as augment_national_pretraining
 from scripts.model_runtime import ModelRuntime
 from scripts.probability_postprocess import monotone_cumulative_probabilities
 
 HORIZONS = (15, 30, 45, 60)
 SITES = ("KCXX", "KTYX")
-MIN_FEATURE_COVERAGE = 0.80
 MAX_ENVIRONMENT_AGE_MINUTES = 90.0
-MIN_INSTANTANEOUS_FEATURES = {
-    "max_reflectivity_dbz",
-    "mean_reflectivity_dbz",
-    "area_km2",
-    "length_km",
-    "width_km",
-    "core_pixel_count",
-    "bbox_aspect_ratio",
-    "reflectivity_gradient_p90_dbkm",
-    "gradient_fraction_above_5dbkm",
-    "background_reflectivity_dbz",
-    "reflectivity_contrast_db",
-}
 
 
 def read_json(path: Path, default):
@@ -125,29 +112,16 @@ def score_site(site: str, live_root: Path, model_root: Path) -> tuple[dict, list
         }
         for horizon in HORIZONS:
             runtime = runtimes[horizon]
-            coverage = feature_coverage(frame.tail(1), runtime.feature_columns)
+            readiness = assess_model_input_readiness(
+                frame,
+                runtime.feature_columns,
+                environment_readiness,
+            )
+            coverage = readiness["feature_coverage"]
             record["feature_coverage"][str(horizon)] = coverage
-            available_instantaneous = [
-                c for c in MIN_INSTANTANEOUS_FEATURES
-                if c in frame.columns and frame.tail(1)[c].notna().any()
-            ]
-            if (
-                coverage["fraction"] < MIN_FEATURE_COVERAGE
-                or len(available_instantaneous) < 6
-            ):
-                reason = (
-                    "low_feature_coverage:{:.3f}".format(coverage["fraction"])
-                    if coverage["fraction"] < MIN_FEATURE_COVERAGE
-                    else "insufficient_instantaneous_object_features"
-                )
-                if not environment_readiness["ready"]:
-                    reason += ";environment_not_model_ready:" + ",".join(environment_readiness["reasons"])
-                record["score_errors"][str(horizon)] = reason
-                continue
-            if not environment_readiness["ready"]:
-                record["score_errors"][str(horizon)] = (
-                    "environment_not_model_ready:" + ",".join(environment_readiness["reasons"])
-                )
+            record.setdefault("model_input_readiness", {})[str(horizon)] = readiness
+            if not readiness["ready"]:
+                record["score_errors"][str(horizon)] = ";".join(readiness["reasons"])
                 continue
             record.setdefault("coverage_class", {})[str(horizon)] = (
                 "evolution_enhanced"
