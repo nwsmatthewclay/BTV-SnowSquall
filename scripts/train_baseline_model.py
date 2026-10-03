@@ -21,7 +21,15 @@ from sklearn.metrics import (
     roc_auc_score,
 )
 from sklearn.model_selection import LeaveOneGroupOut
-\nfrom scripts.audit_radar_environment_contract import (\n    ENVIRONMENT_REQUIRED_FIELDS,\n    BASE_REFLECTIVITY_FIELDS,\n    BASE_VELOCITY_FIELDS,\n    OBJECT_VELOCITY_FIELDS,\n)\n
+
+
+from scripts.audit_radar_environment_contract import (
+    ENVIRONMENT_REQUIRED_FIELDS,
+    BASE_REFLECTIVITY_FIELDS,
+    BASE_VELOCITY_FIELDS,
+    OBJECT_VELOCITY_FIELDS,
+)
+
 
 def class_balanced_weights(y):
     y = np.asarray(y, dtype=int)
