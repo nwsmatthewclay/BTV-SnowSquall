@@ -363,7 +363,16 @@ def detect_reflectivity_objects(reflectivity, config=ObjectDetectionConfig(), ve
             # Candidate generation only: event truth remains downstream.
             # Velocity may rescue modest reflectivity, but cannot create an
             # object without at least a precipitation signal (>=15 dBZ).
-            if not (gradient_good or contrast_good or core_good or velocity_good):
+            detection_evidence = []
+            if gradient_good:
+                detection_evidence.append("reflectivity_gradient")
+            if contrast_good:
+                detection_evidence.append("reflectivity_contrast")
+            if core_good:
+                detection_evidence.append("reflectivity_core")
+            if velocity_good:
+                detection_evidence.append("velocity_rescue")
+            if not detection_evidence:
                 continue
 
             core_fraction = float(np.sum(valid_values >= config.core_threshold_dbz)) / max(1, len(xx))
@@ -393,6 +402,7 @@ def detect_reflectivity_objects(reflectivity, config=ObjectDetectionConfig(), ve
                 "velocity_background_kt":velocity_background_kt,
                 "velocity_contrast_kt":velocity_contrast_kt,
                 "velocity_rescue":velocity_good,
+                "detection_evidence":detection_evidence,
                 "candidate_rank_score":rank_score,
                 "candidate_rank_tier":candidate_rank_tier(rank_score),
                 "touches_grid_edge":bool(yy.min()==0 or xx.min()==0 or yy.max()==arr.shape[0]-1 or xx.max()==arr.shape[1]-1),
