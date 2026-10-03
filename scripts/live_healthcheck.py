@@ -5,6 +5,11 @@ import argparse
 import json
 from datetime import datetime, timezone
 from pathlib import Path
+import sys
+
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "src"))
+from snow_squall.environment_contract import assess_environment
 
 
 SHADOW_HORIZONS = ("15", "30", "45", "60")
@@ -103,6 +108,22 @@ def healthcheck(state_path: Path, geojson_path: Path, max_age_minutes: float = 1
         "object_timestamps_coherent": object_timestamps_coherent,
         "fresh_within_threshold": age_minutes <= max_age_minutes,
     }
+    environment_ready_count = 0
+    environment_not_ready_count = 0
+    environment_reasons = {}
+    for feature in features:
+        props = feature.get("properties", {})
+        readiness = assess_environment(
+            props,
+            radar_time=props.get("timestamp") or metadata.get("scan_time_utc"),
+        )
+        if readiness["ready"]:
+            environment_ready_count += 1
+        else:
+            environment_not_ready_count += 1
+            for reason in readiness["reasons"]:
+                environment_reasons[reason] = environment_reasons.get(reason, 0) + 1
+
     healthy = all(checks.values())
 
     return {
@@ -115,6 +136,12 @@ def healthcheck(state_path: Path, geojson_path: Path, max_age_minutes: float = 1
         "object_count": len(features),
         "probability_status": metadata.get("probability_status"),
         "checks": checks,
+        "environment": {
+            "ready_objects": environment_ready_count,
+            "not_ready_objects": environment_not_ready_count,
+            "reasons": environment_reasons,
+            "max_age_minutes": 90.0,
+        },
     }
 
 
@@ -124,6 +151,7 @@ def main():
     parser.add_argument("--geojson", default="data/derived/live_objects.geojson")
     parser.add_argument("--max-age-minutes", type=float, default=15.0)
     parser.add_argument("--shadow-root", default=None, help="Optional directory containing KCXX_shadow.json and KTYX_shadow.json.")
+    parser.add_argument("--require-environment", action="store_true", help="Fail when any current object lacks the complete fresh environment contract.")
     args = parser.parse_args()
 
     report = healthcheck(
@@ -131,6 +159,11 @@ def main():
         Path(args.geojson),
         max_age_minutes=args.max_age_minutes,
     )
+    if args.require_environment and report.get("environment", {}).get("not_ready_objects", 0):
+        raise SystemExit(
+            "Live environment contract incomplete: "
+            + str(report["environment"])
+        )
     if args.shadow_root:
         try:
             report["shadow"] = audit_shadow_root(Path(args.shadow_root))
