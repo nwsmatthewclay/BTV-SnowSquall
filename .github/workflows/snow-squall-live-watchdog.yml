@@ -97,16 +97,20 @@ jobs:
           last_start="$(gh run list             --workflow "Snow Squall Live Object Publisher"             --branch main             --limit 1             --json startedAt             --jq '.[0].startedAt // ""')"
 
           if [ -n "$last_start" ]; then
-            python - "$last_start" <<'PY'
+            retry_allowed="$(python - "$last_start" <<'PY'
           import sys
           from datetime import datetime, timezone
           raw=sys.argv[1]
           started=datetime.fromisoformat(raw.replace("Z","+00:00")).astimezone(timezone.utc)
           age=(datetime.now(timezone.utc)-started).total_seconds()/60.0
+          print("yes" if age >= 10 else "no")
           if age < 10:
-              print(f"Last publisher started {age:.1f} min ago; allow the retry window to settle.")
-              raise SystemExit(2)
+              print(f"Last publisher started {age:.1f} min ago; allowing the current publisher time to settle.", file=sys.stderr)
           PY
+            )"
+            if [ "$retry_allowed" != "yes" ]; then
+              exit 0
+            fi
           fi
 
           echo "Stale live radar detected: $stale_sites"
