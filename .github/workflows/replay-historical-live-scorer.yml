@@ -41,7 +41,7 @@ jobs:
         run: |
           set -euo pipefail
           git fetch --no-tags origin gh-pages
-          git checkout origin/gh-pages -- data viewer_artifact app.js index.html style.css || true
+          git checkout origin/gh-pages -- data app.js index.html style.css || true
           test -d data/cases
 
       - name: Resolve latest successful candidate bundle
