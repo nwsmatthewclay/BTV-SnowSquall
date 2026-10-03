@@ -162,6 +162,7 @@ def audit(
             report["errors"].append(f"population_contract_incomplete:{population}")
 
     failed = d[~d["_radar_environment_contract_ok"]]
+    report["row_failures"] = int(len(failed))
     if not failed.empty:
         reasons = []
         for idx in failed.index:
