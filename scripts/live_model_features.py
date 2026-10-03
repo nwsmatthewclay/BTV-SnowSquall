@@ -217,6 +217,8 @@ def build_live_feature_row(
         mode = str(current.get("object_mode")).strip().lower()
         row["object_mode"] = mode or None
         row["is_band"] = 1.0 if mode == "band" else (0.0 if mode == "cell_cluster" else _number(current.get("is_band")))
+    elif current.get("is_band") is not None:
+        row["is_band"] = _number(current.get("is_band"))
 
     # Preserve legacy aliases used by replay/tests.
     row["reflectivity_max_dbz"] = row.get("max_reflectivity_dbz")
