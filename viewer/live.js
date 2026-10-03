@@ -77,12 +77,17 @@ function renderRadarMosaic(meta){
   const sources=document.getElementById("mosaicSources");
   const time=document.getElementById("mosaicTime");
   const modeLabel=document.getElementById("hudMode");
-  if(!meta||meta.status!=="ready"||!meta.bounds){
-    if(status)status.textContent="Local mosaic unavailable";
-    if(sources)sources.textContent="NOAA QC fallback";
-    if(time)time.textContent="Live NOAA feed";
+  const localAgeMinutes=meta?.updated_utc?ageMinutes(meta.updated_utc):Infinity;
+  const localStale=localAgeMinutes>10;
+  if(!meta||meta.status!=="ready"||!meta.bounds||localStale){
+    if(status)status.textContent=localStale?"Local mosaic stale • NOAA fallback":"Local mosaic unavailable";
+    if(sources)sources.textContent="NOAA QC • live";
+    if(time)time.textContent=localStale&&meta?.updated_utc
+      ?"Local "+fmt(meta.updated_utc)+" • NOAA fallback"
+      :"Live NOAA feed";
     if(modeLabel)modeLabel.textContent="NOAA QC FALLBACK";
     addMrmsFallback();
+    if(!hasInitialExtent&&meta?.bounds){map.fitBounds(meta.bounds,{padding:[25,25],maxZoom:8});hasInitialExtent=true;}
     return;
   }
 
@@ -125,7 +130,7 @@ function addMrmsFallback(){
   if(mrmsFallbackLayer)return;
   try{
     const url="https://mapservices.weather.noaa.gov/eventdriven/rest/services/radar/radar_base_reflectivity/MapServer/export";
-    const imageUrl=url+"?bbox=-76.9075,41.861,-70.3925,46.3983&bboxSR=4326&imageSR=4326&size=1400,900&format=png32&transparent=true&f=image";
+    const imageUrl=url+"?bbox=-76.9075,41.861,-70.3925,46.3983&bboxSR=4326&imageSR=4326&size=1400,900&format=png32&transparent=true&f=image&cb="+Date.now();
     mrmsFallbackLayer=L.imageOverlay(imageUrl,[[41.861,-76.908],[46.398,-70.392]],{
       pane:"radarMosaicPane",opacity:.62,interactive:false,crossOrigin:true
     }).addTo(radarMosaicLayer);
