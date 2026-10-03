@@ -128,6 +128,11 @@ jobs:
           print("null_groups=",d["null_id"].nunique() if "null_id" in d.columns else 0)
           PY
 
+      - name: Enforce radar + environment training contract
+        run: |
+          set -euo pipefail
+          python scripts/audit_radar_environment_contract.py             data/derived/snow_squall_model_features_cumulative_prior.csv             --output data/derived/snow_squall_prior_radar_environment_contract_audit.json
+
       - name: Stage national pretraining models
         run: |
           set -euo pipefail
@@ -223,5 +228,7 @@ jobs:
             data/derived/snow_squall_candidate_refresh_summary.json
             data/derived/snow_squall_national_pretraining_feature_summary_refresh.json
             data/derived/snow_squall_live_model_compatibility_refresh.json
+            data/derived/snow_squall_prior_radar_environment_contract_audit.json
             data/derived/snow_squall_model_features_cumulative.csv
+            data/derived/snow_squall_radar_environment_contract_audit.json
             data/derived/snow_squall_model_features_expanded.schema.json
