@@ -66,6 +66,11 @@ def object_geometry(mask, lat, lon, spacing_km=1.0):
     geom = unary_union(cells).buffer(0)
     if geom.is_empty:
         return None, np.nan, np.nan, np.nan
+    if geom.geom_type != "Polygon":
+        polygons = [part for part in getattr(geom, "geoms", ()) if part.geom_type == "Polygon"]
+        if not polygons:
+            return None, np.nan, np.nan, np.nan
+        geom = max(polygons, key=lambda part: part.area)
 
     area_km2 = float(len(xx) * spacing_km * spacing_km)
     minx, miny, maxx, maxy = geom.bounds
@@ -375,6 +380,8 @@ def _process_radar_files(radar: str, files: list[Path]):
                 "velocity_background_kt": obj.get("velocity_background_kt"),
                 "velocity_contrast_kt": obj.get("velocity_contrast_kt"),
                 "velocity_rescue": obj.get("velocity_rescue"),
+                "candidate_rank_score": obj.get("candidate_rank_score"),
+                "candidate_rank_tier": obj.get("candidate_rank_tier"),
                 "track_association_status": obj.get("track_association_status"),
                 "track_association_distance_px": obj.get("track_association_distance_px"),
                 "track_association_gate_px": obj.get("track_association_gate_px"),
