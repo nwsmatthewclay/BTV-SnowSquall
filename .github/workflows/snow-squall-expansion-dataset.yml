@@ -419,7 +419,7 @@ jobs:
             -f unverified_offset="$next_review" \
             -f max_official="$next_official_size" \
             -f max_unverified="$next_review_size" \
-            -f source_unified_ledger_run_id="$source_unified_run"
+            -f source_unified_ledger_run_id="$source_unified_run" \
             -f source_expansion_run_id="$source_expansion_run"
           echo "NEXT HISTORICAL BATCH DISPATCHED: official=$next_official review=$next_review size=$next_official_size/$next_review_size unified=$source_unified_run expansion=$source_expansion_run"
 
