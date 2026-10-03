@@ -25,14 +25,10 @@ class ObjectDetectionConfig:
     fill_holes: bool = True
     split_merged: bool = True
     preserve_boundary_components: bool = True
+    max_boundary_pixels: int = 1200
     min_peak_separation_px: int = 8
     # Secondary dynamical evidence. Thresholds are in knots after conversion
     # from the native Level-II radial-velocity field.
-    velocity_rescue_reflectivity_dbz: float = 15.0
-    velocity_rescue_contrast_kt: float = 8.0
-    velocity_rescue_gradient_ktkm: float = 6.0
-    # Velocity is secondary evidence. It may rescue a modest-reflectivity
-    # enhancement only when the lowest-sweep radial-velocity field is coherent.
     velocity_rescue_reflectivity_dbz: float = 15.0
     velocity_rescue_contrast_kt: float = 8.0
     velocity_rescue_gradient_ktkm: float = 6.0
@@ -101,13 +97,47 @@ def _core_seed_split(component, field, config):
         axis=1,
     )
     pieces = []
-    for seed_index in range(len(seeds)):
+    for seed_index in range(len(selected)):
         piece = np.zeros_like(component)
         select = nearest == seed_index
         piece[yy[select], xx[select]] = True
         if int(piece.sum()) >= config.min_pixels:
             pieces.append(piece)
     return pieces or [component]
+
+
+def _clip01(value, low, high):
+    if value is None or not np.isfinite(value) or high <= low:
+        return None
+    return float(np.clip((float(value) - low) / (high - low), 0.0, 1.0))
+
+
+def candidate_rank_score(max_reflectivity_dbz, gradient_p90_dbkm, reflectivity_contrast_db, core_fraction, velocity_contrast_kt=None, velocity_gradient_p90_ktkm=None):
+    """Deterministic 0–100 detection-quality triage score, not a probability."""
+    components = [
+        (_clip01(max_reflectivity_dbz, 20.0, 45.0), 30.0),
+        (_clip01(gradient_p90_dbkm, 5.0, 12.0), 20.0),
+        (_clip01(reflectivity_contrast_db, 3.0, 10.0), 20.0),
+        (_clip01(core_fraction, 0.0, 0.25), 15.0),
+    ]
+    if velocity_contrast_kt is not None and velocity_gradient_p90_ktkm is not None:
+        vc = _clip01(velocity_contrast_kt, 8.0, 20.0)
+        vg = _clip01(velocity_gradient_p90_ktkm, 6.0, 14.0)
+        if vc is not None and vg is not None:
+            components.append((0.5 * vc + 0.5 * vg, 15.0))
+    usable = [(v,w) for v,w in components if v is not None]
+    if not usable:
+        return 0.0
+    return float(100.0 * sum(v*w for v,w in usable) / sum(w for _,w in usable))
+
+
+def candidate_rank_tier(score):
+    score = float(score)
+    if score >= 80: return "priority"
+    if score >= 65: return "strong"
+    if score >= 50: return "candidate"
+    if score >= 35: return "weak"
+    return "low"
 
 
 def detect_reflectivity_objects(reflectivity, config=ObjectDetectionConfig(), velocity=None):
@@ -192,7 +222,14 @@ def detect_reflectivity_objects(reflectivity, config=ObjectDetectionConfig(), ve
             edge_ids.discard(0)
             for raw_id in edge_ids:
                 component = raw_labels == raw_id
-                if int(component.sum()) >= config.min_pixels:
+                pixels = int(component.sum())
+                if pixels < config.min_pixels:
+                    continue
+                if pixels <= config.max_boundary_pixels:
+                    boundary |= component
+                    continue
+                core_count = int(np.sum(arr[component] >= config.core_threshold_dbz))
+                if core_count >= 4:
                     boundary |= component
         mask |= boundary
 
@@ -318,6 +355,12 @@ def detect_reflectivity_objects(reflectivity, config=ObjectDetectionConfig(), ve
             if not (gradient_good or contrast_good or core_good or velocity_good):
                 continue
 
+            core_fraction = float(np.sum(valid_values >= config.core_threshold_dbz)) / max(1, len(xx))
+            rank_score = candidate_rank_score(
+                float(np.nanmax(valid_values)), gradient_p90, contrast_db, core_fraction,
+                velocity_contrast_kt if np.isfinite(velocity_contrast_kt) else None,
+                velocity_gradient_p90_ktkm if np.isfinite(velocity_gradient_p90_ktkm) else None,
+            )
             objects.append({
                 "object_id":next_id,
                 "pixel_count":int(len(xx)),
@@ -339,6 +382,8 @@ def detect_reflectivity_objects(reflectivity, config=ObjectDetectionConfig(), ve
                 "velocity_background_kt":velocity_background_kt,
                 "velocity_contrast_kt":velocity_contrast_kt,
                 "velocity_rescue":velocity_good,
+                "candidate_rank_score":rank_score,
+                "candidate_rank_tier":candidate_rank_tier(rank_score),
                 "touches_grid_edge":bool(yy.min()==0 or xx.min()==0 or yy.max()==arr.shape[0]-1 or xx.max()==arr.shape[1]-1),
                 "row_indices":yy.tolist(),
                 "column_indices":xx.tolist(),
