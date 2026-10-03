@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from processing.environment import acquire_for_radar_time, extract_features, environment_cache_key
+from processing.environment import acquire_for_radar_time, extract_features, environment_cache_key, environment_contract_status
 
 
 def parse_time(value):
@@ -109,6 +109,7 @@ def enrich(
         lon = obj.get("centroid_lon")
         if pd.isna(lat) or pd.isna(lon):
             row["environment_status"] = "unavailable"
+            row.update(environment_contract_status({}))
             rows.append(row)
             continue
 
@@ -133,6 +134,7 @@ def enrich(
                 f"{hour_key}:error",
                 "no acceptable historical analysis found within age limit",
             )
+            row.update(environment_contract_status({}))
             rows.append(row)
             continue
 
@@ -158,8 +160,10 @@ def enrich(
         row["environment_match_method"] = "latest_valid_analysis_at_or_before_scan"
         row["environment_time_delta_policy"] = "scan_time_minus_source_valid_time"
         row["environment_age_minutes"] = environment.get("age_minutes")
-        for key, value in (environment.get("fields") or {}).items():
+        env_fields = environment.get("fields") or {}
+        for key, value in env_fields.items():
             row[key] = value
+        row.update(environment_contract_status(env_fields))
 
         row["label_status"] = "historical_case_context_only"
         row["snow_squall_outcome"] = None
@@ -174,6 +178,18 @@ def enrich(
         result["environment_error"] = pd.NA
     if "environment_status" not in result.columns:
         result["environment_status"] = "unavailable"
+    for _field in (
+        "environment_required_field_count",
+        "environment_present_field_count",
+        "environment_missing_fields",
+        "environment_contract_ok",
+    ):
+        if _field not in result.columns:
+            result[_field] = (
+                0 if _field.endswith("_count") else (
+                    False if _field.endswith("_ok") else ""
+                )
+            )
     output_csv.parent.mkdir(parents=True, exist_ok=True)
     result.to_csv(output_csv, index=False)
 
