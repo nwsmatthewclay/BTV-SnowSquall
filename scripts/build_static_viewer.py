@@ -100,6 +100,7 @@ def main():
     parser.add_argument("--frames-root",default=None)
     parser.add_argument("--model-summary",default=None,help="Optional baseline_horizon_summary.json to embed as research-only viewer diagnostics.")
     parser.add_argument("--model-root",default=None,help="Optional root containing baseline_model_*m/oof_predictions.csv files for historical research-probability overlays.")
+    parser.add_argument("--replay-dir",default=None,help="Optional historical replay directory containing GeoJSON outputs scored through the live model processor.")
     args=parser.parse_args()
 
     objects=pd.read_csv(args.objects)
@@ -137,6 +138,28 @@ def main():
             model_summary=json.loads(model_path.read_text(encoding="utf-8"))
             (data_dir/"model_summary.json").write_text(json.dumps(model_summary,indent=2)+"\n",encoding="utf-8")
 
+    replay_probabilities={}
+    replay_scored_rows=0
+    if args.replay_dir:
+        replay_root=Path(args.replay_dir)
+        for path in sorted(replay_root.glob("*.geojson")):
+            try:
+                payload=json.loads(path.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError):
+                continue
+            for feature in payload.get("features",[]) or []:
+                props=feature.get("properties") or {}
+                ts=props.get("timestamp") or payload.get("metadata",{}).get("scan_time_utc")
+                if not ts:
+                    continue
+                obj_id=props.get("object_id")
+                if obj_id is None:
+                    obj_id=props.get("track_id")
+                rp=props.get("research_probabilities") or {}
+                if rp:
+                    replay_probabilities[(str(props.get("radar_site")),str(obj_id),str(ts))]=rp
+                    replay_scored_rows += 1
+
     catalog=[]
     for (case_id,radar_site),group in objects.groupby(["case_id","radar_site"],sort=True):
         group=group.sort_values(["scan_time_utc","object_id"])
@@ -149,7 +172,13 @@ def main():
                 geom=mapping(wkt.loads(geom_text))
             except Exception:
                 continue
-            features.append({"type":"Feature","geometry":geom,"properties":object_properties(row, research_probabilities)})
+            props=object_properties(row, research_probabilities)
+            replay_key=(str(row.get("radar_site")),str(row.get("object_id")),row["scan_time_utc"].isoformat())
+            if replay_key in replay_probabilities:
+                props["research_probabilities"]=replay_probabilities[replay_key]
+                props["research_probability_source"]="historical_live_scorer"
+                props["research_probability_policy"]="same_live_processor_causal_replay"
+            features.append({"type":"Feature","geometry":geom,"properties":props})
         if not features:
             continue
 
@@ -192,14 +221,15 @@ def main():
         "source_object_rows": int(len(objects)),
         "version":"0.3-pilot",
         "data_status":"research_pilot",
-        "probability_status":"not_scored",
+        "probability_status":"research_candidate_scored" if replay_scored_rows else "not_scored",
         "model_diagnostics_status": "research_only" if model_summary else "not_available",
         "model_summary_file": "model_summary.json" if model_summary else None,
         "truth_note":"Historical case context is not final object-level event truth.",
         "future_information_policy":"Viewer may display historical outcome context, but model predictors remain separate from future labels.",
         "radar_note":"Radar imagery is reconstructed from archived Level-II reflectivity and is shown as a historical diagnostic background.",
         "model_summary": model_summary,
-        "research_probability_status": "oof_research_only" if research_probabilities else "not_available",
+        "research_probability_status": "historical_live_scorer_replay" if replay_scored_rows else ("oof_research_only" if research_probabilities else "not_available"),
+        "historical_live_scorer_scored_object_scans": int(replay_scored_rows),
         "cases":catalog,
     },indent=2),encoding="utf-8")
     print(f"Built viewer package: {len(catalog)} case/radar datasets; {len(objects)} source object rows")
