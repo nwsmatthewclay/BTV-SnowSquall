@@ -127,9 +127,6 @@ def score_site(site: str, live_root: Path, model_root: Path) -> tuple[dict, list
             runtime = runtimes[horizon]
             coverage = feature_coverage(frame.tail(1), runtime.feature_columns)
             record["feature_coverage"][str(horizon)] = coverage
-            if not environment_readiness["ready"]:
-                record["score_errors"][str(horizon)] = "environment_not_model_ready:" + ",".join(environment_readiness["reasons"])
-                continue
             available_instantaneous = [
                 c for c in MIN_INSTANTANEOUS_FEATURES
                 if c in frame.columns and frame.tail(1)[c].notna().any()
@@ -138,10 +135,18 @@ def score_site(site: str, live_root: Path, model_root: Path) -> tuple[dict, list
                 coverage["fraction"] < MIN_FEATURE_COVERAGE
                 or len(available_instantaneous) < 6
             ):
-                record["score_errors"][str(horizon)] = (
+                reason = (
                     "low_feature_coverage:{:.3f}".format(coverage["fraction"])
                     if coverage["fraction"] < MIN_FEATURE_COVERAGE
                     else "insufficient_instantaneous_object_features"
+                )
+                if not environment_readiness["ready"]:
+                    reason += ";environment_not_model_ready:" + ",".join(environment_readiness["reasons"])
+                record["score_errors"][str(horizon)] = reason
+                continue
+            if not environment_readiness["ready"]:
+                record["score_errors"][str(horizon)] = (
+                    "environment_not_model_ready:" + ",".join(environment_readiness["reasons"])
                 )
                 continue
             record.setdefault("coverage_class", {})[str(horizon)] = (
