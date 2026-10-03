@@ -91,6 +91,15 @@ function cellOutlinePoints(p){
     const area=Number(p.area_km2);
     major=Number.isFinite(area)&&area>0?Math.max(1.5,Math.sqrt(area*1.8)):2;
   }
+  if(Number(p.is_band)===1 || p.object_mode==="band"){
+    major=Math.min(45,Math.max(3,major));
+    const angle=(Number(p.orientation_deg)||0)*Math.PI/180;
+    const east=(major/2)*Math.sin(angle);
+    const north=(major/2)*Math.cos(angle);
+    const dLat=north/111;
+    const dLon=east/(111*Math.max(0.2,Math.cos(lat*Math.PI/180)));
+    return [[lat-dLat,lon-dLon],[lat+dLat,lon+dLon]];
+  }
   if(!Number.isFinite(minor)||minor<=0)minor=Math.max(1,major*0.45);
   major=Math.min(35,Math.max(1.5,major));
   minor=Math.min(20,Math.max(0.8,minor));
