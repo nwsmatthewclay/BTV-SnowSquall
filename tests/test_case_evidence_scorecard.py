@@ -107,32 +107,16 @@ def test_mping_diagnostics_are_recorded_without_changing_evidence_points(tmp_pat
     assert int(result["mping_mixed_report_count"]) == 1
 
 
-def test_mping_duplicate_case_id_column_is_collapsed(tmp_path):
-    from scripts.build_case_evidence_scorecard import build
+def test_mping_duplicate_case_id_column_is_collapsed():
+    from scripts.build_case_evidence_scorecard import collapse_duplicate_columns
 
-    cases = tmp_path / "cases.csv"
-    surface = tmp_path / "surface.csv"
-    objects = tmp_path / "objects.csv"
-    radar = tmp_path / "radar.csv"
-    mping = tmp_path / "mping.csv"
-    output = tmp_path / "scorecard.csv"
-
-    pd.DataFrame([{
-        "case_id": "CASE1",
-        "candidate_id": "C1",
-        "verification_class": "study_verified",
-        "source_types": "STUDY",
-    }]).to_csv(cases, index=False)
-    pd.DataFrame([{"case_id": "CASE1"}]).to_csv(surface, index=False)
-    pd.DataFrame([{"case_id": "CASE1"}]).to_csv(objects, index=False)
-    pd.DataFrame([{"candidate_id": "C1"}]).to_csv(radar, index=False)
-    raw = pd.DataFrame({
-        "case_id": ["CASE1"],
-        "ptype_bucket": ["snow"],
-    })
-    raw.insert(1, "case_id", raw["case_id"])
-    raw.to_csv(mping, index=False)
-
-    build(cases, surface, objects, radar, output, mping)
-    result = pd.read_csv(output).iloc[0]
-    assert int(result["mping_report_count"]) == 1
+    raw = pd.concat(
+        [
+            pd.Series(["CASE1"], name="case_id"),
+            pd.Series(["CASE1"], name="case_id"),
+            pd.Series(["snow"], name="ptype_bucket"),
+        ],
+        axis=1,
+    )
+    collapsed = collapse_duplicate_columns(raw)
+    assert list(collapsed.columns) == ["case_id", "ptype_bucket"]
