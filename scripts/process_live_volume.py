@@ -26,6 +26,7 @@ from processing.rap_features import extract_features
 from processing.radar_sites import apply_radar_origin, radar_origin_for_site
 from scripts.live_model_features import build_live_feature_frame
 from scripts.model_runtime import ModelRuntime
+from scripts.model_scoring_contract import assess_model_input_readiness
 from snow_squall.environment_contract import assess_environment
 
 
@@ -567,6 +568,7 @@ def process_volume(
             "environment_model_ready": bool(environment_readiness["ready"]),
             "environment_missing_fields": environment_readiness["missing_fields"],
             "environment_age_minutes": environment_readiness["age_minutes"],
+            "environment_readiness": environment_readiness,
             **environment_fields,
             "data_quality": "degraded" if obj.get("touches_grid_edge", False) else "good",
             "model_version": "live-object-foundation-v2",
@@ -589,6 +591,7 @@ def process_volume(
                 model_runtimes[single.horizon_minutes] = single
     model_scored = False
     model_errors = {}
+    model_gate_blocks = {}
     probability_mode = "none"
     model_versions = {}
     raw_probability_by_feature = {}
@@ -619,6 +622,16 @@ def process_volume(
                     current_row.get("timestamp"),
                 )
                 frame = build_live_feature_frame(history + [current_row], track_id)
+                environment_readiness = current_row.get("environment_readiness") or {}
+                readiness = assess_model_input_readiness(
+                    frame,
+                    runtime.feature_columns,
+                    environment_readiness,
+                )
+                feature.setdefault("model_input_readiness", {})[str(horizon)] = readiness
+                if not readiness["ready"]:
+                    model_gate_blocks[f"{track_id}:{horizon}"] = ";".join(readiness["reasons"])
+                    continue
                 try:
                     scores, score_mode = score_with_runtime(frame.tail(1), runtime, research_replay=research_replay)
                     if score_mode != "candidate_blocked":
@@ -686,6 +699,7 @@ def process_volume(
             },
             "model_horizons_minutes": sorted(int(h) for h in model_runtimes),
             "model_errors": model_errors,
+            "model_gate_blocks": model_gate_blocks,
         },
     }
 
