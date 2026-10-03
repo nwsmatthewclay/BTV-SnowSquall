@@ -258,6 +258,8 @@ def _process_radar_files(radar: str, files: list[Path]):
                 "gradient_fraction_above_5dbkm": obj.get("gradient_fraction_above_5dbkm"),
                 "background_reflectivity_dbz": obj.get("background_reflectivity_dbz"),
                 "reflectivity_contrast_db": obj.get("reflectivity_contrast_db"),
+                "bbox_aspect_ratio": obj.get("bbox_aspect_ratio", obj.get("aspect_ratio")),
+                "object_mode": obj.get("object_mode"),
                 "track_association_status": obj.get("track_association_status"),
                 "track_association_distance_px": obj.get("track_association_distance_px"),
                 "track_association_gate_px": obj.get("track_association_gate_px"),
