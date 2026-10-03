@@ -600,9 +600,12 @@ def process_volume(
             ),
             "environment_source": "RAP",
             "radar_origin": list(radar_origin) if radar_origin is not None else None,
-            "model_version": model_runtime.metadata.get("model_version") if model_runtime.model is not None else None,
-            "model_target": model_runtime.metadata.get("target") if model_runtime.model is not None else None,
-            "model_horizon_minutes": model_runtime.horizon_minutes if model_runtime.model is not None else None,
+            "model_versions": model_versions,
+            "model_targets": {
+                str(h): runtime.metadata.get("target")
+                for h, runtime in model_runtimes.items()
+            },
+            "model_horizons_minutes": sorted(int(h) for h in model_runtimes),
             "model_errors": model_errors,
         },
     }
