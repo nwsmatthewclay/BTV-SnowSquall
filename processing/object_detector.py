@@ -124,7 +124,13 @@ def detect_reflectivity_objects(reflectivity, config=ObjectDetectionConfig(), ve
     gradient = np.hypot(
         *np.gradient(work, 1.0, edge_order=1)
     )
-    mask=finite&(work>=config.threshold_dbz)
+    if velocity_arr is not None:
+        mask = finite & (
+            (work >= config.threshold_dbz)
+            | velocity_rescue
+        )
+    else:
+        mask = finite & (work >= config.threshold_dbz)
     structure=ndimage.generate_binary_structure(2,config.connectivity)
     if config.close_iterations:
         mask=ndimage.binary_closing(mask,structure=structure,iterations=config.close_iterations)
