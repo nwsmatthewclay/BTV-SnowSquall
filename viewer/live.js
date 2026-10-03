@@ -450,6 +450,15 @@ async function refresh(){
     document.getElementById("subtitle").textContent=latestRadarTime
       ?"Radar: "+fmt(latestRadarTime)+" • "+(Number.isFinite(latestRadarAge)?num(latestRadarAge,1)+" min old":"age unknown")
       :"Radar time unavailable";
+    const timelineTime=document.getElementById("timelineTime");
+    if(timelineTime)timelineTime.textContent=latestRadarTime
+      ?"Latest radar: "+fmt(latestRadarTime)+" • "+(Number.isFinite(latestRadarAge)?num(latestRadarAge,1)+" min old":"age unknown")
+      :"Latest radar: —";
+    const liveSlider=document.getElementById("slider");
+    if(liveSlider){
+      liveSlider.max="30";
+      liveSlider.value=String(Math.min(30,Number.isFinite(latestRadarAge)?Math.max(0,latestRadarAge):30));
+    }
     const footerTime=document.getElementById("footerRefreshTime");
     if(footerTime)footerTime.textContent="Page "+fmt(new Date().toISOString());
     const footerBtn=document.getElementById("footerRefreshBtn");
