@@ -37,10 +37,17 @@ def score_site(site: str, live_root: Path, model_root: Path) -> tuple[dict, list
     runtimes = {}
     model_info = {}
     for horizon in HORIZONS:
-        ensemble_dir = model_root / f"candidate_ensemble_expansion_{horizon}m"
-        baseline_dir = model_root / f"baseline_expansion_{horizon}m"
-        directory = ensemble_dir if (ensemble_dir / "metrics.json").exists() else baseline_dir
-        runtime = ModelRuntime.load(directory)
+        candidates = [
+            model_root / f"candidate_ensemble_refresh_{horizon}m",
+            model_root / f"candidate_ensemble_expansion_{horizon}m",
+            model_root / f"baseline_refresh_{horizon}m",
+            model_root / f"baseline_expansion_{horizon}m",
+        ]
+        directory = next(
+            (candidate for candidate in candidates if (candidate / "metrics.json").exists()),
+            None,
+        )
+        runtime = ModelRuntime.load(directory) if directory is not None else ModelRuntime()
         runtimes[horizon] = runtime
         model_info[horizon] = {
             "model_present": runtime.model is not None,
@@ -48,8 +55,12 @@ def score_site(site: str, live_root: Path, model_root: Path) -> tuple[dict, list
             "operational_release_status": runtime.metadata.get("operational_release_status"),
             "predictor_count": len(runtime.feature_columns),
             "model_family": runtime.metadata.get("estimator_family") or runtime.metadata.get("model_version"),
-            "selected_artifact": directory.name,
-            "bundle_family": "candidate_soft_vote_ensemble" if directory.name.startswith("candidate_ensemble_expansion_") else "baseline_hist_gradient_boosting",
+            "selected_artifact": directory.name if directory is not None else None,
+            "bundle_family": (
+                "candidate_soft_vote_ensemble"
+                if directory is not None and directory.name.startswith("candidate_ensemble_")
+                else ("baseline_hist_gradient_boosting" if directory is not None else None)
+            ),
         }
 
     for feature in current_features:
