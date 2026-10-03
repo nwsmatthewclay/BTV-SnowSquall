@@ -163,6 +163,11 @@ jobs:
           print("augmented_rows=",len(d),"augmented_columns=",len(d.columns))
           PY
 
+      - name: Enforce augmented radar + environment training contract
+        run: |
+          set -euo pipefail
+          python scripts/audit_radar_environment_contract.py             data/derived/snow_squall_model_features_cumulative.csv             --output data/derived/snow_squall_radar_environment_contract_audit.json
+
       - name: Train refreshed four-horizon baseline and ensemble candidates
         run: |
           set -euo pipefail
