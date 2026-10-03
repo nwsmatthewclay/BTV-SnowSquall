@@ -19,13 +19,12 @@ def classify(objects: pd.DataFrame, manifest: pd.DataFrame | None = None) -> pd.
 
     d = objects.copy()
     d["scan_time_utc"] = pd.to_datetime(d["scan_time_utc"], utc=True, errors="coerce")
-    d["context_only"] = pd.to_numeric(d.get("context_only", 0), errors="coerce").fillna(0).astype(int)
-    d["max_reflectivity_dbz"] = pd.to_numeric(
-        d.get("max_reflectivity_dbz"), errors="coerce"
-    )
-    d["core_pixel_count"] = pd.to_numeric(
-        d.get("core_pixel_count"), errors="coerce"
-    )
+    context_only = d["context_only"] if "context_only" in d.columns else pd.Series(0, index=d.index)
+    d["context_only"] = pd.to_numeric(context_only, errors="coerce").fillna(0).astype(int)
+    max_reflectivity = d["max_reflectivity_dbz"] if "max_reflectivity_dbz" in d.columns else pd.Series(pd.NA, index=d.index)
+    d["max_reflectivity_dbz"] = pd.to_numeric(max_reflectivity, errors="coerce")
+    core_pixels = d["core_pixel_count"] if "core_pixel_count" in d.columns else pd.Series(pd.NA, index=d.index)
+    d["core_pixel_count"] = pd.to_numeric(core_pixels, errors="coerce")
     detected = d.loc[~d["context_only"].astype(bool)].copy()
     grouped = (
         detected.dropna(subset=["null_id"])
