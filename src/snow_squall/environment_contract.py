@@ -74,7 +74,10 @@ def assess_environment(
         age = float(age) if age is not None else None
     except (TypeError, ValueError):
         age = None
-    if age is None and source_time is not None and reference_time is not None:
+    if source_time is not None and reference_time is not None:
+        # Recompute from the actual radar timestamp whenever available. A
+        # persisted age is only a fallback for legacy payloads without source
+        # and reference timestamps.
         age = (reference_time - source_time).total_seconds() / 60.0
 
     reasons = []
