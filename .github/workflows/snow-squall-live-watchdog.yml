@@ -1,0 +1,121 @@
+name: Snow Squall Live Radar Watchdog
+
+on:
+  schedule:
+    - cron: "2-59/5 * * * *"
+  workflow_dispatch:
+  push:
+    paths:
+      - ".github/workflows/snow-squall-live-watchdog.yml"
+
+permissions:
+  actions: write
+  contents: read
+
+concurrency:
+  group: snow-squall-live-watchdog
+  cancel-in-progress: false
+
+jobs:
+  watchdog:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      PYTHONUNBUFFERED: "1"
+
+    steps:
+      - name: Check out default branch
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 1
+
+      - name: Inspect live radar freshness
+        id: health
+        run: |
+          set -euo pipefail
+          rm -rf live_data
+          mkdir -p live_data
+          git fetch --no-tags origin snow-squall-live-data
+          git archive origin/snow-squall-live-data viewer/data/live | tar -x -C live_data
+
+          python - <<'PY'
+          import json
+          from datetime import datetime, timezone
+          from pathlib import Path
+
+          now = datetime.now(timezone.utc)
+          rows = []
+          for site in ("KCXX", "KTYX"):
+              path = Path("live_data/viewer/data/live") / f"{site}_objects.geojson"
+              scan = None
+              if path.exists():
+                  try:
+                      data = json.loads(path.read_text(encoding="utf-8"))
+                      raw = (data.get("metadata") or {}).get("scan_time_utc")
+                      if raw:
+                          scan = datetime.fromisoformat(
+                              str(raw).replace("Z", "+00:00")
+                          ).astimezone(timezone.utc)
+                  except (OSError, TypeError, ValueError, json.JSONDecodeError):
+                      scan = None
+              age = ((now - scan).total_seconds() / 60.0) if scan else float("inf")
+              rows.append((site, scan, age))
+              print(f"{site}: {scan.isoformat() if scan else 'MISSING'} age={age:.1f} min")
+
+          stale = [site for site, _, age in rows if age > 12.0]
+          print("STALE_SITES=" + ",".join(stale))
+          with open("watchdog_state.json", "w", encoding="utf-8") as handle:
+              json.dump({
+                  "checked_utc": now.isoformat(),
+                  "stale_sites": stale,
+                  "ages_minutes": {site: None if age == float("inf") else round(age, 2) for site, _, age in rows},
+              }, handle)
+          PY
+
+      - name: Re-arm live publisher when radar is stale
+        run: |
+          set -euo pipefail
+          stale_sites="$(python - <<'PY'
+          import json
+          print(",".join(json.load(open("watchdog_state.json"))["stale_sites"]))
+          PY
+          )"
+          if [ -z "$stale_sites" ]; then
+            echo "Live radar is fresh; no action required."
+            exit 0
+          fi
+
+          active="$(gh run list             --workflow "Snow Squall Live Object Publisher"             --branch main             --limit 20             --json databaseId,status             --jq '[.[] | select(.status == "queued" or .status == "in_progress")] | length')"
+
+          if [ "$active" -gt 0 ]; then
+            echo "Publisher already active ($active run); no duplicate dispatch."
+            exit 0
+          fi
+
+          last_start="$(gh run list             --workflow "Snow Squall Live Object Publisher"             --branch main             --limit 1             --json startedAt             --jq '.[0].startedAt // ""')"
+
+          if [ -n "$last_start" ]; then
+            python - "$last_start" <<'PY'
+          import sys
+          from datetime import datetime, timezone
+          raw=sys.argv[1]
+          started=datetime.fromisoformat(raw.replace("Z","+00:00")).astimezone(timezone.utc)
+          age=(datetime.now(timezone.utc)-started).total_seconds()/60.0
+          if age < 10:
+              print(f"Last publisher started {age:.1f} min ago; allow the retry window to settle.")
+              raise SystemExit(2)
+          PY
+          fi
+
+          echo "Stale live radar detected: $stale_sites"
+          echo "Dispatching a fresh publisher run."
+          gh workflow run "Snow Squall Live Object Publisher" --ref main
+
+      - name: Write watchdog summary
+        if: always()
+        run: |
+          if [ -f watchdog_state.json ]; then
+            cat watchdog_state.json
+          fi
