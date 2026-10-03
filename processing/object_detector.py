@@ -26,6 +26,11 @@ class ObjectDetectionConfig:
     split_merged: bool = True
     preserve_boundary_components: bool = True
     min_peak_separation_px: int = 8
+    # Velocity is secondary evidence. It may rescue a modest-reflectivity
+    # enhancement only when the lowest-sweep radial-velocity field is coherent.
+    velocity_rescue_reflectivity_dbz: float = 15.0
+    velocity_rescue_contrast_kt: float = 8.0
+    velocity_rescue_gradient_ktkm: float = 6.0
 
 
 def _core_seed_split(component, field, config):
@@ -100,7 +105,7 @@ def _core_seed_split(component, field, config):
     return pieces or [component]
 
 
-def detect_reflectivity_objects(reflectivity, config=ObjectDetectionConfig()):
+def detect_reflectivity_objects(reflectivity, velocity=None, config=ObjectDetectionConfig()):
     arr=np.asarray(reflectivity,dtype=float)
     finite=np.isfinite(arr)
     if not finite.any():
