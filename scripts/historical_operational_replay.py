@@ -122,6 +122,11 @@ def replay_case(input_dir: Path, output_dir: Path, state_path: Path, case_id: st
     records=[]
     errors=[]
     history_jsonl = output_dir / "replay_object_history.jsonl"
+    model_runtimes = {}
+    if model_dir is not None:
+        from scripts.model_runtime import ModelRuntime
+        model_runtimes = ModelRuntime.load_horizon_set(model_dir)
+        print("Loaded model horizons once for replay stream:", sorted(model_runtimes))
     history_csv = output_dir / "replay_object_history.csv"
     for index,source in enumerate(scans,1):
         output=output_dir/f"{index:04d}_{source.stem}.geojson"
@@ -148,6 +153,7 @@ def replay_case(input_dir: Path, output_dir: Path, state_path: Path, case_id: st
                     history_csv_path=history_csv,
                     model_dir=model_dir,
                     research_replay=(model_dir is not None),
+                    model_runtimes=model_runtimes,
                 )
             except Exception as exc:
                 errors.append({
