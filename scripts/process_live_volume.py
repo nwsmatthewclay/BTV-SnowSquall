@@ -503,6 +503,7 @@ def process_volume(
             "velocity_background_kt": obj.get("velocity_background_kt"),
             "velocity_contrast_kt": obj.get("velocity_contrast_kt"),
             "velocity_rescue": obj.get("velocity_rescue"),
+            "detection_evidence": obj.get("detection_evidence"),
             "candidate_rank_score": obj.get("candidate_rank_score"),
             "candidate_rank_tier": obj.get("candidate_rank_tier"),
             "max_reflectivity_dbz": max_z,
