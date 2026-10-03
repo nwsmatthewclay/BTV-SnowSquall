@@ -105,7 +105,7 @@ def _core_seed_split(component, field, config):
     return pieces or [component]
 
 
-def detect_reflectivity_objects(reflectivity, velocity=None, config=ObjectDetectionConfig()):
+def detect_reflectivity_objects(reflectivity, config=ObjectDetectionConfig(), velocity=None):
     arr=np.asarray(reflectivity,dtype=float)
     finite=np.isfinite(arr)
     if not finite.any():
