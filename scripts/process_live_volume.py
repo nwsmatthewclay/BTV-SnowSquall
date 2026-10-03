@@ -26,6 +26,7 @@ from processing.rap_features import extract_features
 from processing.radar_sites import apply_radar_origin, radar_origin_for_site
 from scripts.live_model_features import build_live_feature_frame
 from scripts.model_runtime import ModelRuntime
+from src.snow_squall.environment_contract import assess_environment
 
 
 def object_geometry(mask, lat, lon, spacing_km=1.0):
@@ -479,6 +480,12 @@ def process_volume(
                     "fields": {},
                 }
 
+        environment_readiness = assess_environment(
+            {**environment.get("fields", {}), "environment": environment, "timestamp": timestamp},
+            radar_time=timestamp,
+        )
+        environment_fields = environment.get("fields") or {}
+
         features.append({
             "track_id": track_key,
             "timestamp": timestamp,
@@ -557,6 +564,10 @@ def process_volume(
             "drivers": [],
             "environment_status": environment.get("status", "unavailable"),
             "environment": environment,
+            "environment_model_ready": bool(environment_readiness["ready"]),
+            "environment_missing_fields": environment_readiness["missing_fields"],
+            "environment_age_minutes": environment_readiness["age_minutes"],
+            **environment_fields,
             "data_quality": "degraded" if obj.get("touches_grid_edge", False) else "good",
             "model_version": "live-object-foundation-v2",
         })
