@@ -125,6 +125,10 @@ jobs:
         if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.source_unified_ledger_run_id == '' && inputs.source_expansion_run_id == '')
         run: |
           set -euo pipefail
+          if find discovery_artifact -name snow_squall_case_ledger.csv -type f -print -quit | grep -q .; then
+            echo "Unified ledger already restored; skipping direct rediscovery."
+            exit 0
+          fi
           python -m pip install --upgrade pip
           pip install -r requirements.txt
           python scripts/discover_snow_squall_cases.py --config config/snow_squall_discovery.json --output-dir discovery_artifact
@@ -132,7 +136,7 @@ jobs:
           python scripts/merge_snow_squall_case_sources.py --discovery discovery_artifact/snow_squall_candidates.csv --iem-lsr lsr_artifact/iem_lsr_case_clusters.csv --study data/manifests/banacos_2014_cases.csv --output-dir discovery_artifact/unified
 
       - name: Prefer newest successful unified evidence ledger for automatic batches
-        if: github.event_name == 'workflow_dispatch' && inputs.source_unified_ledger_run_id == '' && inputs.source_expansion_run_id != ''
+        if: (github.event_name == 'push') || (github.event_name == 'workflow_dispatch' && inputs.source_unified_ledger_run_id == '' && inputs.source_expansion_run_id != '')
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
