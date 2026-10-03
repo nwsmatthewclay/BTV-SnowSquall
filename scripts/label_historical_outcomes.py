@@ -96,6 +96,8 @@ def build_labels(df: pd.DataFrame, cases_csv: Path):
             & out["centroid_lat"].notna()
             & out["centroid_lon"].notna()
         )
+        if "context_only" in out.columns:
+            case_mask &= ~pd.to_numeric(out["context_only"], errors="coerce").fillna(0).astype(bool)
         candidate = out.loc[case_mask]
         group_cols = [c for c in ("radar_site", "object_id") if c in candidate.columns]
         if not group_cols:
