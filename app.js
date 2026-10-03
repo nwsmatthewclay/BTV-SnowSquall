@@ -1,4 +1,4 @@
-const BOOT_VERSION = "2026-10-03-live-score-click-02";
+const BOOT_VERSION = "2026-10-03-live-score-click-03";
 function showBootError(message){
   const subtitle=document.getElementById("subtitle");
   if(subtitle)subtitle.textContent=message;
@@ -31,7 +31,7 @@ const fmtTime=t=>t?new Date(t).toLocaleString(undefined,{month:"short",day:"nume
 const fmtUtc=t=>t?new Date(t).toISOString().replace("T"," ").replace(".000Z","Z"):"—";
 const setText=(id,v)=>{const el=document.getElementById(id);if(el)el.textContent=v??"—";};
 const esc=v=>String(v??"—").replace(/[&<>"\']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[m]));
-const envValue=(e,key)=>e&&e[key]?e[key].value:null;
+const envValue=(e,key)=>e&&e[key]?e[key].value:null;const probValue=(values,horizon)=>values?.[horizon] ?? values?.[horizon.replace("min","")] ?? null;
 const formatEnv=(e,key)=>{const v=envValue(e,key);if(v==null)return"—";const u=e[key].units||"";return num(v,1)+(u?" "+u:"")};
 function renderCaseInfo(){const c=current;setText("caseTitle",c?c.case_id+" • "+c.radar_site:"No case");setText("caseMeta",c?(c.source_study||"Historical study")+" • "+c.first_scan_utc?.slice(0,16)+" to "+c.last_scan_utc?.slice(0,16):"—");document.getElementById("caseGrid").innerHTML=[["Event onset",fmtUtc(c?.event_start_utc)],["Station",c?.observing_station||"—"],["Peak wind",c?.peak_wind_kt==null?"—":num(c.peak_wind_kt)+" kt"],["Min visibility",c?.min_visibility_km==null?"—":num(c.min_visibility_km)+" km"],["Tracks",c?.track_count??"—"],["Scans",c?.scan_count??"—"],["Radar frames",c?.radar_frames?.length??0]].map(x=>"<div><span>"+x[0]+"</span><b>"+x[1]+"</b></div>").join("");setText("subtitle",c?c.case_id+" • "+c.radar_site+" • "+c.status:"Loading historical pilot data…")}
 function renderModelSummary(){
@@ -257,7 +257,7 @@ function renderProbabilityEvolution(){
     .sort((a,b)=>a.properties.timestamp.localeCompare(b.properties.timestamp));
   const points=rows.map(x=>{
     const p=x.properties, v=p.research_probabilities||{};
-    return {ts:p.timestamp, values:["15min","30min","45min","60min"].map(h=>v[h]).map(v=>v==null?null:Number(v))};
+    return {ts:p.timestamp, values:["15min","30min","45min","60min"].map(h=>probValue(v,h)).map(v=>v==null?null:Number(v))};
   });
   const has=points.some(x=>x.values.some(v=>Number.isFinite(v)));
   if(!has){
@@ -331,7 +331,7 @@ function renderResearchProbabilities(p){
     return;
   }
   box.innerHTML="<div class='research-prob-grid'>"+horizons.map(h=>{
-    const v=values[h];
+    const v=probValue(values,h);
     return "<div class='research-prob-cell'><span>"+h.replace("min"," min")+"</span><b>"+(v==null?"—":(Number(v)*100).toFixed(1)+"%")+"</b></div>";
   }).join("")+"</div><div class='research-prob-note'>This is an out-of-fold research result for historical replay only. It is not an operational probability or warning recommendation.</div>";
 }
