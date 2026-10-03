@@ -177,11 +177,22 @@ def detect_reflectivity_objects(reflectivity, config=ObjectDetectionConfig(), ve
                 velocity_arr_kt,
                 np.nanmedian(velocity_arr_kt[velocity_finite]),
             )
-            velocity_work = ndimage.gaussian_filter(
+            velocity_smoothed = ndimage.gaussian_filter(
                 velocity_work, sigma=config.smooth_sigma
             )
-            velocity_gradient = np.hypot(
-                *np.gradient(velocity_work, 1.0, edge_order=1)
+            velocity_gradient_smoothed = np.hypot(
+                *np.gradient(velocity_smoothed, 1.0, edge_order=1)
+            )
+            velocity_gradient_raw = np.hypot(
+                *np.gradient(velocity_arr_kt, 1.0, edge_order=1)
+            )
+            # Retain sharp raw velocity boundaries while using the smoothed
+            # field for local contrast. This prevents smoothing from erasing
+            # narrow coherent wind shifts that are useful for weak-echo rescue.
+            velocity_work = velocity_smoothed
+            velocity_gradient = np.maximum(
+                np.nan_to_num(velocity_gradient_smoothed, nan=0.0),
+                np.nan_to_num(velocity_gradient_raw, nan=0.0),
             )
             local_velocity = ndimage.median_filter(
                 velocity_work, size=5, mode="nearest"
