@@ -53,3 +53,17 @@ def test_live_product_marks_edge_objects(monkeypatch, tmp_path):
     props = geo["features"][0]["properties"]
     assert props["touches_grid_edge"] is True
     assert props["data_quality"] == "degraded"
+
+
+def test_live_object_geometry_repairs_fragmented_polygon_to_polygon():
+    from scripts.process_live_volume import object_geometry
+
+    mask = np.zeros((6, 6), dtype=bool)
+    mask[1, 1] = True
+    mask[4, 4] = True
+    lat = np.array([[44 + 0.01*r for c in range(6)] for r in range(6)])
+    lon = np.array([[-73 + 0.01*c for c in range(6)] for r in range(6)])
+    geometry, area = object_geometry(mask, lat, lon)
+    assert geometry is not None
+    assert geometry["type"] == "Polygon"
+    assert area == 2.0
