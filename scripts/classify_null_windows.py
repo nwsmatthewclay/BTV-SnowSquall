@@ -19,6 +19,7 @@ def classify(objects: pd.DataFrame, manifest: pd.DataFrame | None = None) -> pd.
 
     d = objects.copy()
     d["scan_time_utc"] = pd.to_datetime(d["scan_time_utc"], utc=True, errors="coerce")
+    d["context_only"] = pd.to_numeric(d.get("context_only", 0), errors="coerce").fillna(0).astype(int)
     d["max_reflectivity_dbz"] = pd.to_numeric(
         d.get("max_reflectivity_dbz"), errors="coerce"
     )
@@ -30,8 +31,8 @@ def classify(objects: pd.DataFrame, manifest: pd.DataFrame | None = None) -> pd.
         .groupby("null_id", dropna=False)
         .agg(
             radar_count=("radar_site", "nunique"),
-            object_records=("object_id", "count"),
-            unique_objects=("object_id", "nunique"),
+            object_records=("object_id", lambda s: int((~d.loc[s.index, "context_only"].astype(bool)).sum())),
+            unique_objects=("object_id", lambda s: int(d.loc[s.index].loc[~d.loc[s.index, "context_only"].astype(bool), "object_id"].nunique())),
             scan_count=("scan_time_utc", "nunique"),
             max_reflectivity_dbz=("max_reflectivity_dbz", "max"),
             max_core_pixels=("core_pixel_count", "max"),
