@@ -36,6 +36,25 @@ class ModelRuntime:
         )
 
     @classmethod
+    def load_horizon_set(cls, model_root: str | Path) -> dict[int, "ModelRuntime"]:
+        """Load the best available candidate/released bundle for each forecast horizon."""
+        root = Path(model_root)
+        runtimes = {}
+        for horizon in (15, 30, 45, 60):
+            candidates = [
+                root / f"candidate_ensemble_refresh_{horizon}m",
+                root / f"candidate_ensemble_expansion_{horizon}m",
+                root / f"baseline_refresh_{horizon}m",
+                root / f"baseline_expansion_{horizon}m",
+            ]
+            for directory in candidates:
+                runtime = cls.load(directory)
+                if runtime.model is not None:
+                    runtimes[horizon] = runtime
+                    break
+        return runtimes
+
+    @classmethod
     def load(cls, model_dir: str | Path):
         root = Path(model_dir)
         metrics_path = root / "metrics.json"
