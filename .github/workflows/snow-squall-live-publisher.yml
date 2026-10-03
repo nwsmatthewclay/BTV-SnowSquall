@@ -119,12 +119,12 @@ jobs:
       - name: Validate KCXX live product
         run: |
           python scripts/audit_operational_readiness.py             --state viewer/data/live/KCXX_state.json             --geojson viewer/data/live/KCXX_objects.geojson             --max-age-minutes 30
-          python scripts/live_healthcheck.py             --state viewer/data/live/KCXX_state.json             --geojson viewer/data/live/KCXX_objects.geojson             --max-age-minutes 30
+          python scripts/live_healthcheck.py             --state viewer/data/live/KCXX_state.json             --geojson viewer/data/live/KCXX_objects.geojson             --max-age-minutes 15 > viewer/data/live/KCXX_health.json
 
       - name: Validate KTYX live product
         run: |
           python scripts/audit_operational_readiness.py             --state viewer/data/live/KTYX_state.json             --geojson viewer/data/live/KTYX_objects.geojson             --max-age-minutes 30
-          python scripts/live_healthcheck.py             --state viewer/data/live/KTYX_state.json             --geojson viewer/data/live/KTYX_objects.geojson             --max-age-minutes 30
+          python scripts/live_healthcheck.py             --state viewer/data/live/KTYX_state.json             --geojson viewer/data/live/KTYX_objects.geojson             --max-age-minutes 15 > viewer/data/live/KTYX_health.json
 
       - name: Publish isolated live-data branch
         env:
