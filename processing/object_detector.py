@@ -165,6 +165,7 @@ def detect_reflectivity_objects(reflectivity, config=ObjectDetectionConfig(), ve
     velocity_arr_kt = None
     velocity_gradient = None
     velocity_rescue = np.zeros_like(arr, dtype=bool)
+    velocity_rescue_region = np.zeros_like(arr, dtype=bool)
     if velocity is not None:
         velocity_arr = np.asarray(velocity, dtype=float)
         if velocity_arr.shape != arr.shape:
@@ -205,9 +206,26 @@ def detect_reflectivity_objects(reflectivity, config=ObjectDetectionConfig(), ve
                 & (velocity_gradient >= config.velocity_rescue_gradient_ktkm)
             )
 
+            # Treat velocity rescue as evidence for the coherent weak-echo
+            # footprint, not as two thin edge-only objects created by the
+            # velocity gradient itself. A connected >=15 dBZ precipitation
+            # patch is rescued as one region when a meaningful fraction carries
+            # the required velocity signature.
+            rescue_seed = finite & (arr >= config.velocity_rescue_reflectivity_dbz)
+            rescue_labels, rescue_count = ndimage.label(
+                rescue_seed,
+                structure=ndimage.generate_binary_structure(2, 2),
+            )
+            for rescue_id in range(1, rescue_count + 1):
+                rescue_component = rescue_labels == rescue_id
+                fraction = float(np.mean(velocity_rescue[rescue_component]))
+                if fraction >= 0.10:
+                    velocity_rescue_region |= rescue_component
+
     if velocity_arr_kt is not None:
         mask = finite & (
             (work >= config.threshold_dbz)
+            | velocity_rescue_region
             | velocity_rescue
         )
     else:
