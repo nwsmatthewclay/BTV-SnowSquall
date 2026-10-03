@@ -111,8 +111,6 @@ def build_live_feature_row(
         "radar_motion_axis_alignment",
         "aspect_ratio",
         "bbox_aspect_ratio",
-        "object_mode",
-        "is_band",
         "reflectivity_gradient_p90_dbkm",
         "gradient_fraction_above_5dbkm",
         "background_reflectivity_dbz",
@@ -174,6 +172,14 @@ def build_live_feature_row(
     ):
         if key in current:
             row[key] = _number(current.get(key))
+
+    # Preserve the detector's categorical mode for diagnostics and expose a
+    # numeric band indicator for the model without attempting numeric coercion
+    # on the string label.
+    if current.get("object_mode") is not None:
+        mode = str(current.get("object_mode")).strip().lower()
+        row["object_mode"] = mode or None
+        row["is_band"] = 1.0 if mode == "band" else (0.0 if mode == "cell_cluster" else None)
 
     # Preserve legacy aliases used by replay/tests.
     row["reflectivity_max_dbz"] = row.get("max_reflectivity_dbz")
