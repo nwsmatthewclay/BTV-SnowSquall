@@ -115,7 +115,10 @@ def build(cases_path, surface_path, objects_path, radar_path, output_path, mping
     if objects_path:
         o=pd.read_csv(objects_path)
         if 'case_id' in o.columns:
-            counts=o.dropna(subset=['case_id']).groupby('case_id').size().rename('radar_scan_count')
+            detected=o.dropna(subset=['case_id']).copy()
+            if 'context_only' in detected.columns:
+                detected=detected[pd.to_numeric(detected['context_only'],errors='coerce').fillna(0).eq(0)]
+            counts=detected.groupby('case_id').size().rename('radar_scan_count')
             cases=cases.merge(counts,on='case_id',how='left')
     if radar_path:
         r=pd.read_csv(radar_path)
