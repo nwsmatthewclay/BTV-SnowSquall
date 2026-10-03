@@ -12,6 +12,7 @@ on:
   workflow_run:
     workflows:
       - Snow Squall Expansion Dataset
+      - Snow Squall Candidate Model Refresh
     types:
       - completed
 
@@ -46,7 +47,7 @@ jobs:
           set -euo pipefail
           run_id=""
           artifact_name=""
-          if [ "${{ github.event_name }}" = "workflow_run" ] && [ "${{ github.event.workflow_run.workflow_run.name }}" = "Snow Squall Candidate Model Refresh" ]; then
+          if [ "${{ github.event_name }}" = "workflow_run" ] && [ "${{ github.event.workflow_run.name }}" = "Snow Squall Candidate Model Refresh" ]; then
             run_id="${{ github.event.workflow_run.id }}"
           elif [ "${{ github.event_name }}" = "workflow_run" ] && [ "${{ github.event.workflow_run.name }}" = "Snow Squall Expansion Dataset" ]; then
             run_id="${{ github.event.workflow_run.id }}"
