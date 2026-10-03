@@ -5,7 +5,7 @@ scripts.process_live_volume.process_volume(). It produces a case-specific
 timeline and manifest while preserving the operational information boundary.
 """
 from __future__ import annotations
-import argparse, json, re
+import argparse, json, re, inspect
 from datetime import datetime, timezone
 from pathlib import Path
 from scripts.process_live_volume import process_volume
@@ -147,15 +147,21 @@ def replay_case(input_dir: Path, output_dir: Path, state_path: Path, case_id: st
             finished=started
         else:
             try:
+                process_kwargs = {
+                    "history_jsonl_path": history_jsonl,
+                    "history_csv_path": history_csv,
+                    "model_dir": model_dir,
+                    "research_replay": (model_dir is not None),
+                }
+                # Keep replay compatible with lightweight test doubles and
+                # downstream callers that predate the batched runtime interface.
+                if "model_runtimes" in inspect.signature(process_volume).parameters:
+                    process_kwargs["model_runtimes"] = model_runtimes
                 process_volume(
                     source,
                     state_path,
                     output,
-                    history_jsonl_path=history_jsonl,
-                    history_csv_path=history_csv,
-                    model_dir=model_dir,
-                    research_replay=(model_dir is not None),
-                    model_runtimes=model_runtimes,
+                    **process_kwargs,
                 )
             except Exception as exc:
                 errors.append({
