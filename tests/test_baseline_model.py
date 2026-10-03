@@ -5,6 +5,30 @@ import pandas as pd
 from scripts.train_baseline_model import prepare_dataset
 
 
+def _with_radar_environment_contract(frame):
+    required = {
+        "base_reflectivity_mean_dbz": 18.0,
+        "base_reflectivity_max_dbz": 35.0,
+        "base_reflectivity_p90_dbz": 28.0,
+        "base_velocity_mean_kt": 5.0,
+        "base_velocity_std_kt": 3.0,
+        "base_velocity_p90_abs_kt": 9.0,
+        "cape_jkg": 120.0,
+        "pwat_mm": 12.0,
+        "temperature_2m_k": 268.0,
+        "dewpoint_2m_k": 265.0,
+        "rh_2m_pct": 82.0,
+        "u10_ms": 4.0,
+        "v10_ms": -2.0,
+        "velocity_mean_kt": 20.0,
+        "velocity_std_kt": 4.0,
+        "velocity_p90_abs_kt": 25.0,
+        "base_reflectivity_valid_fraction": 0.5,
+        "base_velocity_valid_fraction": 0.5,
+    }
+    return frame.assign(**{key: value for key, value in required.items()})
+
+
 def test_baseline_split_group_is_case_or_null():
     frame = pd.DataFrame(
         {
@@ -27,7 +51,7 @@ def test_baseline_split_group_is_case_or_null():
         "predictor_columns": ["max_reflectivity_dbz"],
     }
 
-    result, predictors = prepare_dataset(frame, schema, "squall_onset_within_15m")
+    result, predictors = prepare_dataset(_with_radar_environment_contract(frame), schema, "squall_onset_within_15m")
 
     assert predictors == ["max_reflectivity_dbz"]
     assert set(result["split_group"]) == {
@@ -71,7 +95,7 @@ def test_baseline_excludes_post_onset_case_rows():
         "predictor_columns": ["max_reflectivity_dbz"],
     }
 
-    result, _ = prepare_dataset(frame, schema, "squall_onset_within_15m")
+    result, _ = prepare_dataset(_with_radar_environment_contract(frame), schema, "squall_onset_within_15m")
 
     assert len(result) == 3
     assert not (result["label_status"] == "verified_event_interval").any()
@@ -118,7 +142,7 @@ def test_baseline_excludes_case_rows_at_or_after_onset_even_if_nonimpact(tmp_pat
         "predictor_columns": ["max_reflectivity_dbz"],
     }
 
-    result, _ = prepare_dataset(frame, schema, "squall_onset_within_15m")
+    result, _ = prepare_dataset(_with_radar_environment_contract(frame), schema, "squall_onset_within_15m")
 
     assert set(result["case_id"].dropna()) == {"CASE1"}
     assert len(result.loc[result["population"] == "verified_case_context"]) == 1
