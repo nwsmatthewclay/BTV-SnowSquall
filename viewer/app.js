@@ -1,4 +1,4 @@
-const BOOT_VERSION = "2026-10-01-02";
+const BOOT_VERSION = "2026-10-03-cell-outline-01";
 function showBootError(message){
   const subtitle=document.getElementById("subtitle");
   if(subtitle)subtitle.textContent=message;
@@ -80,20 +80,50 @@ function renderMotion(ts){
     }).addTo(motionLayer);
   });
 }
+function cellOutlinePoints(p){
+  const lat=Number(p.centroid_lat), lon=Number(p.centroid_lon);
+  if(!Number.isFinite(lat)||!Number.isFinite(lon))return [];
+  let major=Number(p.shape_major_km);
+  let minor=Number(p.shape_minor_km);
+  if(!Number.isFinite(major)||major<=0)major=Number(p.length_km);
+  if(!Number.isFinite(minor)||minor<=0)minor=Number(p.width_km);
+  if(!Number.isFinite(major)||major<=0){
+    const area=Number(p.area_km2);
+    major=Number.isFinite(area)&&area>0?Math.max(1.5,Math.sqrt(area*1.8)):2;
+  }
+  if(!Number.isFinite(minor)||minor<=0)minor=Math.max(1,major*0.45);
+  major=Math.min(35,Math.max(1.5,major));
+  minor=Math.min(20,Math.max(0.8,minor));
+  const angle=(Number(p.orientation_deg)||0)*Math.PI/180;
+  const points=[];
+  const n=12;
+  for(let i=0;i<n;i++){
+    const t=(i/n)*Math.PI*2;
+    const x=(major/2)*Math.cos(t), y=(minor/2)*Math.sin(t);
+    const east=x*Math.cos(angle)-y*Math.sin(angle);
+    const north=x*Math.sin(angle)+y*Math.cos(angle);
+    const dLat=north/111;
+    const dLon=east/(111*Math.max(0.2,Math.cos(lat*Math.PI/180)));
+    points.push([lat+dLat,lon+dLon]);
+  }
+  return points;
+}
 function renderObjects(ts){
   objectsLayer.clearLayers();
   featuresAt(ts).forEach(f=>{
     const p=f.properties;
     const selected=selectedKey===p.track_key;
+    const points=cellOutlinePoints(p);
+    if(points.length<3)return;
     const outline=selected?"#ffffff":"#61b7e8";
-    const layer=L.geoJSON(f,{
-      style:{
-        color:outline,
-        fillColor:outline,
-        fillOpacity:0,
-        weight:selected?2.8:1.7,
-        className:"object-footprint"
-      }
+    const layer=L.polyline(points,{
+      color:outline,
+      weight:selected?2.8:1.7,
+      opacity:selected?.98:.86,
+      interactive:true,
+      lineJoin:"round",
+      lineCap:"round",
+      className:"object-footprint"
     }).addTo(objectsLayer);
     layer.bindTooltip(
       "Cell "+esc(p.object_id)+" • "+num(p.max_reflectivity_dbz)+" dBZ • "+
