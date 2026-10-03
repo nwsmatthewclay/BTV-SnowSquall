@@ -29,11 +29,43 @@ def test_shadow_scoring_keeps_candidate_non_operational(tmp_path, monkeypatch):
         (bundle / 'metrics.json').write_text('{}')
     (live / "KCXX_objects.geojson").write_text(json.dumps({
         "metadata": {"scan_time_utc": "2026-01-01T12:05:00Z"},
-        "features": [{"type":"Feature","geometry":None,"properties":{"track_id":"7","timestamp":"2026-01-01T12:05:00Z","max_reflectivity_dbz":30.0}}]
+        "features": [{"type":"Feature","geometry":None,"properties":{"track_id":"7","timestamp":"2026-01-01T12:05:00Z",                "max_reflectivity_dbz":30.0,
+                "mean_reflectivity_dbz":24.0,
+                "area_km2":12.0,
+                "length_km":5.0,
+                "width_km":2.0,
+                "core_pixel_count":4,
+                "bbox_aspect_ratio":2.5,
+                "reflectivity_gradient_p90_dbkm":7.0,
+                "gradient_fraction_above_5dbkm":0.2,
+                "background_reflectivity_dbz":18.0,
+                "reflectivity_contrast_db":6.0,
+}}]
     }), encoding="utf-8")
     (live / "KCXX_history.json").write_text(json.dumps([
-        {"track_id":"7","timestamp":"2026-01-01T12:00:00Z","max_reflectivity_dbz":25.0},
-        {"track_id":"7","timestamp":"2026-01-01T12:05:00Z","max_reflectivity_dbz":30.0}
+        {"track_id":"7","timestamp":"2026-01-01T12:00:00Z",                "max_reflectivity_dbz":23.0,
+                "mean_reflectivity_dbz":20.0,
+                "area_km2":10.0,
+                "length_km":3.0,
+                "width_km":1.5,
+                "core_pixel_count":3,
+                "bbox_aspect_ratio":2.5,
+                "reflectivity_gradient_p90_dbkm":5.0,
+                "gradient_fraction_above_5dbkm":0.1,
+                "background_reflectivity_dbz":15.0,
+                "reflectivity_contrast_db":5.0,
+},
+        {"track_id":"7","timestamp":"2026-01-01T12:05:00Z","max_reflectivity_dbz":30.0,                "mean_reflectivity_dbz":22.0,
+                "area_km2":12.0,
+                "length_km":5.0,
+                "width_km":2.0,
+                "core_pixel_count":4,
+                "bbox_aspect_ratio":2.5,
+                "reflectivity_gradient_p90_dbkm":7.0,
+                "gradient_fraction_above_5dbkm":0.2,
+                "background_reflectivity_dbz":18.0,
+                "reflectivity_contrast_db":6.0,
+}
     ]), encoding="utf-8")
     for site in ("KTYX",):
         (live / f"{site}_objects.geojson").write_text(json.dumps({"features":[],"metadata":{}}), encoding="utf-8")
