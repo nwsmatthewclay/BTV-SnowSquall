@@ -576,6 +576,11 @@ jobs:
             --output data/derived/snow_squall_model_features_expanded.csv \
             --schema-output data/derived/snow_squall_model_features_expanded.schema.json
 
+      - name: Enforce radar + environment training contract
+        run: |
+          set -euo pipefail
+          python scripts/audit_radar_environment_contract.py             data/derived/snow_squall_model_features_expanded.csv             --output data/derived/snow_squall_radar_environment_contract_audit.json
+
       - name: Audit expanded training dataset integrity
         run: |
           python scripts/audit_expansion_dataset.py \
@@ -667,6 +672,11 @@ jobs:
           print('Cumulative feature rows:', len(d))
           print('Unique object-timestep rows:', d['row_identity_key'].nunique() if 'row_identity_key' in d.columns else 'not-present')
           PY
+      - name: Enforce cumulative radar + environment training contract
+        run: |
+          set -euo pipefail
+          python scripts/audit_radar_environment_contract.py             data/derived/snow_squall_model_features_cumulative.csv             --output data/derived/snow_squall_cumulative_radar_environment_contract_audit.json
+
       - name: Audit cumulative model population
         run: |
           python scripts/audit_expansion_dataset.py \
