@@ -496,11 +496,19 @@ def process_volume(
 
     # Optional learned-model scoring is deliberately opt-in and release-gated
     # for live execution. Archived replay may explicitly score candidate bundles.
-    model_runtime = ModelRuntime.load(model_dir) if model_dir else ModelRuntime()
+    model_runtimes = (
+        ModelRuntime.load_horizon_set(model_dir)
+        if model_dir and any((Path(model_dir) / name).exists() for name in (
+            "candidate_ensemble_refresh_15m", "candidate_ensemble_expansion_15m",
+            "baseline_refresh_15m", "baseline_expansion_15m",
+        ))
+        else ({ModelRuntime.load(model_dir).horizon_minutes: ModelRuntime.load(model_dir)} if model_dir and ModelRuntime.load(model_dir).model is not None else {})
+    )
     model_scored = False
     model_errors = {}
     probability_mode = "none"
-    if features and (model_runtime.enabled or (research_replay and model_runtime.model is not None)):
+    model_versions = {}
+    if features and model_runtimes:
         prior_rows_by_track = {}
         prior_path = history_jsonl_path or Path("data/derived/live_object_history.jsonl")
         if prior_path.exists():
@@ -514,31 +522,29 @@ def process_volume(
             except OSError:
                 prior_rows_by_track = {}
 
-        for feature in features:
-            track_id = str(feature.get("track_id"))
-            current_row = dict(feature)
-            env = current_row.get("environment") or {}
-            environment_fields = env.get("fields") or {}
-            current_row.update(environment_fields)
-            history = history_rows_as_of(
-                prior_rows_by_track.get(track_id, []),
-                current_row.get("timestamp"),
-            )
-            frame = build_live_feature_frame(history + [current_row], track_id)
-            try:
-                scores, score_mode = score_with_runtime(frame.tail(1), model_runtime, research_replay=research_replay)
-                if score_mode != "candidate_blocked":
-                    probability_mode = score_mode
-                if scores is not None and scores:
-                    horizon = model_runtime.horizon_minutes
-                    if horizon in {15, 30, 45, 60}:
+        for horizon, runtime in model_runtimes.items():
+            model_versions[str(horizon)] = runtime.metadata.get("model_version")
+            for feature in features:
+                track_id = str(feature.get("track_id"))
+                current_row = dict(feature)
+                env = current_row.get("environment") or {}
+                environment_fields = env.get("fields") or {}
+                current_row.update(environment_fields)
+                history = history_rows_as_of(
+                    prior_rows_by_track.get(track_id, []),
+                    current_row.get("timestamp"),
+                )
+                frame = build_live_feature_frame(history + [current_row], track_id)
+                try:
+                    scores, score_mode = score_with_runtime(frame.tail(1), runtime, research_replay=research_replay)
+                    if score_mode != "candidate_blocked":
+                        probability_mode = score_mode
+                    if scores is not None and scores:
                         feature[f"probability_{horizon}min"] = float(scores[0])
                         feature["probability_trend"] = "scored"
                         model_scored = True
-                    else:
-                        model_errors[track_id] = "model_target_horizon_unrecognized"
-            except Exception as exc:
-                model_errors[track_id] = f"{type(exc).__name__}: {exc}"
+                except Exception as exc:
+                    model_errors[f"{track_id}:{horizon}"] = f"{type(exc).__name__}: {exc}"
 
     result = {
         "type": "FeatureCollection",
