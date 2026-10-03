@@ -151,7 +151,6 @@ def build_live_feature_row(
         "velocity_background_kt",
         "velocity_contrast_kt",
         "velocity_rescue",
-        "detection_evidence",
         "base_reflectivity_mean_dbz",
         "base_reflectivity_max_dbz",
         "base_reflectivity_p90_dbz",
@@ -188,6 +187,12 @@ def build_live_feature_row(
     ):
         if key in current:
             row[key] = _number(current.get(key))
+
+    # Preserve detector qualitative diagnostics separately from numeric
+    # model fields. They are useful to explain candidate generation but are not
+    # predictors.
+    if current.get("detection_evidence") is not None:
+        row["detection_evidence"] = current.get("detection_evidence")
 
     # Preserve the detector's categorical mode for diagnostics and expose a
     # numeric band indicator for the model without attempting numeric coercion
