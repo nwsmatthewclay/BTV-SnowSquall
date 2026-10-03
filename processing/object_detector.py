@@ -195,7 +195,7 @@ def detect_reflectivity_objects(reflectivity, config=ObjectDetectionConfig(), ve
                 np.nan_to_num(velocity_gradient_raw, nan=0.0),
             )
             local_velocity = ndimage.median_filter(
-                velocity_work, size=5, mode="nearest"
+                velocity_work, size=11, mode="nearest"
             )
             velocity_contrast_map = np.abs(velocity_work - local_velocity)
             velocity_rescue = (
