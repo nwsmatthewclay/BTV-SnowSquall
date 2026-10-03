@@ -1,0 +1,185 @@
+name: Snow Squall Historical Candidate Replay Lab
+
+on:
+  workflow_dispatch:
+    inputs:
+      case_ids:
+        description: "Comma-separated verified BTV case IDs"
+        required: false
+        default: "BTV20020323,BTV20040323,BTV20060224,BTV20070205,BTV20080210,BTV20101127"
+        type: string
+      max_scans:
+        description: "Maximum scans per replay (blank = all)"
+        required: false
+        default: ""
+        type: string
+      candidate_model_run_id:
+        description: "Candidate Model Refresh run ID (blank = latest successful)"
+        required: false
+        default: ""
+        type: string
+  workflow_run:
+    workflows:
+      - Snow Squall Candidate Model Refresh
+    types:
+      - completed
+  push:
+    branches:
+      - snow-squall-model-foundation
+    paths:
+      - .github/model-replay-trigger
+
+permissions:
+  actions: read
+  contents: read
+
+concurrency:
+  group: snow-squall-historical-candidate-replay
+  cancel-in-progress: false
+
+jobs:
+  replay:
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    env:
+      PYTHONPATH: ${{ github.workspace }}
+      PYTHONUNBUFFERED: "1"
+      GH_TOKEN: ${{ github.token }}
+
+    steps:
+      - name: Checkout model foundation
+        uses: actions/checkout@v4
+        with:
+          ref: snow-squall-model-foundation
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt -r requirements-science.txt
+
+      - name: Resolve candidate model artifact
+        id: candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          run_id=""
+          if [ "${{ github.event_name }}" = "workflow_run" ]; then
+            run_id="${{ github.event.workflow_run.id }}"
+          elif [ -n "${{ inputs.candidate_model_run_id }}" ]; then
+            run_id="${{ inputs.candidate_model_run_id }}"
+          else
+            run_id="$(gh run list --workflow "Snow Squall Candidate Model Refresh"               --branch snow-squall-model-foundation --status success --limit 1               --json databaseId --jq '.[0].databaseId')"
+          fi
+          test -n "$run_id" && test "$run_id" != "null"
+          rm -rf candidate_bundle
+          gh run download "$run_id"             --repo "$GITHUB_REPOSITORY"             --name snow-squall-refreshed-model-bundles             --dir candidate_bundle
+          model_root="$(find candidate_bundle -type d -name 'candidate_ensemble_refresh_15m' -print -quit | xargs -r dirname)"
+          test -n "$model_root"
+          echo "run_id=$run_id" >> "$GITHUB_OUTPUT"
+          echo "model_root=$model_root" >> "$GITHUB_OUTPUT"
+          echo "Using candidate model root: $model_root"
+
+      - name: Validate requested case set
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import os
+          import pandas as pd
+
+          requested=[x.strip() for x in os.environ["CASE_IDS"].split(",") if x.strip()]
+          cases=pd.read_csv("data/manifests/banacos_2014_cases.csv")
+          windows=pd.read_csv("data/manifests/banacos_radar_windows.csv")
+          known=set(cases["case_id"].astype(str))
+          missing=[x for x in requested if x not in known]
+          assert not missing, f"Unknown case IDs: {missing}"
+          coverage=windows.groupby("case_id")["radar_site"].apply(set).to_dict()
+          rows=[]
+          for case_id in requested:
+              available=sorted(coverage.get(case_id, set()))
+              for radar in ("KCXX","KTYX"):
+                  if radar in available:
+                      rows.append((case_id,radar))
+          print("Requested cases:",requested)
+          print("Replay pairs:",rows)
+          assert rows, "No requested cases have KCXX/KTYX radar coverage"
+          PY
+        env:
+          CASE_IDS: ${{ inputs.case_ids || 'BTV20020323,BTV20040323,BTV20060224,BTV20070205,BTV20080210,BTV20101127' }}
+
+      - name: Replay verified analog cases with revised detector and candidate model
+        shell: bash
+        env:
+          CASE_IDS: ${{ inputs.case_ids || 'BTV20020323,BTV20040323,BTV20060224,BTV20070205,BTV20080210,BTV20101127' }}
+          MAX_SCANS: ${{ inputs.max_scans }}
+          MODEL_ROOT: ${{ steps.candidate.outputs.model_root }}
+        run: |
+          set -euo pipefail
+          rm -rf data/raw/replay_lab data/derived/replay_lab
+          for case_id in $(echo "$CASE_IDS" | tr ',' ' '); do
+            for radar in KCXX KTYX; do
+              echo "=== REPLAY $case_id $radar ==="
+              python acquisition/historical_level2.py                 --manifest data/manifests/banacos_radar_windows.csv                 --case-id "$case_id"                 --radar-site "$radar"                 --output "data/raw/replay_lab/$case_id/$radar"                 --workers 16                 --max-failure-rate 0.20 || {
+                  echo "No usable Level-II coverage for $case_id $radar; skipping."
+                  continue
+                }
+              if ! find "data/raw/replay_lab/$case_id/$radar" -type f | grep -q .; then
+                echo "No files downloaded for $case_id $radar; skipping."
+                continue
+              fi
+              args=()
+              if [ -n "$MAX_SCANS" ]; then
+                args+=(--max-scans "$MAX_SCANS")
+              fi
+              python scripts/historical_operational_replay.py                 --case-id "$case_id"                 --input-dir "data/raw/replay_lab/$case_id/$radar"                 --output-dir "data/derived/replay_lab/$case_id/$radar"                 --state-path "data/derived/replay_lab/$case_id/$radar/replay_state.json"                 --continue-on-error                 --model-dir "$MODEL_ROOT"                 "${args[@]}"
+            done
+          done
+
+      - name: Score replay performance for tuning
+        run: |
+          python scripts/score_model_replay.py             --replay-root data/derived/replay_lab             --cases data/manifests/banacos_2014_cases.csv             --output-dir data/derived/replay_scorecard
+
+      - name: Build replay experiment manifest
+        env:
+          CANDIDATE_RUN_ID: ${{ steps.candidate.outputs.run_id }}
+          MODEL_ROOT: ${{ steps.candidate.outputs.model_root }}
+          CASE_IDS: ${{ inputs.case_ids || 'BTV20020323,BTV20040323,BTV20060224,BTV20070205,BTV20080210,BTV20101127' }}
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          import os
+
+          manifests=list(Path("data/derived/replay_lab").rglob("replay_manifest.json"))
+          out={
+              "mode":"historical_candidate_model_replay_lab",
+              "candidate_model_refresh_run_id":os.environ["CANDIDATE_RUN_ID"],
+              "candidate_model_root":os.environ["MODEL_ROOT"],
+              "case_ids":[x.strip() for x in os.environ["CASE_IDS"].split(",") if x.strip()],
+              "replay_count":len(manifests),
+              "detector":"current_snow_squall_object_detector",
+              "future_information_policy":"one_scan_at_a_time",
+              "operational_release_status":"candidate_only_not_operational",
+          }
+          Path("data/derived/replay_scorecard/experiment_manifest.json").write_text(
+              json.dumps(out,indent=2)+"\n",encoding="utf-8"
+          )
+          print(json.dumps(out,indent=2))
+          PY
+
+      - name: Upload replay lab package
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: snow-squall-historical-candidate-replay
+          retention-days: 30
+          path: |
+            data/derived/replay_lab/
+            data/derived/replay_scorecard/
+            data/raw/replay_lab/
