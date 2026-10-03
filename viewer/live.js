@@ -388,7 +388,9 @@ function selectObject(p){
     renderEnvironment(envFields)+
     "<div class='live-card'><h3>Live research shadow</h3>"+shadowGrid(shadowRecord(p.radar_site,p.track_id))+
     "<div class='shadow-note'>Candidate model scored this live object separately from the operational feed. Research only.</div></div>"+
-    "<div class='live-stat'><span>Data quality</span><b>"+esc(p.data_quality||"—")+"</b></div>";
+    "<div class='live-stat'><span>Data quality</span><b>"+esc(p.data_quality||"—")+"</b></div>"+
+    "<div class='live-stat'><span>Detection evidence</span><b>"+esc(Array.isArray(p.detection_evidence)?p.detection_evidence.join(" • "):(p.detection_evidence||"—"))+"</b></div>"+
+    (p.candidate_rank_score==null?"":"<div class='live-stat'><span>Candidate rank</span><b>"+Number(p.candidate_rank_score).toFixed(0)+"/100 • "+esc(p.candidate_rank_tier||"—")+"</b></div>");
   renderSelectedHistory(p);
   renderLiveTrend(p);
 }
