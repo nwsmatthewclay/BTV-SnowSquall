@@ -131,10 +131,15 @@ def build(cases_path, surface_path, objects_path, radar_path, output_path, mping
         # names before grouping so pandas receives a one-dimensional case_id key.
         m = collapse_duplicate_columns(m)
         if 'case_id' in m.columns:
-            counts=m.groupby('case_id').size().rename('mping_report_count')
+            case_series = m['case_id']
+            if isinstance(case_series, pd.DataFrame):
+                case_series = case_series.iloc[:, 0]
+                m = m.copy()
+                m['case_id'] = case_series
+            counts=m.groupby('case_id', dropna=False).size().rename('mping_report_count')
             cases=cases.merge(counts,on='case_id',how='left')
             if 'ptype_bucket' in m.columns:
-                pivot=m.pivot_table(index='case_id',columns='ptype_bucket',values='mping_id' if 'mping_id' in m.columns else 'case_id',aggfunc='count',fill_value=0)
+                pivot=m.groupby(['case_id','ptype_bucket'], dropna=False).size().unstack(fill_value=0)
                 rename={
                     'snow':'mping_snow_report_count',
                     'mixed':'mping_mixed_report_count',
