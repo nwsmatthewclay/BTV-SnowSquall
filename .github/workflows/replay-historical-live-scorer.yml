@@ -1,0 +1,120 @@
+name: Replay Historical Objects Through Live Scorer
+
+on:
+  workflow_dispatch:
+  workflow_run:
+    workflows:
+      - Snow Squall Expansion Dataset
+    types:
+      - completed
+
+permissions:
+  actions: read
+  contents: write
+
+concurrency:
+  group: snow-squall-historical-live-replay
+  cancel-in-progress: false
+
+jobs:
+  replay:
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      GH_TOKEN: \${{ secrets.GITHUB_TOKEN }}
+      PYTHONPATH: \${{ github.workspace }}
+      PYTHONUNBUFFERED: "1"
+
+    steps:
+      - name: Checkout model foundation
+        uses: actions/checkout@v4
+        with:
+          ref: snow-squall-model-foundation
+          fetch-depth: 2
+
+      - name: Restore published historical viewer
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin gh-pages
+          git checkout origin/gh-pages -- data viewer_artifact app.js index.html style.css || true
+          test -d data/cases
+
+      - name: Resolve latest successful candidate bundle
+        id: model
+        run: |
+          set -euo pipefail
+          if [ "\${{ github.event_name }}" = "workflow_run" ]; then
+            run_id="\${{ github.event.workflow_run.id }}"
+          else
+            run_id="$(gh run list \
+              --workflow "Snow Squall Expansion Dataset" \
+              --branch snow-squall-model-foundation \
+              --status success \
+              --limit 20 \
+              --json databaseId \
+              --jq '.[0].databaseId')"
+          fi
+          test -n "$run_id" && test "$run_id" != "null"
+          echo "run_id=$run_id" >> "$GITHUB_OUTPUT"
+
+      - name: Download candidate model bundle
+        run: |
+          set -euo pipefail
+          gh run download "\${{ steps.model.outputs.run_id }}" \
+            --name snow-squall-live-model-bundles \
+            --dir model_bundle
+          test -d model_bundle
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install scoring dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          if [ -f requirements-science.txt ]; then pip install -r requirements-science.txt; fi
+
+      - name: Replay every historical object scan
+        run: |
+          set -euo pipefail
+          rm -rf replayed_cases
+          mkdir -p replayed_cases
+          python scripts/historical_live_model_scorer.py \
+            --input-root data/cases \
+            --output-root replayed_cases \
+            --model-root model_bundle
+          test -f replayed_cases/historical_live_scorer_summary.json
+          cat replayed_cases/historical_live_scorer_summary.json
+
+      - name: Replace published historical case payloads
+        run: |
+          set -euo pipefail
+          cp replayed_cases/*.geojson data/cases/
+          cp replayed_cases/historical_live_scorer_summary.json data/historical_live_scorer_summary.json
+
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          catalog_path = Path("data/catalog.json")
+          catalog = json.loads(catalog_path.read_text(encoding="utf-8"))
+          summary = json.loads(Path("replayed_cases/historical_live_scorer_summary.json").read_text(encoding="utf-8"))
+
+          catalog["research_probability_status"] = "historical_live_scorer_replay"
+          catalog["historical_live_scorer_scored_object_scans"] = summary["scored_object_scans"]
+          catalog["historical_live_scorer_updated_utc"] = summary["updated_utc"]
+          catalog["historical_live_scorer_candidate_only"] = True
+          catalog_path.write_text(json.dumps(catalog, indent=2) + "\n", encoding="utf-8")
+          PY
+
+      - name: Publish replayed historical scorer output
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/cases data/catalog.json data/historical_live_scorer_summary.json
+          git commit -m "Replay historical objects through live scorer" || exit 0
+          git push origin HEAD:gh-pages
