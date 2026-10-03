@@ -102,7 +102,7 @@ def process_volume(path: Path, tracker: CentroidTracker, radar_origin=None, prev
             *np.gradient(field, 1.0, edge_order=1)
         )
 
-    objects = detect_reflectivity_objects(data)
+    objects = detect_reflectivity_objects(data, velocity=gridded.get("velocity"))
     meta = volume_metadata(radar, path)
     timestamp = meta["scan_time_utc"]
     radar_motion = None
@@ -183,7 +183,7 @@ def process_volume(path: Path, tracker: CentroidTracker, radar_origin=None, prev
                         )
                     )
 
-    return tracked, data, timestamp
+    return tracked, data, timestamp, gridded.get("velocity")
 
 
 def _process_radar_files(radar: str, files: list[Path]):
@@ -191,6 +191,7 @@ def _process_radar_files(radar: str, files: list[Path]):
     tracker = CentroidTracker()
     previous_fields = {}
     rows = []
+    context_rows = []
     errors = []
 
     for path in files:
@@ -203,8 +204,74 @@ def _process_radar_files(radar: str, files: list[Path]):
                 previous_reflectivity=previous_fields.get(radar, (None, None))[0],
                 previous_time=previous_fields.get(radar, (None, None))[1],
             )
-            objects, current_reflectivity, current_timestamp = result
+            objects, current_reflectivity, current_timestamp, current_velocity = result
             previous_fields[radar] = (current_reflectivity, current_timestamp)
+
+        finite_refl = current_reflectivity[np.isfinite(current_reflectivity)]
+        finite_vel = (
+            current_velocity[np.isfinite(current_velocity)]
+            if current_velocity is not None
+            else np.asarray([], dtype=float)
+        )
+        context_rows.append({
+            "radar_site": radar,
+            "source_file": str(path),
+            "scan_time_utc": current_timestamp,
+            "scan_has_reflectivity": bool(finite_refl.size),
+            "scan_has_base_velocity": bool(finite_vel.size),
+            "base_reflectivity_mean_dbz": float(np.mean(finite_refl)) if finite_refl.size else np.nan,
+            "base_reflectivity_max_dbz": float(np.max(finite_refl)) if finite_refl.size else np.nan,
+            "base_reflectivity_p90_dbz": float(np.percentile(finite_refl, 90)) if finite_refl.size else np.nan,
+            "base_reflectivity_valid_fraction": float(finite_refl.size / current_reflectivity.size) if current_reflectivity.size else 0.0,
+            "base_velocity_mean_kt": float(np.mean(finite_vel) * 1.94384449244) if finite_vel.size else np.nan,
+            "base_velocity_std_kt": float(np.std(finite_vel) * 1.94384449244) if finite_vel.size else np.nan,
+            "base_velocity_p90_abs_kt": float(np.percentile(np.abs(finite_vel), 90) * 1.94384449244) if finite_vel.size else np.nan,
+            "base_velocity_valid_fraction": float(finite_vel.size / current_velocity.size) if current_velocity is not None and current_velocity.size else 0.0,
+            "detected_object_count": int(len(objects)),
+        })
+        if not objects:
+            rows.append({
+                "radar_site": radar,
+                "source_file": str(path),
+                "scan_time_utc": current_timestamp,
+                "object_id": 0,
+                "detector_object_id": 0,
+                "track_id": 0,
+                "context_only": 1,
+                "pixel_count": 0,
+                "max_reflectivity_dbz": context_rows[-1]["base_reflectivity_max_dbz"],
+                "mean_reflectivity_dbz": context_rows[-1]["base_reflectivity_mean_dbz"],
+                "core_pixel_count": 0,
+                "touches_grid_edge": False,
+                "row_centroid": np.nan,
+                "column_centroid": np.nan,
+                "centroid_lat": np.nan,
+                "centroid_lon": np.nan,
+                "area_km2": 0.0,
+                "length_km": np.nan,
+                "width_km": np.nan,
+                "shape_major_km": np.nan,
+                "shape_minor_km": np.nan,
+                "orientation_deg": np.nan,
+                "aspect_ratio": np.nan,
+                "geometry_wkt": None,
+                "core_fraction": 0.0,
+                "reflectivity_gradient_p90_dbkm": np.nan,
+                "gradient_fraction_above_5dbkm": np.nan,
+                "background_reflectivity_dbz": np.nan,
+                "reflectivity_contrast_db": np.nan,
+                "bbox_aspect_ratio": np.nan,
+                "object_mode": "scan_context",
+                "velocity_mean_kt": context_rows[-1]["base_velocity_mean_kt"],
+                "velocity_std_kt": context_rows[-1]["base_velocity_std_kt"],
+                "velocity_p90_abs_kt": context_rows[-1]["base_velocity_p90_abs_kt"],
+                "velocity_gradient_ktkm": np.nan,
+                "velocity_gradient_p90_ktkm": np.nan,
+                "velocity_background_kt": np.nan,
+                "velocity_contrast_kt": np.nan,
+                "velocity_rescue": False,
+            })
+
         except Exception as exc:
             errors.append({
                 "radar_site": radar,
@@ -260,6 +327,11 @@ def _process_radar_files(radar: str, files: list[Path]):
                 "reflectivity_contrast_db": obj.get("reflectivity_contrast_db"),
                 "bbox_aspect_ratio": obj.get("bbox_aspect_ratio", obj.get("aspect_ratio")),
                 "object_mode": obj.get("object_mode"),
+                "velocity_gradient_p90_ktkm": obj.get("velocity_gradient_p90_ktkm"),
+                "velocity_background_kt": obj.get("velocity_background_kt"),
+                "velocity_contrast_kt": obj.get("velocity_contrast_kt"),
+                "velocity_rescue": obj.get("velocity_rescue"),
+                "context_only": int(bool(obj.get("context_only", False))),
                 "track_association_status": obj.get("track_association_status"),
                 "track_association_distance_px": obj.get("track_association_distance_px"),
                 "track_association_gate_px": obj.get("track_association_gate_px"),
@@ -293,6 +365,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--input", default="data/raw/level2")
     parser.add_argument("--output", default="data/derived/pilot_object_scans.csv")
+    parser.add_argument("--context-output", default=None, help="Scan-level radar context CSV used to audit reflectivity/velocity completeness.")
     parser.add_argument(
         "--error-log",
         default=None,
@@ -302,6 +375,7 @@ def main():
 
     input_root = Path(args.input)
     output = Path(args.output)
+    context_output = Path(args.context_output) if args.context_output else output.with_name(f"{output.stem}_context.csv")
     error_log = (
         Path(args.error_log)
         if args.error_log
@@ -356,6 +430,8 @@ def main():
     frame = add_motion_features(frame)
     output.parent.mkdir(parents=True, exist_ok=True)
     frame.to_csv(output, index=False)
+    context_frame = pd.DataFrame(context_rows)
+    context_frame.to_csv(context_output, index=False)
     pd.DataFrame(
         errors,
         columns=["radar_site", "source_file", "error_type", "error_message"],
