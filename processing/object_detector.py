@@ -220,6 +220,14 @@ def detect_reflectivity_objects(reflectivity, config=ObjectDetectionConfig(), ve
     if config.fill_holes:
         mask=ndimage.binary_fill_holes(mask)
 
+    # Velocity-rescued echoes are deliberately reintroduced after generic
+    # morphology. A narrow coherent velocity signature can be physically
+    # meaningful even when a pixel-scale opening operation would erase its
+    # reflectivity footprint. The rescue itself already requires >=15 dBZ,
+    # strong velocity contrast, and a strong velocity gradient.
+    if velocity_arr_kt is not None:
+        mask |= velocity_rescue
+
     if config.preserve_boundary_components:
         raw_labels, raw_count = ndimage.label(raw_mask, structure=structure)
         boundary = np.zeros_like(raw_mask, dtype=bool)
