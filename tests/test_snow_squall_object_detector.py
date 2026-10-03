@@ -102,3 +102,34 @@ def test_elongated_band_with_multiple_cores_stays_one_object():
     assert len(objects) == 1
     assert objects[0]["object_mode"] == "band"
     assert objects[0]["bbox_aspect_ratio"] >= 3.0
+
+
+def test_coherent_base_velocity_can_rescue_modest_reflectivity():
+    reflectivity = np.full((50, 50), 5.0)
+    reflectivity[22:28, 15:35] = 18.0
+    velocity_ms = np.zeros((50, 50), dtype=float)
+    velocity_ms[22:28, 15:35] = 12.0
+
+    objects = detect_reflectivity_objects(
+        reflectivity,
+        ObjectDetectionConfig(
+            threshold_dbz=20.0,
+            core_threshold_dbz=30.0,
+            min_pixels=4,
+            max_pixels=3000,
+            close_iterations=0,
+            open_iterations=0,
+            fill_holes=False,
+            velocity_rescue_reflectivity_dbz=15.0,
+            velocity_rescue_contrast_kt=8.0,
+            velocity_rescue_gradient_ktkm=6.0,
+        ),
+        velocity=velocity_ms,
+    )
+
+    assert len(objects) == 1
+    obj = objects[0]
+    assert obj["max_reflectivity_dbz"] == 18.0
+    assert obj["velocity_rescue"] is True
+    assert obj["velocity_mean_kt"] > 20.0
+    assert obj["velocity_contrast_kt"] >= 8.0
