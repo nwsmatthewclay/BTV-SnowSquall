@@ -398,11 +398,19 @@ jobs:
             echo 'Automatic historical acquisition cap reached.'
             exit 0
           fi
-          source_run='${{ inputs.source_unified_ledger_run_id }}'
-          if [ -z "$source_run" ]; then
-            source_run="$(gh run list --workflow "Snow Squall Unified Case Ledger" --branch snow-squall-model-foundation --status success --limit 1 --json databaseId --jq '.[0].databaseId')"
+          source_unified_run='${{ inputs.source_unified_ledger_run_id }}'
+          source_expansion_run=''
+          if [ -z "$source_unified_run" ]; then
+            source_unified_run="$(gh run list --workflow "Snow Squall Unified Case Ledger" --branch snow-squall-model-foundation --status success --limit 1 --json databaseId --jq '.[0].databaseId' || true)"
           fi
-          test -n "$source_run" && test "$source_run" != "null"
+          # A successful unified-ledger run is preferred, but the current
+          # expansion run already contains a validated discovery ledger. Fall
+          # back to this run so acquisition can continue rather than stopping
+          # because the separate discovery workflow is unavailable.
+          if [ -z "$source_unified_run" ] || [ "$source_unified_run" = "null" ]; then
+            source_expansion_run="${{ github.run_id }}"
+            echo "No successful unified ledger found; chaining from current expansion run $source_expansion_run."
+          fi
           gh workflow run "Snow Squall Expansion Dataset" \
             --repo "$GITHUB_REPOSITORY" \
             --ref snow-squall-model-foundation \
@@ -411,8 +419,9 @@ jobs:
             -f unverified_offset="$next_review" \
             -f max_official="$next_official_size" \
             -f max_unverified="$next_review_size" \
-            -f source_unified_ledger_run_id="$source_run"
-          echo "NEXT HISTORICAL BATCH DISPATCHED: official=$next_official review=$next_review size=$next_official_size/$next_review_size source=$source_run"
+            -f source_unified_ledger_run_id="$source_unified_run"
+            -f source_expansion_run_id="$source_expansion_run"
+          echo "NEXT HISTORICAL BATCH DISPATCHED: official=$next_official review=$next_review size=$next_official_size/$next_review_size unified=$source_unified_run expansion=$source_expansion_run"
 
       - name: Annotate reconstructed objects to candidate cases
         run: |
