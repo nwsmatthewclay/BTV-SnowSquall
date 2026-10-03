@@ -198,6 +198,7 @@ def process_volume(
     history_csv_path: Path | None = None,
     model_dir: Path | None = None,
     research_replay: bool = False,
+    model_runtimes: dict[int, ModelRuntime] | None = None,
 ):
     state, tracker = load_state(state_path)
     source_name = path.name
@@ -496,8 +497,9 @@ def process_volume(
 
     # Optional learned-model scoring is deliberately opt-in and release-gated
     # for live execution. Archived replay may explicitly score candidate bundles.
-    model_runtimes = {}
-    if model_dir:
+    if model_runtimes is None:
+        model_runtimes = {}
+    if model_dir and not model_runtimes:
         root = Path(model_dir)
         if any((root / name).exists() for name in (
             "candidate_ensemble_refresh_15m", "candidate_ensemble_expansion_15m",
