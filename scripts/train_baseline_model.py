@@ -148,15 +148,6 @@ def prepare_dataset(frame: pd.DataFrame, schema: dict, target: str):
             "rebuild the positive/null population with base reflectivity, "
             "base velocity, and complete common environment data."
         )
-    required_populations = {"verified_case_context", "winter_null_candidate"}
-    present_populations = set(d["population"].astype(str).unique())
-    missing_populations = sorted(required_populations - present_populations)
-    if missing_populations:
-        raise ValueError(
-            "Training requires both positive and null populations; missing "
-            + ", ".join(missing_populations)
-        )
-
     # Materialize the provisional-null target after row selection so sklearn
     # receives a complete binary y vector.
     d.loc[d["population"].eq("winter_null_candidate"), target] = 0
@@ -352,6 +343,15 @@ def main():
                 int(excluded.sum()),
             )
             data = data.loc[~excluded].copy()
+
+    required_populations = {"verified_case_context", "winter_null_candidate"}
+    present_populations = set(data["population"].astype(str).unique())
+    missing_populations = sorted(required_populations - present_populations)
+    if missing_populations:
+        raise ValueError(
+            "Training requires both positive and null populations; missing "
+            + ", ".join(missing_populations)
+        )
 
     oof, metrics, folds = evaluate(data, predictors, args.target)
     output_dir = Path(args.output_dir)
