@@ -47,6 +47,7 @@ background_reflectivity_dbz,geometry,float,Median reflectivity in local surround
 reflectivity_contrast_db,geometry,float,Object median reflectivity minus local background reflectivity,true,radar_available
 bbox_aspect_ratio,geometry,float,Bounding-box aspect ratio used to distinguish elongated bands from compact clusters,true,radar_available
 object_mode,geometry,string,Band or compact cell-cluster candidate geometry class,true,radar_available
+is_band,geometry,float,Numeric indicator for band-class object geometry,true,radar_available
 detector_object_id,identity,string,Scan-local detector component identifier preserved separately from tracked object ID,true,radar_available
 track_id,identity,string,Stable tracker identity for the radar object,true,radar_available
 mrms_reflectivity_dbz,mrms,float,MRMS reflectivity,true,modern_2014_plus
