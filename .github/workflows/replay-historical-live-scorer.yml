@@ -1,6 +1,10 @@
 name: Replay Historical Objects Through Live Scorer
 
 on:
+  push:
+    paths:
+      - ".github/workflows/replay-historical-live-scorer.yml"
+      - "scripts/historical_live_model_scorer.py"
   workflow_dispatch:
   workflow_run:
     workflows:
