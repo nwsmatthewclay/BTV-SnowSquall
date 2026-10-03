@@ -193,10 +193,10 @@ def _process_radar_files(radar: str, files: list[Path]):
     rows = []
     context_rows = []
     errors = []
+    radar_origin = radar_origin_for_site(radar)
 
     for path in files:
         try:
-            radar_origin = radar_origin_for_site(radar)
             result = process_volume(
                 path,
                 tracker,
@@ -206,6 +206,15 @@ def _process_radar_files(radar: str, files: list[Path]):
             )
             objects, current_reflectivity, current_timestamp, current_velocity = result
             previous_fields[radar] = (current_reflectivity, current_timestamp)
+        except Exception as exc:
+            errors.append({
+                "radar_site": radar,
+                "source_file": str(path),
+                "error_type": type(exc).__name__,
+                "error_message": str(exc),
+            })
+            print(f"SKIP {path}: {type(exc).__name__}: {exc}")
+            continue
 
         finite_refl = current_reflectivity[np.isfinite(current_reflectivity)]
         finite_vel = (
@@ -213,7 +222,7 @@ def _process_radar_files(radar: str, files: list[Path]):
             if current_velocity is not None
             else np.asarray([], dtype=float)
         )
-        context_rows.append({
+        context = {
             "radar_site": radar,
             "source_file": str(path),
             "scan_time_utc": current_timestamp,
@@ -228,7 +237,12 @@ def _process_radar_files(radar: str, files: list[Path]):
             "base_velocity_p90_abs_kt": float(np.percentile(np.abs(finite_vel), 90) * 1.94384449244) if finite_vel.size else np.nan,
             "base_velocity_valid_fraction": float(finite_vel.size / current_velocity.size) if current_velocity is not None and current_velocity.size else 0.0,
             "detected_object_count": int(len(objects)),
-        })
+        }
+        context_rows.append(context)
+
+        # A detector miss is not allowed to erase the radar/environment state
+        # from the supervised population. This fallback is deliberately marked
+        # as context-only so downstream QC can distinguish it from a real object.
         if not objects:
             rows.append({
                 "radar_site": radar,
@@ -239,14 +253,14 @@ def _process_radar_files(radar: str, files: list[Path]):
                 "track_id": 0,
                 "context_only": 1,
                 "pixel_count": 0,
-                "max_reflectivity_dbz": context_rows[-1]["base_reflectivity_max_dbz"],
-                "mean_reflectivity_dbz": context_rows[-1]["base_reflectivity_mean_dbz"],
+                "max_reflectivity_dbz": context["base_reflectivity_max_dbz"],
+                "mean_reflectivity_dbz": context["base_reflectivity_mean_dbz"],
                 "core_pixel_count": 0,
                 "touches_grid_edge": False,
                 "row_centroid": np.nan,
                 "column_centroid": np.nan,
-                "centroid_lat": np.nan,
-                "centroid_lon": np.nan,
+                "centroid_lat": radar_origin[0] if radar_origin else np.nan,
+                "centroid_lon": radar_origin[1] if radar_origin else np.nan,
                 "area_km2": 0.0,
                 "length_km": np.nan,
                 "width_km": np.nan,
@@ -262,25 +276,15 @@ def _process_radar_files(radar: str, files: list[Path]):
                 "reflectivity_contrast_db": np.nan,
                 "bbox_aspect_ratio": np.nan,
                 "object_mode": "scan_context",
-                "velocity_mean_kt": context_rows[-1]["base_velocity_mean_kt"],
-                "velocity_std_kt": context_rows[-1]["base_velocity_std_kt"],
-                "velocity_p90_abs_kt": context_rows[-1]["base_velocity_p90_abs_kt"],
+                "velocity_mean_kt": context["base_velocity_mean_kt"],
+                "velocity_std_kt": context["base_velocity_std_kt"],
+                "velocity_p90_abs_kt": context["base_velocity_p90_abs_kt"],
                 "velocity_gradient_ktkm": np.nan,
                 "velocity_gradient_p90_ktkm": np.nan,
                 "velocity_background_kt": np.nan,
                 "velocity_contrast_kt": np.nan,
                 "velocity_rescue": False,
             })
-
-        except Exception as exc:
-            errors.append({
-                "radar_site": radar,
-                "source_file": str(path),
-                "error_type": type(exc).__name__,
-                "error_message": str(exc),
-            })
-            print(f"SKIP {path}: {type(exc).__name__}: {exc}")
-            continue
 
         for obj in objects:
             rows_arr = np.asarray(obj.get("row_indices", []), dtype=int)
@@ -320,7 +324,7 @@ def _process_radar_files(radar: str, files: list[Path]):
                 "core_fraction": float(obj["core_pixel_count"]) / max(1, int(obj["pixel_count"])),
                 "track_id": obj.get("track_id", obj.get("object_id")),
                 "detector_object_id": obj.get("detector_object_id", obj.get("object_id")),
-
+                "context_only": int(bool(obj.get("context_only", False))),
                 "reflectivity_gradient_p90_dbkm": obj.get("reflectivity_gradient_p90_dbkm"),
                 "gradient_fraction_above_5dbkm": obj.get("gradient_fraction_above_5dbkm"),
                 "background_reflectivity_dbz": obj.get("background_reflectivity_dbz"),
@@ -331,7 +335,6 @@ def _process_radar_files(radar: str, files: list[Path]):
                 "velocity_background_kt": obj.get("velocity_background_kt"),
                 "velocity_contrast_kt": obj.get("velocity_contrast_kt"),
                 "velocity_rescue": obj.get("velocity_rescue"),
-                "context_only": int(bool(obj.get("context_only", False))),
                 "track_association_status": obj.get("track_association_status"),
                 "track_association_distance_px": obj.get("track_association_distance_px"),
                 "track_association_gate_px": obj.get("track_association_gate_px"),
@@ -358,7 +361,8 @@ def _process_radar_files(radar: str, files: list[Path]):
                     row[key] = obj.get(key)
             rows.append(row)
 
-    return rows, errors
+    return rows, errors, context_rows
+
 
 
 def main():
@@ -392,6 +396,7 @@ def main():
         grouped.setdefault(radar, []).append(path)
 
     rows = []
+    contexts = []
     errors = []
     # Radar sites are independent; preserve chronological ordering within each
     # radar while processing the two sites concurrently.
@@ -404,7 +409,7 @@ def main():
         for future in as_completed(futures):
             radar = futures[future]
             try:
-                radar_rows, radar_errors = future.result()
+                radar_rows, radar_errors, radar_context = future.result()
             except Exception as exc:
                 errors.append({
                     "radar_site": radar,
@@ -415,9 +420,10 @@ def main():
                 continue
             rows.extend(radar_rows)
             errors.extend(radar_errors)
+            contexts.extend(radar_context)
 
     if not rows:
-        raise SystemExit("No candidate objects were produced.")
+        raise SystemExit("No radar rows were produced.")
 
     rows.sort(key=lambda r: (
         str(r.get("radar_site", "")),
@@ -430,7 +436,7 @@ def main():
     frame = add_motion_features(frame)
     output.parent.mkdir(parents=True, exist_ok=True)
     frame.to_csv(output, index=False)
-    context_frame = pd.DataFrame(context_rows)
+    context_frame = pd.DataFrame(contexts)
     context_frame.to_csv(context_output, index=False)
     pd.DataFrame(
         errors,
