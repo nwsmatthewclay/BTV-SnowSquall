@@ -33,6 +33,12 @@ def main():
             continue
         try:
             geom = wkt.loads(geom_text)
+            if geom.geom_type != "Polygon":
+                polygons = [part for part in getattr(geom, "geoms", ()) if part.geom_type == "Polygon"]
+                if polygons:
+                    geom = max(polygons, key=lambda part: part.area)
+                else:
+                    continue
         except Exception:
             continue
 
