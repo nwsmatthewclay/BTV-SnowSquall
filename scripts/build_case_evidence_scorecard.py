@@ -119,6 +119,9 @@ def build(cases_path, surface_path, objects_path, radar_path, output_path, mping
             cases=cases.merge(r[r_cols].drop_duplicates('candidate_id'),left_on='candidate_id',right_on='candidate_id',how='left')
     if mping_path and Path(mping_path).exists():
         m=pd.read_csv(mping_path)
+        # Some acquisition joins can leave duplicate column names. Collapse duplicate
+        # names before grouping so pandas receives a one-dimensional case_id key.
+        m = m.loc[:, ~m.columns.duplicated()].copy()
         if 'case_id' in m.columns:
             counts=m.groupby('case_id').size().rename('mping_report_count')
             cases=cases.merge(counts,on='case_id',how='left')
