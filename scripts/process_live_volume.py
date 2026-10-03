@@ -252,7 +252,7 @@ def process_volume(
             *np.gradient(field, 1.0, edge_order=1)
         )
 
-    detections = detect_reflectivity_objects(data)
+    detections = detect_reflectivity_objects(data, velocity=gridded.get("velocity"))
     metadata = volume_metadata(radar, path)
     metadata["radar_origin"] = list(radar_origin) if radar_origin is not None else None
     raw_timestamp = metadata["scan_time_utc"]
@@ -440,6 +440,10 @@ def process_volume(
             "gradient_fraction_above_5dbkm": obj.get("gradient_fraction_above_5dbkm"),
             "background_reflectivity_dbz": obj.get("background_reflectivity_dbz"),
             "reflectivity_contrast_db": obj.get("reflectivity_contrast_db"),
+            "velocity_gradient_p90_ktkm": obj.get("velocity_gradient_p90_ktkm"),
+            "velocity_background_kt": obj.get("velocity_background_kt"),
+            "velocity_contrast_kt": obj.get("velocity_contrast_kt"),
+            "velocity_rescue": obj.get("velocity_rescue"),
             "max_reflectivity_dbz": max_z,
             "mean_reflectivity_dbz": mean_z,
             "core_pixel_count": int(obj["core_pixel_count"]),
