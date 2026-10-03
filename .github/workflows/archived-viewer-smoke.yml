@@ -90,7 +90,14 @@ jobs:
         env:
           GITHUB_SHA: ${{ github.sha }}
         run: |
-          python scripts/build_static_viewer.py             --objects data/derived/archived_viewer_objects_annotated.csv             --cases data/manifests/banacos_2014_cases.csv             --output-dir data/derived/viewer             --frames-root data/derived/viewer
+          python scripts/build_static_viewer.py \
+            --objects data/derived/archived_viewer_objects_annotated.csv \
+            --cases data/manifests/banacos_2014_cases.csv \
+            --output-dir data/derived/viewer \
+            --frames-root data/derived/viewer \
+            --replay-dir data/derived/operational_replay \
+            --model-root model_bundle \
+            --model-summary model_bundle/snow_squall_candidate_refresh_summary.json
 
       - name: Validate viewer package
         run: |
@@ -100,7 +107,8 @@ jobs:
           root = Path("data/derived/viewer/data")
           catalog = json.loads((root / "catalog.json").read_text())
           assert catalog["cases"], "Viewer catalog is empty"
-          assert catalog["probability_status"] == "not_scored"
+          assert catalog["probability_status"] == "research_candidate_scored"
+          assert catalog["historical_live_scorer_scored_object_scans"] > 0
           assert catalog["data_status"] == "research_pilot"
           case = catalog["cases"][0]
           assert case["radar_frames"], "No archived radar frames were exported"
@@ -119,7 +127,7 @@ jobs:
           mkdir -p _site
           cp viewer/*.html viewer/*.js viewer/*.css _site/
           cp -R data/derived/viewer/data _site/data
-          printf 'BTV Snow Squall Archived Viewer Smoke Test\nCase: %s\nRadar: %s\nResearch/pilot historical reconstruction only.\nProbability scoring is not exposed.\n'             "${{ inputs.case_id || 'BTV20060224' }}" "${{ inputs.radar_site || 'KCXX' }}" > _site/README.txt
+          printf 'BTV Snow Squall Archived Viewer Smoke Test\nCase: %s\nRadar: %s\nResearch/pilot historical reconstruction only.\nProbability scoring is exposed as research-only historical live-scorer replay.\n'             "${{ inputs.case_id || 'BTV20060224' }}" "${{ inputs.radar_site || 'KCXX' }}" > _site/README.txt
 
       - name: Upload static viewer package
         uses: actions/upload-artifact@v4
