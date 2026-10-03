@@ -69,6 +69,7 @@
     <span class="live-feed-badge" id="feedBadge">INITIALIZING</span>
     <a class="nav-link" href="index.html">Historical Explorer</a>
     <a class="nav-link" href="training.html">Training Replay</a>
+    <a class="nav-link" href="validation.html">Independent Validation</a>
     <button id="refreshBtn">Refresh</button>
   </div>
 </header>
@@ -147,10 +148,10 @@
 
 <footer>
   <div class="timeline-head">
-    <span class="live-footer-note">LIVE RADAR • <b>KCXX + KTYX</b> • automatic page refresh every 60 seconds</span>
+    <span id="timelineTime" class="live-footer-note">Latest radar: —</span>
     <div><button id="footerRefreshBtn" type="button">Refresh now</button><span id="footerRefreshTime">—</span></div>
   </div>
-  <input id="slider" type="range" min="0" max="0" value="0" aria-label="Live refresh indicator" disabled>
+  <input id="slider" type="range" min="0" max="30" value="0" aria-label="Radar age in minutes" disabled>
 </footer>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
