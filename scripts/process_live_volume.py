@@ -280,6 +280,26 @@ def process_volume(
             radar_motion = None
 
     tracked = tracker.update(timestamp, detections, radar_motion=radar_motion)
+
+    # Whole-scan base-radar context accompanies every detected object. This is
+    # distinct from object-footprint statistics and is available to the model.
+    finite_base_refl = data[np.isfinite(data)]
+    velocity_grid = gridded.get("velocity")
+    finite_base_vel = velocity_grid[np.isfinite(velocity_grid)] if velocity_grid is not None else np.asarray([], dtype=float)
+    base_context = {
+        "base_reflectivity_mean_dbz": float(np.mean(finite_base_refl)) if finite_base_refl.size else None,
+        "base_reflectivity_max_dbz": float(np.max(finite_base_refl)) if finite_base_refl.size else None,
+        "base_reflectivity_p90_dbz": float(np.percentile(finite_base_refl, 90)) if finite_base_refl.size else None,
+        "base_reflectivity_valid_fraction": float(finite_base_refl.size / data.size) if data.size else 0.0,
+        "base_velocity_mean_kt": float(np.mean(finite_base_vel) * 1.94384449244) if finite_base_vel.size else None,
+        "base_velocity_std_kt": float(np.std(finite_base_vel) * 1.94384449244) if finite_base_vel.size else None,
+        "base_velocity_p90_abs_kt": float(np.percentile(np.abs(finite_base_vel), 90) * 1.94384449244) if finite_base_vel.size else None,
+        "base_velocity_valid_fraction": float(finite_base_vel.size / velocity_grid.size) if velocity_grid is not None and velocity_grid.size else 0.0,
+        "scan_has_reflectivity": bool(finite_base_refl.size),
+        "scan_has_base_velocity": bool(finite_base_vel.size),
+        "detected_object_count": int(len(tracked)),
+    }
+
     save_previous_radar_field(state_path, data, timestamp)
     features = []
     current_positions = {}
@@ -353,6 +373,17 @@ def process_volume(
             "timestamp": timestamp,
             "max_reflectivity_dbz": max_z,
             "mean_reflectivity_dbz": mean_z,
+            "base_reflectivity_mean_dbz": base_context["base_reflectivity_mean_dbz"],
+            "base_reflectivity_max_dbz": base_context["base_reflectivity_max_dbz"],
+            "base_reflectivity_p90_dbz": base_context["base_reflectivity_p90_dbz"],
+            "base_reflectivity_valid_fraction": base_context["base_reflectivity_valid_fraction"],
+            "base_velocity_mean_kt": base_context["base_velocity_mean_kt"],
+            "base_velocity_std_kt": base_context["base_velocity_std_kt"],
+            "base_velocity_p90_abs_kt": base_context["base_velocity_p90_abs_kt"],
+            "base_velocity_valid_fraction": base_context["base_velocity_valid_fraction"],
+            "scan_has_reflectivity": base_context["scan_has_reflectivity"],
+            "scan_has_base_velocity": base_context["scan_has_base_velocity"],
+            "detected_object_count": base_context["detected_object_count"],
             "area_km2": area_km2,
         }
 
