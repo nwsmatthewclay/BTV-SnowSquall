@@ -145,6 +145,7 @@ NON_PREDICTOR_COLUMNS = TARGET_COLUMNS | {
     "future_information_policy", "supervision_class", "population_track_key", "geometry_wkt", "truth_tier", "evidence_weight",
     "centroid_lat", "centroid_lon", "radar_lat", "radar_lon",
     "station_lat", "station_lon", "grid_x_km", "grid_y_km", "touches_grid_edge",
+    "candidate_rank_score", "candidate_rank_tier",
 }
 
 
