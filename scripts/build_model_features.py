@@ -304,6 +304,13 @@ def build_features(frame: pd.DataFrame) -> pd.DataFrame:
         time_col="scan_dt",
     )
 
+    # Convert the detector's categorical geometry class into a live-compatible
+    # numeric state while preserving object_mode for diagnostics/viewing.
+    if "object_mode" in df.columns and "is_band" not in df.columns:
+        df["is_band"] = (
+            df["object_mode"].astype("string").str.lower().eq("band").astype(float)
+        )
+
     if {"max_reflectivity_dbz_rate_per_min", "cape_jkg"}.issubset(df.columns):
         df["cape_weighted_reflectivity_growth"] = (
             pd.to_numeric(df["max_reflectivity_dbz_rate_per_min"], errors="coerce")
