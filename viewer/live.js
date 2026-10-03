@@ -156,6 +156,11 @@ function renderRadarCards(summary){
       "<div class='live-stat'><span>Objects</span><b>"+x.features.length+"</b></div>"+
       "<div class='live-stat'><span>History</span><b>"+x.history.length.toLocaleString()+" records</b></div>"+
       "<div class='live-stat'><span>Publish state</span><b>"+esc(x.health?.status||"unknown")+"</b></div>"+
+      "<div class='live-stat'><span>Model environment</span><b>"+(
+        x.health?.environment?.ready_objects
+          ? x.health.environment.ready_objects+" ready • "+(x.health.environment.not_ready_objects||0)+" blocked"
+          : ((x.health?.environment?.not_ready_objects||0)>0?"BLOCKED • "+x.health.environment.not_ready_objects+" object(s)":"No current objects")
+      )+"</b></div>"+
       "<div class='live-stat'><span>Live shadow</span><b>"+(x.shadow?.scored_object_count??0)+" scored</b></div></div>";
   }).join("");
 }
@@ -385,6 +390,7 @@ function selectObject(p){
     "<div class='live-stat'><span>Age</span><b>"+(p.age_scans==null?"—":esc(p.age_scans+" scans"))+"</b></div>"+
     "<div class='live-stat'><span>Z trend</span><b>"+num(p.reflectivity_trend_dbz_per_hr)+" dBZ/hr</b></div>"+
     "<div class='live-stat'><span>Environment</span><b>"+esc(envSource)+" • "+esc(envStatus)+"</b></div>"+
+    "<div class='live-stat'><span>Model environment</span><b>"+(p.environment_model_ready===true?"READY":(p.environment_model_ready===false?"BLOCKED":"—"))+" • "+num(p.environment_age_minutes,1)+" min</b></div>"+
     renderEnvironment(envFields)+
     "<div class='live-card'><h3>Live research shadow</h3>"+shadowGrid(shadowRecord(p.radar_site,p.track_id))+
     "<div class='shadow-note'>Candidate model scored this live object separately from the operational feed. Research only.</div></div>"+
