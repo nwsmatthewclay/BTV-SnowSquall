@@ -1,62 +1,59 @@
 <!doctype html>
 <html lang="en">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>BTV Snow Squall • Live Object Workbench</title>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>BTV Snow Squall Live Explorer</title>
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
-<link rel="stylesheet" href="style.css?v=20261003-11">
+<link rel="stylesheet" href="style.css?v=20261003-live-v2">
 <style>
-.live-main{display:grid;grid-template-rows:minmax(0,1fr) minmax(240px,27vh);height:calc(100vh - 68px);min-height:0}
-.live-top{display:grid;grid-template-columns:minmax(0,1fr) 330px;min-height:0}
-#liveMap{min-width:0;min-height:0;height:100%;background:#14202a}
-.live-sidebar{padding:12px;background:var(--panel);border-left:1px solid var(--line);overflow:auto;min-height:0}
-.live-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:9px}
-.live-card{background:#121e29;border:1px solid #2b4051;border-radius:7px;padding:9px}
-.live-card h3{margin:0 0 6px;font-size:13px}
-.live-stat{display:flex;justify-content:space-between;gap:12px;padding:4px 0;color:#b9c7d4}
-.live-stat b{color:#fff;text-align:right}
-.live-status{padding:9px 10px;background:#141f28;border-left:3px solid var(--green);border-radius:5px;margin-top:8px}
-.live-status.degraded{border-left-color:var(--amber)}
-.live-status strong{display:block;color:#fff}
-.live-object-list{display:grid;gap:7px;margin-top:8px}
-.live-object{background:#16212b;border:1px solid #243847;border-radius:7px;padding:8px;cursor:pointer}
-.live-object:hover{border-color:#4f7591}
-.live-object.selected{border-color:#fff;box-shadow:inset 3px 0 0 var(--accent)}
-.live-object .title{font-weight:750;color:#9dd4ff}
-.live-object .sub{font-size:11px;color:var(--muted);margin-top:2px}
-.live-object .chips{display:flex;gap:5px;flex-wrap:wrap;margin-top:6px}
-.chip{padding:3px 6px;border-radius:4px;background:#243746;color:#c8d7e5;font-size:10px}
-.nav-link{color:#9dd4ff;text-decoration:none;border:1px solid #405468;border-radius:6px;padding:6px 9px}
-.detail-drawer{background:var(--panel);border-top:1px solid var(--line);display:grid;grid-template-columns:330px minmax(0,1fr);min-height:0}
-.detail-summary{padding:11px 13px;border-right:1px solid var(--line);overflow:auto}
-.detail-history{padding:11px 13px;min-width:0;overflow:hidden}
-.detail-title{font-size:18px;font-weight:800;color:#dcecff}
-.detail-sub{font-size:11px;color:var(--muted);margin-top:2px}
-.detail-placeholder{height:100%;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:12px}
-.detail-metrics{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:9px}
-.detail-model{margin-top:9px}
-.detail-model .live-status{margin-top:0}
-.history-scroll{max-height:225px;overflow:auto}
-.history-table{border-collapse:collapse;width:100%;min-width:760px;font-size:10px}
-.history-table th,.history-table td{padding:6px 7px;border-bottom:1px solid #263847;text-align:left;white-space:nowrap}
-.history-table th{position:sticky;top:0;background:#162431;color:#8ea1b4;font-size:9px;text-transform:uppercase;letter-spacing:.04em;z-index:1}
-.history-table tbody tr{cursor:pointer}
-.history-table tbody tr:hover{background:#192a38}
-.history-table tbody tr.current{background:#21394a;box-shadow:inset 3px 0 0 var(--accent)}
-.history-table td:nth-child(2){font-weight:700;color:#fff}
-.history-empty{padding:9px 10px;color:var(--muted);font-size:10px}
-.live-env-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:8px}
-.live-env-grid .env-item{background:#16212b;padding:7px 8px;border-radius:5px;border:1px solid #223342}
-.live-env-grid .env-item span{display:block;color:var(--muted);font-size:10px}
-.live-env-grid .env-item b{display:block;font-size:12px;margin-top:2px}
-.shadow-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-top:8px}.shadow-cell{background:#172633;border:1px solid #2a4558;border-radius:5px;padding:7px 5px;text-align:center}.shadow-cell span{display:block;color:#8ea1b4;font-size:9px}.shadow-cell b{display:block;color:#fff;font-size:14px;margin-top:2px}.shadow-note{margin-top:7px;color:#8ea1b4;font-size:10px;line-height:1.35}
+/* Live viewer uses the exact historical outer frame: header → map/panel → footer. */
+#liveMap{position:relative;min-width:0;height:100%;background:#14202a;overflow:hidden}
+#panel.live-sidebar{min-width:0;height:100%;overflow:auto}
+.live-map-wrap{position:relative;width:100%;height:100%}
+.live-status-strip{margin-top:8px;padding:8px 9px;border:1px solid #263847;border-radius:6px;background:#111c26;color:#aebecd;font-size:10px}
+.live-status-strip b{color:#fff}
+.live-panel-note{font-size:9px;color:#7f95a9;line-height:1.35;margin-top:5px}
+.live-feed-badge{display:inline-flex;align-items:center;padding:5px 8px;border-radius:999px;border:1px solid #405468;background:#11212d;color:#8fe0bc;font-size:9px;font-weight:850;letter-spacing:.08em}
+.live-map-hud{position:absolute;left:14px;top:14px;z-index:900;background:rgba(8,15,22,.91);border:1px solid rgba(89,122,147,.72);border-radius:8px;padding:9px 11px;min-width:255px;box-shadow:0 8px 25px rgba(0,0,0,.30);backdrop-filter:blur(4px)}
+.live-map-hud-title{display:flex;justify-content:space-between;gap:16px;align-items:baseline}
+.live-map-hud-title span{font-size:9px;letter-spacing:.13em;color:#7f9bb0;font-weight:800}
+.live-map-hud-title b{font-size:10px;color:#dcecff}
+.live-map-hud-sub{display:flex;gap:6px;margin-top:4px;color:#a9bbc9;font-size:10px}
+.live-map-hud-sub span:first-child{color:#8fd4ff;font-weight:800}
+.map-display-controls{position:absolute;left:14px;top:88px;z-index:900;display:flex;gap:4px;align-items:center;background:rgba(8,15,22,.88);border:1px solid rgba(89,122,147,.58);padding:4px;border-radius:7px;box-shadow:0 6px 18px rgba(0,0,0,.24)}
+.control-label{padding:0 5px;color:#71879a;font-size:9px;font-weight:800;letter-spacing:.08em}
+.display-btn{padding:4px 8px;font-size:9px;border-radius:5px;background:#162530;border:1px solid #324857;color:#a9bdcb}
+.display-btn.active{background:#2a4e63;border-color:#77bbde;color:#fff;box-shadow:inset 0 -2px 0 #8bd0f1}
+.map-legend{position:absolute;right:14px;bottom:14px;z-index:900;width:285px;padding:9px 11px;background:rgba(8,15,22,.9);border:1px solid rgba(89,122,147,.65);border-radius:7px;box-shadow:0 8px 25px rgba(0,0,0,.28);backdrop-filter:blur(4px)}
+.legend-caption{font-size:9px;letter-spacing:.1em;font-weight:800;color:#a9bbc9;margin-bottom:5px}
+.legend-bar{display:grid;grid-template-columns:22px repeat(9,1fr) 25px;gap:2px;align-items:center;font-size:8px;color:#7f95a8}
+.legend-bar i{height:8px;border-radius:2px}
+.legend-bar .l12{background:#385865}.legend-bar .l18{background:#417493}.legend-bar .l24{background:#41a7dc}.legend-bar .l30{background:#1bb780}.legend-bar .l35{background:#84ca3c}.legend-bar .l40{background:#eed428}.legend-bar .l45{background:#f28b1d}.legend-bar .l55{background:#d52f22}.legend-bar .l65{background:#e83db6}
+.legend-bar span:last-child{text-align:right}
+.legend-note{margin-top:5px;color:#7890a3;font-size:8px;line-height:1.3}
+.map-empty-state{position:absolute;left:16px;bottom:16px;z-index:890;display:none;min-width:260px;padding:10px 12px;text-align:left;background:rgba(8,15,22,.90);border:1px solid #42596a;border-radius:8px;box-shadow:0 12px 30px rgba(0,0,0,.34)}
+.map-empty-state.visible{display:block}
+.map-empty-state strong{display:block;color:#dcecff;font-size:11px}
+.map-empty-state span{display:block;margin-top:3px;color:#8499aa;font-size:9px;max-width:310px;line-height:1.4}
+.live-card{margin-top:10px}
+.live-sidebar .section-head{margin-top:14px}
+.live-sidebar .live-object-list{max-height:235px;overflow:auto}
+.live-sidebar .live-track-toggle{margin-top:7px;padding:7px 8px;background:#111c26;border:1px solid #263847;border-radius:6px;display:flex;justify-content:space-between;gap:8px;align-items:center}
+.live-sidebar .live-track-toggle label{display:flex;align-items:center;gap:5px;color:#b9c7d4;font-size:10px}
+.live-sidebar .live-track-toggle span{color:#71869a;font-size:9px;text-align:right}
+.live-sidebar .selected-card{margin-top:7px}
+.live-sidebar .detail-placeholder{padding:20px 10px;line-height:1.5}
+.live-sidebar .track-history,.live-sidebar .track-trend{margin-top:7px}
+.live-sidebar .history-scroll{max-height:210px}
+.live-footer-note{color:#8ea1b4}
+.live-footer-note b{color:#fff}
 @media(max-width:900px){
-  .live-main{grid-template-rows:minmax(0,1fr) 380px}
-  .live-top{grid-template-columns:1fr}
-  .live-sidebar{position:absolute;right:0;top:68px;bottom:380px;width:min(360px,92vw);z-index:1000;box-shadow:-8px 0 25px rgba(0,0,0,.35)}
-  .detail-drawer{grid-template-columns:1fr}
-  .detail-history{border-top:1px solid var(--line)}
+  #panel.live-sidebar{position:absolute;right:0;top:68px;bottom:60px;width:min(365px,92vw);z-index:1000;box-shadow:-8px 0 25px rgba(0,0,0,.35)}
+  .map-legend{width:225px;right:8px;bottom:8px}
+  .live-map-hud{left:8px;top:8px}
+  .map-display-controls{left:8px;top:82px}
+  .live-feed-badge{display:none}
 }
 </style>
 </head>
@@ -64,21 +61,24 @@
 <header>
   <div>
     <div class="eyebrow">BTV SNOW SQUALL PROJECT</div>
-    <h1>Live Snow Squall Object Workbench</h1>
+    <h1>Live Snow Squall Explorer</h1>
     <div id="subtitle">Loading real-time KCXX + KTYX radar objects…</div>
   </div>
   <div class="header-actions">
-    <span class="badge research">LIVE • RESEARCH</span><span class="live-feed-badge" id="feedBadge">INITIALIZING</span>
-    <a class="nav-link" href="index.html">Historical Explorer</a><a class="nav-link" href="training.html">Training Replay</a>
+    <span class="badge research">LIVE • RESEARCH</span>
+    <span class="live-feed-badge" id="feedBadge">INITIALIZING</span>
+    <a class="nav-link" href="index.html">Historical Explorer</a>
+    <a class="nav-link" href="training.html">Training Replay</a>
     <button id="refreshBtn">Refresh</button>
   </div>
 </header>
-<main class="live-main">
-  <div class="live-top">
-    <section id="liveMap" aria-label="Live radar object map">
-      <div class="map-hud">
-        <div class="map-hud-title"><span>RADAR OBJECT ANALYSIS</span><b id="hudScan">—</b></div>
-        <div class="map-hud-sub"><span id="hudMode">CLEAN DISPLAY</span><span>•</span><span id="hudSources">KCXX + KTYX</span><span>•</span><span id="hudObjects">0 objects</span></div>
+
+<main>
+  <section id="liveMap" aria-label="Live radar object map">
+    <div class="live-map-wrap">
+      <div class="live-map-hud">
+        <div class="live-map-hud-title"><span>RADAR OBJECT ANALYSIS</span><b id="hudScan">—</b></div>
+        <div class="live-map-hud-sub"><span id="hudMode">CLEAN DISPLAY</span><span>•</span><span id="hudSources">KCXX + KTYX</span><span>•</span><span id="hudObjects">0 objects</span></div>
       </div>
       <div class="map-display-controls" aria-label="Radar display controls">
         <span class="control-label">DISPLAY</span>
@@ -91,56 +91,69 @@
         <div class="legend-bar">
           <span>12</span><i class="l12"></i><i class="l18"></i><i class="l24"></i><i class="l30"></i><i class="l35"></i><i class="l40"></i><i class="l45"></i><i class="l55"></i><i class="l65"></i><span>75+</span>
         </div>
-        <div class="legend-note">Clean mode suppresses weak speckle and conservative low-CC non-meteorological echoes for display only.</div>
+        <div class="legend-note">Clean mode suppresses weak display noise only. Raw Level-II remains the scientific source for object detection and model features.</div>
       </div>
       <div class="map-empty-state" id="mapEmptyState"><strong>No significant echoes</strong><span>Radar feed is healthy. Weak returns below the display threshold are intentionally muted.</span></div>
-    </section>
-    <aside class="live-sidebar">
-      <div class="live-status" id="overallStatus">
-        <strong id="overallTitle">Loading live feeds…</strong>
-        <span id="overallText">Checking KCXX and KTYX.</span>
-      </div>
-      <div class="live-grid" id="radarCards"></div>
-      <div class="live-card live-mosaic-card" id="mosaicCard">
-        <h3>Radar display</h3>
-        <div class="live-stat"><span>Status</span><b id="mosaicStatus">Waiting for mosaic…</b></div>
-        <div class="live-stat"><span>Sources</span><b id="mosaicSources">—</b></div>
-        <div class="live-stat"><span>Radar time</span><b id="mosaicTime">—</b></div>
-        <div class="mosaic-note">Clean mode is a human-display product. Raw Level-II remains the scientific source for object detection and model features.</div>
-      </div>
-
-      <div class="section-head"><h2>Current objects</h2><span id="objectCount">0</span></div><div class="live-track-toggle"><label><input type="checkbox" id="showAllLiveTracks"> Show all tracks (research/QC)</label><span>Default: active-object tails only</span></div>
-      <div class="live-object-list" id="objectList"></div>
-
-      <div class="section-head compact"><h3>Model status</h3></div>
-      <div class="live-status degraded">
-        <strong>Operational probability: gated</strong>
-        <span>Operational probability is gated. Probability scoring disabled for the operational feed; candidate scoring is displayed only in the isolated research shadow feed while the model remains under validation.</span>
-      </div>
-      <div class="live-card" id="shadowCard">
-        <h3>Live research shadow</h3>
-        <div id="shadowCardBody">Waiting for the expanded candidate model bundle.</div>
-        <div class="shadow-note">Research-only live scoring. This feed is isolated from operational products and does not constitute a warning recommendation.</div>
-      </div>
-    </aside>
-  </div>
-
-  <section class="detail-drawer" aria-label="Selected object details">
-    <div class="detail-summary" id="selectedSummary">
-      <div class="detail-placeholder">Select a live storm object to load its evolving diagnostics and live research shadow score below the map.</div>
-    </div>
-    <div class="detail-history">
-      <div class="section-head compact"><h3>Scan-to-scan object evolution</h3><span id="selectionState">None</span><span id="liveTrackCount">—</span></div>
-      <div id="liveHistory" class="track-history">
-        <div class="history-empty">Select a current object to see its scan-by-scan history.</div>
-      </div>
-      <div id="liveTrend" class="track-trend">
-        <div class="history-empty">Select a live object to see intensity, size, motion, and probability evolution.</div>
-      </div>
     </div>
   </section>
+
+  <aside id="panel" class="live-sidebar">
+    <div class="live-status" id="overallStatus">
+      <strong id="overallTitle">Loading live feeds…</strong>
+      <span id="overallText">Checking KCXX and KTYX.</span>
+    </div>
+
+    <div class="section-head compact"><h2>Radar feeds</h2><span id="liveFeedCount">2</span></div>
+    <div class="live-grid" id="radarCards"></div>
+
+    <div class="live-card" id="mosaicCard">
+      <div class="section-head compact"><h3>Radar display</h3><span id="mosaicStatus">WAITING</span></div>
+      <div class="live-stat"><span>Sources</span><b id="mosaicSources">—</b></div>
+      <div class="live-stat"><span>Radar time</span><b id="mosaicTime">—</b></div>
+      <div class="live-panel-note">Display mosaic only. Detection/model inputs continue to come directly from decoded Level-II radar data.</div>
+    </div>
+
+    <div class="object-control">
+      <div class="object-control-head">
+        <div><span>Cells at current scan</span> <b id="objectCount">0</b></div>
+        <label><input type="checkbox" id="showAllLiveTracks"> All tracks</label>
+      </div>
+      <div class="object-control-note">Cell outlines are the live detector inventory. Retained history appears only when the current scan has no active objects.</div>
+      <div class="live-object-list" id="objectList"></div>
+    </div>
+
+    <div class="section-head"><h2>Selected object</h2><span id="selectionState">No object selected</span></div>
+    <div class="selected-card" id="selectedSummary">
+      <div class="detail-placeholder">Select a live storm object to inspect radar structure, motion, environment, and the isolated research shadow score.</div>
+    </div>
+
+    <div class="section-head compact"><h3>Scan-to-scan evolution</h3><span id="liveTrackCount">—</span></div>
+    <div id="liveHistory" class="track-history"><div class="history-empty">Select a live object to see its retained scan history.</div></div>
+
+    <div class="section-head compact"><h3>Trend window</h3></div>
+    <div id="liveTrend" class="track-trend"><div class="history-empty">Select a live object to see intensity, area, motion, and research-score evolution.</div></div>
+
+    <div class="section-head compact"><h3>Model status</h3><span>RESEARCH</span></div>
+    <div class="live-status degraded">
+      <strong>Operational probability: gated</strong>
+      <span>Candidate probability is displayed only through the isolated research shadow feed while validation continues.</span>
+    </div>
+    <div class="live-card" id="shadowCard">
+      <div class="section-head compact"><h3>Live research shadow</h3><span>ISOLATED</span></div>
+      <div id="shadowCardBody">Waiting for the expanded candidate model bundle.</div>
+    </div>
+  </aside>
 </main>
+
+<footer>
+  <div class="timeline-head">
+    <span class="live-footer-note">LIVE RADAR • <b>KCXX + KTYX</b> • automatic page refresh every 60 seconds</span>
+    <div><button id="footerRefreshBtn" type="button">Refresh now</button><span id="footerRefreshTime">—</span></div>
+  </div>
+  <input id="slider" type="range" min="0" max="0" value="0" aria-label="Live refresh indicator" disabled>
+</footer>
+
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<script src="live.js?v=20261003-11"></script>
+<script src="live.js?v=20261003-live-v2"></script>
 </body>
 </html>
