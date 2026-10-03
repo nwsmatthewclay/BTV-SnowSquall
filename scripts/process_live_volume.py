@@ -67,6 +67,14 @@ def object_geometry(mask, lat, lon, spacing_km=1.0):
     geom = unary_union(cells).buffer(0)
     if geom.is_empty:
         return None, float(len(xx) * spacing_km**2)
+    if geom.geom_type != "Polygon":
+        polygons = [part for part in getattr(geom, "geoms", ()) if part.geom_type == "Polygon"]
+        if not polygons:
+            return None, float(len(xx) * spacing_km**2)
+        # The detector should have produced one connected component. If raster
+        # geometry still fragments, retain the dominant footprint instead of
+        # publishing an invalid MultiPolygon operational object.
+        geom = max(polygons, key=lambda part: part.area)
 
     return geom.__geo_interface__, float(len(xx) * spacing_km**2)
 
@@ -495,6 +503,8 @@ def process_volume(
             "velocity_background_kt": obj.get("velocity_background_kt"),
             "velocity_contrast_kt": obj.get("velocity_contrast_kt"),
             "velocity_rescue": obj.get("velocity_rescue"),
+            "candidate_rank_score": obj.get("candidate_rank_score"),
+            "candidate_rank_tier": obj.get("candidate_rank_tier"),
             "max_reflectivity_dbz": max_z,
             "mean_reflectivity_dbz": mean_z,
             "core_pixel_count": int(obj["core_pixel_count"]),
