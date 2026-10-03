@@ -101,16 +101,20 @@ def main():
     output.parent.mkdir(parents=True, exist_ok=True)
     result.to_csv(output, index=False)
 
+    statuses = result["status"] if "status" in result.columns else pd.Series(dtype="string")
+    timing = result["surface_timing_consistent"] if "surface_timing_consistent" in result.columns else pd.Series(dtype="boolean")
+    minimum_visibility = result["minimum_visibility_m"] if "minimum_visibility_m" in result.columns else pd.Series(dtype="float64")
     summary = {
         "cases": int(len(result)),
-        "surface_files_missing": int((result["status"] == "missing_surface_file").sum()),
-        "surface_files_empty": int((result["status"] == "empty_surface_file").sum()),
+        "surface_files_missing": int(statuses.eq("missing_surface_file").sum()),
+        "surface_files_empty": int(statuses.eq("empty_surface_file").sum()),
         "download_error_cases": 0,
-        "timing_consistent_cases": int(result["surface_timing_consistent"].fillna(False).sum()),
+        "timing_consistent_cases": int(timing.fillna(False).sum()),
         "minimum_visibility_km_all_cases": (
-            float(pd.to_numeric(result["minimum_visibility_m"], errors="coerce").min() / 1000.0)
-            if result["minimum_visibility_m"].notna().any() else None
+            float(pd.to_numeric(minimum_visibility, errors="coerce").min() / 1000.0)
+            if minimum_visibility.notna().any() else None
         ),
+        "surface_evidence_status": "no_case_rows" if result.empty else "evaluated",
     }
     Path(args.summary).write_text(json.dumps(summary, indent=2) + "\n", encoding="utf-8")
     print(json.dumps(summary, indent=2))
