@@ -147,11 +147,12 @@ def replay_case(input_dir: Path, output_dir: Path, state_path: Path, case_id: st
             finished=started
         else:
             try:
+                research_replay=(model_dir is not None)
                 process_kwargs = {
                     "history_jsonl_path": history_jsonl,
                     "history_csv_path": history_csv,
                     "model_dir": model_dir,
-                    "research_replay": (model_dir is not None),
+                    "research_replay": research_replay,
                 }
                 # Keep replay compatible with lightweight test doubles and
                 # downstream callers that predate the batched runtime interface.
