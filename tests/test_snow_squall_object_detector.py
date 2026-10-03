@@ -133,3 +133,14 @@ def test_coherent_base_velocity_can_rescue_modest_reflectivity():
     assert obj["velocity_rescue"] is True
     assert obj["velocity_mean_kt"] > 20.0
     assert obj["velocity_contrast_kt"] >= 8.0
+
+
+def test_candidate_rank_score_is_monotonic_and_tiered():
+    field = np.full((40, 40), 10.0)
+    field[18:22, 8:32] = 24.0
+    field[19:21, 14:26] = 34.0
+    objects = detect_reflectivity_objects(field)
+    assert len(objects) == 1
+    score = objects[0]["candidate_rank_score"]
+    assert 0.0 <= score <= 100.0
+    assert objects[0]["candidate_rank_tier"] in {"low", "weak", "candidate", "strong", "priority"}
