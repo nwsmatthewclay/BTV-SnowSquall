@@ -54,8 +54,13 @@ def score_case(path,model_root):
             available=[c for c in MIN_INSTANTANEOUS_FEATURES if c in frame.columns and frame.tail(1)[c].notna().any()]
             for h in HORIZONS:
                 rt=rts[h]; c=feature_coverage(frame.tail(1),rt.feature_columns); cov[str(h)]=c
-                if c["fraction"]<MIN_FEATURE_COVERAGE: errs[str(h)]=f"low_feature_coverage:{c['fraction']:.3f}"; continue
-                if len(available)<6: errs[str(h)]="insufficient_instantaneous_object_features"; continue
+                live_gate = []
+                if c["fraction"] < MIN_FEATURE_COVERAGE:
+                    live_gate.append(f"low_feature_coverage:{c['fraction']:.3f}")
+                if len(available) < 6:
+                    live_gate.append("insufficient_instantaneous_object_features")
+                if live_gate:
+                    p.setdefault("historical_live_gate", {})[str(h)] = live_gate
                 try:
                     result=rt.score_candidate(frame.tail(1))
                     if result: raw[str(h)]=float(result[0])
@@ -64,7 +69,7 @@ def score_case(path,model_root):
             p["research_probabilities"]={str(h):projected.get("cumulative",{}).get(str(h)) for h in HORIZONS}
             p["research_probabilities_raw"]=raw
             p["research_interval_probabilities"]=projected.get("interval",{}) if raw else {}
-            p["research_score_metadata"]={"mode":"historical_live_shadow_replay","release_status":"candidate_only_not_operational","feature_coverage":cov,"score_errors":errs,"national_pretraining":national,"model_artifacts":info,"leakage_policy":"current_and_prior_track_scans_only"}
+            p["research_score_metadata"]={"mode":"historical_live_shadow_replay","release_status":"candidate_only_not_operational","feature_coverage":cov,"score_errors":errs,"live_gate_would_block":p.get("historical_live_gate",{}),"national_pretraining":national,"model_artifacts":info,"leakage_policy":"current_and_prior_track_scans_only","diagnostic_gate_policy":"historical_replay_scores_model_even_when_live_coverage_gate_would_block"}
             if raw: scored+=1
             if errs: errors+=1
     payload.setdefault("metadata",{})["historical_live_scorer"]={"status":"scored","mode":"historical_live_shadow_replay","updated_utc":datetime.now(timezone.utc).isoformat(),"candidate_only_not_operational":True,"scored_object_scans":scored,"object_scans_with_errors":errors,"model_info":info}
@@ -74,7 +79,7 @@ def main():
     ap=argparse.ArgumentParser(); ap.add_argument("--input-root",type=Path,required=True); ap.add_argument("--output-root",type=Path,required=True); ap.add_argument("--model-root",type=Path,required=True); a=ap.parse_args()
     a.output_root.mkdir(parents=True,exist_ok=True); total=errs=cases=0
     for path in sorted(a.input_root.glob("*.geojson")):
-        payload,n,e=score_case(path,a.model_root); (a.output_root/path.name).write_text(json.dumps(payload,separators=(",",":"))+"\\n",encoding="utf-8"); total+=n; errs+=e; cases+=1; print(path.name,"scored:",n,"errors:",e)
+        payload,n,e=score_case(path,a.model_root); (a.output_root/path.name).write_text(json.dumps(payload,separators=(",",":"))+chr(10),encoding="utf-8"); total+=n; errs+=e; cases+=1; print(path.name,"scored:",n,"errors:",e)
     summary={"status":"complete","mode":"historical_live_shadow_replay","updated_utc":datetime.now(timezone.utc).isoformat(),"cases":cases,"scored_object_scans":total,"object_scans_with_errors":errs,"candidate_only_not_operational":True}
-    (a.output_root/"historical_live_scorer_summary.json").write_text(json.dumps(summary,indent=2)+"\\n",encoding="utf-8"); print(json.dumps(summary,indent=2))
+    (a.output_root/"historical_live_scorer_summary.json").write_text(json.dumps(summary,indent=2)+chr(10),encoding="utf-8"); print(json.dumps(summary,indent=2))
 if __name__=="__main__": main()
