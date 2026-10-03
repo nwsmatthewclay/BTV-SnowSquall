@@ -14,7 +14,7 @@ from scripts.probability_postprocess import monotone_cumulative_probabilities
 
 HORIZONS = (15, 30, 45, 60)
 SITES = ("KCXX", "KTYX")
-MIN_FEATURE_COVERAGE = 0.40
+MIN_FEATURE_COVERAGE = 0.80
 MAX_ENVIRONMENT_AGE_MINUTES = 90.0
 MIN_INSTANTANEOUS_FEATURES = {
     "max_reflectivity_dbz",
