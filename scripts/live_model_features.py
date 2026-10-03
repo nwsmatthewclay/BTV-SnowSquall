@@ -16,6 +16,7 @@ sys.path.insert(0, str(ROOT / "src"))
 import pandas as pd
 
 from snow_squall.evolution import add_environment_evolution_features, add_motion_evolution_features
+from snow_squall.environment_contract import flatten_environment
 
 
 LIVE_TO_MODEL = {
@@ -62,6 +63,13 @@ def build_live_feature_row(
     previous: dict | None = None,
     track_count: int | None = None,
 ) -> dict:
+    # Normalize nested environment.fields into the same flat vocabulary used
+    # by historical model features. This keeps publisher, shadow scoring and
+    # replay on one feature contract.
+    current = flatten_environment(current)
+    if previous is not None:
+        previous = flatten_environment(previous)
+
     row = {"timestamp": current.get("timestamp"), "track_id": current.get("track_id")}
 
     # Keep the live adapter's motion vocabulary structurally identical to the
