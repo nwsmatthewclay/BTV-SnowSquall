@@ -12,7 +12,8 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
-from shapely.geometry import MultiPoint, Polygon
+from shapely.geometry import Polygon, box
+from shapely.ops import unary_union
 
 from acquisition.level2_reader import read_level2, resolve_fields, volume_metadata
 from processing.object_detector import detect_reflectivity_objects
@@ -26,26 +27,54 @@ from processing.vertical_structure import summarize_vertical_structure
 
 
 def object_geometry(mask, lat, lon, spacing_km=1.0):
+    """Return the actual raster-cell footprint outline, not a convex hull.
+
+    Convex-hulling the detected pixels can bridge concavities and turn a real
+    snow-squall cell/band into giant triangular or wedge-shaped polygons. The
+    replay geometry should follow the detected grid cells themselves.
+    """
     yy, xx = np.where(mask)
-    if len(xx) < 3:
+    if len(xx) == 0:
         return None, np.nan, np.nan, np.nan
 
-    points = [(float(lon[y, x]), float(lat[y, x])) for y, x in zip(yy, xx)]
-    hull = MultiPoint(points).convex_hull
-    if hull.is_empty:
+    finite = (
+        np.isfinite(lat[yy, xx]) &
+        np.isfinite(lon[yy, xx])
+    )
+    yy, xx = yy[finite], xx[finite]
+    if len(xx) == 0:
+        return None, np.nan, np.nan, np.nan
+
+    dlat = np.nanmedian(np.abs(np.diff(lat, axis=0)))
+    dlon = np.nanmedian(np.abs(np.diff(lon, axis=1)))
+    fallback = float(spacing_km) / 111.0
+    if not np.isfinite(dlat) or dlat <= 0:
+        dlat = fallback
+    if not np.isfinite(dlon) or dlon <= 0:
+        mean_lat = np.nanmean(lat[yy, xx])
+        dlon = fallback / max(0.2, np.cos(np.deg2rad(mean_lat)))
+
+    cells = [
+        box(
+            float(lon[y, x] - dlon / 2.0),
+            float(lat[y, x] - dlat / 2.0),
+            float(lon[y, x] + dlon / 2.0),
+            float(lat[y, x] + dlat / 2.0),
+        )
+        for y, x in zip(yy, xx)
+    ]
+    geom = unary_union(cells).buffer(0)
+    if geom.is_empty:
         return None, np.nan, np.nan, np.nan
 
     area_km2 = float(len(xx) * spacing_km * spacing_km)
-    coords = np.asarray(hull.exterior.coords) if isinstance(hull, Polygon) else np.empty((0, 2))
-    if len(coords) >= 2:
-        dx = np.ptp(coords[:, 0]) * 111.0 * np.cos(np.deg2rad(np.nanmean(lat)))
-        dy = np.ptp(coords[:, 1]) * 111.0
-        length_km = float(max(dx, dy))
-        width_km = float(min(dx, dy))
-    else:
-        length_km = width_km = np.nan
-
-    return hull.wkt, area_km2, length_km, width_km
+    minx, miny, maxx, maxy = geom.bounds
+    mean_lat = np.nanmean(lat[yy, xx])
+    dx = (maxx - minx) * 111.0 * np.cos(np.deg2rad(mean_lat))
+    dy = (maxy - miny) * 111.0
+    length_km = float(max(dx, dy))
+    width_km = float(min(dx, dy))
+    return geom.wkt, area_km2, length_km, width_km
 
 
 def object_shape_metrics(rows, cols, spacing_km=1.0):
