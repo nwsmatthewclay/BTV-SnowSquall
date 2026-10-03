@@ -151,6 +151,7 @@ def build_live_feature_row(
         "velocity_background_kt",
         "velocity_contrast_kt",
         "velocity_rescue",
+        "detection_evidence",
         "base_reflectivity_mean_dbz",
         "base_reflectivity_max_dbz",
         "base_reflectivity_p90_dbz",
@@ -194,7 +195,7 @@ def build_live_feature_row(
     if current.get("object_mode") is not None:
         mode = str(current.get("object_mode")).strip().lower()
         row["object_mode"] = mode or None
-        row["is_band"] = 1.0 if mode == "band" else (0.0 if mode == "cell_cluster" else None)
+        row["is_band"] = 1.0 if mode == "band" else (0.0 if mode == "cell_cluster" else _number(current.get("is_band")))
 
     # Preserve legacy aliases used by replay/tests.
     row["reflectivity_max_dbz"] = row.get("max_reflectivity_dbz")
