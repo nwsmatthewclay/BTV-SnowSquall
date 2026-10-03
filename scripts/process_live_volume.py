@@ -26,7 +26,7 @@ from processing.rap_features import extract_features
 from processing.radar_sites import apply_radar_origin, radar_origin_for_site
 from scripts.live_model_features import build_live_feature_frame
 from scripts.model_runtime import ModelRuntime
-from src.snow_squall.environment_contract import assess_environment
+from snow_squall.environment_contract import assess_environment
 
 
 def object_geometry(mask, lat, lon, spacing_km=1.0):
