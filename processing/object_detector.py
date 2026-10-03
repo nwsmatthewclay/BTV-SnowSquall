@@ -62,7 +62,10 @@ def _core_seed_split(component, field, config):
         bbox_h = float(np.max(cy) - np.min(cy) + 1)
         bbox_w = float(np.max(cx) - np.min(cx) + 1)
         bbox_aspect = max(bbox_h, bbox_w) / max(1.0, min(bbox_h, bbox_w))
-        if max(bbox_h, bbox_w) >= 15.0 and bbox_aspect >= 3.0:
+        # Only preserve very clearly slender echoes as a single band. More
+        # compact broad echoes still get core-seeded separation so distinct
+        # embedded cells remain individually identifiable.
+        if max(bbox_h, bbox_w) >= 15.0 and bbox_aspect >= 10.0:
             return [component]
 
     # Keep only genuinely separated cores. Without this guard, a broad snow
