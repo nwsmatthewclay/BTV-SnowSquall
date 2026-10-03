@@ -22,7 +22,7 @@ on:
           - KTYX
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: archived-snow-squall-viewer-smoke
@@ -157,6 +157,24 @@ jobs:
           cp viewer/*.html viewer/*.js viewer/*.css _site/
           cp -R data/derived/viewer/data _site/data
           printf 'BTV Snow Squall Archived Viewer Smoke Test\nCase: %s\nRadar: %s\nResearch/pilot historical reconstruction only.\nProbability scoring is exposed as research-only historical live-scorer replay.\n'             "${{ inputs.case_id || 'BTV20060224' }}" "${{ inputs.radar_site || 'KCXX' }}" > _site/README.txt
+
+      - name: Publish scored viewer to gh-pages
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/btv-snow-squall-pages
+          mkdir -p /tmp/btv-snow-squall-pages
+          cp -R _site/. /tmp/btv-snow-squall-pages/
+          cd /tmp/btv-snow-squall-pages
+          git init
+          git checkout -b gh-pages
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .
+          git commit -m "Publish scored historical snow squall viewer"
+          git remote add origin "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          git push --force origin HEAD:gh-pages
 
       - name: Upload static viewer package
         uses: actions/upload-artifact@v4
