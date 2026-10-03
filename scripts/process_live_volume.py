@@ -29,27 +29,46 @@ from scripts.model_runtime import ModelRuntime
 
 
 def object_geometry(mask, lat, lon, spacing_km=1.0):
+    """Return the detected grid-cell footprint as GeoJSON geometry.
+
+    Do not use a convex hull here: it bridges gaps and concavities and can
+    create the giant triangular shapes seen in the historical viewer.
+    """
     from shapely.geometry import box
-from shapely.ops import unary_union
+    from shapely.ops import unary_union
 
     yy, xx = np.where(mask)
-    if len(xx) < 3:
+    if len(xx) == 0:
+        return None, 0.0
+
+    finite = np.isfinite(lat[yy, xx]) & np.isfinite(lon[yy, xx])
+    yy, xx = yy[finite], xx[finite]
+    if len(xx) == 0:
+        return None, 0.0
+
+    dlat = np.nanmedian(np.abs(np.diff(lat, axis=0)))
+    dlon = np.nanmedian(np.abs(np.diff(lon, axis=1)))
+    fallback = float(spacing_km) / 111.0
+    mean_lat = np.nanmean(lat[yy, xx])
+    if not np.isfinite(dlat) or dlat <= 0:
+        dlat = fallback
+    if not np.isfinite(dlon) or dlon <= 0:
+        dlon = fallback / max(0.2, np.cos(np.deg2rad(mean_lat)))
+
+    cells = [
+        box(
+            float(lon[y, x] - dlon / 2.0),
+            float(lat[y, x] - dlat / 2.0),
+            float(lon[y, x] + dlon / 2.0),
+            float(lat[y, x] + dlat / 2.0),
+        )
+        for y, x in zip(yy, xx)
+    ]
+    geom = unary_union(cells).buffer(0)
+    if geom.is_empty:
         return None, float(len(xx) * spacing_km**2)
 
-    points = [(float(lon[y, x]), float(lat[y, x])) for y, x in zip(yy, xx)]
-    hull = MultiPoint(points).convex_hull
-    if hull.is_empty:
-        return None, float(len(xx) * spacing_km**2)
-
-    # The live-product contract is GeoJSON Polygon. Thin/degenerate footprints
-    # can otherwise yield a Point or LineString.
-    if hull.geom_type != "Polygon":
-        center = hull.centroid
-        radius_deg = max(0.0025, float(spacing_km) / 111.0 / 2.0)
-        hull = center.buffer(radius_deg, resolution=8)
-
-    return hull.__geo_interface__, float(len(xx) * spacing_km**2)
-
+    return geom.__geo_interface__, float(len(xx) * spacing_km**2)
 
 def object_shape_metrics(rows, cols, lat, lon, spacing_km=1.0):
     """Estimate object major/minor axes and orientation from the footprint.
