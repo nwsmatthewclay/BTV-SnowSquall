@@ -7,6 +7,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from scripts.live_model_features import build_live_feature_frame, feature_coverage
+from snow_squall.environment_contract import assess_environment
 from scripts.add_national_pretraining_features import augment as augment_national_pretraining
 from scripts.model_runtime import ModelRuntime
 from scripts.probability_postprocess import monotone_cumulative_probabilities
@@ -14,6 +15,7 @@ from scripts.probability_postprocess import monotone_cumulative_probabilities
 HORIZONS = (15, 30, 45, 60)
 SITES = ("KCXX", "KTYX")
 MIN_FEATURE_COVERAGE = 0.40
+MAX_ENVIRONMENT_AGE_MINUTES = 90.0
 MIN_INSTANTANEOUS_FEATURES = {
     "max_reflectivity_dbz",
     "mean_reflectivity_dbz",
@@ -103,22 +105,31 @@ def score_site(site: str, live_root: Path, model_root: Path) -> tuple[dict, list
             track_history = [dict(props)]
         frame = build_live_feature_frame(track_history, track_id)
         frame, national_pretraining = augment_national_pretraining(frame, model_root)
+        environment_readiness = assess_environment(
+            frame.tail(1).iloc[0].to_dict() if not frame.empty else {},
+            radar_time=current_timestamp,
+            max_age_minutes=MAX_ENVIRONMENT_AGE_MINUTES,
+        )
         record = {
             "radar_site": site,
             "track_id": str(track_id),
             "timestamp": props.get("timestamp") or geo.get("metadata", {}).get("scan_time_utc"),
             "max_reflectivity_dbz": props.get("max_reflectivity_dbz"),
             "data_quality": props.get("data_quality"),
+            "environment_readiness": environment_readiness,
             "feature_coverage": {},
             "research_probabilities": {},
             "score_errors": {},
             "national_pretraining": national_pretraining,
-            "score_policy": {"minimum_feature_coverage": MIN_FEATURE_COVERAGE},
+            "score_policy": {"minimum_feature_coverage": MIN_FEATURE_COVERAGE, "max_environment_age_minutes": MAX_ENVIRONMENT_AGE_MINUTES, "requires_complete_environment": True},
         }
         for horizon in HORIZONS:
             runtime = runtimes[horizon]
             coverage = feature_coverage(frame.tail(1), runtime.feature_columns)
             record["feature_coverage"][str(horizon)] = coverage
+            if not environment_readiness["ready"]:
+                record["score_errors"][str(horizon)] = "environment_not_model_ready:" + ",".join(environment_readiness["reasons"])
+                continue
             available_instantaneous = [
                 c for c in MIN_INSTANTANEOUS_FEATURES
                 if c in frame.columns and frame.tail(1)[c].notna().any()
