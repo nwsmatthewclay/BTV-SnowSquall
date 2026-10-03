@@ -363,6 +363,11 @@ jobs:
           set -euo pipefail
           python scripts/audit_object_tracking.py             data/derived/snow_squall_expansion_objects.csv             --output data/derived/snow_squall_expansion_object_tracking_audit.json
 
+      - name: Audit object detection quality
+        run: |
+          set -euo pipefail
+          python scripts/audit_object_detection_quality.py             data/derived/snow_squall_expansion_objects.csv             --output data/derived/snow_squall_expansion_object_detection_audit.json
+
       - name: Dispatch next historical acquisition batch
         if: success()
         env:
