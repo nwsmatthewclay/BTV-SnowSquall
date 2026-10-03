@@ -6,7 +6,7 @@ from datetime import timezone
 from pathlib import Path
 import pandas as pd
 
-from processing.environment import acquire_for_radar_time, extract_features, environment_cache_key
+from processing.environment import acquire_for_radar_time, extract_features, environment_cache_key, environment_contract_status
 
 
 def enrich(input_csv: Path, output_csv: Path, rap_dir: Path, ruc_dir: Path):
@@ -27,6 +27,7 @@ def enrich(input_csv: Path, output_csv: Path, rap_dir: Path, ruc_dir: Path):
                 "environment_status": "unavailable",
                 "environment_valid_time_utc": None,
                 "environment_age_minutes": None,
+                **environment_contract_status({}),
             })
             rows.append(row)
             continue
