@@ -25,6 +25,24 @@ def test_live_row_maps_environment_and_units():
     assert row["sbcin_jkg"] == -35.0
     assert row["shear_0_6km_kt"] == pytest.approx(23.326133904, rel=0, abs=1e-9)
     assert row["reflectivity_core_excess"] == 8.0
+    row = build_live_feature_row({
+        "timestamp": "2026-01-01T12:05:00Z",
+        "track_id": "8",
+        "max_reflectivity_dbz": 32.0,
+        "mean_reflectivity_dbz": 22.0,
+        "bbox_aspect_ratio": 12.0,
+        "reflectivity_gradient_p90_dbkm": 7.0,
+        "gradient_fraction_above_5dbkm": 0.2,
+        "background_reflectivity_dbz": 18.0,
+        "reflectivity_contrast_db": 4.0,
+        "object_mode": "band",
+    })
+    assert row["bbox_aspect_ratio"] == 12.0
+    assert row["reflectivity_gradient_p90_dbkm"] == 7.0
+    assert row["gradient_fraction_above_5dbkm"] == 0.2
+    assert row["background_reflectivity_dbz"] == 18.0
+    assert row["reflectivity_contrast_db"] == 4.0
+    assert row["object_mode"] == "band"
 
 
 def test_live_feature_frame_adds_current_past_evolution_only():
