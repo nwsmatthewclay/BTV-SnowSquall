@@ -24,6 +24,11 @@ def as_bool(value) -> bool:
         return False
     return False
 
+def collapse_duplicate_columns(frame: pd.DataFrame) -> pd.DataFrame:
+    """Keep the first copy of duplicate column names from joined evidence."""
+    return frame.loc[:, ~frame.columns.duplicated()].copy()
+
+
 def num(value, default=0.0):
     try:
         value=float(value)
@@ -121,7 +126,7 @@ def build(cases_path, surface_path, objects_path, radar_path, output_path, mping
         m=pd.read_csv(mping_path)
         # Some acquisition joins can leave duplicate column names. Collapse duplicate
         # names before grouping so pandas receives a one-dimensional case_id key.
-        m = m.loc[:, ~m.columns.duplicated()].copy()
+        m = collapse_duplicate_columns(m)
         if 'case_id' in m.columns:
             counts=m.groupby('case_id').size().rename('mping_report_count')
             cases=cases.merge(counts,on='case_id',how='left')
