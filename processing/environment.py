@@ -14,6 +14,35 @@ from processing.ruc_features import extract_features as extract_ruc
 NARR_END = datetime(2007, 4, 1, tzinfo=timezone.utc)
 RAP_START = datetime(2012, 5, 1, tzinfo=timezone.utc)
 
+COMMON_HISTORICAL_ENVIRONMENT_FIELDS = (
+    "cape_jkg",
+    "pwat_mm",
+    "temperature_2m_k",
+    "dewpoint_2m_k",
+    "rh_2m_pct",
+    "u10_ms",
+    "v10_ms",
+)
+
+def environment_contract_status(fields):
+    """Return deterministic completeness for the common historical package."""
+    values = fields or {}
+    present = [
+        name for name in COMMON_HISTORICAL_ENVIRONMENT_FIELDS
+        if values.get(name) is not None
+    ]
+    missing = [
+        name for name in COMMON_HISTORICAL_ENVIRONMENT_FIELDS
+        if values.get(name) is None
+    ]
+    return {
+        "environment_required_field_count": len(COMMON_HISTORICAL_ENVIRONMENT_FIELDS),
+        "environment_present_field_count": len(present),
+        "environment_missing_fields": ";".join(missing),
+        "environment_contract_ok": len(missing) == 0,
+    }
+
+
 
 def provider_for_time(radar_time: datetime) -> str:
     radar_time = radar_time.astimezone(timezone.utc)
