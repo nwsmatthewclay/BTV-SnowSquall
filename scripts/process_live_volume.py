@@ -29,7 +29,8 @@ from scripts.model_runtime import ModelRuntime
 
 
 def object_geometry(mask, lat, lon, spacing_km=1.0):
-    from shapely.geometry import MultiPoint
+    from shapely.geometry import box
+from shapely.ops import unary_union
 
     yy, xx = np.where(mask)
     if len(xx) < 3:
