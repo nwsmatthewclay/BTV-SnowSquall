@@ -20,8 +20,8 @@ async function fetchJson(url){
 const RESEARCH_RELEASE_STATUS = "candidate_only_not_operational";
 const map=L.map("map",{zoomControl:true,preferCanvas:true}).setView([44.2,-73.1],8);
 L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{maxZoom:12,attribution:"© OpenStreetMap contributors"}).addTo(map);
-const radarLayer=L.layerGroup().addTo(map),objectsLayer=L.layerGroup().addTo(map),tracksLayer=L.layerGroup().addTo(map);
-let catalog=null,current=null,features=[],times=[],currentIndex=0,playing=false,timer=null,selectedKey=null,showAllTracks=false;
+const radarLayer=L.layerGroup().addTo(map),objectsLayer=L.layerGroup().addTo(map),motionLayer=L.layerGroup().addTo(map);
+let catalog=null,current=null,features=[],times=[],currentIndex=0,playing=false,timer=null,selectedKey=null;
 const isTrainingPage=document.body.dataset.mode==="training";
 const radarLocations={KCXX:[44.511,-73.166],KTYX:[43.756,-75.680],KBTV:[44.472,-73.154]};
 const num=(v,d=1)=>v==null||Number.isNaN(Number(v))?"—":Number(v).toFixed(d);
@@ -57,11 +57,56 @@ function populateCases(){const sel=document.getElementById("caseSelect");sel.inn
 async function loadCase(index){current=catalog.cases[index];selectedKey=null;const analogButton=document.getElementById("analogsBtn");analogButton.disabled=true;analogButton.onclick=null;const geo=await fetchJson("data/"+current.file);features=geo.features||[];times=[...new Set(features.map(f=>f.properties.timestamp))].sort();currentIndex=0;document.getElementById("slider").max=Math.max(0,times.length-1);document.getElementById("slider").value=0;renderCaseInfo();addRadarMarker();fitToData();render()}
 function addRadarMarker(){map.eachLayer(layer=>{if(layer.options?.className==="radar-station")map.removeLayer(layer)});const loc=radarLocations[current?.radar_site];if(loc)L.marker(loc,{icon:L.divIcon({className:"radar-station",iconSize:[12,12],iconAnchor:[6,6],html:""}),interactive:false,title:current.radar_site}).addTo(map)}
 function fitToData(){const pts=features.map(f=>[Number(f.properties.centroid_lat),Number(f.properties.centroid_lon)]).filter(x=>x.every(Number.isFinite));if(!pts.length)return;map.fitBounds(L.latLngBounds(pts),{padding:[35,35],maxZoom:9})}
-function featuresAt(ts){return features.filter(f=>f.properties.timestamp===ts)}
-function render(){if(!times.length)return;const ts=times[currentIndex];setText("timelineTime",fmtTime(ts)+" • "+fmtUtc(ts));document.getElementById("slider").value=currentIndex;renderRadar(ts);renderTracks(ts);renderObjects(ts);updateSelection()}
+function featuresAt(ts){return features.filter(f=>f.properties.timestamp===ts && !f.properties.context_only)}
+function render(){if(!times.length)return;const ts=times[currentIndex];setText("timelineTime",fmtTime(ts)+" • "+fmtUtc(ts));document.getElementById("slider").value=currentIndex;renderRadar(ts);renderMotion(ts);renderObjects(ts);updateSelection()}
 function renderRadar(ts){radarLayer.clearLayers();const frames=current?.radar_frames||[],bounds=current?.radar_bounds;if(!frames.length||!bounds){setText("radarStatus","No reconstructed radar frame loaded");return}const exact=frames.find(f=>f.timestamp===ts);const frame=exact||[...frames].reverse().find(f=>f.timestamp<ts);if(!frame){setText("radarStatus","No frame at or before current time");return}const opacity=Number(document.getElementById("radarOpacity")?.value||78)/100;L.imageOverlay("data/"+frame.file,bounds,{opacity,interactive:false,attribution:"Historical Level-II reflectivity reconstruction"}).addTo(radarLayer);setText("radarStatus","Frame: "+fmtUtc(frame.timestamp)+(exact?"":" • prior available scan"))}
-function renderTracks(ts){tracksLayer.clearLayers();const grouped={};features.forEach(f=>{const k=f.properties.track_key;(grouped[k]??=[]).push(f)});Object.entries(grouped).forEach(([key,fs])=>{if(!showAllTracks&&key!==selectedKey)return;fs.sort((a,b)=>a.properties.timestamp.localeCompare(b.properties.timestamp));const past=fs.filter(f=>f.properties.timestamp<=ts);if(past.length<2)return;const coords=past.map(f=>[Number(f.properties.centroid_lat),Number(f.properties.centroid_lon)]).filter(v=>v.every(Number.isFinite));if(coords.length<2)return;const selected=key===selectedKey;L.polyline(coords,{color:selected?"#ffffff":"#7f8d99",weight:selected?4:2,opacity:selected?.92:.30,dashArray:selected?null:"5 6",interactive:false}).addTo(tracksLayer)})}
-function renderObjects(ts){objectsLayer.clearLayers();featuresAt(ts).forEach(f=>{const p=f.properties;const selected=selectedKey===p.track_key;const fill="#58b9ff";const layer=L.geoJSON(f,{style:{color:selected?"#ffffff":fill,fillColor:fill,fillOpacity:selected?.50:.16,weight:selected?3:1.5,className:"object-footprint"}}).addTo(objectsLayer);layer.bindTooltip("Track "+esc(p.object_id)+" • "+num(p.max_reflectivity_dbz)+" dBZ • "+num(p.motion_speed_kt)+" kt",{sticky:true});layer.bindPopup("<b>"+p.case_id+" • "+p.radar_site+"</b><br>Track "+esc(p.object_id)+"<br>"+fmtUtc(p.timestamp));layer.on("click",()=>selectObject(f))});renderObjectList(ts)}
+function renderMotion(ts){
+  motionLayer.clearLayers();
+  featuresAt(ts).forEach(f=>{
+    const p=f.properties;
+    const lat=Number(p.centroid_lat), lon=Number(p.centroid_lon);
+    const speed=Number(p.motion_speed_kt), dir=Number(p.motion_direction_deg);
+    if(!Number.isFinite(lat)||!Number.isFinite(lon)||!Number.isFinite(speed)||!Number.isFinite(dir)||speed>75)return;
+    const km=Math.max(5,Math.min(12,4+speed*0.18));
+    const bearing=dir*Math.PI/180;
+    const dLat=km*Math.cos(bearing)/111;
+    const dLon=km*Math.sin(bearing)/(111*Math.max(0.2,Math.cos(lat*Math.PI/180)));
+    const selected=selectedKey===p.track_key;
+    L.polyline([[lat,lon],[lat+dLat,lon+dLon]],{
+      color:selected?"#ffffff":"#9ab0be",
+      weight:selected?2.5:1.5,
+      opacity:selected?.9:.7,
+      interactive:false
+    }).addTo(motionLayer);
+  });
+}
+function renderObjects(ts){
+  objectsLayer.clearLayers();
+  featuresAt(ts).forEach(f=>{
+    const p=f.properties;
+    const selected=selectedKey===p.track_key;
+    const outline=selected?"#ffffff":"#61b7e8";
+    const layer=L.geoJSON(f,{
+      style:{
+        color:outline,
+        fillColor:outline,
+        fillOpacity:0,
+        weight:selected?2.8:1.7,
+        className:"object-footprint"
+      }
+    }).addTo(objectsLayer);
+    layer.bindTooltip(
+      "Cell "+esc(p.object_id)+" • "+num(p.max_reflectivity_dbz)+" dBZ • "+
+      (Number.isFinite(Number(p.motion_speed_kt))?num(p.motion_speed_kt)+" kt":"motion —"),
+      {sticky:true}
+    );
+    layer.bindPopup(
+      "<b>"+p.case_id+" • "+p.radar_site+"</b><br>Cell "+esc(p.object_id)+"<br>"+fmtUtc(p.timestamp)
+    );
+    layer.on("click",()=>selectObject(f));
+  });
+  renderObjectList(ts);
+}
 function renderObjectList(ts){const box=document.getElementById("objectList"),count=document.getElementById("currentObjectCount");if(!box||!count)return;const rows=featuresAt(ts).slice().sort((a,b)=>Number(b.properties.max_reflectivity_dbz||0)-Number(a.properties.max_reflectivity_dbz||0));count.textContent=String(rows.length);if(!rows.length){box.innerHTML="<div class='history-empty'>No tracked objects at this scan.</div>";return}box.innerHTML=rows.map(f=>{const p=f.properties,selected=selectedKey===p.track_key;return "<button type='button' class='object-row"+(selected?" selected":"")+"' data-track='"+esc(p.track_key)+"'><span class='object-row-main'><b>Track "+esc(p.object_id)+"</b><span>"+num(p.max_reflectivity_dbz)+" dBZ • "+num(p.area_km2)+" km²</span></span><span class='object-row-sub'>"+num(p.motion_speed_kt)+" kt • "+esc(p.environment_status||"environment —")+"</span></button>"}).join("");box.querySelectorAll("[data-track]").forEach(btn=>{btn.onclick=()=>{const f=featuresAt(ts).find(x=>x.properties.track_key===btn.dataset.track);if(f)selectObject(f)}})}
 function selectObject(f){selectedKey=f.properties.track_key;const b=document.getElementById("analogsBtn");b.disabled=false;b.onclick=()=>window.open("analogs.html?case="+catalog.cases.indexOf(current)+"&track="+encodeURIComponent(f.properties.track_key),"_blank");render()}
 function trendSvg(rows,key,label,unit,activeIndex){
@@ -97,7 +142,7 @@ function renderTrackHistory(){
   const count=document.getElementById("trackCount");
   if(!selectedKey){
     setText("trackCount","—");
-    box.innerHTML="<div class='history-empty'>Select a storm object to see its scan-to-scan evolution.</div>";
+    box.innerHTML="<div class='history-empty'>Select a cell to see its scan-to-scan motion and intensity.</div>";
     return;
   }
   const same=features
@@ -105,7 +150,7 @@ function renderTrackHistory(){
     .sort((a,b)=>a.properties.timestamp.localeCompare(b.properties.timestamp));
   setText("trackCount",same.length+" scans");
   if(!same.length){
-    box.innerHTML="<div class='history-empty'>No track history is available for this object.</div>";
+    box.innerHTML="<div class='history-empty'>No object history is available for this cell.</div>";
     return;
   }
   const activeTs=times[currentIndex];
@@ -145,7 +190,7 @@ function renderProbabilityEvolution(){
   const box=document.getElementById("probabilityEvolutionBody");
   if(!box) return;
   if(!selectedKey){
-    box.innerHTML="<div class='history-empty'>Select a storm object to plot its score through time.</div>";
+    box.innerHTML="<div class='history-empty'>Select a cell to plot its score through time.</div>";
     return;
   }
   const rows=features
@@ -157,7 +202,7 @@ function renderProbabilityEvolution(){
   });
   const has=points.some(x=>x.values.some(v=>Number.isFinite(v)));
   if(!has){
-    box.innerHTML="<div class='history-empty'>This track has no attached research score history.</div>";
+    box.innerHTML="<div class='history-empty'>This cell has no attached research score history.</div>";
     return;
   }
 
@@ -232,12 +277,11 @@ function renderResearchProbabilities(p){
   }).join("")+"</div><div class='research-prob-note'>This is an out-of-fold research result for historical replay only. It is not an operational probability or warning recommendation.</div>";
 }
 
-function updateSelection(){const same=features.filter(x=>x.properties.track_key===selectedKey);const exact=same.find(x=>x.properties.timestamp===times[currentIndex]);const prior=[...same].filter(x=>x.properties.timestamp<=times[currentIndex]).sort((a,b)=>a.properties.timestamp.localeCompare(b.properties.timestamp)).pop();const f=exact||prior||same[0],p=f?.properties;if(!p){setText("objectTitle","Select a storm object");setText("objectTime","—");setText("selectionState","No object selected");document.getElementById("metrics").innerHTML="";document.getElementById("environment").innerHTML="";setText("envSource","—");setText("outcome","Select an object to inspect its historical context.");renderTrackHistory();renderResearchProbabilities(null);renderProbabilityEvolution();return;}setText("selectionState","Selected");setText("objectTitle","Track "+p.object_id+" • "+p.radar_site);renderResearchProbabilities(p);renderProbabilityEvolution();setText("objectTime",fmtTime(p.timestamp)+" • "+fmtUtc(p.timestamp));document.getElementById("metrics").innerHTML=[["Max Z",num(p.max_reflectivity_dbz)+" dBZ"],["Mean Z",num(p.mean_reflectivity_dbz)+" dBZ"],["Area",num(p.area_km2)+" km²"],["Length",num(p.length_km)+" km"],["Width",num(p.width_km)+" km"],["Aspect",num(p.aspect_ratio)],["Motion",num(p.motion_speed_kt)+" kt"],["Direction",num(p.motion_direction_deg,0)+"°"],["Z trend",num(p.reflectivity_trend_dbz_per_hr)+" dBZ/hr"],["Age",p.age_scans==null?"—":p.age_scans+" scans"],["Core fraction",p.core_fraction==null?"—":num(p.core_fraction*100)+"%"]].map(x=>"<div class='metric'><span>"+x[0]+"</span><b>"+x[1]+"</b></div>").join("");const e=p.environment||{};document.getElementById("environment").innerHTML=[["SBCAPE","sbcape_jkg"],["SBCIN","sbcin_jkg"],["MLCAPE","mlcape_jkg"],["MLCIN","mlcin_jkg"],["MUCAPE","mucape_jkg"],["DCAPE","dcape_jkg"],["PWAT","pwat_mm"],["LCL","lcl_m"],["RH 0–2 km","rh_0_2km_pct"],["0–1 km wind","wind_0_1km_kt"],["0–3 km wind","wind_0_3km_kt"],["0–1 km shear","shear_0_1km_kt"],["0–3 km shear","shear_0_3km_kt"],["0–6 km shear","shear_0_6km_kt"],["0–3 km lapse","lapse_rate_0_3km_c_km"],["0–7.5 km lapse","lapse_rate_0_7_5km_c_km"],["WB 0–3 km","wet_bulb_0_3km_c"],["0–1 km SRH","srh01_m2s2"],["SNSQ","snsq"]].map(x=>"<div class='env-item'><span>"+x[0]+"</span><b>"+formatEnv(e,x[1])+"</b></div>").join("");setText("envSource",p.environment_source?p.environment_source+" • "+num(p.environment_age_minutes,0)+" min old":"Unavailable");const associated=p.track_event_associated===true||p.track_event_associated==="True",relation=p.case_time_relation||"unclassified",out=document.getElementById("outcome");out.className="outcome "+(associated?"positive":"");out.innerHTML=associated?"<b>Associated with documented case context.</b><br>"+relation+". Published onset: "+fmtUtc(current.event_start_utc)+".<br><span class='truth-subnote'>Association is research context, not verified object-level truth.</span>":"<b>Case-context object.</b><br>Not treated as final object-level truth. Relation: "+relation+".";renderTrackHistory();renderTrackTrend()}
+function updateSelection(){const same=features.filter(x=>x.properties.track_key===selectedKey);const exact=same.find(x=>x.properties.timestamp===times[currentIndex]);const prior=[...same].filter(x=>x.properties.timestamp<=times[currentIndex]).sort((a,b)=>a.properties.timestamp.localeCompare(b.properties.timestamp)).pop();const f=exact||prior||same[0],p=f?.properties;if(!p){setText("objectTitle","Select a storm object");setText("objectTime","—");setText("selectionState","No object selected");document.getElementById("metrics").innerHTML="";document.getElementById("environment").innerHTML="";setText("envSource","—");setText("outcome","Select an object to inspect its historical context.");renderTrackHistory();renderResearchProbabilities(null);renderProbabilityEvolution();return;}setText("selectionState","Selected");setText("objectTitle","Cell "+p.object_id+" • "+p.radar_site);renderResearchProbabilities(p);renderProbabilityEvolution();setText("objectTime",fmtTime(p.timestamp)+" • "+fmtUtc(p.timestamp));document.getElementById("metrics").innerHTML=[["Max Z",num(p.max_reflectivity_dbz)+" dBZ"],["Mean Z",num(p.mean_reflectivity_dbz)+" dBZ"],["Area",num(p.area_km2)+" km²"],["Length",num(p.length_km)+" km"],["Width",num(p.width_km)+" km"],["Aspect",num(p.aspect_ratio)],["Motion",num(p.motion_speed_kt)+" kt"],["Direction",num(p.motion_direction_deg,0)+"°"],["Z trend",num(p.reflectivity_trend_dbz_per_hr)+" dBZ/hr"],["Age",p.age_scans==null?"—":p.age_scans+" scans"],["Core fraction",p.core_fraction==null?"—":num(p.core_fraction*100)+"%"]].map(x=>"<div class='metric'><span>"+x[0]+"</span><b>"+x[1]+"</b></div>").join("");const e=p.environment||{};document.getElementById("environment").innerHTML=[["SBCAPE","sbcape_jkg"],["SBCIN","sbcin_jkg"],["MLCAPE","mlcape_jkg"],["MLCIN","mlcin_jkg"],["MUCAPE","mucape_jkg"],["DCAPE","dcape_jkg"],["PWAT","pwat_mm"],["LCL","lcl_m"],["RH 0–2 km","rh_0_2km_pct"],["0–1 km wind","wind_0_1km_kt"],["0–3 km wind","wind_0_3km_kt"],["0–1 km shear","shear_0_1km_kt"],["0–3 km shear","shear_0_3km_kt"],["0–6 km shear","shear_0_6km_kt"],["0–3 km lapse","lapse_rate_0_3km_c_km"],["0–7.5 km lapse","lapse_rate_0_7_5km_c_km"],["WB 0–3 km","wet_bulb_0_3km_c"],["0–1 km SRH","srh01_m2s2"],["SNSQ","snsq"]].map(x=>"<div class='env-item'><span>"+x[0]+"</span><b>"+formatEnv(e,x[1])+"</b></div>").join("");setText("envSource",p.environment_source?p.environment_source+" • "+num(p.environment_age_minutes,0)+" min old":"Unavailable");const associated=p.track_event_associated===true||p.track_event_associated==="True",relation=p.case_time_relation||"unclassified",out=document.getElementById("outcome");out.className="outcome "+(associated?"positive":"");out.innerHTML=associated?"<b>Associated with documented case context.</b><br>"+relation+". Published onset: "+fmtUtc(current.event_start_utc)+".<br><span class='truth-subnote'>Association is research context, not verified object-level truth.</span>":"<b>Case-context object.</b><br>Not treated as final object-level truth. Relation: "+relation+".";renderTrackHistory();renderTrackTrend()}
 function advance(step){if(!times.length)return;currentIndex=(currentIndex+step+times.length)%times.length;render()}
 function tick(){if(!playing)return;advance(1);timer=setTimeout(tick,700)}
 function togglePlay(){playing=!playing;setText("playBtn",playing?"❚❚ Pause":"▶ Play");if(playing)tick();else clearTimeout(timer)}
 document.getElementById("slider").addEventListener("input",e=>{currentIndex=Number(e.target.value);render()});
-document.getElementById("allTracksToggle").addEventListener("change",e=>{showAllTracks=e.target.checked;renderTracks(times[currentIndex])});
 document.getElementById("radarOpacity").addEventListener("input",e=>{setText("radarOpacityValue",e.target.value+"%");renderRadar(times[currentIndex])});
 document.getElementById("prevBtn").onclick=()=>advance(-1);document.getElementById("nextBtn").onclick=()=>advance(1);document.getElementById("playBtn").onclick=togglePlay;
 document.getElementById("detailsBtn").onclick=()=>{setText("statusText",catalog?.truth_note||"—");document.getElementById("statusList").innerHTML=[["Package",catalog?.version],["Data status",catalog?.data_status],["QC posture",catalog?.source_dataset_status],["Case/radar datasets",catalog?.cases?.length],["Source object rows",catalog?.source_object_rows],["Probability",catalog?.probability_status],["Build commit",catalog?.build_commit?catalog.build_commit.slice(0,12):"—"],["Build time",catalog?.build_time_utc?fmtUtc(catalog.build_time_utc):"—"],["Policy",catalog?.future_information_policy]].map(x=>"<div class='status-row'><span>"+x[0]+"</span><b>"+(x[1]??"—")+"</b></div>").join("");document.getElementById("modal").classList.remove("hidden")};
