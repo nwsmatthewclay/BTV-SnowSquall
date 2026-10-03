@@ -18,6 +18,21 @@ def rich_props(track_id="7", timestamp="2026-01-01T12:05:00Z", max_z=30.0):
         "gradient_fraction_above_5dbkm": 0.2,
         "background_reflectivity_dbz": 18.0,
         "reflectivity_contrast_db": 6.0,
+        "environment": {
+            "source": "RAP",
+            "status": "complete",
+            "source_valid_time_utc": "2026-01-01T12:00:00Z",
+            "age_minutes": 5.0,
+            "fields": {
+                "cape_jkg": 100.0,
+                "pwat_mm": 12.0,
+                "temperature_2m_k": 268.0,
+                "dewpoint_2m_k": 266.0,
+                "rh_2m_pct": 85.0,
+                "u10_ms": 4.0,
+                "v10_ms": -2.0,
+            },
+        },
     }
 
 
