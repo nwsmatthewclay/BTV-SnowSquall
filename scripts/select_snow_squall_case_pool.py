@@ -137,13 +137,22 @@ def main():
             ["official_documented", "official_plus_independent_report", "official_plus_warning", "official_plus_warning_and_report", "official_plus_warning_verified", "official_study_warning_verified", "official_plus_study", "study_verified", "study_warning_verified"]
         )
     ].copy()
+    # Every non-official candidate belongs in the review/unverified pool.
+    # Keep warning-verified/report-only candidates available for feature-population
+    # research; only the explicit strong classes enter the supervised positive gate.
+    strong_classes = {
+        "official_documented",
+        "official_plus_independent_report",
+        "official_plus_warning",
+        "official_plus_warning_and_report",
+        "official_plus_warning_verified",
+        "official_study_warning_verified",
+        "official_plus_study",
+        "study_verified",
+        "study_warning_verified",
+    }
     unverified = candidates[
-        candidates["verification_class"].isin([
-            "unverified_report_only",
-            "warning_only",
-            "warning_plus_report",
-            "official_screening_candidate",
-        ])
+        ~candidates["verification_class"].isin(strong_classes)
     ].copy()
 
     official = choose_diverse(official, args.offset_official + args.max_official).iloc[args.offset_official:].copy()
