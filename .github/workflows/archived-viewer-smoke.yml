@@ -86,6 +86,35 @@ jobs:
         run: |
           python scripts/export_viewer_radar_frames.py             --manifest data/manifests/banacos_radar_windows.csv             --input data/raw/archived_viewer_level2             --output-dir data/derived/viewer
 
+      - name: Resolve latest successful live-model candidate
+        id: model
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          source_run="$(gh run list --workflow "Snow Squall Candidate Model Refresh" --branch snow-squall-model-foundation --status success --limit 1 --json databaseId --jq '.[0].databaseId' || true)"
+          artifact_name="snow-squall-refreshed-model-bundles"
+          if [ -z "$source_run" ] || [ "$source_run" = "null" ]; then
+            source_run="$(gh run list --workflow "Snow Squall Expansion Dataset" --branch snow-squall-model-foundation --status success --limit 20 --json databaseId --jq '.[0].databaseId' | head -1 || true)"
+            artifact_name="snow-squall-live-model-bundles"
+          fi
+          test -n "$source_run" && test "$source_run" != "null"
+          rm -rf model_bundle
+          mkdir -p model_bundle
+          gh run download "$source_run" --repo "$GITHUB_REPOSITORY" --name "$artifact_name" --dir model_bundle
+          echo "Using $artifact_name from workflow run $source_run"
+          find model_bundle -maxdepth 2 -name metrics.json -print | sort
+
+      - name: Replay archived scans through live object scorer
+        run: |
+          set -euo pipefail
+          python scripts/historical_operational_replay.py \
+            --case-id "${{ inputs.case_id || 'BTV20060224' }}" \
+            --input-dir data/raw/archived_viewer_level2 \
+            --output-dir data/derived/operational_replay \
+            --state-path data/derived/operational_replay/state.json \
+            --model-dir model_bundle
+
       - name: Build static historical viewer
         env:
           GITHUB_SHA: ${{ github.sha }}
