@@ -545,11 +545,11 @@ def process_volume(
                     if score_mode != "candidate_blocked":
                         probability_mode = score_mode
                     if scores is not None and scores:
-                    value = float(scores[0])
-                    feature[f"probability_{horizon}min_raw"] = value
-                    raw_probability_by_feature.setdefault(id(feature), {})[str(horizon)] = value
-                    feature["probability_trend"] = "scored"
-                    model_scored = True
+                        value = float(scores[0])
+                        feature[f"probability_{horizon}min_raw"] = value
+                        raw_probability_by_feature.setdefault(id(feature), {})[str(horizon)] = value
+                        feature["probability_trend"] = "scored"
+                        model_scored = True
                 except Exception as exc:
                     model_errors[f"{track_id}:{horizon}"] = f"{type(exc).__name__}: {exc}"
 
