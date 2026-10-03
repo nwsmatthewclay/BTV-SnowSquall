@@ -38,27 +38,41 @@ jobs:
         with:
           ref: snow-squall-model-foundation
 
-      - name: Locate latest expanded model bundle
+      - name: Locate latest candidate model bundle
         id: model
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
-          if [ "${{ github.event_name }}" = "workflow_run" ]; then
+          run_id=""
+          artifact_name=""
+          if [ "${{ github.event_name }}" = "workflow_run" ] && [ "${{ github.event.workflow_run.workflow_run.name }}" = "Snow Squall Candidate Model Refresh" ]; then
+            run_id="${{ github.event.workflow_run.id }}"
+          elif [ "${{ github.event_name }}" = "workflow_run" ] && [ "${{ github.event.workflow_run.name }}" = "Snow Squall Expansion Dataset" ]; then
             run_id="${{ github.event.workflow_run.id }}"
           else
-            run_id="$(gh run list --workflow "Snow Squall Expansion Dataset" --branch snow-squall-model-foundation --status success --limit 20 --json databaseId --jq '.[0].databaseId')"
+            run_id="$(gh run list --workflow "Snow Squall Candidate Model Refresh" --branch snow-squall-model-foundation --status success --limit 1 --json databaseId --jq '.[0].databaseId' || true)"
+            if [ -z "$run_id" ] || [ "$run_id" = "null" ]; then
+              run_id="$(gh run list --workflow "Snow Squall Expansion Dataset" --branch snow-squall-model-foundation --status success --limit 20 --json databaseId --jq '.[0].databaseId' || true)"
+            fi
           fi
           if [ -z "$run_id" ] || [ "$run_id" = "null" ]; then
             echo "skip=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          count="$(gh api "/repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}/artifacts?per_page=100" -q '[.artifacts[] | select(.name=="snow-squall-live-model-bundles" and .expired==false)] | length')"
-          if [ "$count" -eq 0 ]; then
+          for name in snow-squall-refreshed-model-bundles snow-squall-live-model-bundles; do
+            count="$(gh api "/repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}/artifacts?per_page=100" -q "[.artifacts[] | select(.name==\"$name\" and .expired==false)] | length")"
+            if [ "$count" -gt 0 ]; then
+              artifact_name="$name"
+              break
+            fi
+          done
+          if [ -z "$artifact_name" ]; then
             echo "skip=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
           echo "run_id=$run_id" >> "$GITHUB_OUTPUT"
+          echo "artifact_name=$artifact_name" >> "$GITHUB_OUTPUT"
 
       - name: Restore live data
         if: steps.model.outputs.skip != 'true'
@@ -86,7 +100,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
-          gh run download "${{ steps.model.outputs.run_id }}" --name snow-squall-live-model-bundles --dir model_bundle
+          gh run download "${{ steps.model.outputs.run_id }}" --name "${{ steps.model.outputs.artifact_name }}" --dir model_bundle
 
       - name: Set up Python
         if: steps.model.outputs.skip != 'true'
