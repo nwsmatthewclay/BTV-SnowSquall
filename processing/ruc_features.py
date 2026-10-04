@@ -74,7 +74,21 @@ def _nearest(ds, latitude, longitude):
         y = np.asarray(ds["y"].values, dtype=float)
         xx, yy = np.meshgrid(x, y)
         transformer = Transformer.from_crs(RUC_CRS, LL_CRS, always_xy=True)
-        lon, lat = transformer.transform(xx * 1000.0, yy * 1000.0)
+        x_units = str(ds["x"].attrs.get("units", "")).lower()
+        y_units = str(ds["y"].attrs.get("units", "")).lower()
+
+        def _coordinate_scale(values, units):
+            if units in {"m", "meter", "meters", "metre", "metres"}:
+                return 1.0
+            if units in {"km", "kilometer", "kilometers", "kilometre", "kilometres"}:
+                return 1000.0
+            finite = np.abs(values[np.isfinite(values)])
+            return 1000.0 if finite.size and float(np.nanmax(finite)) < 10000.0 else 1.0
+
+        lon, lat = transformer.transform(
+            xx * _coordinate_scale(x, x_units),
+            yy * _coordinate_scale(y, y_units),
+        )
         cached = (np.asarray(lat, dtype=float), np.asarray(lon, dtype=float))
         _COORD_CACHE[cache_key] = cached
     lat, lon = cached
@@ -119,6 +133,15 @@ def extract_features(path: Path, latitude: float, longitude: float, radar_time: 
         if values["wind_10m_ms"] is not None else None
     )
 
+    missing_fields = sorted(
+        set(failures)
+        | {
+            name
+            for name in ("cape_jkg", "pwat_mm", "temperature_2m_k", "dewpoint_2m_k",
+                         "rh_2m_pct", "u10_ms", "v10_ms")
+            if values.get(name) is None
+        }
+    )
     return {
         "source": "RUC",
         "source_valid_time_utc": expected_valid_time.isoformat() if expected_valid_time else None,
@@ -127,6 +150,6 @@ def extract_features(path: Path, latitude: float, longitude: float, radar_time: 
             if expected_valid_time else None
         ),
         "fields": values,
-        "missing_fields": sorted(failures),
-        "status": "complete" if not failures else "partial",
+        "missing_fields": missing_fields,
+        "status": "complete" if not missing_fields else "partial",
     }
