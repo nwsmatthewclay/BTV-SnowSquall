@@ -23,7 +23,6 @@ concurrency:
 
 jobs:
   replay:
-    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
@@ -49,18 +48,19 @@ jobs:
         id: model
         run: |
           set -euo pipefail
-          if [ "${{ github.event_name }}" = "workflow_run" ]; then
-            run_id="${{ github.event.workflow_run.id }}"
-          else
-            run_id="$(gh run list \
-              --workflow "Snow Squall Expansion Dataset" \
-              --branch snow-squall-model-foundation \
-              --status success \
-              --limit 20 \
-              --json databaseId \
-              --jq '.[0].databaseId')"
+          # Diagnostic replay remains independent of the triggering expansion outcome.
+          run_id="$(gh run list \
+            --workflow "Snow Squall Expansion Dataset" \
+            --branch snow-squall-model-foundation \
+            --status success \
+            --limit 20 \
+            --json databaseId,createdAt \
+            --jq 'sort_by(.createdAt) | reverse | .[0].databaseId')"
+          if [ -z "$run_id" ] || [ "$run_id" = "null" ]; then
+            echo "No successful candidate bundle exists yet; diagnostic replay cannot run."
+            exit 1
           fi
-          test -n "$run_id" && test "$run_id" != "null"
+          echo "Using latest successful candidate-model run: $run_id"
           echo "run_id=$run_id" >> "$GITHUB_OUTPUT"
 
       - name: Download candidate model bundle
