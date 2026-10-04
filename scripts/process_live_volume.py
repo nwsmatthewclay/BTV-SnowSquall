@@ -258,23 +258,23 @@ def process_volume(
     if reflectivity is None:
         raise RuntimeError("No reflectivity field found in Level-II volume")
 
-    reflectivity_grid = grid_lowest_available_sweep(
+    # Keep the established reflectivity grid path for compatibility with
+    # existing live test doubles, while independently selecting the lowest
+    # valid sweep for every additional moment (especially base velocity).
+    reflectivity_grid = grid_lowest_sweep(
         radar,
-        reflectivity,
+        [reflectivity],
         grid_size_km=180.0,
         spacing_km=1.0,
     )
-    if reflectivity_grid is None:
-        raise RuntimeError("Reflectivity field has no valid sweep")
     data = grid_field_2d(reflectivity_grid, reflectivity)
     lat, lon = grid_latlon(reflectivity_grid)
 
-    # Grid each moment from its lowest valid sweep independently. This keeps
-    # base velocity available even when velocity is not populated on literal
-    # sweep 0, while all moments retain identical Cartesian coordinates.
-    gridded = {}
+    # Grid each additional moment from its lowest valid sweep independently.
+    # All moments use identical Cartesian geometry so they remain collocated.
+    gridded = {"reflectivity": data}
     for canonical, actual in radar_fields.items():
-        if not actual:
+        if not actual or canonical == "reflectivity":
             continue
         field_grid = grid_lowest_available_sweep(
             radar,
