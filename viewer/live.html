@@ -5,7 +5,7 @@
 <title>BTV Snow Squall Live Explorer</title>
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
-<link rel="stylesheet" href="style.css?v=20261003-live-v2">
+<link rel="stylesheet" href="style.css?v=20261003-live-v3">
 <style>
 /* Live viewer uses the exact historical outer frame: header → map/panel → footer. */
 #liveMap{position:relative;min-width:0;height:100%;background:#14202a;overflow:hidden}
@@ -83,7 +83,8 @@
       </div>
       <div class="map-display-controls" aria-label="Radar display controls">
         <span class="control-label">DISPLAY</span>
-        <button class="display-btn active" data-radar-mode="clean">Clean</button>
+        <button class="display-btn active" data-radar-mode="clean">Mosaic</button>
+        <button class="display-btn" data-radar-mode="base">Base Z</button>
         <button class="display-btn" data-radar-mode="raw">Raw</button>
         <button class="display-btn" data-radar-mode="qcd">NOAA QC</button>
       </div>
@@ -111,7 +112,7 @@
       <div class="section-head compact"><h3>Radar display</h3><span id="mosaicStatus">WAITING</span></div>
       <div class="live-stat"><span>Sources</span><b id="mosaicSources">—</b></div>
       <div class="live-stat"><span>Radar time</span><b id="mosaicTime">—</b></div>
-      <div class="live-panel-note">Display mosaic only. Detection/model inputs continue to come directly from decoded Level-II radar data.</div>
+      <div class="live-panel-note">Mosaic combines KCXX + KTYX reflectivity. Base Z shows the individual lowest-valid-sweep base-reflectivity grids from each downloaded Level-II volume. Detection/model inputs continue to use the decoded radar data directly.</div>
     </div>
 
     <div class="object-control">
@@ -155,6 +156,6 @@
 </footer>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<script src="live.js?v=20261003-live-v3"></script>
+<script src="live.js?v=20261003-live-v4"></script>
 </body>
 </html>
