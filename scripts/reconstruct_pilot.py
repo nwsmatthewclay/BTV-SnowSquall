@@ -18,7 +18,7 @@ from shapely.ops import unary_union
 from acquisition.level2_reader import read_level2, resolve_fields, volume_metadata
 from processing.object_detector import detect_reflectivity_objects
 from processing.object_tracker import CentroidTracker
-from processing.radar_grid import grid_field_2d, grid_latlon, grid_lowest_sweep
+from processing.radar_grid import grid_field_2d, grid_latlon, grid_lowest_sweep, grid_lowest_available_sweep
 from processing.radar_sites import apply_radar_origin, radar_origin_for_site
 from processing.motion import add_motion_features
 from processing.radar_storm_motion import attach_radar_storm_motion
@@ -127,6 +127,21 @@ def process_volume(path: Path, tracker: CentroidTracker, radar_origin=None, prev
         for canonical, actual in fields.items()
         if actual
     }
+    # Base velocity is a training and detection input, so recover it from the
+    # lowest sweep that actually contains finite velocity data instead of
+    # assuming it shares literal sweep 0 with reflectivity.
+    velocity_field = fields.get("velocity")
+    if velocity_field:
+        velocity_grid = grid_lowest_available_sweep(
+            radar,
+            velocity_field,
+            origin_lat=origin_lat,
+            origin_lon=origin_lon,
+            grid_size_km=180.0,
+            spacing_km=1.0,
+        )
+        if velocity_grid is not None:
+            gridded["velocity"] = grid_field_2d(velocity_grid, velocity_field)
     field_gradients = {}
     for canonical in ("zdr", "velocity"):
         field = gridded.get(canonical)
