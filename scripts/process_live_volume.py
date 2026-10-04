@@ -17,7 +17,7 @@ import numpy as np
 from acquisition.level2_reader import read_level2, resolve_fields, volume_metadata
 from processing.object_detector import detect_reflectivity_objects
 from processing.object_tracker import CentroidTracker
-from processing.radar_grid import grid_field_2d, grid_latlon, grid_lowest_sweep
+from processing.radar_grid import grid_field_2d, grid_latlon, grid_lowest_available_sweep
 from processing.radar_storm_motion import attach_radar_storm_motion
 from processing.radar_features import object_field_summary, velocity_object_summary
 from processing.vertical_structure import summarize_vertical_structure
@@ -258,20 +258,32 @@ def process_volume(
     if reflectivity is None:
         raise RuntimeError("No reflectivity field found in Level-II volume")
 
-    available_fields = [name for name in radar_fields.values() if name]
-    grid = grid_lowest_sweep(
+    reflectivity_grid = grid_lowest_available_sweep(
         radar,
-        available_fields,
+        reflectivity,
         grid_size_km=180.0,
         spacing_km=1.0,
     )
-    data = grid_field_2d(grid, reflectivity)
-    lat, lon = grid_latlon(grid)
-    gridded = {
-        canonical: grid_field_2d(grid, actual)
-        for canonical, actual in radar_fields.items()
-        if actual and actual in (getattr(grid, "fields", {}) or {})
-    }
+    if reflectivity_grid is None:
+        raise RuntimeError("Reflectivity field has no valid sweep")
+    data = grid_field_2d(reflectivity_grid, reflectivity)
+    lat, lon = grid_latlon(reflectivity_grid)
+
+    # Grid each moment from its lowest valid sweep independently. This keeps
+    # base velocity available even when velocity is not populated on literal
+    # sweep 0, while all moments retain identical Cartesian coordinates.
+    gridded = {}
+    for canonical, actual in radar_fields.items():
+        if not actual:
+            continue
+        field_grid = grid_lowest_available_sweep(
+            radar,
+            actual,
+            grid_size_km=180.0,
+            spacing_km=1.0,
+        )
+        if field_grid is not None:
+            gridded[canonical] = grid_field_2d(field_grid, actual)
     field_gradients = {}
     for canonical in ("zdr", "velocity"):
         field = gridded.get(canonical)
