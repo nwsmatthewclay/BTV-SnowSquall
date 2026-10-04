@@ -131,7 +131,7 @@ def build_mosaic(raw_root: Path, states: dict[str, Path]):
         )
 
     if not fields:
-        return None, None, None, []
+        return None, None, None, [], {}, {}
 
     mosaic = np.full_like(fields[0], np.nan, dtype=float)
     for field in fields:
