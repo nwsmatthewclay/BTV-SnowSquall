@@ -1,0 +1,130 @@
+{
+  "product": "BTV live radar mosaic",
+  "status": "ready",
+  "updated_utc": "2026-10-04T06:05:24.701402+00:00",
+  "grid": {
+    "center_lat": 44.15,
+    "center_lon": -73.65,
+    "grid_size_km": 250.0,
+    "spacing_km": 1.0,
+    "combine_method": "maximum valid reflectivity",
+    "field": "reflectivity_dbz",
+    "color_table": "BTV_SNOWSQUALL_CLEAN + NWSRef_RAW",
+    "vmin_dbz": 12,
+    "vmax_dbz": 75,
+    "display_qc": {
+      "low_dbz_cutoff": 12,
+      "low_cc_threshold": 0.65,
+      "low_cc_max_dbz": 30,
+      "isolated_weak_echo_cleanup": true
+    }
+  },
+  "display_products": {
+    "default": "clean",
+    "clean_image": "radar_mosaic_clean.png",
+    "raw_image": "radar_mosaic_raw.png",
+    "base_reflectivity": {
+      "KCXX": {
+        "clean_image": "KCXX_base_reflectivity_clean.png",
+        "raw_image": "KCXX_base_reflectivity_raw.png",
+        "bounds": [
+          [
+            41.86099794018779,
+            -76.90750006603258
+          ],
+          [
+            46.398305073487016,
+            -70.39249993396744
+          ]
+        ],
+        "field": "base_reflectivity_dbz"
+      },
+      "KTYX": {
+        "clean_image": "KTYX_base_reflectivity_clean.png",
+        "raw_image": "KTYX_base_reflectivity_raw.png",
+        "bounds": [
+          [
+            41.86099794018779,
+            -76.90750006603258
+          ],
+          [
+            46.398305073487016,
+            -70.39249993396744
+          ]
+        ],
+        "field": "base_reflectivity_dbz"
+      }
+    },
+    "clean_description": "Clutter-suppressed KCXX/KTYX reflectivity mosaic. This does not alter model input.",
+    "raw_description": "Unfiltered gridded KCXX/KTYX reflectivity mosaic.",
+    "base_reflectivity_description": "Individual lowest-valid-sweep base-reflectivity displays from the downloaded KCXX and KTYX Level-II volumes.",
+    "base_velocity": {
+      "KCXX": {
+        "clean_image": "KCXX_base_velocity_clean.png",
+        "raw_image": "KCXX_base_velocity_raw.png",
+        "bounds": [
+          [
+            41.86099794018779,
+            -76.90750006603258
+          ],
+          [
+            46.398305073487016,
+            -70.39249993396744
+          ]
+        ],
+        "field": "base_velocity_kt",
+        "native_units": "m/s",
+        "display_units": "kt"
+      },
+      "KTYX": {
+        "clean_image": "KTYX_base_velocity_clean.png",
+        "raw_image": "KTYX_base_velocity_raw.png",
+        "bounds": [
+          [
+            41.86099794018779,
+            -76.90750006603258
+          ],
+          [
+            46.398305073487016,
+            -70.39249993396744
+          ]
+        ],
+        "field": "base_velocity_kt",
+        "native_units": "m/s",
+        "display_units": "kt"
+      }
+    }
+  },
+  "sources": [
+    {
+      "radar": "KCXX",
+      "source_file": "KCXX20261004_055938_V06",
+      "scan_time_utc": "2026-10-04T05:59:38.273000"
+    },
+    {
+      "radar": "KTYX",
+      "source_file": "KTYX20261004_055345_V06",
+      "scan_time_utc": "2026-10-04T05:53:45.232000"
+    }
+  ],
+  "image": "radar_mosaic_clean.png",
+  "bounds": [
+    [
+      41.86099794018779,
+      -76.90750006603258
+    ],
+    [
+      46.398305073487016,
+      -70.39249993396744
+    ]
+  ],
+  "radar_moment_products": {
+    "velocity_native_units": "m/s",
+    "velocity_display_units": "kt",
+    "velocity_rendering": "signed_radial_velocity",
+    "velocity_sources": [
+      "KCXX",
+      "KTYX"
+    ]
+  }
+}
