@@ -22,6 +22,11 @@ const mosaicImageUrl=(mode="clean")=>{
   const name=mode==="raw"?(product.raw_image||"radar_mosaic_raw.png"):(product.clean_image||"radar_mosaic_clean.png");
   return LIVE_BASE+name+"?cb="+Date.now();
 };
+const baseReflectivityUrl=(site,mode="clean")=>{
+  const product=radarMosaic?.display_products?.base_reflectivity?.[site]||{};
+  const name=mode==="raw"?(product.raw_image||site+"_base_reflectivity_raw.png"):(product.clean_image||site+"_base_reflectivity_clean.png");
+  return LIVE_BASE+name+"?cb="+Date.now();
+};
 
 function markerIcon(site){
   return L.divIcon({className:"radar-station",iconSize:[12,12],iconAnchor:[6,6],html:""});
@@ -80,26 +85,50 @@ function renderRadarMosaic(meta){
   const localAgeMinutes=meta?.updated_utc?ageMinutes(meta.updated_utc):Infinity;
   const localStale=localAgeMinutes>10;
   if(!meta||meta.status!=="ready"||!meta.bounds||localStale){
-    if(status)status.textContent=localStale?"Local mosaic stale • NOAA fallback":"Local mosaic unavailable";
-    if(sources)sources.textContent="NOAA QC • live";
+    if(status)status.textContent=localStale
+      ?(radarMode==="base"?"Base Z stale • NOAA fallback":"Local mosaic stale • NOAA fallback")
+      :"Local radar unavailable";
+    if(sources)sources.textContent=radarMode==="base"?"NOAA QC • live":"NOAA QC • live";
     if(time)time.textContent=localStale&&meta?.updated_utc
       ?"Local "+fmt(meta.updated_utc)+" • NOAA fallback"
       :"Live NOAA feed";
-    if(modeLabel)modeLabel.textContent="NOAA QC FALLBACK";
+    if(modeLabel)modeLabel.textContent=radarMode==="base"?"BASE REFLECTIVITY FALLBACK":"NOAA QC FALLBACK";
     addMrmsFallback();
     if(!hasInitialExtent&&meta?.bounds){map.fitBounds(meta.bounds,{padding:[25,25],maxZoom:8});hasInitialExtent=true;}
     return;
   }
 
   const src=(meta.sources||[]).map(x=>x.radar).filter(Boolean);
-  if(status)status.textContent=src.length===2?"READY • KCXX + KTYX":("READY • "+src.join(" + "));
   if(sources)sources.textContent=src.join(" + ")||"—";
   const times=(meta.sources||[]).map(x=>x.scan_time_utc).filter(Boolean).sort();
   if(time)time.textContent=times.length?fmt(times[times.length-1]):fmt(meta.updated_utc);
-  if(modeLabel)modeLabel.textContent=radarMode==="raw"?"RAW DISPLAY":(radarMode==="qcd"?"NOAA QC DISPLAY":"CLEAN DISPLAY");
+
+  const modeText=radarMode==="raw"?"RAW DISPLAY":(radarMode==="base"?"BASE REFLECTIVITY":(radarMode==="qcd"?"NOAA QC DISPLAY":"CLEAN DISPLAY"));
+  if(modeLabel)modeLabel.textContent=modeText;
 
   if(radarMode==="qcd"){
     addMrmsFallback();
+  }else if(radarMode==="base"){
+    const products=meta.display_products?.base_reflectivity||{};
+    let added=0;
+    for(const site of ["KCXX","KTYX"]){
+      if(!products[site])continue;
+      const overlay=L.imageOverlay(baseReflectivityUrl(site,"clean"),products[site].bounds||meta.bounds,{
+        pane:"radarMosaicPane",
+        opacity:.72,
+        interactive:false,
+        crossOrigin:true
+      });
+      overlay.once("error",()=>{
+        try{map.removeLayer(overlay)}catch(_){}
+      });
+      overlay.addTo(radarMosaicLayer);
+      added++;
+    }
+    if(status)status.textContent=added
+      ?("BASE Z • "+(added===2?"KCXX + KTYX":src.join(" + ")))
+      :"Base Z unavailable • NOAA fallback";
+    if(added===0)addMrmsFallback();
   }else{
     const overlay=L.imageOverlay(mosaicImageUrl(radarMode),meta.bounds,{
       pane:"radarMosaicPane",
@@ -113,6 +142,7 @@ function renderRadarMosaic(meta){
       addMrmsFallback();
     });
     overlay.addTo(radarMosaicLayer);
+    if(status)status.textContent=src.length===2?"READY • KCXX + KTYX":("READY • "+src.join(" + "));
   }
 
   if(!hasInitialExtent){map.fitBounds(meta.bounds,{padding:[25,25],maxZoom:8});hasInitialExtent=true;}
@@ -122,7 +152,7 @@ function setRadarMode(mode){
   document.querySelectorAll(".display-btn").forEach(btn=>btn.classList.toggle("active",btn.dataset.radarMode===mode));
   if(radarMosaic)renderRadarMosaic(radarMosaic);
   const subtitle=document.getElementById("hudMode");
-  if(subtitle)subtitle.textContent=mode==="raw"?"RAW DISPLAY":(mode==="qcd"?"NOAA QC DISPLAY":"CLEAN DISPLAY");
+  if(subtitle)subtitle.textContent=mode==="raw"?"RAW DISPLAY":(mode==="base"?"BASE REFLECTIVITY":(mode==="qcd"?"NOAA QC DISPLAY":"CLEAN DISPLAY"));
 }
 
 let mrmsFallbackLayer=null;
