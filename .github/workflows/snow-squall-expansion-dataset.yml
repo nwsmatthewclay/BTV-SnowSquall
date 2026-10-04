@@ -122,7 +122,7 @@ jobs:
           path: discovery_artifact
 
       - name: Discover directly when no workflow artifact is provided
-        if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.source_unified_ledger_run_id == '' && inputs.source_expansion_run_id == '')
+        if: github.event_name == 'workflow_dispatch' && inputs.source_unified_ledger_run_id == '' && inputs.source_expansion_run_id == ''
         run: |
           set -euo pipefail
           if find discovery_artifact -name snow_squall_case_ledger.csv -type f -print -quit | grep -q .; then
