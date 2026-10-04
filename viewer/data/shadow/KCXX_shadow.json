@@ -1,0 +1,322 @@
+{
+  "site": "KCXX",
+  "updated_utc": "2026-10-04T05:55:46.262824+00:00",
+  "mode": "live_shadow_research",
+  "operational_release_status": "candidate_only_not_operational",
+  "model_info": {
+    "15": {
+      "model_present": true,
+      "model_version": "candidate_soft_vote_ensemble_v1",
+      "operational_release_status": "candidate_only",
+      "predictor_count": 72,
+      "model_family": [
+        "HistGradientBoostingClassifier",
+        "RandomForestClassifier",
+        "ExtraTreesClassifier"
+      ],
+      "selected_artifact": "candidate_ensemble_expansion_15m",
+      "bundle_family": "candidate_soft_vote_ensemble"
+    },
+    "30": {
+      "model_present": true,
+      "model_version": "candidate_soft_vote_ensemble_v1",
+      "operational_release_status": "candidate_only",
+      "predictor_count": 72,
+      "model_family": [
+        "HistGradientBoostingClassifier",
+        "RandomForestClassifier",
+        "ExtraTreesClassifier"
+      ],
+      "selected_artifact": "candidate_ensemble_expansion_30m",
+      "bundle_family": "candidate_soft_vote_ensemble"
+    },
+    "45": {
+      "model_present": true,
+      "model_version": "candidate_soft_vote_ensemble_v1",
+      "operational_release_status": "candidate_only",
+      "predictor_count": 72,
+      "model_family": [
+        "HistGradientBoostingClassifier",
+        "RandomForestClassifier",
+        "ExtraTreesClassifier"
+      ],
+      "selected_artifact": "candidate_ensemble_expansion_45m",
+      "bundle_family": "candidate_soft_vote_ensemble"
+    },
+    "60": {
+      "model_present": true,
+      "model_version": "candidate_soft_vote_ensemble_v1",
+      "operational_release_status": "candidate_only",
+      "predictor_count": 72,
+      "model_family": [
+        "HistGradientBoostingClassifier",
+        "RandomForestClassifier",
+        "ExtraTreesClassifier"
+      ],
+      "selected_artifact": "candidate_ensemble_expansion_60m",
+      "bundle_family": "candidate_soft_vote_ensemble"
+    }
+  },
+  "current_object_count": 1,
+  "scored_object_count": 0,
+  "records": [
+    {
+      "radar_site": "KCXX",
+      "track_id": "360",
+      "timestamp": "2026-10-04T04:30:52.010000Z",
+      "max_reflectivity_dbz": 52.36515426635742,
+      "data_quality": "good",
+      "environment_readiness": {
+        "ready": false,
+        "source": "RAP",
+        "status": "partial",
+        "source_valid_time_utc": null,
+        "age_minutes": 90.87,
+        "max_age_minutes": 90.0,
+        "required_fields": [
+          "cape_jkg",
+          "pwat_mm",
+          "temperature_2m_k",
+          "dewpoint_2m_k",
+          "rh_2m_pct",
+          "u10_ms",
+          "v10_ms"
+        ],
+        "missing_fields": [
+          "cape_jkg",
+          "pwat_mm",
+          "temperature_2m_k",
+          "dewpoint_2m_k",
+          "rh_2m_pct",
+          "u10_ms",
+          "v10_ms"
+        ],
+        "reasons": [
+          "environment_status_not_complete",
+          "required_fields_missing",
+          "environment_stale"
+        ]
+      },
+      "feature_coverage": {
+        "15": {
+          "predictors": 72,
+          "available": 31,
+          "fraction": 0.431,
+          "missing": [
+            "motion_speed_kt",
+            "max_reflectivity_dbz_delta",
+            "max_reflectivity_dbz_rate_per_min",
+            "mean_reflectivity_dbz_delta",
+            "mean_reflectivity_dbz_rate_per_min",
+            "area_km2_delta",
+            "area_km2_rate_per_min",
+            "length_km_delta",
+            "length_km_rate_per_min",
+            "width_km_delta",
+            "width_km_rate_per_min",
+            "echo_top_km_delta",
+            "echo_top_km_rate_per_min",
+            "top_minus_base_km_delta",
+            "top_minus_base_km_rate_per_min",
+            "zdr_mean_db_delta",
+            "zdr_mean_db_rate_per_min",
+            "rhohv_mean_delta",
+            "rhohv_mean_rate_per_min",
+            "max_reflectivity_dbz_trailing_mean_3",
+            "max_reflectivity_dbz_trailing_std_3",
+            "max_reflectivity_dbz_change_2scan",
+            "max_reflectivity_dbz_rate_2scan_per_min",
+            "max_reflectivity_dbz_acceleration_per_min2",
+            "area_km2_trailing_mean_3",
+            "area_km2_trailing_std_3",
+            "area_km2_change_2scan",
+            "area_km2_rate_2scan_per_min",
+            "area_km2_acceleration_per_min2",
+            "echo_top_km_trailing_mean_3",
+            "echo_top_km_trailing_std_3",
+            "echo_top_km_change_2scan",
+            "echo_top_km_rate_2scan_per_min",
+            "echo_top_km_acceleration_per_min2",
+            "motion_speed_kt_trailing_mean_3",
+            "motion_speed_kt_trailing_std_3",
+            "motion_speed_kt_change_2scan",
+            "motion_speed_kt_rate_2scan_per_min",
+            "motion_speed_kt_acceleration_per_min2",
+            "centroid_displacement_km",
+            "motion_speed_kmh"
+          ]
+        },
+        "30": {
+          "predictors": 72,
+          "available": 31,
+          "fraction": 0.431,
+          "missing": [
+            "motion_speed_kt",
+            "max_reflectivity_dbz_delta",
+            "max_reflectivity_dbz_rate_per_min",
+            "mean_reflectivity_dbz_delta",
+            "mean_reflectivity_dbz_rate_per_min",
+            "area_km2_delta",
+            "area_km2_rate_per_min",
+            "length_km_delta",
+            "length_km_rate_per_min",
+            "width_km_delta",
+            "width_km_rate_per_min",
+            "echo_top_km_delta",
+            "echo_top_km_rate_per_min",
+            "top_minus_base_km_delta",
+            "top_minus_base_km_rate_per_min",
+            "zdr_mean_db_delta",
+            "zdr_mean_db_rate_per_min",
+            "rhohv_mean_delta",
+            "rhohv_mean_rate_per_min",
+            "max_reflectivity_dbz_trailing_mean_3",
+            "max_reflectivity_dbz_trailing_std_3",
+            "max_reflectivity_dbz_change_2scan",
+            "max_reflectivity_dbz_rate_2scan_per_min",
+            "max_reflectivity_dbz_acceleration_per_min2",
+            "area_km2_trailing_mean_3",
+            "area_km2_trailing_std_3",
+            "area_km2_change_2scan",
+            "area_km2_rate_2scan_per_min",
+            "area_km2_acceleration_per_min2",
+            "echo_top_km_trailing_mean_3",
+            "echo_top_km_trailing_std_3",
+            "echo_top_km_change_2scan",
+            "echo_top_km_rate_2scan_per_min",
+            "echo_top_km_acceleration_per_min2",
+            "motion_speed_kt_trailing_mean_3",
+            "motion_speed_kt_trailing_std_3",
+            "motion_speed_kt_change_2scan",
+            "motion_speed_kt_rate_2scan_per_min",
+            "motion_speed_kt_acceleration_per_min2",
+            "centroid_displacement_km",
+            "motion_speed_kmh"
+          ]
+        },
+        "45": {
+          "predictors": 72,
+          "available": 31,
+          "fraction": 0.431,
+          "missing": [
+            "motion_speed_kt",
+            "max_reflectivity_dbz_delta",
+            "max_reflectivity_dbz_rate_per_min",
+            "mean_reflectivity_dbz_delta",
+            "mean_reflectivity_dbz_rate_per_min",
+            "area_km2_delta",
+            "area_km2_rate_per_min",
+            "length_km_delta",
+            "length_km_rate_per_min",
+            "width_km_delta",
+            "width_km_rate_per_min",
+            "echo_top_km_delta",
+            "echo_top_km_rate_per_min",
+            "top_minus_base_km_delta",
+            "top_minus_base_km_rate_per_min",
+            "zdr_mean_db_delta",
+            "zdr_mean_db_rate_per_min",
+            "rhohv_mean_delta",
+            "rhohv_mean_rate_per_min",
+            "max_reflectivity_dbz_trailing_mean_3",
+            "max_reflectivity_dbz_trailing_std_3",
+            "max_reflectivity_dbz_change_2scan",
+            "max_reflectivity_dbz_rate_2scan_per_min",
+            "max_reflectivity_dbz_acceleration_per_min2",
+            "area_km2_trailing_mean_3",
+            "area_km2_trailing_std_3",
+            "area_km2_change_2scan",
+            "area_km2_rate_2scan_per_min",
+            "area_km2_acceleration_per_min2",
+            "echo_top_km_trailing_mean_3",
+            "echo_top_km_trailing_std_3",
+            "echo_top_km_change_2scan",
+            "echo_top_km_rate_2scan_per_min",
+            "echo_top_km_acceleration_per_min2",
+            "motion_speed_kt_trailing_mean_3",
+            "motion_speed_kt_trailing_std_3",
+            "motion_speed_kt_change_2scan",
+            "motion_speed_kt_rate_2scan_per_min",
+            "motion_speed_kt_acceleration_per_min2",
+            "centroid_displacement_km",
+            "motion_speed_kmh"
+          ]
+        },
+        "60": {
+          "predictors": 72,
+          "available": 31,
+          "fraction": 0.431,
+          "missing": [
+            "motion_speed_kt",
+            "max_reflectivity_dbz_delta",
+            "max_reflectivity_dbz_rate_per_min",
+            "mean_reflectivity_dbz_delta",
+            "mean_reflectivity_dbz_rate_per_min",
+            "area_km2_delta",
+            "area_km2_rate_per_min",
+            "length_km_delta",
+            "length_km_rate_per_min",
+            "width_km_delta",
+            "width_km_rate_per_min",
+            "echo_top_km_delta",
+            "echo_top_km_rate_per_min",
+            "top_minus_base_km_delta",
+            "top_minus_base_km_rate_per_min",
+            "zdr_mean_db_delta",
+            "zdr_mean_db_rate_per_min",
+            "rhohv_mean_delta",
+            "rhohv_mean_rate_per_min",
+            "max_reflectivity_dbz_trailing_mean_3",
+            "max_reflectivity_dbz_trailing_std_3",
+            "max_reflectivity_dbz_change_2scan",
+            "max_reflectivity_dbz_rate_2scan_per_min",
+            "max_reflectivity_dbz_acceleration_per_min2",
+            "area_km2_trailing_mean_3",
+            "area_km2_trailing_std_3",
+            "area_km2_change_2scan",
+            "area_km2_rate_2scan_per_min",
+            "area_km2_acceleration_per_min2",
+            "echo_top_km_trailing_mean_3",
+            "echo_top_km_trailing_std_3",
+            "echo_top_km_change_2scan",
+            "echo_top_km_rate_2scan_per_min",
+            "echo_top_km_acceleration_per_min2",
+            "motion_speed_kt_trailing_mean_3",
+            "motion_speed_kt_trailing_std_3",
+            "motion_speed_kt_change_2scan",
+            "motion_speed_kt_rate_2scan_per_min",
+            "motion_speed_kt_acceleration_per_min2",
+            "centroid_displacement_km",
+            "motion_speed_kmh"
+          ]
+        }
+      },
+      "research_probabilities": {},
+      "score_errors": {
+        "15": "low_feature_coverage:0.431;environment_not_model_ready:environment_status_not_complete,required_fields_missing,environment_stale",
+        "30": "low_feature_coverage:0.431;environment_not_model_ready:environment_status_not_complete,required_fields_missing,environment_stale",
+        "45": "low_feature_coverage:0.431;environment_not_model_ready:environment_status_not_complete,required_fields_missing,environment_stale",
+        "60": "low_feature_coverage:0.431;environment_not_model_ready:environment_status_not_complete,required_fields_missing,environment_stale"
+      },
+      "national_pretraining": {
+        "15m": {
+          "status": "not_available"
+        },
+        "30m": {
+          "status": "not_available"
+        },
+        "45m": {
+          "status": "not_available"
+        },
+        "60m": {
+          "status": "not_available"
+        }
+      },
+      "score_policy": {
+        "minimum_feature_coverage": 0.8,
+        "max_environment_age_minutes": 90.0,
+        "requires_complete_environment": true
+      }
+    }
+  ]
+}
