@@ -160,8 +160,10 @@ def detect_reflectivity_objects(reflectivity, config=ObjectDetectionConfig(), ve
         *np.gradient(work, 1.0, edge_order=1)
     )
 
-    # Base velocity is a secondary signal. Convert once to knots so all
-    # velocity thresholds and diagnostics use the same units as the model.
+    # Radial velocity is a first-class radar signal for object diagnostics and
+    # weak-echo recovery, but it is not allowed to create arbitrary velocity
+    # objects. Velocity support must be spatially collocated with at least
+    # 15 dBZ precipitation so wind-noise regions do not become objects.
     velocity_arr_kt = None
     velocity_gradient = None
     velocity_rescue = np.zeros_like(arr, dtype=bool)
@@ -369,10 +371,20 @@ def detect_reflectivity_objects(reflectivity, config=ObjectDetectionConfig(), ve
                     velocity_contrast_kt = float(
                         abs(np.median(velocity_values) - velocity_background_kt)
                     )
-            velocity_good = bool(
-                np.mean(velocity_rescue[piece]) >= 0.20
+            velocity_support_fraction = (
+                float(np.mean(velocity_rescue[piece]))
                 if velocity_arr_kt is not None and len(xx)
-                else False
+                else 0.0
+            )
+            velocity_good = velocity_support_fraction >= 0.20
+            velocity_structure_good = bool(
+                velocity_arr_kt is not None
+                and np.isfinite(velocity_contrast_kt)
+                and np.isfinite(velocity_gradient_p90_ktkm)
+                and (
+                    velocity_contrast_kt >= config.velocity_rescue_contrast_kt
+                    or velocity_gradient_p90_ktkm >= config.velocity_rescue_gradient_ktkm
+                )
             )
 
             bbox_h = int(np.max(yy) - np.min(yy) + 1)
@@ -398,6 +410,8 @@ def detect_reflectivity_objects(reflectivity, config=ObjectDetectionConfig(), ve
                 detection_evidence.append("reflectivity_core")
             if velocity_good:
                 detection_evidence.append("velocity_rescue")
+            elif velocity_structure_good:
+                detection_evidence.append("velocity_structure")
             if not detection_evidence:
                 continue
 
@@ -428,6 +442,8 @@ def detect_reflectivity_objects(reflectivity, config=ObjectDetectionConfig(), ve
                 "velocity_background_kt":velocity_background_kt,
                 "velocity_contrast_kt":velocity_contrast_kt,
                 "velocity_rescue":velocity_good,
+                "velocity_support_fraction":velocity_support_fraction,
+                "velocity_structure":velocity_structure_good,
                 "detection_evidence":detection_evidence,
                 "candidate_rank_score":rank_score,
                 "candidate_rank_tier":candidate_rank_tier(rank_score),
