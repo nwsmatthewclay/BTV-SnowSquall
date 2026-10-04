@@ -83,6 +83,19 @@ def grid_radar(path: Path, radar: str):
         raise RuntimeError(f"{radar}: reflectivity field has no valid sweep")
 
     data = grid_field_2d(refl_grid, reflectivity)
+    velocity_data = None
+    velocity_field = fields.get("velocity")
+    if velocity_field:
+        velocity_grid = grid_lowest_available_sweep(
+            radar_obj,
+            velocity_field,
+            origin_lat=CENTER_LAT,
+            origin_lon=CENTER_LON,
+            grid_size_km=GRID_SIZE_KM,
+            spacing_km=SPACING_KM,
+        )
+        if velocity_grid is not None:
+            velocity_data = grid_field_2d(velocity_grid, velocity_field)
     rho = None
     if rhohv:
         rho_grid = grid_lowest_available_sweep(
@@ -132,7 +145,7 @@ def build_mosaic(raw_root: Path, states: dict[str, Path]):
         )
 
     if not fields:
-        return None, None, None, [], {}, {}
+        return None, None, None, [], {}, {}, {}
 
     mosaic = np.full_like(fields[0], np.nan, dtype=float)
     for field in fields:
@@ -397,7 +410,7 @@ def main():
         ):
             output.unlink(missing_ok=True)
         for site in RADARS:
-            for suffix in ("_base_reflectivity_clean.png", "_base_reflectivity_raw.png"):
+            for suffix in ("_base_reflectivity_clean.png", "_base_reflectivity_raw.png", "_base_velocity_clean.png", "_base_velocity_raw.png"):
                 (args.output_image.parent / f"{site}{suffix}").unlink(missing_ok=True)
 
     args.output_json.parent.mkdir(parents=True, exist_ok=True)
