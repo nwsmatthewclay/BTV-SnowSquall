@@ -389,65 +389,104 @@ jobs:
           set -euo pipefail
           python scripts/audit_object_detection_quality.py             data/derived/snow_squall_expansion_objects.csv             --output data/derived/snow_squall_expansion_object_detection_audit.json
 
+      - name: Persist successful historical acquisition state
+        if: success()
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from datetime import datetime, timezone
+          from pathlib import Path
+          import pandas as pd
+
+          state_path = Path(".github/historical-downloader-state.json")
+          selected_path = Path("data/manifests/snow_squall_expansion/snow_squall_expansion_cases.csv")
+          selected = pd.read_csv(selected_path)
+          selected_ids = sorted({
+              str(x) for x in selected.get("candidate_id", pd.Series(dtype="string")).dropna().astype(str)
+              if str(x).strip()
+          })
+
+          state = json.loads(state_path.read_text(encoding="utf-8")) if state_path.exists() else {}
+          prior = set(str(x) for x in state.get("processed_candidate_ids", []) if str(x).strip())
+          new_ids = sorted(set(selected_ids) - prior)
+          prior.update(selected_ids)
+          state.update({
+              "version": 2,
+              "processed_candidate_ids": sorted(prior),
+              "last_successful_radar_qc_run_id": int("${{ github.run_id }}"),
+              "last_successful_radar_qc_utc": datetime.now(timezone.utc).isoformat(),
+          })
+          state_path.write_text(json.dumps(state, indent=2) + "\n", encoding="utf-8")
+
+          print(f"Selected candidate IDs: {len(selected_ids)}")
+          print(f"Newly recorded candidate IDs: {len(new_ids)}")
+          print(f"Total processed candidate IDs: {len(prior)}")
+          PY
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .github/historical-downloader-state.json
+          if git diff --cached --quiet; then
+            echo "Historical acquisition state unchanged."
+          else
+            git commit -m "Record historical radar acquisition state"
+            git push origin HEAD:snow-squall-model-foundation
+          fi
+
       - name: Dispatch next historical acquisition batch
         if: success()
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
-          # Launch the next batch as soon as radar reconstruction/QC is clean.
-          # Downstream environment/model work in this run continues independently.
-          read -r next_official next_review batch_official batch_review < <(python - <<'PY'
+          read -r batch_official batch_review < <(python - <<'PY'
           import pandas as pd
           cases=pd.read_csv('data/manifests/snow_squall_expansion/snow_squall_expansion_cases.csv')
           verified={'official_documented','official_plus_independent_report','official_plus_warning','official_plus_warning_and_report','official_plus_warning_verified','official_study_warning_verified','official_plus_study','study_verified','study_warning_verified'}
           official=int(cases['verification_class'].isin(verified).sum())
           review=int(len(cases)-official)
-          base_o=int('${{ steps.batch.outputs.official_offset }}')
-          base_r=int('${{ steps.batch.outputs.unverified_offset }}')
-          print(base_o+official, base_r+review, official, review)
+          print(official, review)
           PY
           )
-          max_auto_official=150
-          max_auto_review=125
-          remaining_official=$((max_auto_official-next_official))
-          remaining_review=$((max_auto_review-next_review))
-          [ "$remaining_official" -gt 0 ] || remaining_official=0
-          [ "$remaining_review" -gt 0 ] || remaining_review=0
-          next_official_size=$(( remaining_official < 30 ? remaining_official : 30 ))
-          next_review_size=$(( remaining_review < 15 ? remaining_review : 15 ))
+          max_official="${{ steps.batch.outputs.max_official }}"
+          max_review="${{ steps.batch.outputs.max_unverified }}"
+
           if [ "$batch_official" -eq 0 ] && [ "$batch_review" -eq 0 ]; then
-            echo 'No cases reconstructed in this batch; acquisition chain stops safely.'
+            echo 'No historical cases acquired in this batch; acquisition chain stops safely.'
             exit 0
           fi
-          if [ "$next_official_size" -le 0 ] && [ "$next_review_size" -le 0 ]; then
-            echo 'Automatic historical acquisition cap reached.'
+
+          # Continue while at least one candidate pool filled its requested
+          # batch size. When both are partially filled, the current discovery
+          # pool is exhausted and there is nothing new to download.
+          if [ "$batch_official" -lt "$max_official" ] && [ "$batch_review" -lt "$max_review" ]; then
+            echo "Current historical candidate pool is exhausted."
+            echo "Batch sizes: official=$batch_official/$max_official review=$batch_review/$max_review"
             exit 0
           fi
-          source_unified_run='${{ inputs.source_unified_ledger_run_id }}'
+
+          source_unified_run="${{ inputs.source_unified_ledger_run_id }}"
           source_expansion_run=''
           if [ -z "$source_unified_run" ]; then
             source_unified_run="$(gh run list --workflow "Snow Squall Unified Case Ledger" --branch snow-squall-model-foundation --status success --limit 1 --json databaseId --jq '.[0].databaseId' || true)"
           fi
-          # A successful unified-ledger run is preferred, but the current
-          # expansion run already contains a validated discovery ledger. Fall
-          # back to this run so acquisition can continue rather than stopping
-          # because the separate discovery workflow is unavailable.
           if [ -z "$source_unified_run" ] || [ "$source_unified_run" = "null" ]; then
             source_expansion_run="${{ github.run_id }}"
             echo "No successful unified ledger found; chaining from current expansion run $source_expansion_run."
           fi
+
           gh workflow run "Snow Squall Expansion Dataset" \
             --repo "$GITHUB_REPOSITORY" \
             --ref snow-squall-model-foundation \
             -f archive_override=true \
-            -f official_offset="$next_official" \
-            -f unverified_offset="$next_review" \
-            -f max_official="$next_official_size" \
-            -f max_unverified="$next_review_size" \
+            -f official_offset="0" \
+            -f unverified_offset="0" \
+            -f max_official="$max_official" \
+            -f max_unverified="$max_review" \
             -f source_unified_ledger_run_id="$source_unified_run" \
             -f source_expansion_run_id="$source_expansion_run"
-          echo "NEXT HISTORICAL BATCH DISPATCHED: official=$next_official review=$next_review size=$next_official_size/$next_review_size unified=$source_unified_run expansion=$source_expansion_run"
+          echo "NEXT HISTORICAL BATCH DISPATCHED: candidate-ID cursor; size=$max_official/$max_review unified=$source_unified_run expansion=$source_expansion_run"
 
       - name: Annotate reconstructed objects to candidate cases
         run: |
