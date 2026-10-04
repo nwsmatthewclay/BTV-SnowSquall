@@ -1,10 +1,9 @@
-"""Build a small, georeferenced KCXX/KTYX real-time reflectivity mosaic for the live viewer.
+"""Build KCXX/KTYX live reflectivity and base-velocity display products.
 
-The mosaic is a display product only. The live model continues to consume decoded
-Level-II data and radar-derived predictors directly. The viewer receives two
-renderings:
-  * radar_mosaic_clean.png - clutter-suppressed human display (default)
-  * radar_mosaic_raw.png   - unfiltered scientific display
+The display products are derived from the same downloaded Level-II volumes used
+by object detection and feature generation. Reflectivity is mosaicked across
+radars; signed radial velocity is kept as individual per-radar products because
+radial velocity from different radar viewpoints should not be merged directly.
 """
 from __future__ import annotations
 
@@ -97,7 +96,7 @@ def grid_radar(path: Path, radar: str):
         if rho_grid is not None:
             rho = grid_field_2d(rho_grid, rhohv)
     lat, lon = grid_latlon(refl_grid)
-    return data, rho, lat, lon, meta.get("scan_time_utc"), meta.get("radar_id") or radar
+    return data, velocity_data, rho, lat, lon, meta.get("scan_time_utc"), meta.get("radar_id") or radar
 
 
 def build_mosaic(raw_root: Path, states: dict[str, Path]):
@@ -105,6 +104,7 @@ def build_mosaic(raw_root: Path, states: dict[str, Path]):
     fields = []
     rho_fields = []
     site_fields = {}
+    site_velocity_fields = {}
     site_rho_fields = {}
     grid_lat = grid_lon = None
 
@@ -113,13 +113,14 @@ def build_mosaic(raw_root: Path, states: dict[str, Path]):
         if source is None:
             continue
         try:
-            data, rho, lat, lon, timestamp, radar_id = grid_radar(source, radar)
+            data, velocity, rho, lat, lon, timestamp, radar_id = grid_radar(source, radar)
         except Exception as exc:
             print(f"{radar}: mosaic source unavailable: {type(exc).__name__}: {exc}")
             continue
         fields.append(data)
         rho_fields.append(rho)
         site_fields[radar] = data
+        site_velocity_fields[radar] = velocity
         site_rho_fields[radar] = rho
         grid_lat, grid_lon = lat, lon
         contributors.append(
@@ -155,7 +156,7 @@ def build_mosaic(raw_root: Path, states: dict[str, Path]):
             rho_mosaic[new_only] = rho[new_only]
             rho_mosaic[overlap] = np.maximum(rho_mosaic[overlap], rho[overlap])
 
-    return mosaic, rho_mosaic, (grid_lat, grid_lon), contributors, site_fields, site_rho_fields
+    return mosaic, rho_mosaic, (grid_lat, grid_lon), contributors, site_fields, site_velocity_fields, site_rho_fields
 
 
 def _clean_field(mosaic, rhohv=None):
@@ -228,6 +229,36 @@ def render_raw(mosaic, latlon, output_path: Path):
     return _render(mosaic, latlon, output_path, mode="raw")
 
 
+def _render_velocity(velocity, latlon, output_path: Path, *, raw=False):
+    lat, lon = latlon
+    data = np.asarray(velocity, dtype=float) * 1.94384449244
+    masked = np.ma.masked_invalid(data)
+    cmap = plt.get_cmap("RdBu_r").copy()
+    cmap.set_bad((0, 0, 0, 0))
+    limit = 80.0 if raw else 60.0
+    fig = plt.figure(figsize=(8.5, 6.5), dpi=120)
+    ax = fig.add_axes([0, 0, 1, 1])
+    ax.set_axis_off()
+    ax.set_xlim(float(np.nanmin(lon)), float(np.nanmax(lon)))
+    ax.set_ylim(float(np.nanmin(lat)), float(np.nanmax(lat)))
+    ax.pcolormesh(lon, lat, masked, cmap=cmap, vmin=-limit, vmax=limit, shading="auto")
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(output_path, format="png", transparent=True, dpi=120, pad_inches=0)
+    plt.close(fig)
+    return [
+        [float(np.nanmin(lat)), float(np.nanmin(lon))],
+        [float(np.nanmax(lat)), float(np.nanmax(lon))],
+    ]
+
+
+def render_velocity(velocity, latlon, output_path: Path):
+    return _render_velocity(velocity, latlon, output_path, raw=False)
+
+
+def render_velocity_raw(velocity, latlon, output_path: Path):
+    return _render_velocity(velocity, latlon, output_path, raw=True)
+
+
 def render_site_products(
     site_fields,
     latlon,
@@ -269,7 +300,7 @@ def main():
     args = parser.parse_args()
 
     states = {"KCXX": args.kcxx_state, "KTYX": args.ktyx_state}
-    mosaic, rhohv, latlon, contributors, site_fields, site_rho_fields = build_mosaic(args.raw_root, states)
+    mosaic, rhohv, latlon, contributors, site_fields, site_velocity_fields, site_rho_fields = build_mosaic(args.raw_root, states)
 
     now = datetime.now(timezone.utc).isoformat()
     payload = {
@@ -335,6 +366,29 @@ def main():
             rhohv_by_site=site_rho_fields,
         )
         payload["display_products"]["base_reflectivity"] = site_products
+        velocity_products = {}
+        for site, velocity in site_velocity_fields.items():
+            if velocity is None or not np.isfinite(velocity).any():
+                continue
+            clean_path = args.output_image.parent / f"{site}_base_velocity_clean.png"
+            raw_path = args.output_image.parent / f"{site}_base_velocity_raw.png"
+            vbounds = render_velocity(velocity, latlon, clean_path)
+            render_velocity_raw(velocity, latlon, raw_path)
+            velocity_products[site] = {
+                "clean_image": clean_path.name,
+                "raw_image": raw_path.name,
+                "bounds": vbounds,
+                "field": "base_velocity_kt",
+                "native_units": "m/s",
+                "display_units": "kt",
+            }
+        payload["display_products"]["base_velocity"] = velocity_products
+        payload["radar_moment_products"] = {
+            "velocity_native_units": "m/s",
+            "velocity_display_units": "kt",
+            "velocity_rendering": "signed_radial_velocity",
+            "velocity_sources": sorted(velocity_products),
+        }
     else:
         for output in (
             args.output_image,
