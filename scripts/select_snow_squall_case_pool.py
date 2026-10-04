@@ -78,6 +78,21 @@ def exclude_protected_candidates(candidates: pd.DataFrame, protected_path: str |
     protected = pd.read_csv(protected_path)
     protected_ids = set(protected.get("case_id", pd.Series(dtype="string")).dropna().astype(str))
     return candidates[~candidates["candidate_id"].astype(str).isin(protected_ids)].copy()
+
+
+def load_excluded_candidate_ids(path: str | None) -> set[str]:
+    """Load candidate IDs already successfully acquired by prior batches."""
+    if not path:
+        return set()
+    p = Path(path)
+    if not p.exists():
+        return set()
+    frame = pd.read_csv(p)
+    ids: set[str] = set()
+    for column in ("candidate_id", "case_id", "id"):
+        if column in frame.columns:
+            ids.update(frame[column].dropna().astype(str))
+    return ids
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--input", required=True)
@@ -86,6 +101,7 @@ def main():
     parser.add_argument("--max-official", type=int, default=50)
     parser.add_argument("--max-unverified", type=int, default=50)
     parser.add_argument("--exclude-modern-validation", default=None, help="CSV manifest of protected validation cases to exclude")
+    parser.add_argument("--exclude-candidate-ids", default=None, help="CSV containing candidate IDs already acquired in prior historical batches")
     parser.add_argument("--offset-official", type=int, default=0)
     parser.add_argument("--offset-unverified", type=int, default=0)
     args = parser.parse_args()
@@ -94,6 +110,11 @@ def main():
     out.mkdir(parents=True, exist_ok=True)
 
     candidates = pd.read_csv(args.input)
+    excluded_ids = load_excluded_candidate_ids(args.exclude_candidate_ids)
+    if excluded_ids:
+        before_processed = len(candidates)
+        candidates = candidates[~candidates["candidate_id"].astype(str).isin(excluded_ids)].copy()
+        print(f"Excluded previously acquired candidates: {before_processed - len(candidates)}")
     if args.exclude_modern_validation:
         before = len(candidates)
         candidates = exclude_protected_candidates(candidates, args.exclude_modern_validation)
@@ -201,6 +222,7 @@ def main():
         "unverified_selected": int(len(unverified)),
         "total_selected": int(len(selected)),
         "radar_manifest_rows": int(len(selected_radar)),
+        "excluded_previously_acquired": int(before_processed - len(candidates)) if excluded_ids else 0,
         "official_case_ids": sorted(official["candidate_id"].astype(str).tolist()),
         "unverified_case_ids": sorted(unverified["candidate_id"].astype(str).tolist()),
         "training_policy": "Explicit NCEI/study-documented cases and multi-source official/study cases may enter the first expanded positive-label research training pass. warning_verified-only, warning_only, warning_plus_report, screening, and report-only candidates remain a weak/review feature-population pool until onset timing is independently verified.",
