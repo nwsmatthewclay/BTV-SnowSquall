@@ -52,7 +52,7 @@ on:
 
 permissions:
   actions: write
-  contents: read
+  contents: write
 
 concurrency:
   group: snow-squall-expansion-dataset-v2
@@ -229,29 +229,37 @@ jobs:
         id: batch
         run: |
           set -euo pipefail
+          # Automatic continuation now uses candidate-ID state instead of numeric
+          # offsets. Numeric offsets remain only as an explicit manual override.
           official_offset="${{ inputs.official_offset || '0' }}"
           unverified_offset="${{ inputs.unverified_offset || '0' }}"
           max_official="${{ inputs.max_official || '30' }}"
           max_unverified="${{ inputs.max_unverified || '15' }}"
-          # A workflow_run begins from the last archived batch state, while a
-          # manual dispatch uses its explicit offsets. This prevents the ledger-triggered
-          # expansion from re-processing yesterday's first 30/15 case batch.
-          if [ -f .github/expansion-next-batch.json ] && [ "${{ github.event_name }}" = "workflow_run" ]; then
-            official_offset="$(python -c 'import json; print(json.load(open(".github/expansion-next-batch.json"))["official_offset"])')"
-            unverified_offset="$(python -c 'import json; print(json.load(open(".github/expansion-next-batch.json"))["unverified_offset"])')"
-            max_official="$(python -c 'import json; print(json.load(open(".github/expansion-next-batch.json"))["max_official"])')"
-            max_unverified="$(python -c 'import json; print(json.load(open(".github/expansion-next-batch.json"))["max_unverified"])')"
-          elif [ "${{ github.event_name }}" = "push" ] && [ -f .github/expansion-next-batch.json ]; then
-            official_offset="$(python -c 'import json; print(json.load(open(".github/expansion-next-batch.json"))["official_offset"])')"
-            unverified_offset="$(python -c 'import json; print(json.load(open(".github/expansion-next-batch.json"))["unverified_offset"])')"
-            max_official="$(python -c 'import json; print(json.load(open(".github/expansion-next-batch.json"))["max_official"])')"
-            max_unverified="$(python -c 'import json; print(json.load(open(".github/expansion-next-batch.json"))["max_unverified"])')"
-          fi
           echo "official_offset=$official_offset" >> "$GITHUB_OUTPUT"
           echo "unverified_offset=$unverified_offset" >> "$GITHUB_OUTPUT"
           echo "max_official=$max_official" >> "$GITHUB_OUTPUT"
           echo "max_unverified=$max_unverified" >> "$GITHUB_OUTPUT"
-          echo "Expansion batch: official=$official_offset+$max_official review=$unverified_offset+$max_unverified"
+          echo "Expansion batch controls: legacy_offsets=$official_offset/$unverified_offset size=$max_official/$max_unverified"
+
+      - name: Restore processed historical candidate state
+        run: |
+          set -euo pipefail
+          mkdir -p data/manifests
+          python - <<'PY'
+          import csv
+          import json
+          from pathlib import Path
+
+          state_path = Path(".github/historical-downloader-state.json")
+          state = json.loads(state_path.read_text(encoding="utf-8")) if state_path.exists() else {}
+          ids = sorted({str(x) for x in state.get("processed_candidate_ids", []) if str(x).strip()})
+          out = Path("data/manifests/historical_processed_candidate_ids.csv")
+          with out.open("w", newline="", encoding="utf-8") as fh:
+              writer = csv.writer(fh)
+              writer.writerow(["candidate_id"])
+              writer.writerows([[x] for x in ids])
+          print(f"Previously acquired candidate IDs: {len(ids)}")
+          print(f"State source: {state_path}")
 
       - name: Select expanded documented and unverified case pool
         run: |
@@ -265,7 +273,8 @@ jobs:
             --max-unverified "${{ steps.batch.outputs.max_unverified }}" \
             --offset-official "${{ steps.batch.outputs.official_offset }}" \
             --offset-unverified "${{ steps.batch.outputs.unverified_offset }}" \
-            --exclude-modern-validation data/manifests/modern_independent_validation_cases.csv
+            --exclude-modern-validation data/manifests/modern_independent_validation_cases.csv \
+            --exclude-candidate-ids data/manifests/historical_processed_candidate_ids.csv
           python - <<'PY'
           import pandas as pd
           from pathlib import Path
@@ -287,6 +296,18 @@ jobs:
             --workers 16 \
             --max-failure-rate 0.20
 
+      - name: Preserve raw Level-II acquisition batch
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: snow-squall-level2-raw-${{ github.run_id }}
+          retention-days: 30
+          compression-level: 0
+          if-no-files-found: warn
+          path: |
+            data/raw/snow_squall_expansion_level2
+            data/manifests/snow_squall_expansion/snow_squall_expansion_cases.csv
+            data/manifests/snow_squall_expansion/snow_squall_expansion_radar_manifest.csv
       - name: Acquire ASOS/METAR observations
         run: |
           python acquisition/asos_iem.py \
