@@ -18,7 +18,7 @@ from shapely.ops import unary_union
 from acquisition.level2_reader import read_level2, resolve_fields, volume_metadata
 from processing.object_detector import detect_reflectivity_objects
 from processing.object_tracker import CentroidTracker
-from processing.radar_grid import grid_field_2d, grid_latlon, grid_lowest_sweep
+from processing.radar_grid import grid_field_2d, grid_latlon, grid_lowest_available_sweep
 from processing.radar_sites import apply_radar_origin, radar_origin_for_site
 from processing.motion import add_motion_features
 from processing.radar_storm_motion import attach_radar_storm_motion
@@ -111,22 +111,37 @@ def process_volume(path: Path, tracker: CentroidTracker, radar_origin=None, prev
     if radar_origin:
         origin_lat, origin_lon = radar_origin
 
-    available_fields = [name for name in fields.values() if name]
-    grid = grid_lowest_sweep(
+    # Reflectivity and velocity do not have to be carried on the same
+    # literal sweep in a NEXRAD volume. Grid each moment on its own lowest
+    # valid sweep, using identical Cartesian geometry, so base velocity cannot
+    # disappear merely because sweep 0 is a reflectivity-only cut.
+    reflectivity_grid = grid_lowest_available_sweep(
         radar,
-        available_fields,
+        reflectivity,
         origin_lat=origin_lat,
         origin_lon=origin_lon,
         grid_size_km=180.0,
         spacing_km=1.0,
     )
-    data = grid_field_2d(grid, reflectivity)
-    lat, lon = grid_latlon(grid)
-    gridded = {
-        canonical: grid_field_2d(grid, actual)
-        for canonical, actual in fields.items()
-        if actual
-    }
+    if reflectivity_grid is None:
+        return []
+
+    data = grid_field_2d(reflectivity_grid, reflectivity)
+    lat, lon = grid_latlon(reflectivity_grid)
+    gridded = {}
+    for canonical, actual in fields.items():
+        if not actual:
+            continue
+        field_grid = grid_lowest_available_sweep(
+            radar,
+            actual,
+            origin_lat=origin_lat,
+            origin_lon=origin_lon,
+            grid_size_km=180.0,
+            spacing_km=1.0,
+        )
+        if field_grid is not None:
+            gridded[canonical] = grid_field_2d(field_grid, actual)
     field_gradients = {}
     for canonical in ("zdr", "velocity"):
         field = gridded.get(canonical)
