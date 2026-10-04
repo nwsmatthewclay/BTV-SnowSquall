@@ -23,7 +23,7 @@ from matplotlib.colors import BoundaryNorm, ListedColormap
 from scipy import ndimage
 
 from acquisition.level2_reader import read_level2, resolve_fields, volume_metadata
-from processing.radar_grid import grid_field_2d, grid_latlon, grid_lowest_sweep
+from processing.radar_grid import grid_field_2d, grid_latlon, grid_lowest_available_sweep
 from processing.radar_sites import apply_radar_origin, radar_origin_for_site
 
 
@@ -72,19 +72,31 @@ def grid_radar(path: Path, radar: str):
         raise RuntimeError(f"{radar}: no reflectivity field found")
     rhohv = fields.get("rhohv")
 
-    requested = [reflectivity] + ([rhohv] if rhohv else [])
-    grid = grid_lowest_sweep(
+    refl_grid = grid_lowest_available_sweep(
         radar_obj,
-        requested,
+        reflectivity,
         origin_lat=CENTER_LAT,
         origin_lon=CENTER_LON,
         grid_size_km=GRID_SIZE_KM,
         spacing_km=SPACING_KM,
     )
+    if refl_grid is None:
+        raise RuntimeError(f"{radar}: reflectivity field has no valid sweep")
 
-    data = grid_field_2d(grid, reflectivity)
-    rho = grid_field_2d(grid, rhohv) if rhohv and rhohv in getattr(grid, "fields", {}) else None
-    lat, lon = grid_latlon(grid)
+    data = grid_field_2d(refl_grid, reflectivity)
+    rho = None
+    if rhohv:
+        rho_grid = grid_lowest_available_sweep(
+            radar_obj,
+            rhohv,
+            origin_lat=CENTER_LAT,
+            origin_lon=CENTER_LON,
+            grid_size_km=GRID_SIZE_KM,
+            spacing_km=SPACING_KM,
+        )
+        if rho_grid is not None:
+            rho = grid_field_2d(rho_grid, rhohv)
+    lat, lon = grid_latlon(refl_grid)
     return data, rho, lat, lon, meta.get("scan_time_utc"), meta.get("radar_id") or radar
 
 
@@ -92,6 +104,8 @@ def build_mosaic(raw_root: Path, states: dict[str, Path]):
     contributors = []
     fields = []
     rho_fields = []
+    site_fields = {}
+    site_rho_fields = {}
     grid_lat = grid_lon = None
 
     for radar in RADARS:
@@ -105,6 +119,8 @@ def build_mosaic(raw_root: Path, states: dict[str, Path]):
             continue
         fields.append(data)
         rho_fields.append(rho)
+        site_fields[radar] = data
+        site_rho_fields[radar] = rho
         grid_lat, grid_lon = lat, lon
         contributors.append(
             {
@@ -139,7 +155,7 @@ def build_mosaic(raw_root: Path, states: dict[str, Path]):
             rho_mosaic[new_only] = rho[new_only]
             rho_mosaic[overlap] = np.maximum(rho_mosaic[overlap], rho[overlap])
 
-    return mosaic, rho_mosaic, (grid_lat, grid_lon), contributors
+    return mosaic, rho_mosaic, (grid_lat, grid_lon), contributors, site_fields, site_rho_fields
 
 
 def _clean_field(mosaic, rhohv=None):
@@ -212,6 +228,37 @@ def render_raw(mosaic, latlon, output_path: Path):
     return _render(mosaic, latlon, output_path, mode="raw")
 
 
+def render_site_products(
+    site_fields,
+    latlon,
+    output_dir: Path,
+    *,
+    rhohv_by_site=None,
+):
+    """Render persistent individual KCXX/KTYX base-reflectivity products."""
+    products = {}
+    rhohv_by_site = rhohv_by_site or {}
+    for site, field in site_fields.items():
+        if field is None or not np.isfinite(field).any():
+            continue
+        clean_path = output_dir / f"{site}_base_reflectivity_clean.png"
+        raw_path = output_dir / f"{site}_base_reflectivity_raw.png"
+        bounds = render_clean(
+            field,
+            latlon,
+            clean_path,
+            rhohv=rhohv_by_site.get(site),
+        )
+        render_raw(field, latlon, raw_path)
+        products[site] = {
+            "clean_image": clean_path.name,
+            "raw_image": raw_path.name,
+            "bounds": bounds,
+            "field": "base_reflectivity_dbz",
+        }
+    return products
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--raw-root", type=Path, default=Path("data/raw"))
@@ -222,7 +269,7 @@ def main():
     args = parser.parse_args()
 
     states = {"KCXX": args.kcxx_state, "KTYX": args.ktyx_state}
-    mosaic, rhohv, latlon, contributors = build_mosaic(args.raw_root, states)
+    mosaic, rhohv, latlon, contributors, site_fields, site_rho_fields = build_mosaic(args.raw_root, states)
 
     now = datetime.now(timezone.utc).isoformat()
     payload = {
@@ -250,8 +297,19 @@ def main():
             "default": "clean",
             "clean_image": "radar_mosaic_clean.png",
             "raw_image": "radar_mosaic_raw.png",
-            "clean_description": "Clutter-suppressed human display. This does not alter model input.",
-            "raw_description": "Unfiltered gridded reflectivity display.",
+            "base_reflectivity": {
+                "KCXX": {
+                    "clean_image": "KCXX_base_reflectivity_clean.png",
+                    "raw_image": "KCXX_base_reflectivity_raw.png",
+                },
+                "KTYX": {
+                    "clean_image": "KTYX_base_reflectivity_clean.png",
+                    "raw_image": "KTYX_base_reflectivity_raw.png",
+                },
+            },
+            "clean_description": "Clutter-suppressed KCXX/KTYX reflectivity mosaic. This does not alter model input.",
+            "raw_description": "Unfiltered gridded KCXX/KTYX reflectivity mosaic.",
+            "base_reflectivity_description": "Individual lowest-valid-sweep base-reflectivity displays from the downloaded KCXX and KTYX Level-II volumes.",
         },
         "sources": contributors,
         "image": "radar_mosaic_clean.png" if mosaic is not None else None,
@@ -270,6 +328,13 @@ def main():
             # Re-create the clean product at its explicit canonical name.
             render_clean(mosaic, latlon, clean_output, rhohv=rhohv)
         payload["bounds"] = bounds
+        site_products = render_site_products(
+            site_fields,
+            latlon,
+            args.output_image.parent,
+            rhohv_by_site=site_rho_fields,
+        )
+        payload["display_products"]["base_reflectivity"] = site_products
     else:
         for output in (
             args.output_image,
@@ -277,6 +342,9 @@ def main():
             args.output_image.with_name("radar_mosaic_raw.png"),
         ):
             output.unlink(missing_ok=True)
+        for site in RADARS:
+            for suffix in ("_base_reflectivity_clean.png", "_base_reflectivity_raw.png"):
+                (args.output_image.parent / f"{site}{suffix}").unlink(missing_ok=True)
 
     args.output_json.parent.mkdir(parents=True, exist_ok=True)
     args.output_json.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
