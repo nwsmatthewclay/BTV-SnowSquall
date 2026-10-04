@@ -7,6 +7,9 @@
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <link rel="stylesheet" href="style.css?v=20261003-live-v3">
 <style>
+.velocity-legend{display:grid;grid-template-columns:28px repeat(10,1fr) 38px;gap:2px;align-items:center;font-size:8px;color:#7f95a8}
+.velocity-legend i{height:8px;border-radius:2px}
+.velocity-legend i:nth-child(2){background:#08306b}.velocity-legend i:nth-child(3){background:#2171b5}.velocity-legend i:nth-child(4){background:#6baed6}.velocity-legend i:nth-child(5){background:#c6dbef}.velocity-legend i:nth-child(6){background:#f7f7f7}.velocity-legend i:nth-child(7){background:#fee0d2}.velocity-legend i:nth-child(8){background:#fc9272}.velocity-legend i:nth-child(9){background:#ef3b2c}.velocity-legend i:nth-child(10){background:#cb181d}.velocity-legend i:nth-child(11){background:#67000d}
 /* Live viewer uses the exact historical outer frame: header → map/panel → footer. */
 #liveMap{position:relative;min-width:0;height:100%;background:#14202a;overflow:hidden}
 #panel.live-sidebar{min-width:0;height:100%;overflow:auto}
@@ -83,17 +86,21 @@
       </div>
       <div class="map-display-controls" aria-label="Radar display controls">
         <span class="control-label">DISPLAY</span>
-        <button class="display-btn active" data-radar-mode="clean">Mosaic</button>
+        <button class="display-btn active" data-radar-mode="clean">Mosaic Z</button>
         <button class="display-btn" data-radar-mode="base">Base Z</button>
-        <button class="display-btn" data-radar-mode="raw">Raw</button>
+        <button class="display-btn" data-radar-mode="velocity">Velocity</button>
+        <button class="display-btn" data-radar-mode="raw">Raw Z</button>
         <button class="display-btn" data-radar-mode="qcd">NOAA QC</button>
       </div>
-      <div class="map-legend">
-        <div class="legend-caption">REFLECTIVITY • dBZ</div>
-        <div class="legend-bar">
+      <div class="map-legend" id="radarLegend">
+        <div class="legend-caption" id="legendCaption">REFLECTIVITY • dBZ</div>
+        <div class="legend-bar" id="reflectivityLegend">
           <span>12</span><i class="l12"></i><i class="l18"></i><i class="l24"></i><i class="l30"></i><i class="l35"></i><i class="l40"></i><i class="l45"></i><i class="l55"></i><i class="l65"></i><span>75+</span>
         </div>
-        <div class="legend-note">Clean mode suppresses weak display noise only. Raw Level-II remains the scientific source for object detection and model features.</div>
+        <div class="velocity-legend" id="velocityLegend" style="display:none">
+          <span>−60</span><i></i><i></i><i></i><i></i><i></i><span>0</span><i></i><i></i><i></i><i></i><i></i><span>+60 kt</span>
+        </div>
+        <div class="legend-note" id="legendNote">Clean Z mode suppresses weak display noise only. Raw Level-II remains the scientific source for object detection and model features.</div>
       </div>
       <div class="map-empty-state" id="mapEmptyState"><strong>No significant echoes</strong><span>Radar feed is healthy. Weak returns below the display threshold are intentionally muted.</span></div>
     </div>
