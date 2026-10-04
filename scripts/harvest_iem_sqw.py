@@ -11,9 +11,10 @@ def fetch(year,wfo):
     req=Request(f"{BASE}?{urlencode(params)}",headers={"User-Agent":"BTV-SnowSquall historical research"})
     with urlopen(req,timeout=30) as resp: payload=json.load(resp)
     if isinstance(payload,dict):
-        for key in ("data","results","features"):
+        for key in ("events","data","results","features"):
             value=payload.get(key)
-            if isinstance(value,list): return [x.get("properties",x) if isinstance(x,dict) else {} for x in value]
+            if isinstance(value,list):
+                return [x.get("properties",x) if isinstance(x,dict) else {} for x in value]
     if isinstance(payload,list): return [x.get("properties",x) if isinstance(x,dict) else {} for x in payload]
     raise ValueError("Unsupported IEM response format")
 def get(row,*keys):
