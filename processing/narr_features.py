@@ -124,6 +124,15 @@ def extract_features(
         if values["wind_10m_ms"] is not None else None
     )
 
+    missing_fields = sorted(
+        set(failures)
+        | {
+            name
+            for name in ("cape_jkg", "pwat_mm", "temperature_2m_k", "dewpoint_2m_k",
+                         "rh_2m_pct", "u10_ms", "v10_ms")
+            if values.get(name) is None
+        }
+    )
     return {
         "source": "NARR",
         "source_valid_time_utc": (
@@ -134,6 +143,6 @@ def extract_features(
             if expected_valid_time else None
         ),
         "fields": values,
-        "missing_fields": sorted(failures),
-        "status": "complete" if not failures else "partial",
+        "missing_fields": missing_fields,
+        "status": "complete" if not missing_fields else "partial",
     }
