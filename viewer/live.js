@@ -114,6 +114,17 @@ function renderRadarMosaic(meta){
 
   const modeText=radarMode==="raw"?"RAW DISPLAY":(radarMode==="base"?"BASE REFLECTIVITY":(radarMode==="velocity"?"BASE VELOCITY":"NOAA QC DISPLAY"));
   if(modeLabel)modeLabel.textContent=modeText;
+  const reflLegend=document.getElementById("reflectivityLegend");
+  const velocityLegend=document.getElementById("velocityLegend");
+  const legendCaption=document.getElementById("legendCaption");
+  const legendNote=document.getElementById("legendNote");
+  const showingVelocity=radarMode==="velocity";
+  if(reflLegend)reflLegend.style.display=showingVelocity?"none":"grid";
+  if(velocityLegend)velocityLegend.style.display=showingVelocity?"grid":"none";
+  if(legendCaption)legendCaption.textContent=showingVelocity?"RADIAL VELOCITY • kt":"REFLECTIVITY • dBZ";
+  if(legendNote)legendNote.textContent=showingVelocity
+    ?"Signed base radial velocity from the individual KCXX/KTYX lowest-valid velocity sweeps. Red/positive is outbound; blue/negative is inbound."
+    :"Clean Z mode suppresses weak display noise only. Raw Level-II remains the scientific source for object detection and model features.";
 
   if(radarMode==="qcd"){
     addMrmsFallback();
@@ -179,7 +190,7 @@ function setRadarMode(mode){
   document.querySelectorAll(".display-btn").forEach(btn=>btn.classList.toggle("active",btn.dataset.radarMode===mode));
   if(radarMosaic)renderRadarMosaic(radarMosaic);
   const subtitle=document.getElementById("hudMode");
-  if(subtitle)subtitle.textContent=mode==="raw"?"RAW DISPLAY":(mode==="base"?"BASE REFLECTIVITY":(mode==="velocity"?"BASE VELOCITY":(mode==="qcd"?"NOAA QC DISPLAY":"CLEAN DISPLAY")));
+  if(subtitle)subtitle.textContent=mode==="raw"?"RAW Z DISPLAY":(mode==="base"?"BASE REFLECTIVITY":(mode==="velocity"?"BASE RADIAL VELOCITY":(mode==="qcd"?"NOAA QC DISPLAY":"MOSAIC Z DISPLAY")));
 }
 
 let mrmsFallbackLayer=null;
@@ -244,7 +255,7 @@ function renderMap(summary){
       const isSelected=selected&&String(selected.track_id)===id&&selected.radar_site===x.site;
       const fill=objectColor(p);
       const layer=L.geoJSON(f,{style:{color:isSelected?"#ffffff":fill,fillColor:fill,fillOpacity:isSelected?.50:.18,weight:isSelected?3:1.5}}).addTo(layers[x.site]);
-      layer.bindTooltip("<b>"+esc(x.site)+" • Object "+esc(id)+"</b><br>"+num(p.max_reflectivity_dbz)+" dBZ • "+num(p.area_km2)+" km² • "+num(p.motion_speed_kt)+" kt",{sticky:true,direction:"top"});
+      layer.bindTooltip("<b>"+esc(x.site)+" • Object "+esc(id)+"</b><br>"+num(p.max_reflectivity_dbz)+" dBZ • Vr "+num(p.velocity_mean_kt)+" kt • "+num(p.area_km2)+" km² • motion "+num(p.motion_speed_kt)+" kt",{sticky:true,direction:"top"});
       layer.on("click",()=>selectObject({...p,radar_site:x.site}));
       if(isSelected&&p.centroid_lat!=null&&p.centroid_lon!=null){
         L.marker([Number(p.centroid_lat),Number(p.centroid_lon)],{icon:L.divIcon({className:"live-object-label-wrap",iconSize:null,iconAnchor:[0,0],html:"<div class='live-object-label selected'>"+esc(x.site)+"-"+esc(id)+"</div>"}),interactive:false}).addTo(layers[x.site]).bringToFront();
@@ -446,6 +457,9 @@ function selectObject(p){
     "<div class='live-stat'><span>Time</span><b>"+esc(fmt(p.timestamp))+"</b></div>"+
     "<div class='live-stat'><span>Max Z</span><b>"+num(p.max_reflectivity_dbz)+" dBZ</b></div>"+
     "<div class='live-stat'><span>Mean Z</span><b>"+num(p.mean_reflectivity_dbz)+" dBZ</b></div>"+
+    "<div class='live-stat'><span>Base Vr</span><b>"+num(p.velocity_mean_kt)+" kt mean • "+num(p.velocity_p90_abs_kt)+" kt p90 abs</b></div>"+
+    "<div class='live-stat'><span>Vr structure</span><b>"+num(p.velocity_contrast_kt)+" kt contrast • "+num(p.velocity_gradient_p90_ktkm)+" kt/km</b></div>"+
+    "<div class='live-stat'><span>Velocity support</span><b>"+(p.velocity_support_fraction==null?"—":(Number(p.velocity_support_fraction)*100).toFixed(0)+"%")+" • "+esc(p.velocity_structure===true?"STRUCTURED":"—")+"</b></div>"+
     "<div class='live-stat'><span>Area</span><b>"+num(p.area_km2)+" km²</b></div>"+
     "<div class='live-stat'><span>Shape</span><b>"+num(p.length_km)+" × "+num(p.width_km)+" km</b></div>"+
     "<div class='live-stat'><span>Motion</span><b>"+num(p.motion_speed_kt)+" kt @ "+num(motionDir,0)+"°</b></div>"+
