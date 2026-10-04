@@ -27,6 +27,11 @@ const baseReflectivityUrl=(site,mode="clean")=>{
   const name=mode==="raw"?(product.raw_image||site+"_base_reflectivity_raw.png"):(product.clean_image||site+"_base_reflectivity_clean.png");
   return LIVE_BASE+name+"?cb="+Date.now();
 };
+const baseVelocityUrl=(site,mode="clean")=>{
+  const product=radarMosaic?.display_products?.base_velocity?.[site]||{};
+  const name=mode==="raw"?(product.raw_image||site+"_base_velocity_raw.png"):(product.clean_image||site+"_base_velocity_clean.png");
+  return LIVE_BASE+name+"?cb="+Date.now();
+};
 
 function markerIcon(site){
   return L.divIcon({className:"radar-station",iconSize:[12,12],iconAnchor:[6,6],html:""});
@@ -88,12 +93,16 @@ function renderRadarMosaic(meta){
     if(status)status.textContent=localStale
       ?(radarMode==="base"?"Base Z stale • NOAA fallback":"Local mosaic stale • NOAA fallback")
       :"Local radar unavailable";
-    if(sources)sources.textContent=radarMode==="base"?"NOAA QC • live":"NOAA QC • live";
+    if(sources)sources.textContent=(radarMode==="base"||radarMode==="velocity")?"LOCAL MOMENT • live":"NOAA QC • live";
     if(time)time.textContent=localStale&&meta?.updated_utc
       ?"Local "+fmt(meta.updated_utc)+" • NOAA fallback"
       :"Live NOAA feed";
-    if(modeLabel)modeLabel.textContent=radarMode==="base"?"BASE REFLECTIVITY FALLBACK":"NOAA QC FALLBACK";
-    addMrmsFallback();
+    if(modeLabel)modeLabel.textContent=radarMode==="base"?"BASE REFLECTIVITY FALLBACK":(radarMode==="velocity"?"BASE VELOCITY UNAVAILABLE":"NOAA QC FALLBACK");
+    if(radarMode==="velocity"){
+      if(status)status.textContent="Base velocity unavailable • feed stale";
+    }else{
+      addMrmsFallback();
+    }
     if(!hasInitialExtent&&meta?.bounds){map.fitBounds(meta.bounds,{padding:[25,25],maxZoom:8});hasInitialExtent=true;}
     return;
   }
@@ -103,7 +112,7 @@ function renderRadarMosaic(meta){
   const times=(meta.sources||[]).map(x=>x.scan_time_utc).filter(Boolean).sort();
   if(time)time.textContent=times.length?fmt(times[times.length-1]):fmt(meta.updated_utc);
 
-  const modeText=radarMode==="raw"?"RAW DISPLAY":(radarMode==="base"?"BASE REFLECTIVITY":(radarMode==="qcd"?"NOAA QC DISPLAY":"CLEAN DISPLAY"));
+  const modeText=radarMode==="raw"?"RAW DISPLAY":(radarMode==="base"?"BASE REFLECTIVITY":(radarMode==="velocity"?"BASE VELOCITY":"NOAA QC DISPLAY"));
   if(modeLabel)modeLabel.textContent=modeText;
 
   if(radarMode==="qcd"){
@@ -129,6 +138,24 @@ function renderRadarMosaic(meta){
       ?("BASE Z • "+(added===2?"KCXX + KTYX":src.join(" + ")))
       :"Base Z unavailable • NOAA fallback";
     if(added===0)addMrmsFallback();
+  }else if(radarMode==="velocity"){
+    const products=meta.display_products?.base_velocity||{};
+    let added=0;
+    for(const site of ["KCXX","KTYX"]){
+      if(!products[site])continue;
+      const overlay=L.imageOverlay(baseVelocityUrl(site,"clean"),products[site].bounds||meta.bounds,{
+        pane:"radarMosaicPane",
+        opacity:.78,
+        interactive:false,
+        crossOrigin:true
+      });
+      overlay.once("error",()=>{try{map.removeLayer(overlay)}catch(_){}});
+      overlay.addTo(radarMosaicLayer);
+      added++;
+    }
+    if(status)status.textContent=added
+      ?("BASE Vr • "+(added===2?"KCXX + KTYX":src.join(" + ")))
+      :"Base velocity unavailable";
   }else{
     const overlay=L.imageOverlay(mosaicImageUrl(radarMode),meta.bounds,{
       pane:"radarMosaicPane",
@@ -152,7 +179,7 @@ function setRadarMode(mode){
   document.querySelectorAll(".display-btn").forEach(btn=>btn.classList.toggle("active",btn.dataset.radarMode===mode));
   if(radarMosaic)renderRadarMosaic(radarMosaic);
   const subtitle=document.getElementById("hudMode");
-  if(subtitle)subtitle.textContent=mode==="raw"?"RAW DISPLAY":(mode==="base"?"BASE REFLECTIVITY":(mode==="qcd"?"NOAA QC DISPLAY":"CLEAN DISPLAY"));
+  if(subtitle)subtitle.textContent=mode==="raw"?"RAW DISPLAY":(mode==="base"?"BASE REFLECTIVITY":(mode==="velocity"?"BASE VELOCITY":(mode==="qcd"?"NOAA QC DISPLAY":"CLEAN DISPLAY")));
 }
 
 let mrmsFallbackLayer=null;
