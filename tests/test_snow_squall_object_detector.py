@@ -131,6 +131,8 @@ def test_coherent_base_velocity_can_rescue_modest_reflectivity():
     obj = objects[0]
     assert obj["max_reflectivity_dbz"] == 18.0
     assert obj["velocity_rescue"] is True
+    assert obj["velocity_structure"] is True
+    assert obj["velocity_support_fraction"] >= 0.20
     assert obj["velocity_mean_kt"] > 20.0
     assert obj["velocity_contrast_kt"] >= 8.0
 
