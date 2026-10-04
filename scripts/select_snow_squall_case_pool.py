@@ -111,10 +111,12 @@ def main():
 
     candidates = pd.read_csv(args.input)
     excluded_ids = load_excluded_candidate_ids(args.exclude_candidate_ids)
+    processed_excluded_count = 0
     if excluded_ids:
         before_processed = len(candidates)
         candidates = candidates[~candidates["candidate_id"].astype(str).isin(excluded_ids)].copy()
-        print(f"Excluded previously acquired candidates: {before_processed - len(candidates)}")
+        processed_excluded_count = before_processed - len(candidates)
+        print(f"Excluded previously acquired candidates: {processed_excluded_count}")
     if args.exclude_modern_validation:
         before = len(candidates)
         candidates = exclude_protected_candidates(candidates, args.exclude_modern_validation)
@@ -222,7 +224,7 @@ def main():
         "unverified_selected": int(len(unverified)),
         "total_selected": int(len(selected)),
         "radar_manifest_rows": int(len(selected_radar)),
-        "excluded_previously_acquired": int(before_processed - len(candidates)) if excluded_ids else 0,
+        "excluded_previously_acquired": int(processed_excluded_count),
         "official_case_ids": sorted(official["candidate_id"].astype(str).tolist()),
         "unverified_case_ids": sorted(unverified["candidate_id"].astype(str).tolist()),
         "training_policy": "Explicit NCEI/study-documented cases and multi-source official/study cases may enter the first expanded positive-label research training pass. warning_verified-only, warning_only, warning_plus_report, screening, and report-only candidates remain a weak/review feature-population pool until onset timing is independently verified.",
