@@ -283,22 +283,22 @@ function renderEnvironment(){
   var rows=trackHistory(p),current=p,prev=rows.length>1?rows[Math.max(0,rows.length-2)]:null;
   var forecast=p.environment_forecast_30min||{},forecastFields=forecast.fields||{};
   var forecastReady=p.environment_forecast_30min_model_ready;
-  var header="<thead><tr><th>Parameter</th><th>−30 min</th><th>Current</th><th>Expected +30 min</th></tr></thead><tbody>";
-  header+=fields.map(function(x){
+  var format=function(val,key){
+    if(val==null)return "—";
+    if(key==="temperature_2m_k"||key==="dewpoint_2m_k")return num(kToC(val),1)+" °C";
+    if(key==="gust_ms"||key==="mean_wind_0_2km_ms")return num(msToKt(val),0)+" kt";
+    if(key==="shear_0_1km_kt"||key==="shear_0_3km_kt"||key==="shear_0_6km_kt")return num(val,0)+" kt";
+    if(key==="lapse_rate_0_3km_c_km"||key==="lapse_rate_0_7_5km_c_km")return num(val,2)+" °C/km";
+    if(key==="lcl_m"||key==="lfc_m"||key==="el_m"||key==="freezing_level_m")return num(val/1000,2)+" km";
+    if(key==="wetbulb_2m_c")return num(val,1)+" °C";
+    return fmtLiveEnv(val,key);
+  };
+  var html="<div class='environment-row env-head' role='row'><div class='env-name' role='columnheader'>Parameter</div><div role='columnheader'>−30 min</div><div role='columnheader'>Current</div><div role='columnheader'>Expected +30 min</div></div>";
+  html+=fields.map(function(x){
     var pv=prev?envField(prev,x[1]):null,cv=envField(current,x[1]),nv=forecastFields[x[1]];
-    var format=function(val,key){
-      if(val==null)return "—";
-      if(key==="temperature_2m_k"||key==="dewpoint_2m_k")return num(kToC(val),1)+" °C";
-      if(key==="gust_ms"||key==="mean_wind_0_2km_ms")return num(msToKt(val),0)+" kt";
-      if(key==="shear_0_1km_kt"||key==="shear_0_3km_kt"||key==="shear_0_6km_kt")return num(val,0)+" kt";
-      if(key==="lapse_rate_0_3km_c_km"||key==="lapse_rate_0_7_5km_c_km")return num(val,2)+" °C/km";
-      if(key==="lcl_m"||key==="lfc_m"||key==="el_m"||key==="freezing_level_m")return num(val/1000,2)+" km";
-      if(key==="wetbulb_2m_c")return num(val,1)+" °C";
-      return fmtLiveEnv(val,key);
-    };
-    return "<tr><td>"+x[0]+"</td><td class='ctx-prev'>"+format(pv,x[1])+"</td><td class='ctx-current'>"+format(cv,x[1])+"</td><td class='ctx-next "+(forecastReady?"":"ctx-na")+"\">"+format(nv,x[1])+"</td></tr>";
+    return "<div class='environment-row' role='row'><div class='env-name' role='rowheader'>"+x[0]+"</div><div class='ctx-prev' role='cell'>"+format(pv,x[1])+"</div><div class='ctx-current' role='cell'>"+format(cv,x[1])+"</div><div class='ctx-next "+(forecastReady?"":"ctx-na")+"" role='cell'>"+format(nv,x[1])+"</div></div>";
   }).join("");
-  q("environmentTable").innerHTML=header+"</tbody>";
+  q("environmentTable").innerHTML=html;
   var e=p.environment||{},forecastLabel=forecast.valid_time_utc||forecast.forecast_valid_time_utc,derivedCount=(e.metpy_derived_fields||[]).length;
   setText("envSource",(e.source||p.environment_source||"RAP")+(e.age_minutes==null?"":" • "+num(e.age_minutes,0)+" min")+(derivedCount?" • MetPy "+derivedCount+" derived":"")+" • +30 RAP "+(forecastLabel?fmtUTC(forecastLabel):"unavailable"));
 }
