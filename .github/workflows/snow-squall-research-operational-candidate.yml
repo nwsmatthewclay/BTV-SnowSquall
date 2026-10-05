@@ -14,7 +14,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  actions: read
+  actions: write
   contents: read
 
 concurrency:
@@ -160,6 +160,16 @@ jobs:
             --candidate-summary "$summary" \
             --output candidate_gate/research_operational_candidate_status.json
 
+      - name: Launch protected modern validation
+        if: success()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          gh workflow run "Modern Independent Validation" \
+            --repo "$GITHUB_REPOSITORY" \
+            --ref snow-squall-model-foundation
+          echo "Dispatched Modern Independent Validation from candidate gate."
       - name: Upload research-operational candidate package
         if: always()
         uses: actions/upload-artifact@v4
