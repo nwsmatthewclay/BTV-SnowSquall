@@ -81,6 +81,11 @@ def run(
                     if key not in persisted_processed and key != last_key:
                         recent = [(key, volume_time)]
 
+            # Keep each scheduled publisher run bounded. Process the oldest
+            # unprocessed volumes first so track history remains chronological;
+            # any remaining backlog is picked up by the next cycle.
+            if len(recent) > 8:
+                recent = recent[:8]
             # A brand-new state starts from the newest available volume; an
             # existing state catches up all unprocessed volumes in order.
             if since is None and recent:
