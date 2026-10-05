@@ -6,6 +6,11 @@ on:
       - Snow Squall Candidate Model Refresh
     types:
       - completed
+  push:
+    branches:
+      - snow-squall-model-foundation
+    paths:
+      - .github/candidate-gate-bootstrap-trigger
   workflow_dispatch:
 
 permissions:
@@ -32,26 +37,86 @@ jobs:
         with:
           ref: snow-squall-model-foundation
 
-      - name: Resolve latest successful candidate refresh
+      - name: Resolve candidate model source
         id: candidate
         shell: bash
         run: |
           set -euo pipefail
+          run_id=""
+          artifact_name=""
+          source_mode=""
+
           if [ "${{ github.event_name }}" = "workflow_run" ]; then
             run_id="${{ github.event.workflow_run.id }}"
-          else
-            run_id="$(gh run list --workflow "Snow Squall Candidate Model Refresh"               --branch snow-squall-model-foundation --status success --limit 1               --json databaseId --jq '.[0].databaseId')"
+            source_name="${{ github.event.workflow_run.name }}"
+            if [ "$source_name" = "Snow Squall Candidate Model Refresh" ]; then
+              artifact_name="snow-squall-refreshed-model-bundles"
+              source_mode="strict_refresh"
+            fi
           fi
-          test -n "$run_id" && test "$run_id" != "null"
-          echo "run_id=$run_id" >> "$GITHUB_OUTPUT"
-          echo "Using candidate refresh run $run_id"
 
-      - name: Download candidate refresh bundle
+          if [ -z "$run_id" ] || [ -z "$artifact_name" ]; then
+            refresh_run="$(gh run list --workflow "Snow Squall Candidate Model Refresh" --branch snow-squall-model-foundation --status success --limit 1 --json databaseId --jq '.[0].databaseId' || true)"
+            if [ -n "$refresh_run" ] && [ "$refresh_run" != "null" ]; then
+              run_id="$refresh_run"
+              artifact_name="snow-squall-refreshed-model-bundles"
+              source_mode="strict_refresh"
+            fi
+          fi
+
+          if [ -z "$run_id" ] || [ -z "$artifact_name" ]; then
+            expansion_run="$(gh run list --workflow "Snow Squall Expansion Dataset" --branch snow-squall-model-foundation --status success --limit 20 --json databaseId --jq '.[].databaseId' | head -n 1 || true)"
+            test -n "$expansion_run" && test "$expansion_run" != "null"
+            run_id="$expansion_run"
+            artifact_name="snow-squall-live-model-bundles"
+            source_mode="bootstrap_legacy_feature_contract"
+          fi
+
+          echo "run_id=$run_id" >> "$GITHUB_OUTPUT"
+          echo "artifact_name=$artifact_name" >> "$GITHUB_OUTPUT"
+          echo "source_mode=$source_mode" >> "$GITHUB_OUTPUT"
+          echo "Using $source_mode from run $run_id"
+
+      - name: Download candidate model package
         run: |
           set -euo pipefail
           rm -rf candidate_bundle
-          gh run download "${{ steps.candidate.outputs.run_id }}"             --repo "$GITHUB_REPOSITORY"             --name snow-squall-refreshed-model-bundles             --dir candidate_bundle
-          find candidate_bundle -maxdepth 5 -type f | sort
+          gh run download "${{ steps.candidate.outputs.run_id }}" \
+            --repo "$GITHUB_REPOSITORY" \
+            --name "${{ steps.candidate.outputs.artifact_name }}" \
+            --dir candidate_bundle
+
+          if [ "${{ steps.candidate.outputs.source_mode }}" = "bootstrap_legacy_feature_contract" ]; then
+            rm -rf bootstrap_features
+            gh run download "${{ steps.candidate.outputs.run_id }}" \
+              --repo "$GITHUB_REPOSITORY" \
+              --name snow-squall-expansion-feature-batch \
+              --dir bootstrap_features
+            cp -R bootstrap_features/. candidate_bundle/
+
+            for h in 15 30 45 60; do
+              src="candidate_bundle/candidate_ensemble_expansion_${h}m"
+              base="candidate_bundle/baseline_expansion_${h}m"
+              test -f "${src}/metrics.json"
+              test -f "${src}/baseline_model.joblib"
+              test -f "${src}/probability_calibrator.joblib"
+              rm -rf "candidate_bundle/candidate_ensemble_refresh_${h}m" "candidate_bundle/baseline_refresh_${h}m"
+              cp -R "$src" "candidate_bundle/candidate_ensemble_refresh_${h}m"
+              if [ -d "$base" ]; then cp -R "$base" "candidate_bundle/baseline_refresh_${h}m"; else cp -R "$src" "candidate_bundle/baseline_refresh_${h}m"; fi
+            done
+
+            cat > candidate_bundle/snow_squall_candidate_refresh_summary.json <<'JSON'
+          {
+            "release_status": "candidate_only_not_operational",
+            "candidate_mode": "bootstrap_legacy_feature_contract",
+            "bootstrap_source": "latest_successful_snow_squall_expansion_live_model_bundle",
+            "training_contract_status": "legacy_feature_population_missing_first_class_base_moments",
+            "note": "Bootstrap candidate is permitted only for research shadow scoring. Strict retraining remains required as soon as a complete radar/environment feature population is available."
+          }
+          JSON
+          fi
+
+          find candidate_bundle -maxdepth 4 -type f | sort
 
       - name: Locate candidate model root and schema
         id: locate
@@ -66,7 +131,6 @@ jobs:
           echo "model_root=$model_root" >> "$GITHUB_OUTPUT"
           echo "schema=$schema" >> "$GITHUB_OUTPUT"
           echo "features=$features" >> "$GITHUB_OUTPUT"
-
       - name: Install science dependencies
         run: |
           python -m pip install --upgrade pip
