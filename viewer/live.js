@@ -481,7 +481,7 @@ function renderEnvironment(){
   }).join("");
   q("environmentTable").innerHTML=html;
   var e=p.environment||{},forecastLabel=forecast.valid_time_utc||forecast.forecast_valid_time_utc,derivedCount=(e.metpy_derived_fields||[]).length;
-  setText("envSource",(e.source||p.environment_source||"RAP")+(e.age_minutes==null?"":" • "+num(e.age_minutes,0)+" min")+(derivedCount?" • MetPy "+derivedCount+" derived":"")+" • +30 RAP "+(forecastLabel?fmtUTC(forecastLabel):"unavailable"));
+  setText("envSource",(e.source||p.environment_source||"RAP")+(e.age_minutes==null?"":" • analysis "+num(e.age_minutes,0)+" min old")+(derivedCount?" • MetPy "+derivedCount+" derived":"")+" • forecast "+(forecastLabel?fmtUTC(forecastLabel):"unavailable")+(forecast.actual_valid_offset_minutes==null?"":" (+"+num(forecast.actual_valid_offset_minutes,0)+" min)"));
 }
 function evidenceItem(icon,cls,title,body){return "<div class='evidence-card'><div class='evidence-icon "+(cls||"")+"'>"+icon+"</div><div><b>"+title+"</b><span>"+body+"</span></div></div>"}
 function renderEvidence(){
