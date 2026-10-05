@@ -185,3 +185,49 @@ def test_shadow_scoring_excludes_future_history(tmp_path, monkeypatch):
     assert payload["scored_object_count"] == 1
     assert rows[0]["research_probabilities"]["15"] == 0.3
     assert all(row["max_reflectivity_dbz"] == 30.0 for row in captured["rows"])
+
+
+def test_radar_only_bootstrap_does_not_require_complete_environment(tmp_path, monkeypatch):
+    live = tmp_path / "live"
+    models = tmp_path / "models"
+    live.mkdir()
+    models.mkdir()
+    make_model_dirs(models)
+
+    current = {
+        "track_id": "9",
+        "timestamp": "2026-01-01T12:05:00Z",
+        "max_reflectivity_dbz": 32.0,
+        "mean_reflectivity_dbz": 24.0,
+        "area_km2": 10.0,
+        "length_km": 4.0,
+        "width_km": 2.0,
+        "core_pixel_count": 3,
+        "bbox_aspect_ratio": 2.0,
+        "reflectivity_gradient_p90_dbkm": 6.0,
+        "gradient_fraction_above_5dbkm": 0.2,
+        "background_reflectivity_dbz": 18.0,
+        "reflectivity_contrast_db": 7.0,
+        "environment": {"source": "RAP", "status": "partial", "fields": {}},
+    }
+    (live / "KCXX_objects.geojson").write_text(json.dumps({
+        "metadata": {"scan_time_utc": current["timestamp"]},
+        "features": [{"type": "Feature", "geometry": None, "properties": current}],
+    }), encoding="utf-8")
+    (live / "KCXX_history.json").write_text("[]", encoding="utf-8")
+    write_empty_site(live, "KTYX")
+
+    class RadarOnlyRuntime(FakeRuntime):
+        def __init__(self, horizon):
+            super().__init__(horizon)
+            self.feature_columns = ["max_reflectivity_dbz"]
+
+    monkeypatch.setattr(
+        "scripts.shadow_live_model_scorer.ModelRuntime.load",
+        lambda directory: RadarOnlyRuntime(int(directory.name.split("_")[-1].replace("m", ""))),
+    )
+    payload, rows = score_site("KCXX", live, models)
+
+    assert payload["scored_object_count"] == 1
+    assert rows[0]["environment_requirement"]["15"] == "not_used_by_model"
+    assert rows[0]["research_probabilities"]
