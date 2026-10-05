@@ -330,18 +330,8 @@ body.live-dashboard-page header{
 .comp-dot{width:6px;height:6px;border-radius:50%;display:inline-block;margin-right:4px}
 .chart-box{margin-top:8px;background:#0b151d;border:1px solid #223743;border-radius:6px;padding:6px}
 .mini-chart{width:100%;height:142px;display:block}
- .track-probability-box{margin-top:6px}
- .track-probability-chart{height:190px}
- .track-evolution-summary{margin-top:5px;padding:6px 8px;border-left:3px solid #4fb3ee;background:#111f29;color:#bdced8;font-size:9px;line-height:1.3}
- .env-outlook-label{font-size:8px;color:#7f96a7;letter-spacing:.08em;font-weight:800;margin-top:9px;margin-bottom:4px}
- .environment-outlook{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:5px}
- .env-outlook-tile{background:#111e27;border:1px solid #273e4b;border-radius:5px;padding:6px 7px;min-width:0}
- .env-outlook-tile span{display:block;color:#8198a8;font-size:7px;text-transform:uppercase;letter-spacing:.06em}
- .env-outlook-tile b{display:block;color:#edf5f8;font-size:12px;margin-top:2px}
- .env-outlook-tile i{display:block;color:#8fa6b4;font-size:8px;font-style:normal;margin-top:2px}
 .chart-axis{stroke:#344b5a;stroke-width:1}.chart-gridline{stroke:#20323e;stroke-width:1;stroke-dasharray:2 3}.chart-text{fill:#768c9e;font-size:8px}.chart-line-15{stroke:#ff5648}.chart-line-30{stroke:#1f90e9}.chart-line-45{stroke:#f0c54c}.chart-line-60{stroke:#62ce73}.chart-path{fill:none;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
-.prob-point{fill:#0b151d;stroke-width:1.4;cursor:default}.chart-key-muted{color:#6f8493}
- .chart-legend-row{display:flex;gap:9px;flex-wrap:wrap;margin-top:3px;font-size:8px;color:#93a7b5}.chart-key{display:inline-flex;align-items:center;gap:4px}.chart-key i{width:14px;height:3px;border-radius:2px;display:inline-block}
+.chart-legend-row{display:flex;gap:9px;flex-wrap:wrap;margin-top:3px;font-size:8px;color:#93a7b5}.chart-key{display:inline-flex;align-items:center;gap:4px}.chart-key i{width:14px;height:3px;border-radius:2px;display:inline-block}
 .environment-table{width:100%;border-collapse:separate;border-spacing:2px;font-size:9px}
 .environment-table th{color:#afc0ca;background:#13212b;padding:6px 5px;font-weight:700}
 .environment-table th:not(:first-child){text-align:center}
@@ -389,6 +379,38 @@ body.live-dashboard-page header{
 .sq-motion-arrow{color:#fff;background:transparent;font-size:18px;text-shadow:0 0 4px #000,0 0 8px #000}
 .dashboard-map .leaflet-container{background:#071018}
 
+/* Live viewer stability overrides: keep the detail column readable on desktop. */
+.live-dashboard-main{
+  grid-template-columns:minmax(0,1fr) minmax(520px,40vw);
+}
+.live-dashboard-main .dashboard-panel{
+  width:100%;
+  max-width:none;
+  box-sizing:border-box;
+}
+.live-dashboard-main .section-block{
+  min-width:0;
+  overflow:hidden;
+}
+.live-dashboard-main .environment-table{
+  table-layout:fixed;
+}
+.live-dashboard-main .environment-table th,
+.live-dashboard-main .environment-table td{
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
+.live-dashboard-main .history-table-wrap{
+  max-width:100%;
+  overflow-x:auto;
+}
+@media(max-width:1250px){
+  .live-dashboard-main{grid-template-columns:minmax(0,1fr) 520px}
+}
+@media(max-width:900px){
+  .live-dashboard-main{grid-template-columns:1fr!important}
+}
+
 /* Live-page layout is the same scientific workstation, without the archive timeline. */
 .live-dashboard-main{grid-template-columns:minmax(0,1fr) minmax(500px,39vw)}
 .live-dashboard-main .dashboard-panel{padding-top:9px}
@@ -419,7 +441,7 @@ body.live-dashboard-page header{
   .map-legend{left:9px;bottom:89px;width:230px}
   .map-controls{left:9px;top:84px}.map-hud-main{left:9px;top:9px}
   .object-picker{grid-template-columns:repeat(3,minmax(0,1fr))}
-  .prob-wrap{grid-template-columns:1fr}.trend-grid{grid-template-columns:1fr 1fr}.environment-outlook{grid-template-columns:1fr 1fr}
+  .prob-wrap{grid-template-columns:1fr}.trend-grid{grid-template-columns:1fr 1fr}
 }
 @media(max-width:560px){
   .dashboard-nav a:nth-last-child(-n+2){display:none}
@@ -429,6 +451,184 @@ body.live-dashboard-page header{
   .trend-grid{grid-template-columns:1fr 1fr}
   .map-legend{display:none}
 }
+
+
+/* Final live workspace readability/clickability pass. */
+.live-dashboard-main .environment-table{
+  width:100%;
+  display:block;
+  table-layout:auto;
+  border-spacing:0;
+  font-size:9px;
+  overflow:visible;
+}
+.live-dashboard-main .environment-row{
+  display:grid;
+  grid-template-columns:minmax(145px,1.45fr) minmax(82px,.82fr) minmax(82px,.82fr) minmax(105px,1fr);
+  gap:2px;
+  width:100%;
+  min-width:0;
+}
+.live-dashboard-main .environment-row > div{
+  min-width:0;
+  box-sizing:border-box;
+  padding:5px 6px;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+  background:#101c25;
+  color:#eaf3f8;
+  font-weight:800;
+  border-top:1px solid #223641;
+}
+.live-dashboard-main .environment-row .env-name{
+  color:#c6d5de;
+  font-weight:700;
+  text-align:left;
+}
+.live-dashboard-main .environment-row > div:not(.env-name){
+  text-align:center;
+  border-radius:2px;
+}
+.live-dashboard-main .environment-row.env-head > div{
+  background:#13212b;
+  color:#afc0ca;
+  border-top:0;
+  font-weight:700;
+}
+.live-dashboard-main .environment-row .ctx-prev{
+  background:linear-gradient(90deg,#315a39,#355f3b);
+  color:#def3df;
+}
+.live-dashboard-main .environment-row .ctx-current{
+  background:linear-gradient(90deg,#5c551f,#7a681f);
+  color:#fff6bc;
+}
+.live-dashboard-main .environment-row .ctx-next{
+  background:linear-gradient(90deg,#733022,#7f3925);
+  color:#ffd2cb;
+}
+.live-dashboard-main .environment-row .ctx-na{
+  background:#182530;
+  color:#8295a5;
+}
+.live-dashboard-main .section-block#environmentSection{
+  overflow:visible;
+}
+.live-dashboard-main .dashboard-panel{
+  overflow-x:hidden;
+}
+.liveHitPane,
+.leaflet-pane.liveHitPane{
+  pointer-events:auto !important;
+}
+.live-dashboard-main .map-controls{
+  pointer-events:auto !important;
+}
+
+
+/* Final environment panel: div-grid rows, never table/flex distortion. */
+.live-dashboard-main #environmentTable{
+  display:block;
+  width:100%;
+  min-width:0;
+  overflow:visible;
+  font-size:10px;
+}
+.live-dashboard-main #environmentTable .environment-row{
+  display:grid;
+  grid-template-columns:minmax(115px,1.35fr) minmax(70px,.8fr) minmax(70px,.8fr) minmax(105px,1fr);
+  gap:2px;
+  width:100%;
+  min-width:0;
+  margin:0;
+}
+.live-dashboard-main #environmentTable .environment-row > div{
+  min-width:0;
+  box-sizing:border-box;
+  padding:5px 6px;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+  background:#101c25;
+  color:#eaf3f8;
+  font-weight:800;
+  border-top:1px solid #223641;
+}
+.live-dashboard-main #environmentTable .environment-row .env-name{
+  color:#c6d5de;
+  font-weight:700;
+  text-align:left;
+}
+.live-dashboard-main #environmentTable .environment-row > div:not(.env-name){text-align:center;border-radius:2px;}
+.live-dashboard-main #environmentTable .environment-row.env-head > div{
+  background:#13212b;
+  color:#afc0ca;
+  border-top:0;
+  font-weight:700;
+}
+.live-dashboard-main #environmentTable .ctx-prev{background:#315a39;color:#def3df;}
+.live-dashboard-main #environmentTable .ctx-current{background:#6b5f1e;color:#fff6bc;}
+.live-dashboard-main #environmentTable .ctx-next{background:#733022;color:#ffd2cb;}
+.live-dashboard-main #environmentTable .ctx-na{background:#182530;color:#8295a5;}
+
+/* Isolated environment grid. Uses unique classes to avoid legacy table/flex rules. */
+.live-dashboard-main #environmentTable{
+  display:block !important;
+  width:100% !important;
+  min-width:0 !important;
+  overflow:hidden !important;
+}
+.live-dashboard-main #environmentTable .env-grid-row{
+  display:grid !important;
+  grid-template-columns:minmax(115px,1.35fr) minmax(72px,.8fr) minmax(72px,.8fr) minmax(100px,1fr) !important;
+  gap:2px !important;
+  width:100% !important;
+  min-width:0 !important;
+}
+.live-dashboard-main #environmentTable .env-grid-row > div{
+  min-width:0 !important;
+  width:auto !important;
+  box-sizing:border-box !important;
+  padding:5px 6px !important;
+  overflow:hidden !important;
+  text-overflow:ellipsis !important;
+  white-space:nowrap !important;
+  background:#101c25 !important;
+  color:#eaf3f8 !important;
+  border-top:1px solid #223641 !important;
+  text-align:center !important;
+  font-weight:700 !important;
+}
+.live-dashboard-main #environmentTable .env-grid-row .env-grid-name{
+  text-align:left !important;
+  color:#c6d5de !important;
+}
+.live-dashboard-main #environmentTable .env-grid-head > div{
+  background:#13212b !important;
+  color:#afc0ca !important;
+  border-top:0 !important;
+  font-weight:700 !important;
+}
+.live-dashboard-main #environmentTable .env-risk-green{
+  background:#244b32 !important;
+  color:#d8f2dc !important;
+}
+.live-dashboard-main #environmentTable .env-risk-yellow{
+  background:#625a20 !important;
+  color:#fff2b0 !important;
+}
+.live-dashboard-main #environmentTable .env-risk-red{
+  background:#702d28 !important;
+  color:#ffd6d1 !important;
+  box-shadow:inset 3px 0 0 #ef6258 !important;
+}
+.live-dashboard-main #environmentTable .env-risk-na,
+.live-dashboard-main #environmentTable .env-risk-neutral{
+  background:#182530 !important;
+  color:#9eafba !important;
+}
+
 
 /* Rolling radar timelapse controls */
 .live-dashboard-main .radar-timeline{
@@ -443,4 +643,3 @@ body.live-dashboard-page header{
 .radar-timeline-controls button:hover{background:#233944}
 .radar-timeline-controls input{width:100%}
 .radar-timeline-note{margin-top:4px;font:9px/1.2 monospace;color:#748b98}
-
