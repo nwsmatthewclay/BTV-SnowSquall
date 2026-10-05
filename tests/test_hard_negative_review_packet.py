@@ -91,3 +91,12 @@ def test_invalid_manual_training_flag_is_rejected():
     errors = validate_packet(packet)
     assert errors
     assert any("must be derived" in error for error in errors)
+
+
+def test_packet_contains_review_candidates_not_entire_null_population():
+    queue = queue_frame().copy()
+    queue["review_recommended"] = [True, False]
+
+    packet = build_packet(queue)
+
+    assert set(packet["null_id"]) == {"N1"}
