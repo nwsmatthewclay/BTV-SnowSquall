@@ -66,11 +66,53 @@ def load_schema(path: Path) -> dict:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
-def prepare_dataset(frame: pd.DataFrame, schema: dict, target: str, *, enforce_training_contract: bool = True):
+def prepare_dataset(
+    frame: pd.DataFrame,
+    schema: dict,
+    target: str,
+    *,
+    enforce_training_contract: bool = True,
+    reviewed_negative_manifest: Path | None = None,
+):
     if target not in frame.columns:
         raise ValueError(f"Target column not found: {target}")
 
     d = frame.copy()
+
+    reviewed_negative_ids: set[str] = set()
+    if reviewed_negative_manifest is not None:
+        review = pd.read_csv(reviewed_negative_manifest)
+        required_review = {"null_id", "negative_truth_status"}
+        missing_review = sorted(required_review - set(review.columns))
+        if missing_review:
+            raise ValueError(
+                "Reviewed-negative manifest missing columns: "
+                + ", ".join(missing_review)
+            )
+        statuses = (
+            review["negative_truth_status"]
+            .fillna("")
+            .astype(str)
+            .str.strip()
+        )
+        if not statuses.eq("reviewed_negative").all():
+            raise ValueError(
+                "Reviewed-negative manifest contains rows that are not explicitly "
+                "marked negative_truth_status=reviewed_negative"
+            )
+        reviewed_negative_ids = {
+            str(value).strip()
+            for value in review["null_id"].dropna().tolist()
+            if str(value).strip()
+        }
+
+    d["reviewed_negative_window"] = (
+        d.get("null_id", pd.Series("", index=d.index))
+        .fillna("")
+        .astype(str)
+        .str.strip()
+        .isin(reviewed_negative_ids)
+    )
     positive_population = d["population"].eq("verified_case_context")
     supervised_provenance = d.get(
         "supervision_class",
@@ -115,7 +157,10 @@ def prepare_dataset(frame: pd.DataFrame, schema: dict, target: str, *, enforce_t
         clean_null_classes = {"quiet", "light_activity"}
         null_negative_rows = (
             null_population
-            & d["activity_class"].fillna("").isin(clean_null_classes)
+            & (
+                d["activity_class"].fillna("").isin(clean_null_classes)
+                | d["reviewed_negative_window"]
+            )
         )
     else:
         null_negative_rows = null_population
@@ -350,6 +395,14 @@ def main():
         help="Which provisional null windows may enter baseline training.",
     )
     parser.add_argument("--output-dir", default="data/derived/baseline_model")
+    parser.add_argument(
+        "--reviewed-negative-manifest",
+        default=None,
+        help=(
+            "Optional human-reviewed hard-negative manifest. Only rows explicitly "
+            "marked reviewed_negative are admitted as null negatives."
+        ),
+    )
     parser.add_argument("--allow-limited-data", action="store_true",
                         help="Allow explicit research-only bootstrap training when the full radar/environment contract is unavailable.")
     args = parser.parse_args()
@@ -359,12 +412,19 @@ def main():
     data, predictors = prepare_dataset(
         source, schema, args.target,
         enforce_training_contract=not args.allow_limited_data,
+        reviewed_negative_manifest=(
+            Path(args.reviewed_negative_manifest)
+            if args.reviewed_negative_manifest
+            else None
+        ),
     )
     if args.allow_limited_data:
         predictors = [c for c in predictors if c in BOOTSTRAP_INSTANTANEOUS_PREDICTORS]
     if args.null_activity_policy == "clean_quiet_light" and "activity_class" in data.columns:
-        excluded = data["population"].eq("winter_null_candidate") & ~data["activity_class"].isin(
-            {"quiet", "light_activity"}
+        excluded = (
+            data["population"].eq("winter_null_candidate")
+            & ~data["activity_class"].isin({"quiet", "light_activity"})
+            & ~data["reviewed_negative_window"]
         )
         if excluded.any():
             print(
