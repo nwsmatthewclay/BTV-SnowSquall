@@ -248,6 +248,8 @@ def build(
             "surface_min_visibility_m": surface_vis if pd.notna(surface_vis) else None,
             "surface_max_gust_kt": surface_gust if pd.notna(surface_gust) else None,
             "surface_snow_reports": int(surface_snow),
+            "surface_mixed_reports": int(pd.to_numeric(surface_unique["surface_mixed_reports"], errors="coerce").fillna(0).max()),
+            "surface_freezing_rain_reports": int(pd.to_numeric(surface_unique["surface_freezing_rain_reports"], errors="coerce").fillna(0).max()),
             "activity_class": activity,
             "hard_negative_score": int(score),
             "review_recommended": bool(score >= 3),

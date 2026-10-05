@@ -11,7 +11,7 @@ def test_live_viewer_references_operational_feed_assets():
     assert "_objects.geojson" in js
     assert 'fetch(base+site+"_objects.geojson?cb="+Date.now()' in js
     assert 'fetch(base+site+"_state.json?cb="+Date.now()' in js
-    assert '"history"' in js
+    assert 'fetchOptional(base+site+"_history.json?cb="+Date.now(),[])' in js
     assert '+".json"' in js
     assert "probability scoring disabled" in html.lower()
     assert "detail-drawer" in html
@@ -66,8 +66,8 @@ def test_live_viewer_degrades_per_radar_without_taking_down_other_feed():
     root = Path(__file__).resolve().parents[1]
     js = (root / "viewer/live.js").read_text(encoding="utf-8")
     assert 'return {site:site,error:String(e.message||e)' in js
-    assert 'summary.filter(x=>!x.error)' in js
-    assert 'degraded.map(x=>x.site' in js
+    assert 'got.map(function(x){return [x.site,x]})' in js
+    assert 'got.filter(function(x){return x.error||ageMinutes' in js
 
 
 def test_live_viewer_consumes_radar_health_status():
