@@ -103,7 +103,7 @@ class CentroidTracker:
     def _association_gate_pixels(self,timestamp,previous):
         dt=min(self.config.max_time_gap_minutes,max(0.1,self._dt_minutes(timestamp,previous)))
         max_distance_km=max(self.config.min_gate_distance_km,self.config.max_motion_kt*1.852*(dt/60.0))
-        return max(self.config.max_pixel_distance,max_distance_km/max(self.config.grid_spacing_km,0.01))
+        return max(self.config.max_pixel_distance*(dt/10.0),max_distance_km/max(self.config.grid_spacing_km,0.01))
 
     def _cost(self,track,obj,timestamp,radar_motion=None):
         pred_row,pred_col=self._predicted_position(track,timestamp,radar_motion)
