@@ -1,8 +1,8 @@
 """Validate the contract of a live snow-squall object product.
 
 This is an engineering/data-integrity gate. It intentionally does not judge
-forecast skill. The current worker is probability-free, so probability fields
-must remain null and product metadata must explicitly say not_scored.
+forecast skill. Research-weighted component scores are allowed, while learned
+operational release remains separately gated.
 """
 from __future__ import annotations
 
