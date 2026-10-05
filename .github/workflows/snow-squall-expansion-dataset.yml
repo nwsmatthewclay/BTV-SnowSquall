@@ -813,6 +813,13 @@ jobs:
           p=pd.read_csv('data/derived/snow_squall_reviewed_negative_nulls.csv')
           print('Human-reviewed hard-negative training windows:', len(p))
           PY
+      - name: Materialize reviewed-negative object provenance
+        run: |
+          python scripts/build_reviewed_negative_object_manifest.py \
+            --features data/derived/snow_squall_model_features_cumulative.csv \
+            --promoted data/derived/snow_squall_reviewed_negative_nulls.csv \
+            --output data/derived/snow_squall_reviewed_negative_object_manifest.csv \
+            --summary data/derived/snow_squall_reviewed_negative_object_manifest.summary.json
       - name: Enforce cumulative radar + environment training contract
         run: |
           set -euo pipefail
@@ -1013,6 +1020,8 @@ jobs:
             data/derived/snow_squall_hard_negative_review_packet.csv
             data/derived/snow_squall_hard_negative_review_packet.summary.json
             data/derived/snow_squall_reviewed_negative_nulls.csv
+            data/derived/snow_squall_reviewed_negative_object_manifest.csv
+            data/derived/snow_squall_reviewed_negative_object_manifest.summary.json
             data/manifests/snow_squall_expansion/snow_squall_expansion_cases.csv
             data/manifests/snow_squall_expansion/snow_squall_verified_cases.csv
       - name: Upload lightweight live-model bundle
@@ -1055,6 +1064,8 @@ jobs:
             data/derived/snow_squall_hard_negative_review_packet.csv
             data/derived/snow_squall_hard_negative_review_packet.summary.json
             data/derived/snow_squall_reviewed_negative_nulls.csv
+            data/derived/snow_squall_reviewed_negative_object_manifest.csv
+            data/derived/snow_squall_reviewed_negative_object_manifest.summary.json
             data/raw/ASOS_IEM_expansion
             data/raw/ASOS_IEM_null_expansion
             data/raw/RAP_expansion
