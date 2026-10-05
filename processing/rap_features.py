@@ -519,7 +519,15 @@ def extract_features(
 
     snsq = _extract_snsq(path, latitude, longitude, values)
     values.update(snsq)
-    values.update({k: v for k, v in _metpy_derived_fields(path, latitude, longitude, values).items() if values.get(k) is None})
+
+    metpy_derived = _metpy_derived_fields(path, latitude, longitude, values)
+    metpy_derived_fields = []
+    for key, value in metpy_derived.items():
+        if key == "metpy_derived_fields":
+            continue
+        if values.get(key) is None and value is not None:
+            values[key] = value
+            metpy_derived_fields.append(key)
 
     if values["pwat_mm"] is not None:
         # RAP PWAT is kg m^-2, numerically equivalent to mm of liquid water.
@@ -532,6 +540,7 @@ def extract_features(
         if shear_u is not None and shear_v is not None else None
     )
 
+    remaining_missing = [name for name in FIELD_SPECS if values.get(name) is None]
     return {
         "source": "RAP",
         "source_valid_time_utc": (
@@ -542,6 +551,7 @@ def extract_features(
             if source_valid_time else None
         ),
         "fields": values,
-        "missing_fields": sorted(failures),
-        "status": "complete" if not failures else "partial",
+        "metpy_derived_fields": sorted(set(metpy_derived_fields)),
+        "missing_fields": sorted(remaining_missing),
+        "status": "complete" if not remaining_missing else "partial",
     }
