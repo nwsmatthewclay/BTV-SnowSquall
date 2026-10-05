@@ -11,6 +11,7 @@ import json
 import logging
 import time
 from pathlib import Path
+from datetime import datetime, timezone
 
 from acquisition.radar_watcher import (
     find_newest_volume,
@@ -46,24 +47,52 @@ def run(
     while max_polls is None or polls < max_polls:
         polls += 1
         try:
-            newest = find_newest_volume(s3, radar)
-            if newest is None:
-                logging.warning("No recent %s volumes found.", radar)
+            persisted_processed = set()
+            persisted_last_scan = None
+            if state.exists():
+                try:
+                    persisted = json.loads(state.read_text(encoding="utf-8"))
+                    persisted_processed = set(persisted.get("processed_sources", []))
+                    persisted_last_scan = persisted.get("last_scan_time_utc")
+                except Exception:
+                    logging.warning("Could not read persisted worker state; continuing.")
+
+            since = None
+            if persisted_last_scan:
+                try:
+                    since = datetime.fromisoformat(
+                        str(persisted_last_scan).replace("Z", "+00:00")
+                    ).astimezone(timezone.utc)
+                except (TypeError, ValueError):
+                    since = None
+
+            # After the first live scan, catch up chronologically instead of
+            # jumping directly to the newest volume. This preserves the
+            # scan-to-scan sequence required for stable object identities and
+            # temporal evolution features.
+            recent = find_recent_volumes(s3, radar, since=since, lookback_hours=2)
+            if not recent:
+                newest = find_newest_volume(s3, radar)
+                if newest is None:
+                    logging.warning("No recent %s volumes found.", radar)
+                else:
+                    key, volume_time = newest
+                    if key not in persisted_processed and key != last_key:
+                        recent = [(key, volume_time)]
+
+            # A brand-new state starts from the newest available volume; an
+            # existing state catches up all unprocessed volumes in order.
+            if since is None and recent:
+                recent = [recent[-1]]
+
+            if not recent:
+                logging.info("No unprocessed %s volumes; waiting.", radar)
             else:
-                key, volume_time = newest
-                persisted_processed = set()
-                if state.exists():
-                    try:
-                        persisted = json.loads(state.read_text(encoding="utf-8"))
-                        persisted_processed = set(persisted.get("processed_sources", []))
-                    except Exception:
-                        logging.warning("Could not read persisted worker state; continuing.")
-                if key in persisted_processed:
-                    logging.info("Newest %s volume already processed: %s", radar, key)
-                    last_key = key
-                elif key != last_key:
+                for key, volume_time in recent:
+                    if key in persisted_processed or key == last_key:
+                        continue
                     logging.info(
-                        "New %s volume: %s | radar time=%s",
+                        "Processing %s volume: %s | radar time=%s",
                         radar, key, volume_time.isoformat()
                     )
                     path = download_volume(s3, radar, key, volume_time)
@@ -79,8 +108,7 @@ def run(
                         changed, path.name, output
                     )
                     last_key = key
-                else:
-                    logging.info("No newer %s volume; waiting.", radar)
+                    persisted_processed.add(key)
 
             if max_polls is not None and polls >= max_polls:
                 break
