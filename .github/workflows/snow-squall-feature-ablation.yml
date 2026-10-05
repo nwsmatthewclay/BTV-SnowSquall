@@ -67,7 +67,16 @@ jobs:
           echo "Feature table: $p"
       - name: Run common-population feature ablation
         run: |
-          python scripts/feature_ablation.py "${{ steps.feature.outputs.path }}" --reviewed-negative-manifest data/reviews/snow_squall_hard_negative_review.csv --output-dir data/derived/feature_ablation
+          set -euo pipefail
+          review="$(find feature_artifact -name 'snow_squall_reviewed_negative_nulls.csv' -type f -print -quit || true)"
+          args=(
+            "${{ steps.feature.outputs.path }}"
+            --output-dir data/derived/feature_ablation
+          )
+          if [ -n "$review" ]; then
+            args+=(--reviewed-negative-manifest "$review")
+          fi
+          python scripts/feature_ablation.py "${args[@]}"
       - name: Upload ablation report
         uses: actions/upload-artifact@v4
         with:
