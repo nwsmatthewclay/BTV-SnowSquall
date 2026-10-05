@@ -78,3 +78,5 @@ def test_live_viewer_consumes_radar_health_status():
     assert "Restore prior live feed history" in workflow
     assert "Build bounded browser history payloads" in workflow
     assert "Validate KCXX live product" in workflow
+
+# CI trigger: final live viewer contract alignment.
