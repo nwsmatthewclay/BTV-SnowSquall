@@ -77,29 +77,28 @@ jobs:
           python - <<'PY'
           import json
           from pathlib import Path
-          from acquisition.radar_watcher import make_s3_client, download_volume, find_newest_volume, parse_volume_time
+          from acquisition.radar_watcher import make_s3_client, download_volume, find_recent_volumes
 
           s3 = make_s3_client()
           for radar in ("KCXX", "KTYX"):
               state_path = Path(f"viewer/data/live/{radar}_state.json")
               state = json.loads(state_path.read_text(encoding="utf-8")) if state_path.exists() else {}
-              source = state.get("last_source")
-              volume_time = parse_volume_time(str(source), radar) if source else None
-              if source and volume_time:
-                  target = Path("data/raw") / radar / Path(str(source)).name
+              source = Path(str(state.get("last_source", ""))).name
+              candidates = find_recent_volumes(s3, radar, lookback_hours=6)
+              match = next(((key, when) for key, when in candidates if Path(key).name == source), None) if source else None
+              if match:
+                  key, when = match
+                  target = Path("data/raw") / radar / Path(key).name
                   if not target.exists() or target.stat().st_size == 0:
-                      print(f"{radar}: restoring last processed volume {source} for radar rendering")
-                      download_volume(s3, radar, str(source), volume_time)
-              else:
-                  newest = find_newest_volume(s3, radar)
-                  if newest:
-                      key, when = newest
-                      print(f"{radar}: no persisted source; downloading newest {key}")
+                      print(f"{radar}: restoring processed volume {Path(key).name}")
                       download_volume(s3, radar, key, when)
-                  else:
-                      print(f"{radar}: no archive volume available")
+              elif candidates:
+                  key, when = candidates[-1]
+                  print(f"{radar}: persisted source not in archive listing; using newest available {Path(key).name} for radar rendering")
+                  download_volume(s3, radar, key, when)
+              else:
+                  print(f"{radar}: no Level-II archive volume available")
           PY
-
       - name: Build KCXX KTYX live radar mosaic
         run: |
           set -euo pipefail
