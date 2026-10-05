@@ -348,6 +348,130 @@ def write_cursor_grid(output_dir: Path, mosaic, site_velocity_fields):
     path.write_text(json.dumps(cursor, separators=(",", ":")) + "\n", encoding="utf-8")
     return path
 
+
+def _direct_sweep(radar_obj, field_name: str, sweep: int):
+    """Return gate field and geographic coordinates without Cartesian gridding."""
+    sw = radar_obj.extract_sweeps([sweep])
+    data = sw.fields[field_name]["data"]
+    lat = np.asarray(sw.gate_latitude["data"], dtype=float)
+    lon = np.asarray(sw.gate_longitude["data"], dtype=float)
+    if np.ma.isMaskedArray(data):
+        data = data.filled(np.nan)
+    else:
+        data = np.asarray(data, dtype=float)
+    return data, lat, lon
+
+
+def _direct_render(sweep_products, output_dir: Path, *, product_name: str, clean: bool):
+    """Render native lowest-sweep gates directly in geographic coordinates."""
+    if not sweep_products:
+        return None, {}
+    fig = plt.figure(figsize=(8.5, 6.5), dpi=120)
+    ax = fig.add_axes([0, 0, 1, 1])
+    ax.set_axis_off()
+    ax.set_xlim(-76.78, -70.52)
+    ax.set_ylim(41.90, 46.40)
+    if clean:
+        bounds = [12, 18, 24, 30, 35, 40, 45, 55, 65, 75]
+        colors = [
+            (0.18, 0.28, 0.36, 0.12), (0.25, 0.45, 0.58, 0.25),
+            (0.25, 0.65, 0.86, 0.42), (0.10, 0.72, 0.50, 0.58),
+            (0.52, 0.82, 0.24, 0.72), (0.95, 0.84, 0.18, 0.82),
+            (0.96, 0.55, 0.10, 0.90), (0.86, 0.18, 0.12, 0.96),
+            (0.92, 0.25, 0.72, 1.0),
+        ]
+        cmap = ListedColormap(colors, name="BTV_SNOWSQUALL_CLEAN")
+        norm = BoundaryNorm(bounds, cmap.N)
+    else:
+        cmap = plt.get_cmap("NWSRef").copy()
+        cmap.set_bad((0, 0, 0, 0))
+        norm = None
+    for item in sweep_products:
+        data = np.asarray(item["data"], dtype=float).copy()
+        if clean:
+            data[data < 12.0] = np.nan
+            rho = item.get("rho")
+            if rho is not None:
+                low_cc = np.isfinite(rho) & (rho < 0.65) & (data < 30.0)
+                data[low_cc] = np.nan
+            present = np.isfinite(data)
+            cleaned = ndimage.binary_opening(present, structure=np.ones((2, 2)))
+            data[present & ~cleaned & (data < 24.0)] = np.nan
+        masked = np.ma.masked_invalid(data)
+        if masked.count():
+            kwargs = {"cmap": cmap, "shading": "auto"}
+            if norm is None:
+                kwargs.update(vmin=-10, vmax=75)
+            else:
+                kwargs["norm"] = norm
+            ax.pcolormesh(item["lon"], item["lat"], masked, **kwargs)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    path = output_dir / product_name
+    fig.savefig(path, format="png", transparent=True, dpi=120, pad_inches=0)
+    plt.close(fig)
+    return [[41.90, -76.78], [46.40, -70.52]], path.name
+
+
+def _direct_velocity_render(item, output_dir: Path, site: str):
+    data = np.asarray(item["velocity"], dtype=float) * 1.94384449244
+    masked = np.ma.masked_invalid(data)
+    if not masked.count():
+        return None
+    fig = plt.figure(figsize=(8.5, 6.5), dpi=120)
+    ax = fig.add_axes([0, 0, 1, 1])
+    ax.set_axis_off()
+    ax.set_xlim(-76.78, -70.52)
+    ax.set_ylim(41.90, 46.40)
+    cmap = plt.get_cmap("RdBu_r").copy()
+    cmap.set_bad((0, 0, 0, 0))
+    ax.pcolormesh(item["lon"], item["lat"], masked, cmap=cmap, vmin=-60, vmax=60, shading="auto")
+    output_dir.mkdir(parents=True, exist_ok=True)
+    path = output_dir / f"{site}_base_velocity_clean.png"
+    fig.savefig(path, format="png", transparent=True, dpi=120, pad_inches=0)
+    plt.close(fig)
+    raw_path = output_dir / f"{site}_base_velocity_raw.png"
+    import shutil
+    shutil.copyfile(path, raw_path)
+    return {"clean_image":path.name,"raw_image":raw_path.name,"bounds":[[41.90,-76.78],[46.40,-70.52]],"field":"base_velocity_kt","native_units":"m/s","display_units":"kt"}
+
+
+def build_direct_fallback(raw_root: Path, states: dict[str, Path]):
+    """Build browser products directly from native Level-II gates."""
+    products=[]; sources=[]
+    for radar in RADARS:
+        source=latest_source(raw_root,states[radar],radar)
+        if source is None: continue
+        try:
+            radar_obj=read_level2(source)
+            fields=resolve_fields(radar_obj); refl=fields.get("reflectivity")
+            if not refl: continue
+            sweep=lowest_valid_sweep(radar_obj,refl)
+            if sweep is None: continue
+            data,lat,lon=_direct_sweep(radar_obj,refl,sweep)
+            rho=None
+            if fields.get("rhohv"):
+                try: rho,_,_=_direct_sweep(radar_obj,fields["rhohv"],sweep)
+                except Exception: rho=None
+            velocity=None
+            if fields.get("velocity"):
+                try: velocity,_,_=_direct_sweep(radar_obj,fields["velocity"],sweep)
+                except Exception as exc: print(f"{radar}: direct velocity unavailable: {type(exc).__name__}: {exc}")
+            products.append({"radar":radar,"data":data,"lat":lat,"lon":lon,"rho":rho,"velocity":velocity})
+            meta=volume_metadata(radar_obj,source)
+            sources.append({"radar":meta.get("radar_id") or radar,"source_file":source.name,"scan_time_utc":meta.get("scan_time_utc")})
+        except Exception as exc:
+            print(f"{radar}: direct display fallback failed: {type(exc).__name__}: {exc}")
+    if not products: return None
+    output_dir=raw_root.parent/"viewer"/"data"/"live"
+    bounds,_=_direct_render(products,output_dir,product_name="radar_mosaic_clean.png",clean=True)
+    _direct_render(products,output_dir,product_name="radar_mosaic_raw.png",clean=False)
+    velocity_products={}
+    for item in products:
+        if item.get("velocity") is None: continue
+        vp=_direct_velocity_render(item,output_dir,item["radar"])
+        if vp: velocity_products[item["radar"]]=vp
+    return {"bounds":bounds,"sources":sources,"velocity_products":velocity_products}
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--raw-root", type=Path, default=Path("data/raw"))
@@ -359,6 +483,7 @@ def main():
 
     states = {"KCXX": args.kcxx_state, "KTYX": args.ktyx_state}
     mosaic, rhohv, latlon, contributors, site_fields, site_velocity_fields, site_rho_fields = build_mosaic(args.raw_root, states)
+    direct_fallback = build_direct_fallback(args.raw_root, states) if mosaic is None else None
 
     now = datetime.now(timezone.utc).isoformat()
     payload = {
@@ -456,6 +581,14 @@ def main():
             "status": "ready" if cursor_path is not None else "unavailable",
         }
     else:
+        if direct_fallback is not None:
+            payload["status"]="ready"
+            payload["stale_reason"]="Native-gate display fallback used because Cartesian radar gridding was unavailable."
+            payload["bounds"]=direct_fallback["bounds"]
+            payload["sources"]=direct_fallback["sources"]
+            payload["image"]="radar_mosaic_clean.png"
+            payload["display_products"]["base_velocity"]=direct_fallback["velocity_products"]
+            payload["radar_moment_products"]={"velocity_native_units":"m/s","velocity_display_units":"kt","velocity_rendering":"signed_radial_velocity","velocity_sources":sorted(direct_fallback["velocity_products"])}
         # Never destroy the last good radar display just because one publisher
         # cycle cannot acquire a usable Level-II volume. The live workflow
         # restores the previous viewer payload before rebuilding this product.
