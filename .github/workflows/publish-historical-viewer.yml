@@ -87,6 +87,16 @@ jobs:
           cp viewer/*.html viewer/*.js viewer/*.css _site/
           cp -R viewer_artifact/. _site/
 
+          # Preserve the live object-monitor shell from the current Pages branch.
+          # Historical publication must never delete live.html/live.js/style.css.
+          if git fetch origin gh-pages --quiet 2>/dev/null; then
+            for f in live.html live.js style.css favicon.svg; do
+              if git cat-file -e origin/gh-pages:$f 2>/dev/null; then
+                git show origin/gh-pages:$f > "_site/$f"
+              fi
+            done
+          fi
+
           # Preserve the newest modern-validation review page when republishing
           # the historical explorer so either viewer lane can update independently.
           if git fetch origin gh-pages --quiet 2>/dev/null; then
