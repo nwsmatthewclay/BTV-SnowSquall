@@ -73,8 +73,7 @@ def surface_summary(surface: pd.DataFrame) -> pd.DataFrame:
 
 def build(frame: pd.DataFrame, surface: pd.DataFrame | None = None) -> tuple[pd.DataFrame, pd.DataFrame]:
     d = frame.copy()
-    nulls = d[d["population"].eq("winter_null_candidate")].copy()
-    if nulls.empty:
+    if d[d["population"].eq("winter_null_candidate")].empty:
         return (
             pd.DataFrame(columns=["null_id"]),
             pd.DataFrame(
@@ -108,6 +107,7 @@ def build(frame: pd.DataFrame, surface: pd.DataFrame | None = None) -> tuple[pd.
         d[col] = pd.to_numeric(d[col], errors="coerce").fillna(0)
     d["surface_min_visibility_m"] = numeric(d, "surface_min_visibility_m")
     d["surface_max_gust_kt"] = numeric(d, "surface_max_gust_kt")
+    nulls = d[d["population"].eq("winter_null_candidate")].copy()
 
     rows = []
     for null_id, g in nulls.groupby("null_id", dropna=True):
