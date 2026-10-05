@@ -1,6 +1,11 @@
 name: Snow Squall Modern Independent Validation
 
 on:
+  push:
+    branches:
+      - snow-squall-model-foundation
+    paths:
+      - .github/modern-validation-trigger
   workflow_run:
     workflows:
       - Snow Squall Research-Operational Candidate Gate
