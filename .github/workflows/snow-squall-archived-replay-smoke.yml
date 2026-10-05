@@ -57,11 +57,11 @@ jobs:
           set -euo pipefail
           validation_run="${{inputs.validation_run_id }}"
           if [ -z "$validation_run" ]; then
-            validation_run="$(gh run list --workflow "Snow Squall Modern Independent Validation" --branch snow-squall-model-foundation --status success --limit 1 --json databaseId --jq '.[0].databaseId')"
+            validation_run="$(gh run list --workflow "snow-squall-modern-validation.yml" --branch snow-squall-model-foundation --status success --limit 1 --json databaseId --jq '.[0].databaseId')"
           fi
           candidate_run="${{inputs.candidate_model_run_id }}"
           if [ -z "$candidate_run" ]; then
-            candidate_run="$(gh run list --workflow "Snow Squall Candidate Model Refresh" --branch snow-squall-model-foundation --status success --limit 1 --json databaseId --jq '.[0].databaseId')"
+            candidate_run="$(gh run list --workflow "snow-squall-candidate-model-refresh.yml" --branch snow-squall-model-foundation --status success --limit 1 --json databaseId --jq '.[0].databaseId')"
           fi
           test -n "$validation_run" && test "$validation_run" != "null"
           test -n "$candidate_run" && test "$candidate_run" != "null"
