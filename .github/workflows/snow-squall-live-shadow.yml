@@ -11,8 +11,6 @@ on:
   workflow_dispatch:
   workflow_run:
     workflows:
-      - Snow Squall Expansion Dataset
-      - Snow Squall Candidate Model Refresh
       - Snow Squall Research-Operational Candidate Gate
     types:
       - completed
