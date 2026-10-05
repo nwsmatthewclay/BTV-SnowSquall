@@ -8,7 +8,7 @@ on:
       - .github/archived-replay-trigger
   workflow_run:
     workflows:
-      - Modern Independent Validation
+      - Snow Squall Modern Independent Validation
     types:
       - completed
   workflow_dispatch:
@@ -57,7 +57,7 @@ jobs:
           set -euo pipefail
           validation_run="${{inputs.validation_run_id }}"
           if [ -z "$validation_run" ]; then
-            validation_run="$(gh run list --workflow "Modern Independent Validation" --branch snow-squall-model-foundation --status success --limit 1 --json databaseId --jq '.[0].databaseId')"
+            validation_run="$(gh run list --workflow "Snow Squall Modern Independent Validation" --branch snow-squall-model-foundation --status success --limit 1 --json databaseId --jq '.[0].databaseId')"
           fi
           candidate_run="${{inputs.candidate_model_run_id }}"
           if [ -z "$candidate_run" ]; then
@@ -86,7 +86,7 @@ jobs:
           set -euo pipefail
           mkdir -p validation_artifact
           gh run download "${{steps.runs.outputs.validation_run }}" \
-            --name modern-independent-validation \
+            --name snow-squall-modern-validation \
             --dir validation_artifact
 
       - name: Set up Python
