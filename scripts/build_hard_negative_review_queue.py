@@ -114,15 +114,21 @@ def build(frame: pd.DataFrame, surface: pd.DataFrame | None = None) -> tuple[pd.
         score = 0
         reasons = []
 
-        max_z = pd.concat(
-            [numeric(g, "max_reflectivity_dbz"), numeric(g, "base_reflectivity_max_dbz")]
-        ).max()
+        max_z_series = pd.concat(
+            [numeric(g, "max_reflectivity_dbz"), numeric(g, "base_reflectivity_max_dbz")],
+            axis=1,
+        ).max(axis=1)
+        max_z = max_z_series.max()
         max_core = numeric(g, "core_pixel_count").max()
         max_vel = pd.concat(
-            [numeric(g, "velocity_p90_abs_kt"), numeric(g, "base_velocity_p90_abs_kt")]
-        ).max()
+            [numeric(g, "velocity_p90_abs_kt"), numeric(g, "base_velocity_p90_abs_kt")],
+            axis=1,
+        ).max().max()
         max_area = numeric(g, "area_km2").max()
         max_scans = numeric(g, "track_scan_count_to_date").max()
+
+        peak_idx = max_z_series.idxmax() if max_z_series.notna().any() else g.index[0]
+        peak_row = g.loc[peak_idx]
 
         if pd.notna(max_z):
             if max_z >= 40:
@@ -172,6 +178,9 @@ def build(frame: pd.DataFrame, surface: pd.DataFrame | None = None) -> tuple[pd.
             "max_velocity_p90_abs_kt": float(max_vel) if pd.notna(max_vel) else None,
             "max_area_km2": float(max_area) if pd.notna(max_area) else None,
             "max_track_scan_count_to_date": float(max_scans) if pd.notna(max_scans) else None,
+            "peak_object_id": str(peak_row.get("object_id")) if pd.notna(peak_row.get("object_id")) else None,
+            "peak_scan_time_utc": str(peak_row.get("scan_time_utc")) if pd.notna(peak_row.get("scan_time_utc")) else None,
+            "peak_radar_site": str(peak_row.get("radar_site")) if pd.notna(peak_row.get("radar_site")) else None,
             "environment_contract_fraction": float(g["environment_contract_ok"].mean()),
             "surface_report_count": int(pd.to_numeric(g["surface_report_count"], errors="coerce").fillna(0).max()),
             "surface_min_visibility_m": float(surface_vis) if pd.notna(surface_vis) else None,
