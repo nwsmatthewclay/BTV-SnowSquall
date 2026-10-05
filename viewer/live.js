@@ -458,7 +458,7 @@ function renderEnvironment(){
     ["SBCAPE","cape_jkg"],["MLCAPE","mlcape_jkg"],["MUCAPE","mucape_jkg"],["MLCIN","mlcin_jkg"],["DCAPE","dcape_jkg"],["PWAT","pwat_mm"],["LCL","lcl_m"],["LFC","lfc_m"],["EL","el_m"],
     ["0–1 km SRH","srh01_m2s2"],["0–1 km shear","shear_0_1km_kt"],["0–3 km shear","shear_0_3km_kt"],["0–6 km shear","shear_0_6km_kt"],
     ["0–3 km lapse","lapse_rate_0_3km_c_km"],["0–7.5 km lapse","lapse_rate_0_7_5km_c_km"],["Freezing level","freezing_level_m"],
-    ["2 m temp","temperature_2m_k"],["2 m dewpoint","dewpoint_2m_k"],["Surface gust","gust_ms"],
+    ["2 m temperature","temperature_2m_k"],["2 m dewpoint","dewpoint_2m_k"],["2 m RH","rh_2m_pct"],["Visibility","visibility_m"],["Surface gust","gust_ms"],
     ["SNSQ","snsq"],["SNSQ 0–2 km RH","mean_rh_0_2km_pct"],["SNSQ Δθe 0–2 km","thetae_delta_0_2km_k"],["SNSQ 0–2 km wind","mean_wind_0_2km_ms"],["2 m wet-bulb","wetbulb_2m_c"]
   ];
   var rows=trackHistory(p),current=p,prev=rows.length>1?rows[Math.max(0,rows.length-2)]:null;
