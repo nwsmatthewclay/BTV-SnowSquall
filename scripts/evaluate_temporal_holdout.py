@@ -21,6 +21,71 @@ from src.snow_squall.training import case_scan_balanced_weights
 HORIZONS = (15, 30, 45, 60)
 
 
+def load_reviewed_negative_ids(path: Path | None) -> set[str]:
+    if path is None or not path.exists():
+        return set()
+    review = pd.read_csv(path)
+    required = {"null_id", "negative_truth_status"}
+    missing = sorted(required - set(review.columns))
+    if missing:
+        raise ValueError("Reviewed-negative manifest missing columns: " + ", ".join(missing))
+    status = review["negative_truth_status"].fillna("").astype(str).str.strip()
+    if not status.eq("reviewed_negative").all():
+        raise ValueError("Reviewed-negative manifest contains non-negative rows")
+    return {str(v).strip() for v in review["null_id"].dropna() if str(v).strip()}
+
+
+def filter_evaluation_population(df: pd.DataFrame, reviewed_negative_ids: set[str]) -> pd.DataFrame:
+    if "population" not in df.columns:
+        return df.copy()
+
+    d = df.copy()
+    positive_population = d["population"].eq("verified_case_context")
+    supervised = d.get(
+        "supervision_class",
+        pd.Series("", index=d.index, dtype="object"),
+    ).eq("supervised_positive")
+    null_population = d["population"].eq("winter_null_candidate")
+
+    pre_onset = (
+        d["label_status"].isin(["prospective_positive", "case_associated_nonimpact"])
+        if "label_status" in d.columns
+        else positive_population
+    )
+    if {"scan_time_utc", "case_event_start_utc"}.issubset(d.columns):
+        scan = pd.to_datetime(d["scan_time_utc"], utc=True, errors="coerce")
+        onset = pd.to_datetime(d["case_event_start_utc"], utc=True, errors="coerce")
+        pre_onset &= ~positive_population | onset.isna() | (scan < onset)
+
+    positive_rows = (
+        positive_population & supervised & pre_onset
+    )
+    associated_negative_rows = (
+        positive_population
+        & supervised
+        & d.get("track_event_associated", pd.Series(False, index=d.index)).fillna(False).astype(bool)
+        & pre_onset
+    )
+
+    reviewed_mask = (
+        d.get("null_id", pd.Series("", index=d.index))
+        .fillna("")
+        .astype(str)
+        .str.strip()
+        .isin(reviewed_negative_ids)
+    )
+    if "activity_class" in d.columns:
+        clean_null = d["activity_class"].fillna("").isin({"quiet", "light_activity"})
+        null_rows = null_population & (clean_null | reviewed_mask)
+    else:
+        null_rows = null_population
+
+    keep = positive_rows | associated_negative_rows | null_rows
+    filtered = d.loc[keep].copy()
+    if filtered.empty:
+        raise ValueError("No rows remain after applying the training-consistent evaluation population policy.")
+    return filtered
+
 def choose_predictors(df: pd.DataFrame, schema: dict) -> list[str]:
     blocked = {
         "scan_time_utc", "source_file", "radar_site", "object_id",
@@ -176,10 +241,21 @@ def main() -> None:
     parser.add_argument("features")
     parser.add_argument("--schema", required=True)
     parser.add_argument("--output", required=True)
+    parser.add_argument(
+        "--reviewed-negative-manifest",
+        default=None,
+        help="Optional human-reviewed hard-negative manifest used to admit reviewed null windows.",
+    )
     args = parser.parse_args()
 
     df = pd.read_csv(args.features)
     schema = json.loads(Path(args.schema).read_text(encoding="utf-8"))
+    reviewed_negative_ids = load_reviewed_negative_ids(
+        Path(args.reviewed_negative_manifest) if args.reviewed_negative_manifest else None
+    )
+    df = filter_evaluation_population(df, reviewed_negative_ids)
+    print("Evaluation rows after training-consistent population policy:", len(df))
+    print("Reviewed-negative windows admitted:", len(reviewed_negative_ids))
     predictors = choose_predictors(df, schema)
 
     report = {
