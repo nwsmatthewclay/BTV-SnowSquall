@@ -46,7 +46,16 @@ def fold_groups(groups):
 
 def evaluate(df,target):
     ys=as_binary(df[target]); valid=ys.notna(); data=df.loc[valid].copy(); y=ys.loc[valid].astype(int).to_numpy()
-    groups=data["case_id"].astype(str).to_numpy(); cols=predictors(data,target)
+    groups=(
+        data["split_group"].astype(str).to_numpy()
+        if "split_group" in data.columns
+        else (
+            data["case_id"].fillna("").astype(str).to_numpy()
+            if "case_id" in data.columns
+            else np.arange(len(data)).astype(str)
+        )
+    )
+    cols=predictors(data,target)
     families=("radar_only","environment_only","radar_environment","radar_environment_motion")
     oof={f:np.full(len(data),np.nan) for f in families}; folds=[]
     for fold,held in enumerate(fold_groups(groups),1):
@@ -56,7 +65,11 @@ def evaluate(df,target):
         for fam in families:
             fam_cols=[c for c in family(fam,cols) if data.iloc[train][c].notna().any() and data.iloc[train][c].nunique(dropna=True)>=2]
             if not fam_cols: continue
-            m=fit_model(); m.fit(data.iloc[train][fam_cols],y[train]); oof[fam][test]=m.predict_proba(data.iloc[test][fam_cols])[:,1]
+            from src.snow_squall.training import case_scan_balanced_weights
+            m=fit_model()
+            weights=case_scan_balanced_weights(data.iloc[train])
+            m.fit(data.iloc[train][fam_cols], y[train], model__sample_weight=weights)
+            oof[fam][test]=m.predict_proba(data.iloc[test][fam_cols])[:,1]
         folds.append(info)
     results={}
     for fam,p in oof.items():
@@ -67,7 +80,7 @@ def evaluate(df,target):
                       "roc_auc":float(roc_auc_score(yy,pp)) if len(np.unique(yy))==2 else None,
                       "pr_auc":float(average_precision_score(yy,pp)) if yy.sum() else None,
                       "brier":float(brier_score_loss(yy,pp))}
-    return {"status":"ok" if folds else "no_valid_folds","records":len(data),"cases":len(set(groups)),
+    return {"status":"ok" if folds else "no_valid_folds","records":len(data),"independent_groups":len(set(groups)),
             "positive":int(y.sum()),"negative":int((1-y).sum()),"candidate_predictors":len(cols),"folds":folds,"families":results}
 
 def main():
