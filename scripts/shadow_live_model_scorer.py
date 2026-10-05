@@ -15,7 +15,7 @@ from scripts.probability_postprocess import monotone_cumulative_probabilities
 HORIZONS = (15, 30, 45, 60)
 SITES = ("KCXX", "KTYX")
 MIN_FEATURE_COVERAGE = 0.80
-MAX_ENVIRONMENT_AGE_MINUTES = 90.0
+MAX_ENVIRONMENT_AGE_MINUTES = 180.0
 MIN_INSTANTANEOUS_FEATURES = {
     "max_reflectivity_dbz",
     "mean_reflectivity_dbz",
@@ -117,11 +117,24 @@ def score_site(site: str, live_root: Path, model_root: Path) -> tuple[dict, list
             "max_reflectivity_dbz": props.get("max_reflectivity_dbz"),
             "data_quality": props.get("data_quality"),
             "environment_readiness": environment_readiness,
+            "environment_confidence": (
+                "fresh"
+                if environment_readiness.get("ready") and (environment_readiness.get("age_minutes") or 0) <= 90
+                else "degraded_freshness"
+                if environment_readiness.get("ready")
+                else "not_ready"
+            ),
             "feature_coverage": {},
             "research_probabilities": {},
             "score_errors": {},
             "national_pretraining": national_pretraining,
-            "score_policy": {"minimum_feature_coverage": MIN_FEATURE_COVERAGE, "max_environment_age_minutes": MAX_ENVIRONMENT_AGE_MINUTES, "requires_complete_environment": True},
+            "score_policy": {
+                "minimum_feature_coverage": MIN_FEATURE_COVERAGE,
+                "max_environment_age_minutes": MAX_ENVIRONMENT_AGE_MINUTES,
+                "fresh_environment_target_minutes": 90,
+                "requires_complete_environment": True,
+                "stale_but_usable_policy": "complete_RAP_environment_up_to_180m_is_scored_with_degraded_freshness",
+            },
         }
         for horizon in HORIZONS:
             runtime = runtimes[horizon]
