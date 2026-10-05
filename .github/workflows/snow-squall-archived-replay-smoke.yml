@@ -28,7 +28,7 @@ on:
 
 permissions:
   actions: read
-  contents: write
+  contents: read
 
 concurrency:
   group: snow-squall-archived-replay-smoke
@@ -103,8 +103,8 @@ jobs:
         id: inputs
         run: |
           set -euo pipefail
-          level2_root="validation_artifact/raw/modern_level2"
-          cases_csv="validation_artifact/manifests/modern_independent_validation_cases.csv"
+          level2_root="$(find validation_artifact -type d -name modern_validation_level2 -print -quit)"
+          cases_csv="$(find validation_artifact -type f -name modern_validation_cases.csv -print -quit)"
           test -n "$level2_root"
           test -n "$cases_csv"
           test -n "$(find "$level2_root" -type f -print -quit)"
@@ -300,17 +300,9 @@ jobs:
           print('Radar frames:', len(case['radar_frames']))
           PY
 
-      - name: Trigger operational release review
+      - name: Hand off to operational release review
         if: success()
-        run: |
-          set -euo pipefail
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          printf 'Replay completed successfully.\n' > .github/operational-review-trigger
-          git add .github/operational-review-trigger
-          git commit -m "Trigger operational release review"
-          git push origin HEAD:snow-squall-model-foundation
-          echo "Triggered operational release review through the branch trigger file."
+        run: echo "Archived replay passed; operational release review will start from the workflow_run dependency."
       - name: Upload replay viewer package
         uses: actions/upload-artifact@v4
         with:
