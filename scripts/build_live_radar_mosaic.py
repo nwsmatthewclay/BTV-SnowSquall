@@ -484,7 +484,7 @@ def main():
 
     states = {"KCXX": args.kcxx_state, "KTYX": args.ktyx_state}
     mosaic, rhohv, latlon, contributors, site_fields, site_velocity_fields, site_rho_fields = build_mosaic(args.raw_root, states)
-    direct_fallback = build_direct_fallback(args.raw_root, states) if (mosaic is None or any(v is None for v in site_velocity_fields.values())) else None
+    direct_fallback = build_direct_fallback(args.raw_root, states)
 
     now = datetime.now(timezone.utc).isoformat()
     payload = {
