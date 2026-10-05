@@ -37,7 +37,7 @@ FIELD_SPECS = {
     "shear_v_0_6km_ms": ("heightAboveGroundLayer", "vvcsh", (6000, 0)),
     "u10_ms": ("heightAboveGround", "10u", 10),
     "v10_ms": ("heightAboveGround", "10v", 10),
-    "temperature_2m_k": ("heightAboveGround", "tmp", 2),
+    "temperature_2m_k": ("heightAboveGround", "2t", 2),
     "dewpoint_2m_k": ("heightAboveGround", "2d", 2),
     "rh_2m_pct": ("heightAboveGround", "2r", 2),
     "surface_pressure_pa": ("surface", "sp", None),
