@@ -59,17 +59,25 @@ jobs:
           if [ -z "$validation_run" ]; then
             validation_run="$(gh run list --workflow "Modern Independent Validation" --branch snow-squall-model-foundation --status success --limit 1 --json databaseId --jq '.[0].databaseId')"
           fi
-          expansion_run="${{inputs.expansion_run_id }}"
-          if [ -z "$expansion_run" ] && [ "${{ github.event_name }}" = "workflow_run" ]; then
-            expansion_run="${{ github.event.workflow_run.id }}"
-          fi
-          if [ -z "$expansion_run" ]; then
-            expansion_run="$(gh run list --workflow "Snow Squall Expansion Dataset" --branch snow-squall-model-foundation --status success --limit 1 --json databaseId --jq '.[0].databaseId')"
+          candidate_run="${{inputs.candidate_model_run_id }}"
+          if [ -z "$candidate_run" ]; then
+            candidate_run="$(gh run list --workflow "Snow Squall Candidate Model Refresh" --branch snow-squall-model-foundation --status success --limit 1 --json databaseId --jq '.[0].databaseId')"
           fi
           test -n "$validation_run" && test "$validation_run" != "null"
-          test -n "$expansion_run" && test "$expansion_run" != "null"
+          test -n "$candidate_run" && test "$candidate_run" != "null"
+
+          rm -rf model_bundle
+          gh run download "$candidate_run" \
+            --repo "$GITHUB_REPOSITORY" \
+            --name snow-squall-refreshed-model-bundles \
+            --dir model_bundle
+
+          model_root="$(find model_bundle -type d -name 'candidate_ensemble_refresh_15m' -print -quit | xargs -r dirname)"
+          test -n "$model_root"
           echo "validation_run=$validation_run" >> "$GITHUB_OUTPUT"
-          echo "expansion_run=$expansion_run" >> "$GITHUB_OUTPUT"
+          echo "candidate_run=$candidate_run" >> "$GITHUB_OUTPUT"
+          echo "model_root=$model_root" >> "$GITHUB_OUTPUT"
+          echo "Using candidate refresh run $candidate_run with model root $model_root"
 
       - name: Download protected validation archive
         env:
@@ -80,16 +88,6 @@ jobs:
           gh run download "${{steps.runs.outputs.validation_run }}" \
             --name modern-independent-validation \
             --dir validation_artifact
-
-      - name: Download candidate model bundle
-        env:
-          GH_TOKEN: ${{secrets.GITHUB_TOKEN }}
-        run: |
-          set -euo pipefail
-          mkdir -p model_bundle
-          gh run download "${{steps.runs.outputs.expansion_run }}" \
-            --name snow-squall-live-model-bundles \
-            --dir model_bundle
 
       - name: Set up Python
         uses: actions/setup-python@v5
