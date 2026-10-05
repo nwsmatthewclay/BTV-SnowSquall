@@ -105,7 +105,7 @@ function renderInventory(){
 function selectDefault(){if(selected&&allObjects.some(function(p){return p.radar_site===selected.radar_site&&String(p.track_id)===String(selected.track_id)}))return;var sorted=allObjects.slice().sort(function(a,b){var d=riskScore(b)-riskScore(a);return d||Number(b.max_reflectivity_dbz||0)-Number(a.max_reflectivity_dbz||0)});selected=sorted[0]||null}
 function renderObjectCard(){
   var p=latestForSelected();if(!p){setText("objectTitle","OBJECT —");setText("objectSubtitle","No current object selected.");setText("objectBadge","NO SELECTION");q("objectAccent").style.background="#526776";return}
-  var rows=trackHistory(p),last=rows.at(-1)||p,first=rows[0]||p,dist=haversineMi(p.centroid_lat,p.centroid_lon,BTV[0],BTV[1]),speed=Number(p.motion_speed_kt),dir=Number(p.motion_direction_deg??p.motion_dir_deg),age=Number(p.age_scans);
+  var rows=trackHistory(p),last=rows.at(-1)||p,first=rows[0]||p,dist=haversineMi(p.centroid_lat,p.centroid_lon,BTV[0],BTV[1]),speed=Number(p.motion_speed_kt),dir=Number(p.motion_direction_deg??p.motion_dir_deg),age=Number(p.age_scans),ageMin=Number(p.track_age_min);
   q("objectAccent").style.background=objectRisk(p);
   setText("objectTitle","OBJECT "+objectOrdinal(p));
   setText("objectSubtitle",p.radar_site+" • Track "+p.track_id);
@@ -115,7 +115,7 @@ function renderObjectCard(){
   setText("objectLatLon",num(p.centroid_lat,2)+"°N / "+num(Math.abs(Number(p.centroid_lon)),2)+"°W");
   setText("objectMotion",Number.isFinite(speed)?Math.round(speed)+" kt • "+num(dir,0)+"° ("+compass(dir)+")":"Motion —");
   setText("objectDistance",Number.isFinite(dist)?num(dist,0)+" mi":"—");
-  setText("objectAge",Number.isFinite(age)?age+" scans":"< 1 scan");
+  setText("objectAge",Number.isFinite(ageMin)?num(ageMin,0)+" min • "+(Number.isFinite(age)?age+" scans":"—"):Number.isFinite(age)?age+" scans":"< 1 scan");
   setText("objectDuration",durationText(rows));
   setText("objectQuality",p.track_quality||p.data_quality||"—");
   setText("objectDataQuality",p.data_quality||"good");
