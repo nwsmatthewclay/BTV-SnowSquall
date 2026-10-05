@@ -102,6 +102,7 @@ def build_packet(
         & d["surface_evidence_interpreted"].isin({"yes", "no"})
         & d["reviewer"].ne("")
         & d["reviewed_at_utc"].ne("")
+        & d["review_notes"].ne("")
     )
     promotable = (
         complete_review
@@ -170,6 +171,7 @@ def validate_packet(packet: pd.DataFrame) -> list[str]:
             and str(row["surface_evidence_interpreted"]).strip() in {"yes", "no"}
             and str(row["reviewer"]).strip() != ""
             and str(row["reviewed_at_utc"]).strip() != ""
+            and str(row["review_notes"]).strip() != ""
         )
         if eligible != should_be_eligible:
             errors.append(
