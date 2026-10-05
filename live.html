@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>BTV Snow Squall • Live Object Monitor</title>
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<link rel="stylesheet" href="style.css?v=20261005-object-monitor-19">
+</head>
+<body class="live-dashboard-page">
+<header>
+  <div class="dashboard-header-left">
+    <div class="dashboard-title-row"><span class="header-dot"></span><h1>Snow Squall Object Monitor <span style="font-weight:500;color:#8da1b1">(Live)</span></h1></div>
+    <div class="dashboard-subtitle" id="subtitle">KCXX + KTYX • real-time radar object analysis • research candidate scoring</div>
+  </div>
+  <div class="dashboard-header-center">
+    <div class="dashboard-header-context"><b id="liveSite">KCXX + KTYX • BTV CWA</b><span id="liveTime">Waiting for live feed…</span></div>
+  </div>
+  <div class="dashboard-nav">
+    <button class="active" data-jump="objectSection">Objects</button>
+    <button data-jump="historySection">Tracks</button>
+    <button data-jump="motionSection">Motion</button>
+    <button data-jump="environmentSection">Environment</button>
+    <button data-jump="evidenceSection">Reports</button>
+    <a href="index.html">Archive</a>
+    <button id="refreshBtn">↻</button>
+    <span class="dashboard-pill" id="liveBadge"><span style="width:6px;height:6px;border-radius:50%;background:#56d07b"></span>LIVE</span>
+  </div>
+</header>
+
+<main class="dashboard-main live-dashboard-main">
+  <section id="liveMap" class="dashboard-map" aria-label="Live snow squall radar object map">
+    <div class="map-hud-main">
+      <b id="mapRadarLabel">KCXX + KTYX • LIVE</b>
+      <strong id="mapScanLabel">Loading radar…</strong>
+      <span id="radarStatus">Checking current mosaic and object feeds</span>
+    </div>
+    <div class="map-controls">
+      <span class="label">DISPLAY</span>
+      <button class="active display-btn" data-radar-mode="reflectivity">Reflectivity</button>
+      <button class="display-btn" data-radar-mode="velocity">Velocity</button>
+      <button id="objectNumbersBtn" class="active">Object IDs</button>
+    </div>
+    <div id="cursorReadout" style="position:absolute;left:12px;bottom:12px;z-index:800;background:rgba(10,18,24,.86);border:1px solid rgba(190,210,220,.28);border-radius:4px;padding:6px 9px;font:12px/1.25 monospace;color:#eaf2f5;pointer-events:none">CURSOR — | Z — dBZ | V —</div>
+    <div class="map-legend">
+      <div class="map-legend-title" id="legendTitle">REFLECTIVITY • dBZ</div>
+      <div class="map-legend-bar"><span>0</span><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><span>70+</span></div>
+      <div class="map-legend-note" id="legendNote">Clean KCXX/KTYX reflectivity mosaic. Object outlines remain clickable above the radar.</div>
+    </div>
+  </section>
+
+  <aside class="dashboard-panel" id="panel">
+    <div class="section-block">
+      <div class="live-refresh-row"><div><span class="case-select-label">LIVE FEED</span><div id="feedSummary" style="font-size:11px;color:#dbe8ef;margin-top:3px">Initializing…</div></div><button id="refreshBtn2">Refresh</button></div>
+    </div>
+
+    <div class="section-block" id="objectSection">
+      <div class="section-header"><h2>OBJECT INVENTORY</h2><span id="objectCount">0 active</span></div>
+      <div class="object-picker" id="objectPicker"><button class="object-pick">Loading live objects…</button></div>
+    </div>
+
+    <div class="section-block object-card">
+      <div class="object-title-row">
+        <div class="object-accent" id="objectAccent"></div>
+        <div>
+          <div class="object-title" id="objectTitle">OBJECT —</div>
+          <div class="object-subtitle" id="objectSubtitle">Select a live object on the map or from the inventory.</div>
+          <div class="object-time" id="objectTime">—</div>
+        </div>
+        <div class="object-badge" id="objectBadge">NO SELECTION</div>
+      </div>
+      <div class="object-facts">
+        <div class="object-fact"><span>Radar / Track</span><b id="objectTrack">—</b></div>
+        <div class="object-fact"><span>Lat/Lon</span><b id="objectLatLon">—</b></div>
+        <div class="object-fact"><span>Motion</span><b id="objectMotion">—</b></div>
+        <div class="object-fact"><span>Distance to BTV</span><b id="objectDistance">—</b></div>
+        <div class="object-fact"><span>Track age</span><b id="objectAge">—</b></div>
+        <div class="object-fact"><span>Duration</span><b id="objectDuration">—</b></div>
+        <div class="object-fact"><span>Track quality</span><b id="objectQuality">—</b></div>
+        <div class="object-fact"><span>Data quality</span><b id="objectDataQuality">—</b></div>
+      </div>
+    </div>
+
+    <div class="section-block" id="probabilitySection">
+      <div class="section-header"><h2>SNOW SQUALL PROBABILITY (15 MIN)</h2><span class="dashboard-pill gated" id="probBadge">RESEARCH LIVE</span></div>
+      <div class="prob-wrap">
+        <div class="prob-main">
+          <div class="prob-label">Live research candidate</div>
+          <div class="prob-value na" id="probabilityValue">—</div>
+          <div class="prob-delta flat" id="probabilityDelta">Awaiting score</div>
+          <div class="prob-status" id="probabilityNote">Candidate probability is shown only from the isolated research shadow feed. The operational object feed itself stays probability-free.</div>
+        </div>
+        <div class="prob-components" id="probComponents"></div>
+      </div>
+      <div class="chart-box"><svg class="mini-chart" id="probChart" viewBox="0 0 420 142" role="img" aria-label="Live research probability evolution"></svg><div class="chart-legend-row"><span class="chart-key"><i style="background:#ff5648"></i>15m</span><span class="chart-key"><i style="background:#1f90e9"></i>30m</span><span class="chart-key"><i style="background:#f0c54c"></i>45m</span><span class="chart-key"><i style="background:#62ce73"></i>60m</span></div></div>
+    </div>
+
+    <div class="section-block" id="motionSection">
+      <div class="section-header"><h2>KEY TRENDS</h2><span>Latest retained object history</span></div>
+      <div class="trend-grid" id="keyTrends"></div>
+    </div>
+
+    <div class="section-block" id="environmentSection">
+      <div class="section-header"><h2>ENVIRONMENT AT OBJECT</h2><span id="envSource">—</span></div>
+      <table class="environment-table" id="environmentTable"></table>
+    </div>
+
+    <div class="section-block" id="evidenceSection">
+      <div class="section-header"><h2>EVIDENCE &amp; CONTEXT</h2><span>Live sensor support</span></div>
+      <div class="evidence-grid" id="evidenceGrid"></div>
+    </div>
+
+    <div class="section-block" id="historySection">
+      <div class="section-header"><h2>RECENT HISTORY</h2><span id="historyCount">—</span></div>
+      <div class="history-chart-wrap"><svg class="history-chart" id="historyChart" viewBox="0 0 520 145" role="img" aria-label="Selected live object recent history"></svg></div>
+      <div class="history-table-wrap"><table class="history-table" id="historyTable"></table></div>
+    </div>
+
+    <div class="section-block">
+      <div class="section-header"><h2>MODEL / LIVE STATUS</h2><span id="modelStatus">—</span></div>
+      <div id="liveGate" class="live-model-gate"><strong>Operational release gated.</strong><span id="liveGateText">Waiting for current feature coverage.</span></div>
+      <div class="status-card" id="modelStatusCard" style="margin-top:6px"></div>
+    </div>
+  </aside>
+</main>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="live.js?v=20261005-object-monitor-19"></script>
+</body>
+</html>
