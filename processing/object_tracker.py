@@ -121,7 +121,12 @@ class CentroidTracker:
     def update(self,timestamp,objects,radar_motion=None):
         self._prune_stale(timestamp)
         objects=list(objects)
-        if not objects: return []
+        if not objects:
+            for tid,track in list(self.tracks.items()):
+                track.missed_scans += 1
+                if track.missed_scans > self.config.max_missed_scans:
+                    del self.tracks[tid]
+            return []
         track_ids=sorted(self.tracks); assignments={}; used=set(); matched_track_ids=set()
         candidate_counts = np.zeros(len(objects), dtype=int)
         candidate_track_counts = np.zeros(len(track_ids), dtype=int) if track_ids else np.zeros(0, dtype=int)
