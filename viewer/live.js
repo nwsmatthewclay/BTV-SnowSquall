@@ -421,6 +421,7 @@ async function refresh(){
     var got=await Promise.all(["KCXX","KTYX"].map(function(site){return getSite(site).catch(function(e){return {site:site,error:String(e.message||e),geo:{features:[]},state:{},history:[],shadow:null}})}));
     datasets=Object.fromEntries(got.map(function(x){return [x.site,x]}));
     cursorGrid=await fetchOptional(LIVE_BASE+"radar_cursor.json?cb="+Date.now(),null);
+    await loadRadarHistory();
     var detectedObjects=got.flatMap(function(x){return (x.geo.features||[]).map(function(f){return Object.assign({},f.properties,{radar_site:x.site,radar_geometry:f.geometry})})});
     allObjects=detectedObjects.filter(function(p){
       var score=Number(p.candidate_rank_score);
