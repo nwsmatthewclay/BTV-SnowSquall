@@ -13,9 +13,11 @@ import pandas as pd
 
 
 def numeric(df: pd.DataFrame, col: str) -> pd.Series:
-    return pd.to_numeric(
-        df[col], errors="coerce"
-    ) if col in df.columns else pd.Series(float("nan"), index=df.index)
+    return (
+        pd.to_numeric(df[col], errors="coerce")
+        if col in df.columns
+        else pd.Series(float("nan"), index=df.index)
+    )
 
 
 def load_surface(root: Path | None) -> pd.DataFrame:
@@ -62,7 +64,7 @@ def surface_summary(surface: pd.DataFrame) -> pd.DataFrame:
         .agg(
             surface_report_count=("surface_report_count", "sum"),
             surface_min_visibility_m=("surface_visibility_m", "min"),
-            surface_max_gust_kt=("surface_gust_kt", "max"),
+            surface_max_gust_kt=("surface_gust", "max"),
             surface_snow_reports=("surface_snow_report", "sum"),
             surface_mixed_reports=("surface_mixed_report", "sum"),
             surface_freezing_rain_reports=("surface_freezing_rain_report", "sum"),
@@ -71,7 +73,9 @@ def surface_summary(surface: pd.DataFrame) -> pd.DataFrame:
     )
 
 
-def build(frame: pd.DataFrame, surface: pd.DataFrame | None = None) -> tuple[pd.DataFrame, pd.DataFrame]:
+def build(
+    frame: pd.DataFrame, surface: pd.DataFrame | None = None
+) -> tuple[pd.DataFrame, pd.DataFrame]:
     d = frame.copy()
     if d[d["population"].eq("winter_null_candidate")].empty:
         return (
@@ -150,9 +154,35 @@ def build(frame: pd.DataFrame, surface: pd.DataFrame | None = None) -> tuple[pd.
             score += 1
             reasons.append("persistent_three_or_more_scans")
 
-        surface_snow = pd.to_numeric(g.get("surface_snow_reports", pd.Series(0, index=g.index)), errors="coerce").fillna(0).sum()
-        surface_vis = pd.to_numeric(g.get("surface_min_visibility_m", pd.Series(float("nan"), index=g.index)), errors="coerce").min()
-        surface_gust = pd.to_numeric(g.get("surface_max_gust_kt", pd.Series(float("nan"), index=g.index)), errors="coerce").max()
+        # Surface evidence is summarized once per null window. Do not sum
+        # merged surface values across radar/object rows because the same
+        # null-level summary is repeated on every associated object row.
+        surface_unique = (
+            g[
+                [
+                    "surface_report_count",
+                    "surface_min_visibility_m",
+                    "surface_max_gust_kt",
+                    "surface_snow_reports",
+                    "surface_mixed_reports",
+                    "surface_freezing_rain_reports",
+                ]
+            ]
+            .drop_duplicates()
+        )
+        surface_snow = float(pd.to_numeric(
+            surface_unique["surface_snow_reports"], errors="coerce"
+        ).fillna(0).max())
+        surface_vis = float(pd.to_numeric(
+            surface_unique["surface_min_visibility_m"], errors="coerce"
+        ).min()) if surface_unique["surface_min_visibility_m"].notna().any() else float("nan")
+        surface_gust = float(pd.to_numeric(
+            surface_unique["surface_max_gust_kt"], errors="coerce"
+        ).max()) if surface_unique["surface_max_gust_kt"].notna().any() else float("nan")
+        surface_report_count = int(pd.to_numeric(
+            surface_unique["surface_report_count"], errors="coerce"
+        ).fillna(0).max())
+
         if surface_snow > 0:
             score += 2
             reasons.append("nearby_surface_snow_report")
@@ -182,9 +212,9 @@ def build(frame: pd.DataFrame, surface: pd.DataFrame | None = None) -> tuple[pd.
             "peak_scan_time_utc": str(peak_row.get("scan_time_utc")) if pd.notna(peak_row.get("scan_time_utc")) else None,
             "peak_radar_site": str(peak_row.get("radar_site")) if pd.notna(peak_row.get("radar_site")) else None,
             "environment_contract_fraction": float(g["environment_contract_ok"].mean()),
-            "surface_report_count": int(pd.to_numeric(g["surface_report_count"], errors="coerce").fillna(0).max()),
-            "surface_min_visibility_m": float(surface_vis) if pd.notna(surface_vis) else None,
-            "surface_max_gust_kt": float(surface_gust) if pd.notna(surface_gust) else None,
+            "surface_report_count": surface_report_count,
+            "surface_min_visibility_m": surface_vis if pd.notna(surface_vis) else None,
+            "surface_max_gust_kt": surface_gust if pd.notna(surface_gust) else None,
             "surface_snow_reports": int(surface_snow),
             "activity_class": activity,
             "hard_negative_score": int(score),
