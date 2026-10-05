@@ -188,8 +188,9 @@ async function renderRadarMosaic(){
     setText("legendNote","Lowest-valid-sweep KCXX + KTYX velocity. Signed inbound/outbound flow is shown for cell analysis.");
   }else{
     var frame=radarHistoryFrame();
-    var imageName=frame?frame.image.split("/").pop():"";
-    var imageUrl=frame?(LIVE_BASE+"radar_history/"+imageName+"?cb="+Date.now()):mosaicImageUrl("reflectivity");
+    var useStoredFrame=!!(frame&&frame.image&&frame.image!=="iem-wms");
+    var imageName=useStoredFrame?frame.image.split("/").pop():"";
+    var imageUrl=useStoredFrame?(LIVE_BASE+"radar_history/"+imageName+"?cb="+Date.now()):mosaicImageUrl("reflectivity");
     var ov=L.imageOverlay(imageUrl,radarMosaic.bounds,{pane:"liveRadarPane",opacity:.96,interactive:false,crossOrigin:true});
     ov.addTo(radarLayer);
     setText("radarStatus","Reflectivity mosaic "+(radarMosaic.status==="stale"?"RETAINED":"READY")+" • KCXX + KTYX");
