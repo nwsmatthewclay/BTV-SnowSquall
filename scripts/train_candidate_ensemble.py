@@ -128,6 +128,8 @@ def main():
     # Enforce the same live-compatible predictor contract as the baseline.
     operational=set(schema.get("operational_predictor_columns") or predictors)
     predictors=[c for c in predictors if c in operational]
+    if args.allow_limited_data:
+        predictors=[c for c in predictors if c in BOOTSTRAP_INSTANTANEOUS_PREDICTORS]
     if not predictors:
         raise ValueError("No live-compatible predictors remain for ensemble training.")
     oof,metrics,folds=evaluate(data,predictors,args.target)
