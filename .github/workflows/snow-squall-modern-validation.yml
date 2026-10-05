@@ -47,7 +47,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
-          run_id="$(gh run list --workflow "Snow Squall Candidate Model Refresh" --branch snow-squall-model-foundation --status success --limit 1 --json databaseId --jq '.[0].databaseId')"
+          run_id="$(gh run list --workflow "snow-squall-candidate-model-refresh.yml" --branch snow-squall-model-foundation --status success --limit 1 --json databaseId --jq '.[0].databaseId')"
           test -n "$run_id" && test "$run_id" != "null"
           rm -rf model_bundle
           gh run download "$run_id" --repo "$GITHUB_REPOSITORY" --name snow-squall-refreshed-model-bundles --dir model_bundle
@@ -115,12 +115,11 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
-          gh workflow run "Snow Squall Archived Replay Smoke" \
-            --repo "$GITHUB_REPOSITORY" \
-            --ref snow-squall-model-foundation \
-            -f validation_run_id="${{ github.run_id }}" \
-            -f candidate_model_run_id="" \
-            -f case_id="BTV20181121"
+          gh api --method POST "/repos/$GITHUB_REPOSITORY/actions/workflows/snow-squall-archived-replay-smoke.yml/dispatches" \
+            -f ref="snow-squall-model-foundation" \
+            -f inputs[validation_run_id]="${{ github.run_id }}" \
+            -f inputs[candidate_model_run_id]="" \
+            -f inputs[case_id]="BTV20181121"
           echo "Dispatched archived candidate replay from scored modern validation."
       - name: Upload modern validation package
         uses: actions/upload-artifact@v4
