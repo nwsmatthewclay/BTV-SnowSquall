@@ -158,26 +158,25 @@ jobs:
           set -euo pipefail
           python scripts/audit_radar_environment_contract.py             data/derived/snow_squall_model_features_cumulative_prior.csv             --output data/derived/snow_squall_prior_radar_environment_contract_audit.json
 
-      - name: Prepare limited-data bootstrap candidate
-        id: mode
-        if: steps.contract.outcome != 'success'
-        run: |
-          set -euo pipefail
-          cp data/derived/snow_squall_model_features_cumulative_prior.csv \
-            data/derived/snow_squall_model_features_cumulative.csv
-          printf '%s\n' '{"status":"national_pretraining_not_available","mode":"limited_data_bootstrap"}' \
-            > data/derived/snow_squall_national_pretraining_feature_summary_refresh.json
-          echo "candidate_mode=limited_data_bootstrap" >> "$GITHUB_OUTPUT"
-          echo "training_contract_status=limited_data_bootstrap" >> "$GITHUB_OUTPUT"
-          echo "Limited-data bootstrap mode enabled: training will proceed without the strict first-class base-moment contract."
-          echo "This candidate remains research-shadow only."
-
       - name: Establish candidate training mode
         id: mode
-        if: steps.contract.outcome == 'success'
+        if: always()
         run: |
-          echo "candidate_mode=full_contract" >> "$GITHUB_OUTPUT"
-          echo "training_contract_status=full_radar_environment_contract" >> "$GITHUB_OUTPUT"
+          set -euo pipefail
+          if [ "${{ steps.contract.outcome }}" = "success" ]; then
+            echo "candidate_mode=full_contract" >> "$GITHUB_OUTPUT"
+            echo "training_contract_status=full_radar_environment_contract" >> "$GITHUB_OUTPUT"
+            echo "Using full radar/velocity/environment training path."
+          else
+            cp data/derived/snow_squall_model_features_cumulative_prior.csv \
+              data/derived/snow_squall_model_features_cumulative.csv
+            printf '%s\n' '{"status":"national_pretraining_not_available","mode":"limited_data_bootstrap"}' \
+              > data/derived/snow_squall_national_pretraining_feature_summary_refresh.json
+            echo "candidate_mode=limited_data_bootstrap" >> "$GITHUB_OUTPUT"
+            echo "training_contract_status=limited_data_bootstrap" >> "$GITHUB_OUTPUT"
+            echo "Limited-data bootstrap mode enabled: training will proceed from the archived feature population."
+            echo "This candidate remains research-shadow only."
+          fi
 
       - name: Stage optional national pretraining models
         if: steps.contract.outcome == 'success'
