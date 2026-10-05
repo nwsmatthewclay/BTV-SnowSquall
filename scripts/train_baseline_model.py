@@ -329,11 +329,16 @@ def main():
         help="Which provisional null windows may enter baseline training.",
     )
     parser.add_argument("--output-dir", default="data/derived/baseline_model")
+    parser.add_argument("--allow-limited-data", action="store_true",
+                        help="Allow explicit research-only bootstrap training when the full radar/environment contract is unavailable.")
     args = parser.parse_args()
 
     source = pd.read_csv(args.features_csv)
     schema = load_schema(Path(args.schema))
-    data, predictors = prepare_dataset(source, schema, args.target)
+    data, predictors = prepare_dataset(
+        source, schema, args.target,
+        enforce_training_contract=not args.allow_limited_data,
+    )
     if args.null_activity_policy == "clean_quiet_light" and "activity_class" in data.columns:
         excluded = data["population"].eq("winter_null_candidate") & ~data["activity_class"].isin(
             {"quiet", "light_activity"}
@@ -410,6 +415,7 @@ def main():
             else "case_held_out_exploratory"
         ),
         "operational_release_status": "candidate_only",
+        "training_contract_status": ("limited_data_bootstrap" if args.allow_limited_data else "full_radar_environment_contract"),
         "operational_release_note": "Training produces a research candidate; live probability exposure requires a separate explicit release decision after independent verification.",
         "evaluation_note": (
             "Fewer than three independent historical case groups contain positive "
