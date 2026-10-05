@@ -57,6 +57,15 @@ jobs:
           run-id: ${{ steps.run.outputs.run_id }}
           path: feature_artifact
 
+      - name: Download expansion research package
+        uses: actions/download-artifact@v4
+        with:
+          name: snow-squall-expansion-research-package
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          repository: ${{ github.repository }}
+          run-id: ${{ steps.run.outputs.run_id }}
+          path: research_artifact
+
       - name: Locate cumulative features
         id: input
         run: |
