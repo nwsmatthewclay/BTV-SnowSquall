@@ -788,6 +788,13 @@ jobs:
             --schema data/derived/snow_squall_model_features_expanded.schema.json \
             --output data/derived/snow_squall_cumulative_dataset_audit.json
 
+      - name: Run forward-in-time validation
+        run: |
+          python scripts/evaluate_temporal_holdout.py \
+            data/derived/snow_squall_model_features_cumulative.csv \
+            --schema data/derived/snow_squall_model_features_expanded.schema.json \
+            --output data/derived/snow_squall_temporal_holdout.json
+
       - name: Profile cumulative training population
         run: |
           python scripts/audit_training_population.py \
@@ -957,6 +964,7 @@ jobs:
             data/derived/snow_squall_expansion_object_detection_audit.json
             data/derived/snow_squall_cumulative_dataset_audit.json
             data/derived/snow_squall_training_population_audit.json
+            data/derived/snow_squall_temporal_holdout.json
             data/derived/snow_squall_national_pretraining_feature_summary.json
             data/derived/next_expansion_batch.json
             data/derived/snow_squall_expansion_provenance.json
