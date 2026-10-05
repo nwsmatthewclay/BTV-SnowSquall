@@ -303,6 +303,43 @@ def render_site_products(
     return products
 
 
+
+def write_cursor_grid(output_dir: Path, mosaic, site_velocity_fields):
+    """Publish compact 1-km cursor-sampling arrays for the browser viewer."""
+    if mosaic is None:
+        return None
+
+    def encode(field, multiplier=1.0):
+        arr = np.asarray(field, dtype=float)
+        scaled = np.rint(arr * multiplier)
+        return np.where(np.isfinite(scaled), scaled, -9999).astype(np.int16).reshape(-1).tolist()
+
+    cursor = {
+        "version": 1,
+        "product": "BTV live radar cursor grid",
+        "center_lat": CENTER_LAT,
+        "center_lon": CENTER_LON,
+        "spacing_km": SPACING_KM,
+        "half_width_km": GRID_SIZE_KM,
+        "shape": [int(mosaic.shape[0]), int(mosaic.shape[1])],
+        "reflectivity_scale": 1,
+        "reflectivity_missing": -9999,
+        "reflectivity_dbz": encode(mosaic),
+        "velocity_scale": 1,
+        "velocity_missing": -9999,
+        "velocity_units": "kt",
+        "velocity_by_site": {},
+    }
+    for site in RADARS:
+        field = site_velocity_fields.get(site)
+        if field is None or not np.isfinite(field).any():
+            continue
+        cursor["velocity_by_site"][site] = encode(field, 1.94384449244)
+
+    path = output_dir / "radar_cursor.json"
+    path.write_text(json.dumps(cursor, separators=(",", ":")) + "\n", encoding="utf-8")
+    return path
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--raw-root", type=Path, default=Path("data/raw"))
@@ -401,6 +438,14 @@ def main():
             "velocity_display_units": "kt",
             "velocity_rendering": "signed_radial_velocity",
             "velocity_sources": sorted(velocity_products),
+        }
+        cursor_path = write_cursor_grid(args.output_image.parent, mosaic, site_velocity_fields)
+        payload["cursor_grid"] = {
+            "file": cursor_path.name if cursor_path is not None else None,
+            "spacing_km": SPACING_KM,
+            "shape": [int(mosaic.shape[0]), int(mosaic.shape[1])],
+            "velocity_sources": sorted(velocity_products),
+            "status": "ready" if cursor_path is not None else "unavailable",
         }
     else:
         for output in (
