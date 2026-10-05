@@ -27,7 +27,8 @@ permissions:
 
 concurrency:
   group: snow-squall-live-object-publisher
-  cancel-in-progress: true
+  # Never cancel a radar acquisition mid-volume; scheduled runs may queue instead.
+  cancel-in-progress: false
 
 jobs:
   publish-live-objects:
@@ -146,7 +147,7 @@ jobs:
           if status not in {"ready","stale"} or not bounds:
               raise SystemExit("Radar display is unavailable; refusing to publish a broken live payload.")
           if status == "ready" and not velocity:
-              raise SystemExit("Radar reflectivity built but no base velocity product was generated.")
+              print("WARNING: Radar reflectivity is ready but no base velocity product was generated; publishing reflectivity rather than discarding the fresh scan.")
           for site,item in velocity.items():
               for key in ("clean_image","raw_image"):
                   path=Path("viewer/data/live")/str(item[key])
