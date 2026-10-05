@@ -62,6 +62,7 @@ def test_surface_snow_and_low_visibility_increase_review_priority(tmp_path):
     result, summary = build(table, surface=surface)
     row = result.loc[result["null_id"].eq("N1")].iloc[0]
 
+    assert row["surface_report_count"] == 2
     assert row["surface_snow_reports"] == 2
     assert row["surface_min_visibility_m"] == 650.0
     assert row["surface_max_gust_kt"] == 30.0
