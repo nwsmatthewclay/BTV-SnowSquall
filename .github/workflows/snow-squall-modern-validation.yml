@@ -111,6 +111,7 @@ jobs:
 
       - name: Launch candidate archived replay
         if: success()
+        continue-on-error: true
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
