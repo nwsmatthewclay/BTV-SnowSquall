@@ -117,7 +117,7 @@ jobs:
 
           ledger_path = Path("data/reviews/snow_squall_hard_negative_review.csv")
           packet_path = Path("data/derived/snow_squall_hard_negative_review_packet.csv")
-          protected = [
+          review_fields = [
               "null_id", "review_status", "final_class",
               "radar_target_present", "event_evidence_present",
               "surface_evidence_interpreted", "reviewer",
@@ -127,17 +127,20 @@ jobs:
           existing = (
               pd.read_csv(ledger_path)
               if ledger_path.exists()
-              else pd.DataFrame(columns=protected)
+              else pd.DataFrame()
           )
           packet = pd.read_csv(packet_path)
-          existing = existing.reindex(columns=protected)
-          packet = packet.reindex(columns=protected)
 
+          # Keep the complete queue diagnostics alongside reviewer decisions so
+          # a promoted negative remains traceable to its radar/object evidence.
           merged = pd.concat([existing, packet], ignore_index=True, sort=False)
           merged["null_id"] = merged["null_id"].fillna("").astype(str).str.strip()
           merged = merged[merged["null_id"].ne("")]
           merged = merged.drop_duplicates("null_id", keep="last")
-          for col in protected[1:]:
+
+          for col in review_fields[1:]:
+              if col not in merged.columns:
+                  merged[col] = ""
               merged[col] = merged[col].fillna("").astype(str).str.strip()
 
           ledger_path.parent.mkdir(parents=True, exist_ok=True)
