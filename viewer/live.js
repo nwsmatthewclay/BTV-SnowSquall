@@ -344,14 +344,75 @@ function renderProbability(){
 }
 function renderProbabilityChart(hist){
   var svg=q("probChart");svg.innerHTML="";
-  if(!hist.length||!hist.some(function(r){return Object.values(r.research_probabilities||{}).some(function(v){return Number.isFinite(Number(v))})})){svg.innerHTML="<text x='210' y='70' text-anchor='middle' class='chart-text'>Research probability history is warming up</text>";return}
-  var W=420,H=142,P=24,points=hist.map(function(r){var v=r.research_probabilities||{};return [v["15"]??v["15min"],v["30"]??v["30min"],v["45"]??v["45min"],v["60"]??v["60min"]].map(function(x){return x==null?null:Number(x)})}),obs=points.flatMap(function(x){return x}).filter(function(v){return Number.isFinite(v)}),maxY=Math.max(.1,Math.min(1,(Math.max.apply(null,obs)||.1)*1.15));
-  for(var g=0;g<=4;g++){var yy=H-P-g*(H-2*P)/4;svg.innerHTML+="<line x1='"+P+"' y1='"+yy+"' x2='"+(W-P)+"' y2='"+yy+"' class='chart-gridline'/><text x='"+(P-4)+"' y='"+(yy+3)+"' text-anchor='end' class='chart-text'>"+Math.round(maxY*(1-g/4)*100)+"</text>"}
-  svg.innerHTML+="<line x1='"+P+"' y1='"+(H-P)+"' x2='"+(W-P)+"' y2='"+(H-P)+"' class='chart-axis'/>";
-  var cls=["chart-line-15","chart-line-30","chart-line-45","chart-line-60"];
-  var x=function(i){return P+(points.length===1?0:i*(W-2*P)/(points.length-1))},y=function(v){return H-P-Math.max(0,Math.min(maxY,v))/maxY*(H-2*P)};
-  for(var j=0;j<4;j++){var valid=points.map(function(pt,i){return {i:i,v:pt[j]}}).filter(function(x){return Number.isFinite(x.v)});if(!valid.length)continue;var path=valid.map(function(pt,n){return (n?"L":"M")+x(pt.i).toFixed(1)+" "+y(pt.v).toFixed(1)}).join(" ");svg.innerHTML+="<path d='"+path+"' class='chart-path "+cls[j]+"'/>"}
-  var xx=x(points.length-1);svg.innerHTML+="<line x1='"+xx+"' y1='"+P+"' x2='"+xx+"' y2='"+(H-P)+"' class='chart-current'/>";
+  var rows=(hist||[]).filter(function(r){
+    var v=r.research_probabilities||{};
+    return Number.isFinite(Number(v["15"]??v["15min"]));
+  });
+  if(!rows.length){
+    svg.innerHTML="<text x='210' y='70' text-anchor='middle' class='chart-text'>Observed probability history is warming up</text>";
+    setText("probabilityChartState","WAITING FOR OBSERVATIONS");
+    return;
+  }
+
+  var W=420,H=142,P=24,TOP=16,BOTTOM=24;
+  var latest=rows.at(-1);
+  var latestTime=new Date(latest.timestamp||Date.now()).getTime();
+  var observed=rows.map(function(r){
+    var t=new Date(r.timestamp||latest.timestamp).getTime();
+    return {
+      x:(t-latestTime)/60000,
+      v:Number((r.research_probabilities||{})["15"]??(r.research_probabilities||{})["15min"])
+    };
+  }).filter(function(p){return Number.isFinite(p.x)&&Number.isFinite(p.v)});
+
+  var latestProbs=latest.research_probabilities||{};
+  var forecast=[
+    [0,Number(latestProbs["15"]??latestProbs["15min"])],
+    [15,Number(latestProbs["30"]??latestProbs["30min"])],
+    [30,Number(latestProbs["45"]??latestProbs["45min"])],
+    [45,Number(latestProbs["60"]??latestProbs["60min"])]
+  ].filter(function(p){return Number.isFinite(p[1])});
+  /* The horizon fields describe probability at +15/+30/+45/+60 from NOW.
+     Build the x coordinates explicitly so the forecast portion is genuinely forward-looking. */
+  forecast=[
+    [0,Number(latestProbs["15"]??latestProbs["15min"])],
+    [15,Number(latestProbs["30"]??latestProbs["30min"])],
+    [30,Number(latestProbs["45"]??latestProbs["45min"])],
+    [45,Number(latestProbs["60"]??latestProbs["60min"])]
+  ].filter(function(p){return Number.isFinite(p[1])});
+
+  var minX=Math.min(-60,observed.length?Math.min.apply(null,observed.map(function(p){return p.x})):0);
+  var maxX=60;
+  var x=function(v){return P+(v-minX)/(maxX-minX)*(W-2*P)};
+  var y=function(v){return H-BOTTOM-Math.max(0,Math.min(1,v))*(H-TOP-BOTTOM)};
+
+  [0,.25,.5,.75,1].forEach(function(v){
+    var yy=y(v);
+    svg.innerHTML+="<line x1='"+P+"' y1='"+yy+"' x2='"+(W-P)+"' y2='"+yy+"' class='chart-gridline'/><text x='"+(P-4)+"' y='"+(yy+3)+"' text-anchor='end' class='chart-text'>"+Math.round(v*100)+"</text>";
+  });
+  svg.innerHTML+="<line x1='"+P+"' y1='"+(H-BOTTOM)+"' x2='"+(W-P)+"' y2='"+(H-BOTTOM)+"' class='chart-axis'/>";
+  svg.innerHTML+="<text x='"+x(minX)+"' y='"+(H-7)+"' text-anchor='start' class='chart-text'>"+Math.round(minX)+"m</text>";
+  svg.innerHTML+="<text x='"+x(0)+"' y='"+(H-7)+"' text-anchor='middle' class='chart-text'>NOW</text>";
+  svg.innerHTML+="<text x='"+x(60)+"' y='"+(H-7)+"' text-anchor='end' class='chart-text'>+60m</text>";
+
+  if(observed.length){
+    var observedPath=observed.map(function(pt,n){return (n?"L":"M")+x(pt.x).toFixed(1)+" "+y(pt.v).toFixed(1)}).join(" ");
+    svg.innerHTML+="<path d='"+observedPath+"' class='prob-observed'/>";
+    observed.forEach(function(pt){
+      svg.innerHTML+="<circle cx='"+x(pt.x).toFixed(1)+"' cy='"+y(pt.v).toFixed(1)+"' r='2.5' fill='#eaf4f8'/>";
+    });
+  }
+
+  if(forecast.length){
+    var forecastPath=forecast.map(function(pt,n){return (n?"L":"M")+x(pt[0]).toFixed(1)+" "+y(pt[1]).toFixed(1)}).join(" ");
+    svg.innerHTML+="<path d='"+forecastPath+"' class='prob-forecast'/>";
+    forecast.forEach(function(pt){
+      svg.innerHTML+="<circle cx='"+x(pt[0]).toFixed(1)+"' cy='"+y(pt[1]).toFixed(1)+"' r='2.5' fill='#6fb8e5'/>";
+    });
+  }
+
+  svg.innerHTML+="<line x1='"+x(0)+"' y1='"+TOP+"' x2='"+x(0)+"' y2='"+(H-BOTTOM)+"' class='prob-now'/>";
+  setText("probabilityChartState",forecast.length>1?"OBSERVED / FORECAST":"OBSERVED ONLY");
 }
 function renderKeyTrends(){
   var p=latestForSelected();if(!p){q("keyTrends").innerHTML="";return}var rows=trackHistory(p),first=rows[0]||p;
