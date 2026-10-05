@@ -11,7 +11,7 @@ on:
       - "scripts/live_healthcheck.py"
       - "scripts/build_live_radar_mosaic.py"
   schedule:
-    - cron: "*/5 * * * *"
+    - cron: "2-59/5 * * * *"
   workflow_dispatch:
 
 permissions:
@@ -19,7 +19,7 @@ permissions:
 
 concurrency:
   group: snow-squall-live-publisher
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   publish:
@@ -150,5 +150,5 @@ jobs:
           git commit -m "Update live snow squall object feeds"
           git push --force origin HEAD:snow-squall-live-data
 
-# Live publisher follows the model-foundation branch.
+# Live publisher follows the model-foundation branch.\n# Scheduled at minutes 2,7,12,... to reduce top-of-hour Actions scheduling contention.
 # Live refresh heartbeat: 2026-10-03T21:55 EDT — base Z + base Vr live products
