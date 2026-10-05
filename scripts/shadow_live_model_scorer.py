@@ -123,11 +123,11 @@ def score_site(site: str, live_root: Path, model_root: Path) -> tuple[dict, list
             max_age_minutes=MAX_ENVIRONMENT_AGE_MINUTES,
         )
         any_runtime_environment_required = any(
-        bool(set(runtime.feature_columns) & ENVIRONMENT_PREDICTORS)
-        for runtime in runtimes.values()
-        if runtime.model is not None
-    )
-    record = {
+            bool(set(runtime.feature_columns) & ENVIRONMENT_PREDICTORS)
+            for runtime in runtimes.values()
+            if runtime.model is not None
+        )
+        record = {
             "radar_site": site,
             "track_id": str(track_id),
             "timestamp": props.get("timestamp") or geo.get("metadata", {}).get("scan_time_utc"),
