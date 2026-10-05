@@ -1,0 +1,119 @@
+name: Snow Squall Event Verification
+
+on:
+  workflow_run:
+    workflows:
+      - Snow Squall Expansion Dataset
+    types:
+      - completed
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: read
+
+concurrency:
+  group: snow-squall-event-verification
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Check out model-foundation code
+        uses: actions/checkout@v4
+        with:
+          ref: snow-squall-model-foundation
+          fetch-depth: 1
+
+      - name: Install science dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install -r requirements-science.txt
+
+      - name: Resolve expansion run
+        id: run
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "workflow_run" ]; then
+            run_id="${{ github.event.workflow_run.id }}"
+          else
+            run_id="$(gh run list               --workflow "Snow Squall Expansion Dataset"               --branch snow-squall-model-foundation               --status success               --limit 1               --json databaseId               --jq '.[0].databaseId')"
+          fi
+          test -n "$run_id" && test "$run_id" != "null"
+          echo "run_id=$run_id" >> "$GITHUB_OUTPUT"
+
+      - name: Download cumulative feature batch
+        uses: actions/download-artifact@v4
+        with:
+          name: snow-squall-expansion-feature-batch
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          repository: ${{ github.repository }}
+          run-id: ${{ steps.run.outputs.run_id }}
+          path: feature_artifact
+
+      - name: Download candidate model bundles
+        uses: actions/download-artifact@v4
+        with:
+          name: snow-squall-live-model-bundles
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          repository: ${{ github.repository }}
+          run-id: ${{ steps.run.outputs.run_id }}
+          path: model_artifact
+
+      - name: Download research package
+        uses: actions/download-artifact@v4
+        with:
+          name: snow-squall-expansion-research-package
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          repository: ${{ github.repository }}
+          run-id: ${{ steps.run.outputs.run_id }}
+          path: research_artifact
+
+      - name: Locate inputs
+        id: inputs
+        run: |
+          set -euo pipefail
+          features="$(find feature_artifact -name snow_squall_model_features_cumulative.csv -type f -print -quit)"
+          cases="$(find research_artifact -name snow_squall_training_cases.csv -type f -print -quit)"
+          test -n "$features"
+          test -n "$cases"
+          echo "features=$features" >> "$GITHUB_OUTPUT"
+          echo "cases=$cases" >> "$GITHUB_OUTPUT"
+          echo "Features: $features"
+          echo "Training cases: $cases"
+
+      - name: Run event-level verification
+        run: |
+          python scripts/evaluate_event_thresholds.py             --features "${{ steps.inputs.outputs.features }}"             --cases "${{ steps.inputs.outputs.cases }}"             --model-root model_artifact             --output event_verification
+
+      - name: Publish verification artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: snow-squall-event-verification
+          retention-days: 30
+          path: event_verification
+
+      - name: Print threshold summary
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          p = Path("event_verification/summary.json")
+          d = json.loads(p.read_text())
+          for h, info in d.get("horizons", {}).items():
+              print("\nHORIZON", h, info.get("status"))
+              for row in (info.get("thresholds") or []):
+                  print(
+                      f"  threshold={row.get('threshold'):.2f} "
+                      f"POD={row.get('pod')} "
+                      f"FAR={row.get('false_alarm_ratio')} "
+                      f"median_lead={row.get('median_lead_min')}"
+                  )
+          PY
