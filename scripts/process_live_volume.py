@@ -773,7 +773,7 @@ def process_volume(
             "source_file": source_name,
             "fields": radar_fields,
             "object_count": len(features),
-            "probability_status": ("scored" if model_scored else ("model_error" if model_errors else "not_scored")),
+            "probability_status": ("research_scored" if features else ("model_error" if model_errors else "not_scored")),
             "probability_mode": probability_mode,
             "environment_status": (
                 "attached" if rap_result is not None else "unavailable"
