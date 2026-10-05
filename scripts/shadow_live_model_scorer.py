@@ -50,6 +50,20 @@ def read_json(path: Path, default):
         return default
 
 
+def load_candidate_summary(model_root: Path) -> dict:
+    candidates = [
+        model_root / "snow_squall_candidate_refresh_summary.json",
+        model_root / "data" / "derived" / "snow_squall_candidate_refresh_summary.json",
+    ]
+    candidates.extend(model_root.rglob("snow_squall_candidate_refresh_summary.json"))
+    for path in candidates:
+        if path.exists():
+            payload = read_json(path, {})
+            if isinstance(payload, dict):
+                return payload
+    return {}
+
+
 def score_site(site: str, live_root: Path, model_root: Path) -> tuple[dict, list[dict]]:
     objects_path = live_root / f"{site}_objects.geojson"
     history_path = live_root / f"{site}_history.json"
@@ -58,6 +72,9 @@ def score_site(site: str, live_root: Path, model_root: Path) -> tuple[dict, list
     now = datetime.now(timezone.utc)
     rows = []
     current_features = geo.get("features") or []
+    candidate_summary = load_candidate_summary(model_root)
+    candidate_mode = str(candidate_summary.get("candidate_mode") or "").strip()
+    training_contract_status = str(candidate_summary.get("training_contract_status") or "").strip()
 
     runtimes = {}
     model_info = {}
@@ -78,8 +95,8 @@ def score_site(site: str, live_root: Path, model_root: Path) -> tuple[dict, list
             "model_present": runtime.model is not None,
             "model_version": runtime.metadata.get("model_version"),
             "operational_release_status": runtime.metadata.get("operational_release_status"),
-            "training_contract_status": runtime.metadata.get("training_contract_status"),
-            "candidate_mode": runtime.metadata.get("candidate_mode"),
+            "training_contract_status": runtime.metadata.get("training_contract_status") or training_contract_status or None,
+            "candidate_mode": runtime.metadata.get("candidate_mode") or candidate_mode or None,
             "predictor_count": len(runtime.feature_columns),
             "model_family": runtime.metadata.get("estimator_family") or runtime.metadata.get("model_version"),
             "selected_artifact": directory.name if directory is not None else None,
@@ -147,6 +164,7 @@ def score_site(site: str, live_root: Path, model_root: Path) -> tuple[dict, list
             "national_pretraining": national_pretraining,
             "score_policy": {
                 "minimum_feature_coverage": MIN_FEATURE_COVERAGE,
+                "limited_data_minimum_feature_coverage": LIMITED_DATA_MIN_FEATURE_COVERAGE,
                 "max_environment_age_minutes": MAX_ENVIRONMENT_AGE_MINUTES,
                 "fresh_environment_target_minutes": 90,
                 "requires_complete_environment": "per_horizon",
@@ -163,7 +181,9 @@ def score_site(site: str, live_root: Path, model_root: Path) -> tuple[dict, list
             coverage = feature_coverage(frame.tail(1), runtime.feature_columns)
             record["feature_coverage"][str(horizon)] = coverage
             limited_candidate = (
-                str(runtime.metadata.get("training_contract_status") or "").strip()
+                training_contract_status == "limited_data_bootstrap"
+                or candidate_mode.startswith("bootstrap")
+                or str(runtime.metadata.get("training_contract_status") or "").strip()
                 == "limited_data_bootstrap"
                 or str(runtime.metadata.get("candidate_mode") or "").startswith("bootstrap")
             )
