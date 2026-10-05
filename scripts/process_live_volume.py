@@ -293,7 +293,16 @@ def process_volume(
             *np.gradient(field, 1.0, edge_order=1)
         )
 
-    live_detection_config = ObjectDetectionConfig(min_candidate_rank_score=35.0)
+    # Live objects should represent coherent cells/bands rather than isolated
+    # high-gradient pixels. Keep the general detector unchanged for training
+    # while using a more spatially coherent configuration for the live view.
+    live_detection_config = ObjectDetectionConfig(
+        min_pixels=16,
+        close_iterations=2,
+        open_iterations=0,
+        split_merged=False,
+        min_candidate_rank_score=40.0,
+    )
     detections = detect_reflectivity_objects(
         data,
         config=live_detection_config,
