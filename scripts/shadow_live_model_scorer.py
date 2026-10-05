@@ -130,6 +130,21 @@ def score_site(site: str, live_root: Path, model_root: Path) -> tuple[dict, list
                 if row_dt <= current_dt:
                     filtered_history.append(row)
             track_history = filtered_history
+
+        # The live objects feed can be one filesystem write ahead of the
+        # persisted history feed. Always insert the actual current object row
+        # for this score, replacing any stale same-timestamp history row.
+        by_timestamp = {}
+        for row in track_history:
+            stamp = str(row.get("timestamp") or "")
+            if stamp:
+                by_timestamp[stamp] = dict(row)
+        if current_timestamp:
+            by_timestamp[str(current_timestamp)] = dict(props)
+        track_history = sorted(
+            by_timestamp.values(),
+            key=lambda row: str(row.get("timestamp") or ""),
+        )
         if not track_history:
             track_history = [dict(props)]
         frame = build_live_feature_frame(track_history, track_id)
