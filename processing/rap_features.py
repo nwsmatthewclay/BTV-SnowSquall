@@ -164,6 +164,7 @@ def _metpy_derived_fields(path: Path, latitude, longitude, values):
         from metpy.calc import (
             bulk_shear, downdraft_cape, el, lcl, lfc, mixed_layer_cape_cin,
             most_unstable_cape_cin, parcel_profile, relative_humidity_from_dewpoint,
+            dewpoint_from_relative_humidity, dewpoint_from_specific_humidity,
             storm_relative_helicity, surface_based_cape_cin, wet_bulb_temperature,
         )
         from metpy.units import units
@@ -389,11 +390,20 @@ def _metpy_derived_fields(path: Path, latitude, longitude, values):
             result.update({k: v for k, v in snsq_result.items() if v is not None})
         except Exception:
             pass
-    except Exception:
+    except Exception as exc:
+        result["__metpy_error"] = f"{type(exc).__name__}: {exc}"
         return result
     return {k: v for k, v in result.items() if v is not None}
 def _open_profile(path: Path, short_name: str):
-    return _open_field(path, "isobaricInhPa", short_name, None)
+    last_error = None
+    for level_type in ("isobaricInhPa", "isobaricInPa"):
+        try:
+            return _open_field(path, level_type, short_name, None)
+        except Exception as exc:
+            last_error = exc
+    if last_error is not None:
+        raise last_error
+    return None
 
 def _nearest_profile(ds, latitude, longitude):
     if ds is None or not ds.data_vars:
