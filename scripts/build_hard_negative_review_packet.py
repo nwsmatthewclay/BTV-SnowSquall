@@ -139,6 +139,7 @@ def validate_packet(packet: pd.DataFrame) -> list[str]:
     required = {
         "null_id", "review_status", "final_class",
         "radar_target_present", "event_evidence_present",
+        "surface_evidence_interpreted",
         "reviewer", "reviewed_at_utc", "training_eligible",
     }
     missing = sorted(required - set(packet.columns))
