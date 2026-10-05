@@ -207,19 +207,6 @@ jobs:
           print("Independent validation boundary OK.")
           PY
 
-      - name: Launch archived candidate replay
-        if: success()
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          set -euo pipefail
-          gh workflow run "Snow Squall Archived Replay Smoke" \
-            --ref snow-squall-model-foundation \
-            -f validation_run_id="${{ github.run_id }}" \
-            -f expansion_run_id="" \
-            -f case_id="BTV20181121"
-          echo "Dispatched archived candidate replay for validation run ${{ github.run_id }}"
-
       - name: Upload validation package
         if: always()
         uses: actions/upload-artifact@v4
