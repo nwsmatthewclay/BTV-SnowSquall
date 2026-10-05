@@ -187,6 +187,8 @@ def main():
         "predictor_columns":predictors,
         "operational_predictor_policy":"live_compatible_subset_from_feature_schema",
         "training_rows":int(len(data)),
+        "reviewed_negative_window_count":int(data["reviewed_negative_window"].sum()),
+        "reviewed_negative_row_count":int((data["population"].eq("winter_null_candidate") & data["reviewed_negative_window"]).sum()),
         "training_groups":int(data["split_group"].nunique()),
         "positive_case_groups":positive_groups,
         "positive_case_group_count":len(positive_groups),
