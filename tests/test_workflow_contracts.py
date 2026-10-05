@@ -85,7 +85,7 @@ def test_historical_benchmark_replay_workflow_contract():
 def test_candidate_refresh_has_legacy_bootstrap_without_yaml_newline_break():
     text = Path('.github/workflows/snow-squall-candidate-model-refresh.yml').read_text(encoding='utf-8')
     assert 'continue-on-error: true' in text
-    assert 'Bootstrap candidate from prior successful expansion model' in text
+    assert 'Establish candidate training mode' in text
     assert "candidate_mode: bootstrap_legacy_feature_contract" in text
     assert "printf '%s\\n'" in text
     assert "printf '%s\n'" not in text
