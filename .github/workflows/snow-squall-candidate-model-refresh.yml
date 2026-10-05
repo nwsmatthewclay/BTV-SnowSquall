@@ -285,12 +285,25 @@ jobs:
                   "operational_release_status":m.get("operational_release_status"),
                   "metrics":m.get("metrics",{}),
               }
-          Path("data/derived/snow_squall_candidate_refresh_summary.json").write_text(
-              json.dumps({
-                  "release_status":"candidate_only_not_operational",
-                  "national_pretraining_source":"BTV-excluded national SQW warning/radar weak supervision",
-                  "horizons":out,
-              },indent=2)+"\n",encoding="utf-8")
+          summary_path = Path("data/derived/snow_squall_candidate_refresh_summary.json")
+          prior = {}
+          if summary_path.exists():
+              try:
+                  prior = json.loads(summary_path.read_text(encoding="utf-8"))
+              except json.JSONDecodeError:
+                  prior = {}
+          summary = {
+              **prior,
+              "release_status": "candidate_only_not_operational",
+              "national_pretraining_source": (
+                  prior.get("national_pretraining_source")
+                  or "BTV-excluded national SQW warning/radar weak supervision"
+              ),
+              "horizons": out,
+          }
+          summary_path.write_text(
+              json.dumps(summary, indent=2) + "\n", encoding="utf-8"
+          )
           print(json.dumps(out,indent=2))
           PY
 
