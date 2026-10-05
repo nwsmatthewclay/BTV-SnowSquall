@@ -741,8 +741,18 @@ def process_volume(
             for h, v in component_result["probabilities"].items()
         }
         feature["research_probabilities"] = dict(feature["research_probabilities_raw"])
+        # The transparent component model's base score represents the current
+        # object state (NOW). Horizon scores remain forward guidance at +15/+30/+45/+60.
+        now_score = (
+            component_result["radar"]["score"] * 0.50
+            + component_result["environment"]["score"] * 0.35
+            + component_result["analog"]["score"] * 0.15
+        )
+        feature["research_probability_now"] = round(float(now_score) / 100.0, 4)
+        feature["probability_now"] = feature["research_probability_now"]
+        feature["research_probabilities"]["now"] = feature["research_probability_now"]
         feature["research_interval_probabilities"] = {}
-        feature["probability_projection"] = "weighted_radar50_environment35_analog15"
+        feature["probability_projection"] = "now_plus15_plus30_plus45_plus60"
         feature["probability_trend"] = "scored"
 
         learned = learned_probability_by_feature.get(id(feature), {})
