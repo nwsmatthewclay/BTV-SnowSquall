@@ -238,24 +238,23 @@ def build_live_feature_row(
     row["rh_0_2km_pct"] = _number(current.get("rh_0_2km_pct"))
     if row["rh_0_2km_pct"] is None:
         row["rh_0_2km_pct"] = _number(current.get("mean_rh_0_2km_pct"))
-    for key in (
+    canonical_env = (
         "lcl_m", "lfc_m", "el_m", "dcape_jkg",
         "wind_0_1km_kt", "wind_0_3km_kt",
         "shear_0_1km_kt", "shear_0_3km_kt", "shear_0_6km_kt",
         "lapse_rate_0_3km_c_km", "lapse_rate_0_7_5km_c_km",
         "wet_bulb_0_3km_c", "freezing_level_m",
-    ):
-        if key in current:
-            row[key] = _number(current.get(key))
-
-    # Common aliases emitted by the MetPy profile calculator.
-    if row.get("lapse_rate_0_3km_c_km") is None:
-        row["lapse_rate_0_3km_c_km"] = _number(current.get("lr03_Ckm"))
-    if row.get("lapse_rate_0_7_5km_c_km") is None:
-        row["lapse_rate_0_7_5km_c_km"] = _number(current.get("lr75_Ckm"))
-    if row.get("wet_bulb_0_3km_c") is None:
-        row["wet_bulb_0_3km_c"] = _number(current.get("wet_bulb_0_3km_c"))
-
+    )
+    for key in canonical_env:
+        value = current.get(key)
+        if value is None:
+            fallback = {
+                "lapse_rate_0_3km_c_km": current.get("lr03_Ckm"),
+                "lapse_rate_0_7_5km_c_km": current.get("lr75_Ckm"),
+                "wet_bulb_0_3km_c": current.get("wet_bulb_0_3km_c"),
+            }.get(key)
+            value = fallback
+        row[key] = _number(value)
     # Canonical motion naming used by the historical feature builder.    if row.get("motion_dir_deg") is None:
         row["motion_dir_deg"] = _number(current.get("motion_direction_deg"))
     if row.get("motion_direction_deg") is None:
