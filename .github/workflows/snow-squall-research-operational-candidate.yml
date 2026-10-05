@@ -96,7 +96,7 @@ jobs:
           name: snow-squall-research-operational-candidate
           retention-days: 30
           path: |
-            candidate_bundle/candidate_ensemble_refresh_*m/
+            candidate_bundle/**/candidate_ensemble_refresh_*m/**
             candidate_bundle/snow_squall_candidate_refresh_summary.json
             candidate_bundle/snow_squall_live_model_compatibility_refresh.json
             candidate_gate/candidate_release_audit.json
