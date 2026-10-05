@@ -608,6 +608,25 @@ def extract_features(
         # RAP PWAT is kg m^-2, numerically equivalent to mm of liquid water.
         values["pwat_mm"] = float(values["pwat_mm"])
 
+    # If the native profile moments are temporarily incomplete, MetPy may
+    # still have already derived the three 0-2 km SNSQ ingredients from the
+    # same colocated RAP sounding. Use those real diagnostics rather than
+    # leaving SNSQ as "profile_missing".
+    if values.get("snsq") is None:
+        try:
+            from processing.snsq import snow_squall_parameter
+            fallback = snow_squall_parameter(
+                values.get("mean_rh_0_2km_pct"),
+                values.get("thetae_delta_0_2km_k"),
+                values.get("mean_wind_0_2km_ms"),
+                wetbulb_2m_c=values.get("wetbulb_2m_c"),
+            )
+            if fallback.get("snsq") is not None:
+                values.update(fallback)
+                values["snsq_status"] = "metpy_derived"
+        except Exception:
+            pass
+
     shear_u = values.get("shear_u_0_6km_ms")
     shear_v = values.get("shear_v_0_6km_ms")
     values["shear_0_6km_ms"] = (
