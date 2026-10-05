@@ -94,11 +94,16 @@ def main():
     parser.add_argument("--schema",required=True)
     parser.add_argument("--target",required=True)
     parser.add_argument("--output-dir",required=True)
+    parser.add_argument("--allow-limited-data", action="store_true",
+                        help="Allow explicit research-only bootstrap training when the full radar/environment contract is unavailable.")
     args=parser.parse_args()
 
     source=pd.read_csv(args.features_csv)
     schema=load_schema(Path(args.schema))
-    data,predictors=prepare_dataset(source,schema,args.target)
+    data,predictors=prepare_dataset(
+        source, schema, args.target,
+        enforce_training_contract=not args.allow_limited_data,
+    )
     # Enforce the same live-compatible predictor contract as the baseline.
     operational=set(schema.get("operational_predictor_columns") or predictors)
     predictors=[c for c in predictors if c in operational]
@@ -131,6 +136,7 @@ def main():
         "evaluation_unit":"episode_or_case_or_null_group",
         "evaluation_status":"case_held_out_exploratory" if len(positive_groups)>=3 else "case_held_out_not_interpretable",
         "operational_release_status":"candidate_only",
+        "training_contract_status":("limited_data_bootstrap" if args.allow_limited_data else "full_radar_environment_contract"),
         "operational_release_note":"Research candidate only; independent modern verification and calibration are required before operational release.",
         "estimator_family":["HistGradientBoostingClassifier","RandomForestClassifier","ExtraTreesClassifier"],
         "training_weight_policy":"inverse_class_frequency_with_equal_class_total_multiplied_by_evidence_weight",
