@@ -10,7 +10,7 @@ on:
 
 permissions:
   actions: read
-  contents: read
+  contents: write
 
 concurrency:
   group: snow-squall-hard-negative-review
@@ -74,11 +74,93 @@ jobs:
           test -n "$features"
           echo "features=$features" >> "$GITHUB_OUTPUT"
 
+      - name: Locate null-window surface evidence
+        id: surface
+        run: |
+          set -euo pipefail
+          surface_root="$(find research_artifact -type d -name 'ASOS_IEM_null_expansion' -print -quit || true)"
+          echo "surface_root=$surface_root" >> "$GITHUB_OUTPUT"
+          echo "Null surface root: ${surface_root:-none}"
+
       - name: Build hard-negative review queue
         run: |
-          python scripts/build_hard_negative_review_queue.py             "${{ steps.input.outputs.features }}"             --output data/derived/snow_squall_hard_negative_review_queue
+          set -euo pipefail
+          args=(
+            "${{ steps.input.outputs.features }}"
+            --output data/derived/snow_squall_hard_negative_review_queue
+          )
+          if [ -n "${{ steps.surface.outputs.surface_root }}" ]; then
+            args+=(--surface-root "${{ steps.surface.outputs.surface_root }}")
+          fi
+          python scripts/build_hard_negative_review_queue.py "${args[@]}"
 
-      - name: Upload review queue
+      - name: Build persistent human-review packet
+        run: |
+          set -euo pipefail
+          existing=""
+          if [ -f data/reviews/snow_squall_hard_negative_review.csv ]; then
+            existing="--existing-review data/reviews/snow_squall_hard_negative_review.csv"
+          fi
+          python scripts/build_hard_negative_review_packet.py \
+            --queue data/derived/snow_squall_hard_negative_review_queue.csv \
+            --output data/derived/snow_squall_hard_negative_review_packet.csv \
+            --promoted-output data/derived/snow_squall_reviewed_negative_nulls.csv \
+            --summary data/derived/snow_squall_hard_negative_review_packet.summary.json \
+            $existing
+
+      - name: Persist new review candidates to foundation ledger
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+          import pandas as pd
+
+          ledger_path = Path("data/reviews/snow_squall_hard_negative_review.csv")
+          packet_path = Path("data/derived/snow_squall_hard_negative_review_packet.csv")
+          protected = [
+              "null_id", "review_status", "final_class",
+              "radar_target_present", "event_evidence_present",
+              "surface_evidence_interpreted", "reviewer",
+              "reviewed_at_utc", "review_notes",
+          ]
+
+          existing = (
+              pd.read_csv(ledger_path)
+              if ledger_path.exists()
+              else pd.DataFrame(columns=protected)
+          )
+          packet = pd.read_csv(packet_path)
+          existing = existing.reindex(columns=protected)
+          packet = packet.reindex(columns=protected)
+
+          merged = pd.concat([existing, packet], ignore_index=True, sort=False)
+          merged["null_id"] = merged["null_id"].fillna("").astype(str).str.strip()
+          merged = merged[merged["null_id"].ne("")]
+          merged = merged.drop_duplicates("null_id", keep="last")
+          for col in protected[1:]:
+              merged[col] = merged[col].fillna("").astype(str).str.strip()
+
+          ledger_path.parent.mkdir(parents=True, exist_ok=True)
+          merged.sort_values("null_id").to_csv(ledger_path, index=False)
+          print(f"Persistent review ledger rows: {len(merged)}")
+          PY
+
+      - name: Commit persistent review ledger
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/reviews/snow_squall_hard_negative_review.csv
+          if git diff --cached --quiet; then
+            echo "No review-ledger changes to commit."
+            exit 0
+          fi
+          git commit -m "Update hard-negative review ledger"
+          git push origin snow-squall-model-foundation
+
+      - name: Upload review queue and promotion packet
         uses: actions/upload-artifact@v4
         with:
           name: snow-squall-hard-negative-review
@@ -86,3 +168,7 @@ jobs:
           path: |
             data/derived/snow_squall_hard_negative_review_queue.csv
             data/derived/snow_squall_hard_negative_review_queue.summary.csv
+            data/derived/snow_squall_hard_negative_review_packet.csv
+            data/derived/snow_squall_hard_negative_review_packet.summary.json
+            data/derived/snow_squall_reviewed_negative_nulls.csv
+            data/reviews/snow_squall_hard_negative_review.csv
