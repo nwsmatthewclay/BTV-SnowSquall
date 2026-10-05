@@ -141,7 +141,7 @@ def score_site(site: str, live_root: Path, model_root: Path) -> tuple[dict, list
                 "minimum_feature_coverage": MIN_FEATURE_COVERAGE,
                 "max_environment_age_minutes": MAX_ENVIRONMENT_AGE_MINUTES,
                 "fresh_environment_target_minutes": 90,
-                "requires_complete_environment": environment_required,
+                "requires_complete_environment": "per_horizon",
                 "environment_requirement": (
                     "model_predictors_require_environment"
                     if environment_required
