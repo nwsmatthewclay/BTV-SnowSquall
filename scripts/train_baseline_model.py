@@ -360,6 +360,8 @@ def main():
         source, schema, args.target,
         enforce_training_contract=not args.allow_limited_data,
     )
+    if args.allow_limited_data:
+        predictors = [c for c in predictors if c in BOOTSTRAP_INSTANTANEOUS_PREDICTORS]
     if args.null_activity_policy == "clean_quiet_light" and "activity_class" in data.columns:
         excluded = data["population"].eq("winter_null_candidate") & ~data["activity_class"].isin(
             {"quiet", "light_activity"}
