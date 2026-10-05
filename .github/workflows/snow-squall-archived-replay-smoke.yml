@@ -8,7 +8,7 @@ on:
       - .github/archived-replay-trigger
   workflow_run:
     workflows:
-      - Snow Squall Expansion Dataset
+      - Modern Independent Validation
     types:
       - completed
   workflow_dispatch:
@@ -17,8 +17,8 @@ on:
         description: "Modern validation workflow run ID; blank uses latest successful run."
         required: false
         default: ""
-      expansion_run_id:
-        description: "Expansion workflow run ID; blank uses latest successful run."
+      candidate_model_run_id:
+        description: "Candidate Model Refresh run ID; blank uses latest successful candidate refresh."
         required: false
         default: ""
       case_id:
