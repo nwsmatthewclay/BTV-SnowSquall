@@ -69,3 +69,34 @@ def test_surface_snow_and_low_visibility_increase_review_priority(tmp_path):
     assert bool(row["review_recommended"])
     assert "nearby_surface_snow_report" in row["review_reasons"]
     assert "nearby_surface_visibility_le_0p8km" in row["review_reasons"]
+
+
+def test_mixed_rasn_is_not_counted_as_pure_snow_and_station_counts_are_conditional():
+    surface = pd.DataFrame({
+        "null_id": ["N1", "N1", "N1"],
+        "station": ["KBTV", "KPBG", "KMPV"],
+        "visibility_m": [900.0, 700.0, 600.0],
+        "wind_gust_kt": [20.0, 30.0, 28.0],
+        "wxcodes": ["RASN", "SN", "BLSN"],
+    })
+    frame = pd.DataFrame({
+        "population": ["winter_null_candidate"] * 3,
+        "null_id": ["N1"] * 3,
+        "radar_site": ["KCXX", "KCXX", "KTYX"],
+        "max_reflectivity_dbz": [30.0, 31.0, 29.0],
+        "base_reflectivity_max_dbz": [31.0, 32.0, 30.0],
+        "core_pixel_count": [0, 0, 0],
+        "velocity_p90_abs_kt": [8, 9, 7],
+        "base_velocity_p90_abs_kt": [8, 9, 7],
+        "area_km2": [40, 41, 39],
+        "track_scan_count_to_date": [2, 2, 2],
+        "environment_contract_ok": [True, True, True],
+        "activity_class": ["moderate_activity"] * 3,
+    })
+    result, _ = build(frame, surface=surface)
+    row = result.iloc[0]
+
+    assert row["surface_snow_reports"] == 2
+    assert row["surface_mixed_reports"] == 1
+    assert row["surface_snow_station_count"] == 2
+    assert row["surface_mixed_station_count"] == 1
