@@ -165,6 +165,7 @@ def score_site(site: str, live_root: Path, model_root: Path) -> tuple[dict, list
             "score_policy": {
                 "minimum_feature_coverage": MIN_FEATURE_COVERAGE,
                 "limited_data_minimum_feature_coverage": LIMITED_DATA_MIN_FEATURE_COVERAGE,
+                "limited_data_shadow_policy": "candidate_only_models_may_score_at_0.40_coverage_for_research_shadow_only",
                 "max_environment_age_minutes": MAX_ENVIRONMENT_AGE_MINUTES,
                 "fresh_environment_target_minutes": 90,
                 "requires_complete_environment": "per_horizon",
@@ -180,19 +181,25 @@ def score_site(site: str, live_root: Path, model_root: Path) -> tuple[dict, list
             runtime = runtimes[horizon]
             coverage = feature_coverage(frame.tail(1), runtime.feature_columns)
             record["feature_coverage"][str(horizon)] = coverage
+            runtime_release_status = str(runtime.metadata.get("operational_release_status") or "").strip()
+            runtime_candidate_mode = str(runtime.metadata.get("candidate_mode") or "").strip()
+            runtime_training_contract = str(runtime.metadata.get("training_contract_status") or "").strip()
             limited_candidate = (
                 training_contract_status == "limited_data_bootstrap"
                 or candidate_mode.startswith("bootstrap")
-                or str(runtime.metadata.get("training_contract_status") or "").strip()
-                == "limited_data_bootstrap"
-                or str(runtime.metadata.get("candidate_mode") or "").startswith("bootstrap")
+                or runtime_training_contract == "limited_data_bootstrap"
+                or runtime_candidate_mode.startswith("bootstrap")
+                # Candidate-only bundles are intentionally allowed to shadow-score
+                # at reduced feature coverage while the historical dataset warms.
+                # This does NOT release probabilities to the operational feed.
+                or runtime_release_status == "candidate_only"
             )
             coverage_floor = (
                 LIMITED_DATA_MIN_FEATURE_COVERAGE if limited_candidate else MIN_FEATURE_COVERAGE
             )
             record.setdefault("coverage_policy", {})[str(horizon)] = {
                 "minimum_fraction": coverage_floor,
-                "mode": "limited_data_bootstrap" if limited_candidate else "full_candidate",
+                "mode": "limited_data_shadow" if limited_candidate else "full_candidate",
             }
             environment_required = bool(set(runtime.feature_columns) & ENVIRONMENT_PREDICTORS)
             record.setdefault("environment_requirement", {})[str(horizon)] = (
@@ -333,6 +340,7 @@ def main():
             "status": "healthy",
             "mode": "live_shadow_research",
             "operational_release_status": "candidate_only_not_operational",
+            "probability_status": "research_shadow_candidate",
             "updated_utc": datetime.now(timezone.utc).isoformat(),
             "sites": site_health,
         }, indent=2) + "\n",
