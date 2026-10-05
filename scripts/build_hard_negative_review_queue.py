@@ -60,6 +60,8 @@ def surface_summary(surface: pd.DataFrame) -> pd.DataFrame:
             "null_id": d["null_id"],
             "surface_report_count": 1,
             "surface_station": station,
+            "surface_snow_station": station.where(pure_snow, ""),
+            "surface_mixed_station": station.where(mixed, ""),
             "surface_visibility_m": d["visibility_m"],
             "surface_gust_kt": d["wind_gust_kt"],
             "surface_snow_report": pure_snow,
@@ -75,7 +77,8 @@ def surface_summary(surface: pd.DataFrame) -> pd.DataFrame:
             surface_snow_reports=("surface_snow_report", "sum"),
             surface_mixed_reports=("surface_mixed_report", "sum"),
             surface_freezing_rain_reports=("surface_freezing_rain_report", "sum"),
-            surface_snow_station_count=("surface_station", lambda s: s[s.ne("")].nunique()),
+            surface_snow_station_count=("surface_snow_station", lambda s: s[s.ne("")].nunique()),
+            surface_mixed_station_count=("surface_mixed_station", lambda s: s[s.ne("")].nunique()),
         )
         .reset_index()
     )
@@ -176,6 +179,7 @@ def build(
                     "surface_freezing_rain_reports",
                     "surface_station_count",
                     "surface_snow_station_count",
+                    "surface_mixed_station_count",
                 ]
             ]
             .drop_duplicates()
@@ -198,6 +202,10 @@ def build(
         ).fillna(0).max())
         surface_snow_station_count = int(pd.to_numeric(
             surface_unique.get("surface_snow_station_count", pd.Series(0, index=surface_unique.index)),
+            errors="coerce"
+        ).fillna(0).max())
+        surface_mixed_station_count = int(pd.to_numeric(
+            surface_unique.get("surface_mixed_station_count", pd.Series(0, index=surface_unique.index)),
             errors="coerce"
         ).fillna(0).max())
 
@@ -233,6 +241,7 @@ def build(
             "surface_report_count": surface_report_count,
             "surface_station_count": surface_station_count,
             "surface_snow_station_count": surface_snow_station_count,
+            "surface_mixed_station_count": surface_mixed_station_count,
             "surface_min_visibility_m": surface_vis if pd.notna(surface_vis) else None,
             "surface_max_gust_kt": surface_gust if pd.notna(surface_gust) else None,
             "surface_snow_reports": int(surface_snow),
