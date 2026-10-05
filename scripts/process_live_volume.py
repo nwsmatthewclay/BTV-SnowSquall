@@ -531,6 +531,7 @@ def process_volume(
                 environment_forecast_30["forecast_valid_time_utc"] = forecast_30_match.valid_time.isoformat().replace("+00:00", "Z")
                 environment_forecast_30["forecast_lead_hours"] = int(forecast_30_match.lead_hours)
                 environment_forecast_30["target_minutes"] = 30
+                environment_forecast_30["actual_valid_offset_minutes"] = round((forecast_30_match.valid_time - radar_dt).total_seconds() / 60.0, 1)
             except Exception as exc:
                 environment_forecast_30 = {
                     "source": "RAP",
