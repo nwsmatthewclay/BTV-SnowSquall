@@ -28,7 +28,7 @@ on:
 
 permissions:
   actions: read
-  contents: read
+  contents: write
 
 concurrency:
   group: snow-squall-archived-replay-smoke
@@ -300,16 +300,17 @@ jobs:
           print('Radar frames:', len(case['radar_frames']))
           PY
 
-      - name: Launch operational release review snapshot
+      - name: Trigger operational release review
         if: success()
-        continue-on-error: true
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
-          gh api --method POST "/repos/$GITHUB_REPOSITORY/actions/workflows/snow-squall-operational-release-review.yml/dispatches" \
-            -f ref="snow-squall-model-foundation"
-          echo "Dispatched operational release review snapshot."
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          printf 'Replay completed successfully.\n' > .github/operational-review-trigger
+          git add .github/operational-review-trigger
+          git commit -m "Trigger operational release review"
+          git push origin HEAD:snow-squall-model-foundation
+          echo "Triggered operational release review through the branch trigger file."
       - name: Upload replay viewer package
         uses: actions/upload-artifact@v4
         with:
