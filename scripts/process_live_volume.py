@@ -1,8 +1,8 @@
 """Process one newly acquired Level-II volume into live object state.
 
-This bridge remains probability-free until trained predictors and leakage-safe
-labels exist. All time-evolving diagnostics use only the current scan and
-state retained from earlier scans.
+Publishes transparent research-weighted 15/30/45/60 guidance while keeping
+learned operational release models separately gated. All time-evolving
+diagnostics use only the current scan and prior retained state.
 """
 from __future__ import annotations
 
