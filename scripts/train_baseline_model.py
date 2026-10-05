@@ -45,7 +45,7 @@ def load_schema(path: Path) -> dict:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
-def prepare_dataset(frame: pd.DataFrame, schema: dict, target: str):
+def prepare_dataset(frame: pd.DataFrame, schema: dict, target: str, *, enforce_training_contract: bool = True):
     if target not in frame.columns:
         raise ValueError(f"Target column not found: {target}")
 
@@ -105,49 +105,50 @@ def prepare_dataset(frame: pd.DataFrame, schema: dict, target: str):
     if d.empty:
         raise ValueError("No usable labeled rows remain for baseline training.")
 
-    # Mandatory radar/environment training contract. Missing context is a
-    # dataset-build failure, not something the model is allowed to learn
-    # around with imputation.
-    numeric = d.select_dtypes(include=["number", "bool"]).copy()
-    missing_required = [
-        col for col in (
-            BASE_REFLECTIVITY_FIELDS
-            + BASE_VELOCITY_FIELDS
-            + ENVIRONMENT_REQUIRED_FIELDS
-            + OBJECT_VELOCITY_FIELDS
+    # The full radar/environment contract is mandatory for the normal training
+    # path. A limited-data bootstrap may explicitly bypass this check so an
+    # older population can support research-shadow experimentation while the
+    # strict production-quality dataset continues to be built separately.
+    if enforce_training_contract:
+        missing_required = [
+            col for col in (
+                BASE_REFLECTIVITY_FIELDS
+                + BASE_VELOCITY_FIELDS
+                + ENVIRONMENT_REQUIRED_FIELDS
+                + OBJECT_VELOCITY_FIELDS
+            )
+            if col not in d.columns
+        ]
+        if missing_required:
+            raise ValueError(
+                "Training radar/environment contract missing columns: "
+                + ", ".join(missing_required)
+            )
+        refl_count = d[list(BASE_REFLECTIVITY_FIELDS)].apply(pd.to_numeric, errors="coerce").notna().sum(axis=1)
+        vel_count = d[list(BASE_VELOCITY_FIELDS)].apply(pd.to_numeric, errors="coerce").notna().sum(axis=1)
+        env_count = d[list(ENVIRONMENT_REQUIRED_FIELDS)].apply(pd.to_numeric, errors="coerce").notna().sum(axis=1)
+        obj_vel_count = d[list(OBJECT_VELOCITY_FIELDS)].apply(pd.to_numeric, errors="coerce").notna().sum(axis=1)
+        contract_ok = (
+            refl_count.ge(1)
+            & vel_count.ge(1)
+            & env_count.eq(len(ENVIRONMENT_REQUIRED_FIELDS))
+            & obj_vel_count.ge(1)
         )
-        if col not in d.columns
-    ]
-    if missing_required:
-        raise ValueError(
-            "Training radar/environment contract missing columns: "
-            + ", ".join(missing_required)
-        )
-    refl_count = d[list(BASE_REFLECTIVITY_FIELDS)].apply(pd.to_numeric, errors="coerce").notna().sum(axis=1)
-    vel_count = d[list(BASE_VELOCITY_FIELDS)].apply(pd.to_numeric, errors="coerce").notna().sum(axis=1)
-    env_count = d[list(ENVIRONMENT_REQUIRED_FIELDS)].apply(pd.to_numeric, errors="coerce").notna().sum(axis=1)
-    obj_vel_count = d[list(OBJECT_VELOCITY_FIELDS)].apply(pd.to_numeric, errors="coerce").notna().sum(axis=1)
-    contract_ok = (
-        refl_count.ge(1)
-        & vel_count.ge(1)
-        & env_count.eq(len(ENVIRONMENT_REQUIRED_FIELDS))
-        & obj_vel_count.ge(1)
-    )
-    if "base_reflectivity_valid_fraction" in d.columns:
-        contract_ok &= pd.to_numeric(
-            d["base_reflectivity_valid_fraction"], errors="coerce"
-        ).gt(0)
-    if "base_velocity_valid_fraction" in d.columns:
-        contract_ok &= pd.to_numeric(
-            d["base_velocity_valid_fraction"], errors="coerce"
-        ).gt(0)
-    if (~contract_ok).any():
-        bad = int((~contract_ok).sum())
-        raise ValueError(
-            f"Training radar/environment contract failed for {bad} rows; "
-            "rebuild the positive/null population with base reflectivity, "
-            "base velocity, and complete common environment data."
-        )
+        if "base_reflectivity_valid_fraction" in d.columns:
+            contract_ok &= pd.to_numeric(
+                d["base_reflectivity_valid_fraction"], errors="coerce"
+            ).gt(0)
+        if "base_velocity_valid_fraction" in d.columns:
+            contract_ok &= pd.to_numeric(
+                d["base_velocity_valid_fraction"], errors="coerce"
+            ).gt(0)
+        if (~contract_ok).any():
+            bad = int((~contract_ok).sum())
+            raise ValueError(
+                f"Training radar/environment contract failed for {bad} rows; "
+                "rebuild the positive/null population with base reflectivity, "
+                "base velocity, and complete common environment data."
+            )
     # Materialize the provisional-null target after row selection so sklearn
     # receives a complete binary y vector.
     d.loc[d["population"].eq("winter_null_candidate"), target] = 0
