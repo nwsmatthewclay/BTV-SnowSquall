@@ -174,7 +174,29 @@ async function renderRadarMosaic(){
       if(!map._sqExtent){map.fitBounds(histBounds,{padding:[25,25],maxZoom:8});map._sqExtent=true}
       return;
     }
-    if(radarMode==="velocity"){setText("radarStatus","Local velocity unavailable • waiting for Level-II volume");setText("legendTitle","RADIAL VELOCITY • kt");setText("legendNote","No retained KCXX/KTYX velocity image is currently published.");}else{setText("radarStatus","Local mosaic unavailable • NOAA QC fallback");setText("legendTitle","REFLECTIVITY • dBZ");setText("legendNote","NOAA fallback is display-only; local object analysis remains independent.");addNoaaFallback();}return}
+    if(radarMode==="velocity"){
+      // Display-only emergency fallback: IEM serves current single-site
+      // NEXRAD Level-III base velocity (N0U). This keeps the velocity control
+      // useful when our local Level-II mosaic publisher is delayed.
+      var ridgeUrl="https://mesonet.agron.iastate.edu/cgi-bin/wms/nexrad/ridge.cgi";
+      var ridgeSites=[["CXX","KCXX"],["KTYX","KTYX"]];
+      ridgeSites.forEach(function(pair){
+        var sector=pair[0],site=pair[1];
+        L.tileLayer.wms(ridgeUrl,{
+          layers:"single",format:"image/png",transparent:true,version:"1.1.1",
+          sector:sector,prod:"N0U",opacity:.62
+        }).addTo(radarLayer);
+      });
+      setText("radarStatus","IEM velocity fallback • KCXX + KTYX • current");
+      setText("legendTitle","RADIAL VELOCITY • kt");
+      setText("legendNote","Display fallback: current single-site NEXRAD base velocity. Local Level-II velocity resumes automatically when published.");
+    }else{
+      setText("radarStatus","Local mosaic unavailable • NOAA QC fallback");
+      setText("legendTitle","REFLECTIVITY • dBZ");
+      setText("legendNote","NOAA fallback is display-only; local object analysis remains independent.");
+      addNoaaFallback();
+    }
+    return}
   var src=(radarMosaic.sources||[]).map(function(x){return x.radar}).filter(Boolean);var freshness=radarMosaic.status==="stale"?"RETAINED":"READY";setText("radarStatus","Mosaic "+freshness+" • "+(src.join(" + ")||"KCXX + KTYX"));
   if(radarMode==="velocity"){
     var vp=radarMosaic.display_products?.base_velocity||{};
