@@ -92,3 +92,31 @@ def test_tracker_new_object_gets_unique_track_identity():
     )[0]
     assert second["object_id"] != first["object_id"]
     assert second["track_id"] != first["track_id"]
+
+
+def test_two_missed_scans_can_recover_same_track():
+    t = CentroidTracker()
+    first = t.update("2026-01-01T12:00:00Z", [obj(10, 10)])[0]["object_id"]
+    assert t.update("2026-01-01T12:05:00Z", []) == []
+    assert t.update("2026-01-01T12:10:00Z", []) == []
+    third = t.update("2026-01-01T12:15:00Z", [obj(10, 13)])[0]["object_id"]
+    assert third == first
+
+
+def test_three_missed_scans_end_track_identity():
+    t = CentroidTracker()
+    first = t.update("2026-01-01T12:00:00Z", [obj(10, 10)])[0]["object_id"]
+    assert t.update("2026-01-01T12:05:00Z", []) == []
+    assert t.update("2026-01-01T12:10:00Z", []) == []
+    assert t.update("2026-01-01T12:15:00Z", []) == []
+    replacement = t.update("2026-01-01T12:20:00Z", [obj(10, 13)])[0]["object_id"]
+    assert replacement != first
+
+
+def test_track_age_is_persistent_and_emitted_on_each_observation():
+    t = CentroidTracker()
+    first = t.update("2026-01-01T12:00:00Z", [obj(10, 10)])[0]
+    second = t.update("2026-01-01T12:05:00Z", [obj(10, 11)])[0]
+    assert first["track_age_min"] == 0.0
+    assert second["track_age_min"] == 5.0
+    assert second["track_first_scan_utc"].startswith("2026-01-01T12:00:00")
