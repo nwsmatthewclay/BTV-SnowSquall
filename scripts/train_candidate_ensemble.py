@@ -15,6 +15,27 @@ from sklearn.model_selection import LeaveOneGroupOut
 from sklearn.pipeline import Pipeline
 
 from scripts.train_baseline_model import load_schema, prepare_dataset, grouped_bootstrap_intervals
+BOOTSTRAP_INSTANTANEOUS_PREDICTORS = {
+    "area_km2", "length_km", "width_km", "aspect_ratio", "bbox_aspect_ratio", "is_band",
+    "reflectivity_gradient_p90_dbkm", "gradient_fraction_above_5dbkm",
+    "background_reflectivity_dbz", "reflectivity_contrast_db",
+    "max_reflectivity_dbz", "mean_reflectivity_dbz",
+    "core_pixel_count", "pixel_count", "core_fraction",
+    "echo_top_km", "top_minus_base_km", "vertical_reflectivity_gradient", "vertical_valid_points",
+    "zdr_mean_db", "zdr_p90_db", "zdr_gradient_dbkm",
+    "rhohv_mean", "rhohv_max", "rhohv_p90", "rhohv_min",
+    "velocity_mean_kt", "velocity_std_kt", "velocity_p90_abs_kt",
+    "velocity_gradient_ktkm", "velocity_gradient_p90_ktkm",
+    "velocity_background_kt", "velocity_contrast_kt", "velocity_rescue",
+    "radar_motion_speed_kt", "radar_motion_direction_deg", "radar_motion_confidence",
+    "cape_jkg", "cin_jkg", "snsq", "pwat_mm", "mlcape_jkg", "mlcin_jkg",
+    "mucape_jkg", "mucin_jkg", "srh01_m2s2", "srh03_m2s2",
+    "shear_u_0_6km_ms", "shear_v_0_6km_ms", "shear_0_6km_ms",
+    "u10_ms", "v10_ms", "temperature_2m_k", "dewpoint_2m_k", "rh_2m_pct",
+    "wetbulb_2m_c", "frontogenesis", "dcva", "omega", "epv",
+    "cloud_layer_depth_m", "cloud_layer_rh_pct", "cloud_layer_mean_wind_kt", "cloud_layer_shear_kt"
+}
+
 
 
 def class_balanced_weights(y):
