@@ -9,13 +9,20 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from functools import lru_cache
+import random
 import re
+import time
 import requests
 
 
 BASE_URL = "https://nomads.ncep.noaa.gov/pub/data/nccf/com/rap/prod"
+NCEI_BASE = "https://www.ncei.noaa.gov/thredds/fileServer"
+NCEI_DATASETS = ("model-rap130anl", "model-rap130anl-old")
 FILENAME_TEMPLATE = "rap.t{hour:02d}z.awp130pgrbf00.grib2"
+NCEI_FILENAME_TEMPLATE = "rap_130_{date}_{hour:02d}00_000.grb2"
 DATE_RE = re.compile(r"rap\.(\d{8})$")
+NOMADS_PREFERRED_AGE_DAYS = 7
 
 
 @dataclass(frozen=True)
@@ -33,6 +40,58 @@ def rap_analysis_url(valid_time: datetime) -> str:
     return f"{BASE_URL}/rap.{date_dir}/{filename}"
 
 
+def ncei_rap_analysis_urls(valid_time: datetime):
+    valid_time = valid_time.astimezone(timezone.utc)
+    stamp = valid_time.strftime("%Y%m%d")
+    month = valid_time.strftime("%Y%m")
+    filename = NCEI_FILENAME_TEMPLATE.format(date=stamp, hour=valid_time.hour)
+    for dataset in NCEI_DATASETS:
+        yield f"{NCEI_BASE}/{dataset}/{month}/{stamp}/{filename}"
+
+
+@lru_cache(maxsize=2048)
+def _url_exists(url: str) -> bool:
+    """Probe a remote model file with a tiny ranged GET."""
+    for attempt, delay in enumerate((0, 1, 3), start=1):
+        if delay:
+            time.sleep(delay + random.uniform(0.0, 0.5))
+        try:
+            response = requests.get(
+                url,
+                stream=True,
+                timeout=(8, 20),
+                allow_redirects=True,
+                headers={"Range": "bytes=0-0"},
+            )
+            status = response.status_code
+            response.close()
+            if status in (200, 206):
+                return True
+            if status in (404, 410):
+                return False
+            if status not in (429, 500, 502, 503, 504):
+                return False
+        except requests.RequestException:
+            if attempt == 3:
+                return False
+    return False
+
+
+def _ncei_match(valid_time: datetime, radar_time: datetime, max_age_minutes: int):
+    age = (radar_time - valid_time).total_seconds() / 60.0
+    if age < 0 or age > max_age_minutes:
+        return None
+    for url in ncei_rap_analysis_urls(valid_time):
+        if _url_exists(url):
+            return RapMatch(
+                valid_time,
+                url,
+                Path(url.rsplit("/", 1)[-1]),
+                age,
+            )
+    return None
+
+
 def find_latest_analysis(
     radar_time: datetime,
     max_age_minutes: int = 180,
@@ -40,15 +99,28 @@ def find_latest_analysis(
     """Return the newest hourly RAP analysis at or before radar_time."""
     radar_time = radar_time.astimezone(timezone.utc).replace(second=0, microsecond=0)
 
-    for offset in range(0, max_age_minutes + 60, 60):
-        valid = radar_time - timedelta(minutes=offset)
-        valid = valid.replace(minute=0)
-        url = rap_analysis_url(valid)
+    historical_cutoff = datetime.now(timezone.utc) - timedelta(days=NOMADS_PREFERRED_AGE_DAYS)
 
-        response = requests.head(url, timeout=20, allow_redirects=True)
-        if response.status_code == 200:
-            age = (radar_time - valid).total_seconds() / 60.0
-            if age <= max_age_minutes:
+    for offset in range(0, max_age_minutes + 60, 60):
+        valid = (radar_time - timedelta(minutes=offset)).replace(minute=0)
+
+        if valid >= historical_cutoff:
+            url = rap_analysis_url(valid)
+            if _url_exists(url):
+                age = (radar_time - valid).total_seconds() / 60.0
+                return RapMatch(valid, url, Path(url.rsplit("/", 1)[-1]), age)
+
+            match = _ncei_match(valid, radar_time, max_age_minutes)
+            if match is not None:
+                return match
+        else:
+            match = _ncei_match(valid, radar_time, max_age_minutes)
+            if match is not None:
+                return match
+
+            url = rap_analysis_url(valid)
+            if _url_exists(url):
+                age = (radar_time - valid).total_seconds() / 60.0
                 return RapMatch(valid, url, Path(url.rsplit("/", 1)[-1]), age)
 
     return None
