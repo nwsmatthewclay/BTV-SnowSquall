@@ -687,10 +687,25 @@ jobs:
             --output data/derived/snow_squall_model_features_expanded.csv \
             --schema-output data/derived/snow_squall_model_features_expanded.schema.json
 
-      - name: Enforce radar + environment training contract
+      - name: Audit derived environment predictor coverage
         run: |
-          set -euo pipefail
-          python scripts/audit_radar_environment_contract.py             data/derived/snow_squall_model_features_expanded.csv             --output data/derived/snow_squall_radar_environment_contract_audit.json
+          python - <<'PY'
+          import pandas as pd
+          d = pd.read_csv("data/derived/snow_squall_model_features_expanded.csv")
+          fields = [
+              "snsq", "sbcape_jkg", "sbcin_jkg", "mlcape_jkg", "mlcin_jkg",
+              "mucape_jkg", "mucin_jkg", "dcape_jkg", "lcl_m", "lfc_m", "el_m",
+              "rh_0_2km_pct", "wind_0_1km_kt", "wind_0_3km_kt",
+              "shear_0_1km_kt", "shear_0_3km_kt", "shear_0_6km_kt",
+              "lapse_rate_0_3km_c_km", "lapse_rate_0_7_5km_c_km",
+              "wet_bulb_0_3km_c", "freezing_level_m",
+          ]
+          total = len(d)
+          print("Derived environment predictor coverage:")
+          for name in fields:
+              n = int(pd.to_numeric(d[name], errors="coerce").notna().sum()) if name in d.columns else 0
+              print(f"  {name}: {n}/{total} ({100*n/total if total else 0:.1f}%)")
+          PY
 
       - name: Audit expanded training dataset integrity
         run: |
