@@ -57,3 +57,21 @@ def test_research_operational_candidate_requires_minimum_support(tmp_path: Path)
     result = evaluate(tmp_path, audit, gate)
     assert result["status"] == "research_operational_candidate"
     assert result["probability_enablement"] is False
+
+
+def test_bootstrap_candidate_never_gets_strong_operational_status(tmp_path: Path):
+    for h in (15, 30, 45, 60):
+        _bundle(tmp_path, h, positive_groups=8, beats_climatology=True)
+    audit = tmp_path / "audit.json"
+    audit.write_text(json.dumps({"status": "pass"}), encoding="utf-8")
+    gate = tmp_path / "gate.json"
+    _write_gate(gate, {15, 30, 45, 60})
+    summary = tmp_path / "summary.json"
+    summary.write_text(
+        json.dumps({"candidate_mode": "bootstrap_legacy_feature_contract"}),
+        encoding="utf-8",
+    )
+    result = evaluate(tmp_path, audit, gate, summary)
+    assert result["status"] == "limited_data_candidate"
+    assert result["bootstrap_mode"] is True
+    assert result["live_shadow_enablement"] is True
