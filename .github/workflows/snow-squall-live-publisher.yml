@@ -123,6 +123,7 @@ jobs:
           frames.append({
               "timestamp": timestamp,
               "image": f"radar_history/{frame_name}",
+              "bounds": payload.get("bounds"),
               "velocity": velocities,
           })
           frames.sort(key=lambda x: x.get("timestamp", ""))
