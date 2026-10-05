@@ -75,6 +75,15 @@ function shadowRows(site,trackId){return (datasets[site]?.shadowHistory||[]).fil
 function probValue(r,h){var v=r?.research_probabilities;if(!v)return null;return v[h]??v[String(h).replace("min","")]??null}
 function riskScore(p){var s=shadowRecord(p.radar_site,p.track_id),v=probValue(s,"15");if(Number.isFinite(Number(v)))return Number(v);var rank=Number(p.candidate_rank_score);if(Number.isFinite(rank))return rank/100;var z=Number(p.max_reflectivity_dbz);if(z>=45)return .85;if(z>=35)return .62;if(z>=25)return .38;return .16}
 function objectRisk(p){var s=riskScore(p);return s>=.70?"#ff4d3d":s>=.45?"#ff9a3c":s>=.25?"#efcd48":"#54b6ee"}
+function lifecycleObjectId(p){
+  if(p&&p.object_id)return String(p.object_id);
+  var stamp=p?.track_first_scan_utc||p?.timestamp;
+  var d=new Date(stamp||Date.now());
+  if(!Number.isFinite(d.getTime()))d=new Date();
+  var date=d.toISOString().slice(2,10).replace(/-/g,"");
+  var n=String(p?.track_id??"").replace(/\\D/g,"");
+  return date+(n?n.padStart(3,"0").slice(-3):"000");
+}
 function objectOrdinal(p){var idx=allObjects.findIndex(function(x){return x.radar_site===p.radar_site&&String(x.track_id)===String(p.track_id)});return String(idx+1).padStart(2,"0")}
 function latestForSelected(){
   if(!selected)return null;
@@ -303,10 +312,10 @@ function renderObjectCard(){
   var rows=trackHistory(p),last=rows.at(-1)||p,first=rows[0]||p,dist=haversineMi(p.centroid_lat,p.centroid_lon,BTV[0],BTV[1]),speed=Number(p.motion_speed_kt),dir=Number(p.motion_direction_deg??p.motion_dir_deg),age=Number(p.age_scans);
   q("objectAccent").style.background=objectRisk(p);
   setText("objectTitle","OBJECT "+objectOrdinal(p));
-  setText("objectSubtitle",p.radar_site+" • Track "+p.track_id);
+  setText("objectSubtitle",p.radar_site+" • Object "+lifecycleObjectId(p)+" • Track "+p.track_id);
   setText("objectTime",fmtTime(p.timestamp)+" • "+fmtUTC(p.timestamp));
   var z=Number(p.max_reflectivity_dbz);setText("objectBadge",riskScore(p)>=.70?"ELEVATED":riskScore(p)>=.45?"WATCH":"CANDIDATE");
-  setText("objectTrack",p.radar_site+" • "+p.track_id);
+  setText("objectTrack",lifecycleObjectId(p)+" • "+p.radar_site+" • "+p.track_id);
   setText("objectLatLon",num(p.centroid_lat,2)+"°N / "+num(Math.abs(Number(p.centroid_lon)),2)+"°W");
   setText("objectMotion",Number.isFinite(speed)?Math.round(speed)+" kt • "+num(dir,0)+"° ("+compass(dir)+")":"Motion —");
   setText("objectDistance",Number.isFinite(dist)?num(dist,0)+" mi":"—");
@@ -337,33 +346,43 @@ function renderProbability(){
   renderProbabilityChart(hist,shadow);
 }
 function renderProbabilityChart(hist,currentRecord){
-  var svg=q("probChart");svg.innerHTML="";
-  var rows=(hist||[]).filter(function(r){var v=probValue(r,15);return Number.isFinite(Number(v))});
-  if(!rows.length){
-    svg.innerHTML="<text x='210' y='70' text-anchor='middle' class='chart-text'>Research probability history is warming up</text>";
-    setText("probabilityChartState","WAITING FOR OBSERVATIONS");
-    return;
-  }
-  var W=420,H=142,P=24,TOP=16,BOTTOM=24;
-  var latest=rows.at(-1),latestT=new Date(latest.timestamp||Date.now()).getTime();
-  var observed=rows.map(function(r){return {x:(new Date(r.timestamp||latest.timestamp).getTime()-latestT)/60000,v:Number(probValue(r,15))}}).filter(function(pt){return Number.isFinite(pt.x)&&Number.isFinite(pt.v)});
+  var svg=q("probChart");if(!svg)return;svg.innerHTML="";
+  var rows=(hist||[]).filter(function(r){var v=probValue(r,15);return Number.isFinite(Number(v))}).sort(function(a,b){return String(a.timestamp).localeCompare(String(b.timestamp))});
+  var currentNow=Number(currentRecord?.research_probability_now ?? currentRecord?.probability_now);
   var probs=currentRecord?.research_probabilities||{};
   var forward=[
-    [0,Number(probValue(currentRecord,15))],
+    [0,Number.isFinite(currentNow)?currentNow:Number(probValue(currentRecord,15))],
     [15,Number(probs["15"]??probs["15min"])],
     [30,Number(probs["30"]??probs["30min"])],
     [45,Number(probs["45"]??probs["45min"])],
     [60,Number(probs["60"]??probs["60min"])]
   ].filter(function(pt){return Number.isFinite(pt[1])});
-  var minX=Math.min(-60,observed.length?Math.min.apply(null,observed.map(function(pt){return pt.x})):0),maxX=60;
+  if(!rows.length && !forward.length){
+    svg.innerHTML="<text x='260' y='68' text-anchor='middle' class='chart-text'>No probability observations for this object yet</text><text x='260' y='86' text-anchor='middle' class='chart-text'>The timeline will populate as the object receives additional scans.</text>";
+    setText("probabilityChartState","WAITING FOR OBJECT SCANS");return;
+  }
+  var W=520,H=160,P=34,TOP=16,BOTTOM=34;
+  var latestT=rows.length?new Date(rows.at(-1).timestamp).getTime():Date.now();
+  var observed=rows.map(function(r){return {x:(new Date(r.timestamp).getTime()-latestT)/60000,v:Number(probValue(r,15)),t:r.timestamp}}).filter(function(pt){return Number.isFinite(pt.x)&&Number.isFinite(pt.v)});
+  var minObserved=observed.length?Math.min.apply(null,observed.map(function(pt){return pt.x})):-15;
+  var minX=Math.min(-60,minObserved),maxX=60;
   var x=function(v){return P+(v-minX)/(maxX-minX)*(W-2*P)},y=function(v){return H-BOTTOM-Math.max(0,Math.min(1,v))*(H-TOP-BOTTOM)};
-  [0,.25,.5,.75,1].forEach(function(v){var yy=y(v);svg.innerHTML+="<line x1='"+P+"' y1='"+yy+"' x2='"+(W-P)+"' y2='"+yy+"' class='chart-gridline'/><text x='"+(P-4)+"' y='"+(yy+3)+"' text-anchor='end' class='chart-text'>"+Math.round(v*100)+"</text>"});
-  svg.innerHTML+="<line x1='"+P+"' y1='"+(H-BOTTOM)+"' x2='"+(W-P)+"' y2='"+(H-BOTTOM)+"' class='chart-axis'/><text x='"+x(minX)+"' y='"+(H-7)+"' text-anchor='start' class='chart-text'>"+Math.round(minX)+"m</text><text x='"+x(0)+"' y='"+(H-7)+"' text-anchor='middle' class='chart-text'>NOW</text><text x='"+x(60)+"' y='"+(H-7)+"' text-anchor='end' class='chart-text'>+60m</text>";
-  if(observed.length){var path=observed.map(function(pt,n){return(n?"L":"M")+x(pt.x).toFixed(1)+" "+y(pt.v).toFixed(1)}).join(" ");svg.innerHTML+="<path d='"+path+"' class='prob-observed'/>"}
-  if(forward.length){var path2=forward.map(function(pt,n){return(n?"L":"M")+x(pt[0]).toFixed(1)+" "+y(pt[1]).toFixed(1)}).join(" ");svg.innerHTML+="<path d='"+path2+"' class='prob-forecast'/>"}
+  [0,.25,.5,.75,1].forEach(function(v){var yy=y(v);svg.innerHTML+="<line x1='"+P+"' y1='"+yy+"' x2='"+(W-P)+"' y2='"+yy+"' class='chart-gridline'/><text x='"+(P-5)+"' y='"+(yy+3)+"' text-anchor='end' class='chart-text'>"+Math.round(v*100)+"</text>"});
+  svg.innerHTML+="<line x1='"+P+"' y1='"+(H-BOTTOM)+"' x2='"+(W-P)+"' y2='"+(H-BOTTOM)+"' class='chart-axis'/><text x='"+x(minX)+"' y='"+(H-8)+"' text-anchor='start' class='chart-text'>"+Math.round(minX)+"m</text><text x='"+x(0)+"' y='"+(H-8)+"' text-anchor='middle' class='chart-text'>NOW</text><text x='"+x(60)+"' y='"+(H-8)+"' text-anchor='end' class='chart-text'>+60m</text>";
+  if(observed.length){
+    var path=observed.map(function(pt,n){return(n?"L":"M")+x(pt.x).toFixed(1)+" "+y(pt.v).toFixed(1)}).join(" ");
+    svg.innerHTML+="<path d='"+path+"' class='prob-observed'/>";
+    observed.forEach(function(pt){svg.innerHTML+="<circle cx='"+x(pt.x).toFixed(1)+"' cy='"+y(pt.v).toFixed(1)+"' r='2.7' class='prob-observed-dot'><title>"+fmtTime(pt.t)+" • "+(pt.v*100).toFixed(1)+"%</title></circle>"});
+  }
+  if(forward.length){
+    var path2=forward.map(function(pt,n){return(n?"L":"M")+x(pt[0]).toFixed(1)+" "+y(pt[1]).toFixed(1)}).join(" ");
+    svg.innerHTML+="<path d='"+path2+"' class='prob-forecast'/>";
+    forward.forEach(function(pt){svg.innerHTML+="<circle cx='"+x(pt[0]).toFixed(1)+"' cy='"+y(pt[1]).toFixed(1)+"' r='2.4' class='prob-forecast-dot'><title>"+(pt[0]===0?"NOW":"+"+pt[0]+" min")+" • "+(pt[1]*100).toFixed(1)+"%</title></circle>"});
+  }
   svg.innerHTML+="<line x1='"+x(0)+"' y1='"+TOP+"' x2='"+x(0)+"' y2='"+(H-BOTTOM)+"' class='prob-now'/>";
-  setText("probabilityChartState","NOW / FORECAST");
+  setText("probabilityChartState",observed.length+" observed scan"+(observed.length===1?"":"s")+" • current + forecast");
 }
+
 function renderKeyTrends(){
   var p=latestForSelected();if(!p){q("keyTrends").innerHTML="";return}var rows=trackHistory(p),first=rows[0]||p;
   var delta=function(a,b){var x=Number(a),y=Number(b);return Number.isFinite(x)&&Number.isFinite(y)?x-y:null}
