@@ -271,6 +271,19 @@ function renderKeyTrends(){
   q("keyTrends").innerHTML=items.map(function(x){var d=x[2];return "<div class='trend-tile'><div class='label'>"+x[0]+"</div><div class='value'>"+x[1]+"</div><div class='delta "+(d==null?"neutral":"")+"'>"+(d==null?"Live snapshot":(d>=0?"▲ +":"▼ ")+Math.abs(d).toFixed(0)+" "+x[3])+"</div></div>"}).join("");
 }
 function fmtLiveEnv(v,key){if(v==null)return "—";if(key.indexOf("cape")>=0||key.indexOf("cin")>=0||key==="dcape_jkg")return num(v,0);if(key==="srh01_m2s2"||key.indexOf("shear")>=0&&key!=="shear_0_6km_ms")return num(v,0);return num(v,1)}
+function envRiskClass(key,val){
+  if(val==null||!Number.isFinite(Number(val)))return "env-risk-na";
+  var v=Number(val),y=null,r=null,hi=true;
+  if(key==="cape_jkg"){y=10;r=50}
+  else if(key==="mean_rh_0_2km_pct"){y=60;r=75}
+  else if(key==="thetae_delta_0_2km_k"){y=4;r=0;hi=false}
+  else if(key==="mean_wind_0_2km_ms"){y=9;r=13.1}
+  else if(key==="lapse_rate_0_3km_c_km"){y=6;r=7}
+  else if(key==="snsq"){y=.5;r=1}
+  else return "env-risk-neutral";
+  var s=hi?(v<=y?0:v>=r?1:(v-y)/(r-y)):(v>=y?0:v<=r?1:(y-v)/(y-r));
+  return s>=1?"env-risk-red":s>0?"env-risk-yellow":"env-risk-green";
+}
 function renderEnvironment(){
   var p=latestForSelected();if(!p){q("environmentTable").innerHTML="";return}
   var fields=[
