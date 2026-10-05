@@ -29,3 +29,23 @@ def test_rap_field_specs_use_canonical_cfgrib_levels():
     assert FIELD_SPECS["mlcin_jkg"] == ("pressureFromGroundLayer", "cin", 9000)
     assert FIELD_SPECS["mucape_jkg"] == ("pressureFromGroundLayer", "cape", 18000)
     assert FIELD_SPECS["mucin_jkg"] == ("pressureFromGroundLayer", "cin", 18000)
+
+
+
+def test_ncei_rap_analysis_urls_use_historical_filename():
+    from acquisition.rap_environment import ncei_rap_analysis_urls
+
+    valid = datetime(2018, 11, 21, 17, 0, tzinfo=timezone.utc)
+    urls = list(ncei_rap_analysis_urls(valid))
+    assert any(
+        url.endswith("/model-rap130anl/201811/20181121/rap_130_20181121_1700_000.grb2")
+        for url in urls
+    )
+
+
+def test_ncei_old_rap_archive_is_in_candidate_urls():
+    from acquisition.rap_environment import ncei_rap_analysis_urls
+
+    valid = datetime(2013, 7, 23, 23, 0, tzinfo=timezone.utc)
+    urls = list(ncei_rap_analysis_urls(valid))
+    assert any("/model-rap130anl-old/" in url for url in urls)
