@@ -142,6 +142,80 @@ def _dataset_valid_time(ds):
     return None
 
 
+def _metpy_derived_fields(path: Path, latitude, longitude, values):
+    result = {}
+    try:
+        from metpy.calc import bulk_shear, downdraft_cape, el, lcl, lfc, surface_based_cape_cin, mixed_layer_cape_cin, most_unstable_cape_cin
+        from metpy.units import units
+        profiles = {}
+        for name in ('gh','t','dpt','u','v'):
+            profiles[name] = _nearest_profile(_open_profile(path, name), latitude, longitude)
+            if profiles[name] is None:
+                return result
+        _, temp = profiles['t']
+        p = np.asarray(profiles['t'][0], dtype=float)
+        def interp_profile(pair):
+            lev, val = np.asarray(pair[0],dtype=float), np.asarray(pair[1],dtype=float)
+            order = np.argsort(lev)
+            return np.interp(p, lev[order], val[order])
+        gh = interp_profile(profiles['gh'])
+        td = interp_profile(profiles['dpt'])
+        u = interp_profile(profiles['u'])
+        v = interp_profile(profiles['v'])
+        temp = np.asarray(temp,dtype=float)
+        orog = _nearest(_open_field(path,'surface','orog',None),latitude,longitude)
+        sp = values.get('surface_pressure_pa')
+        if orog is None or sp is None:
+            return result
+        h = gh - float(orog)
+        spt = values.get('temperature_2m_k')
+        sptd = values.get('dewpoint_2m_k')
+        spu, spv = values.get('u10_ms'), values.get('v10_ms')
+        if spt is not None and sptd is not None:
+            p = np.concatenate([[float(sp)/100.0],p]); temp=np.concatenate([[float(spt)],temp]); td=np.concatenate([[float(sptd)],td]); h=np.concatenate([[0.0],h])
+            u=np.concatenate([[float(spu) if spu is not None else u[0]],u]); v=np.concatenate([[float(spv) if spv is not None else v[0]],v])
+        order=np.argsort(p)[::-1]; p,temp,td,u,v,h=[np.asarray(x)[order] for x in (p,temp,td,u,v,h)]
+        mask=np.isfinite(p)&np.isfinite(temp)&np.isfinite(td)&np.isfinite(u)&np.isfinite(v)&np.isfinite(h)
+        p,temp,td,u,v,h=[np.asarray(x)[mask] for x in (p,temp,td,u,v,h)]
+        if len(p)<5:return result
+        pq=p*units.hPa; tq=temp*units.kelvin; tdq=td*units.kelvin; hq=h*units.meter; uq=u*units('m/s'); vq=v*units('m/s')
+        def val(q,unit):
+            try:return float(q.to(unit).magnitude)
+            except Exception:return None
+        if values.get('lcl_m') is None:
+            try: result['lcl_m']=_height_from_pressure(val(lcl(pq[0],tq[0],tdq[0])[0],units.hPa),p,h)
+            except Exception: pass
+        if values.get('lfc_m') is None:
+            try: result['lfc_m']=_height_from_pressure(val(lfc(pq,tq,tdq)[0],units.hPa),p,h)
+            except Exception: pass
+        if values.get('el_m') is None:
+            try: result['el_m']=_height_from_pressure(val(el(pq,tq,tdq)[0],units.hPa),p,h)
+            except Exception: pass
+        if values.get('dcape_jkg') is None:
+            try: result['dcape_jkg']=val(downdraft_cape(pq,tq,tdq)[0],units('J/kg'))
+            except Exception: pass
+        try:
+            du,dv=bulk_shear(pq,uq,vq,height=hq,depth=6*units.km)
+            result['shear_u_0_6km_ms']=val(du,units('m/s')); result['shear_v_0_6km_ms']=val(dv,units('m/s'))
+            result['shear_0_6km_ms']=float(np.hypot(result['shear_u_0_6km_ms'],result['shear_v_0_6km_ms']))
+            result['bs06_kt']=result['shear_0_6km_ms']*1.943844492
+        except Exception: pass
+        hs=np.argsort(h); hh=h[hs]; tt=temp[hs]
+        for target,key in ((3000.0,'lr03_Ckm'),(7500.0,'lr75_Ckm')):
+            if hh[0]<=0 and hh[-1]>=target:
+                t0=float(np.interp(0.0,hh,tt)); tx=float(np.interp(target,hh,tt)); result[key]=(t0-tx)/(target/1000.0)
+        if values.get('cape_jkg') is None:
+            try: result['cape_jkg']=val(surface_based_cape_cin(pq,tq,tdq)[0],units('J/kg'))
+            except Exception: pass
+        if values.get('mlcape_jkg') is None:
+            try: result['mlcape_jkg']=val(mixed_layer_cape_cin(pq,tq,tdq)[0],units('J/kg'))
+            except Exception: pass
+        if values.get('mucape_jkg') is None:
+            try: result['mucape_jkg']=val(most_unstable_cape_cin(pq,tq,tdq)[0],units('J/kg'))
+            except Exception: pass
+    except Exception:
+        return result
+    return {k:v for k,v in result.items() if v is not None}
 def _open_profile(path: Path, short_name: str):
     return _open_field(path, "isobaricInhPa", short_name, None)
 
@@ -249,6 +323,7 @@ def extract_features(
 
     snsq = _extract_snsq(path, latitude, longitude, values)
     values.update(snsq)
+    values.update({k: v for k, v in _metpy_derived_fields(path, latitude, longitude, values).items() if values.get(k) is None})
 
     if values["pwat_mm"] is not None:
         # RAP PWAT is kg m^-2, numerically equivalent to mm of liquid water.
