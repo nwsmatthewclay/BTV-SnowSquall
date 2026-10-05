@@ -448,15 +448,30 @@ def main():
             "status": "ready" if cursor_path is not None else "unavailable",
         }
     else:
-        for output in (
-            args.output_image,
-            args.output_image.with_name("radar_mosaic_clean.png"),
-            args.output_image.with_name("radar_mosaic_raw.png"),
-        ):
-            output.unlink(missing_ok=True)
-        for site in RADARS:
-            for suffix in ("_base_reflectivity_clean.png", "_base_reflectivity_raw.png", "_base_velocity_clean.png", "_base_velocity_raw.png"):
-                (args.output_image.parent / f"{site}{suffix}").unlink(missing_ok=True)
+        # Never destroy the last good radar display just because one publisher
+        # cycle cannot acquire a usable Level-II volume. The live workflow
+        # restores the previous viewer payload before rebuilding this product.
+        # Preserve those images and mark the metadata stale instead.
+        previous = {}
+        try:
+            if args.output_json.exists():
+                previous = json.loads(args.output_json.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            previous = {}
+        previous_sources = previous.get("sources") or []
+        previous_bounds = previous.get("bounds")
+        previous_products = previous.get("display_products") or {}
+        if previous_sources and previous_bounds:
+            payload["status"] = "stale"
+            payload["stale_reason"] = "No new usable KCXX/KTYX Level-II volume was available; retaining last successful radar display."
+            payload["bounds"] = previous_bounds
+            payload["sources"] = previous_sources
+            payload["display_products"] = previous_products
+            payload["image"] = previous.get("image") or "radar_mosaic_clean.png"
+            if previous.get("radar_moment_products") is not None:
+                payload["radar_moment_products"] = previous["radar_moment_products"]
+            if previous.get("cursor_grid") is not None:
+                payload["cursor_grid"] = previous["cursor_grid"]
 
     args.output_json.parent.mkdir(parents=True, exist_ok=True)
     args.output_json.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
