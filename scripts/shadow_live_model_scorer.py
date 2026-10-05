@@ -181,10 +181,17 @@ def score_site(site: str, live_root: Path, model_root: Path) -> tuple[dict, list
         )
         current_frame_row = frame.tail(1).iloc[0].to_dict() if not frame.empty else {}
         environment_keys = (
-            "snsq", "cape_jkg", "mlcape_jkg", "mucape_jkg", "mlcin_jkg",
-            "mucin_jkg", "dcape_jkg", "pwat_mm", "mean_rh_0_2km_pct",
-            "thetae_delta_0_2km_k", "srh01_m2s2", "srh03_m2s2",
-            "shear_0_6km_kt", "shear_0_6km_ms", "wetbulb_2m_c",
+            "snsq", "cape_jkg", "sbcape_jkg", "mlcape_jkg", "mucape_jkg",
+            "cin_jkg", "sbcin_jkg", "mlcin_jkg", "mucin_jkg", "dcape_jkg",
+            "pwat_mm", "mean_rh_0_2km_pct", "rh_0_2km_pct",
+            "thetae_delta_0_2km_k", "mean_wind_0_2km_ms",
+            "wind_0_1km_kt", "wind_0_3km_kt",
+            "srh01_m2s2", "srh03_m2s2",
+            "shear_0_1km_kt", "shear_0_3km_kt", "shear_0_6km_kt",
+            "shear_0_6km_ms", "wetbulb_2m_c", "wet_bulb_0_3km_c",
+            "lcl_m", "lfc_m", "el_m",
+            "lapse_rate_0_3km_c_km", "lapse_rate_0_7_5km_c_km",
+            "freezing_level_m",
             "temperature_2m_k", "dewpoint_2m_k", "rh_2m_pct",
         )
         environment_snapshot = {
