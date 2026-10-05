@@ -142,6 +142,21 @@ def _dataset_valid_time(ds):
     return None
 
 
+def _height_from_pressure(target_pressure_hpa, pressure_hpa, heights_m):
+    if target_pressure_hpa is None:
+        return None
+    p = np.asarray(pressure_hpa, dtype=float).reshape(-1)
+    h = np.asarray(heights_m, dtype=float).reshape(-1)
+    mask = np.isfinite(p) & np.isfinite(h)
+    p, h = p[mask], h[mask]
+    if len(p) < 2 or not np.isfinite(target_pressure_hpa):
+        return None
+    order = np.argsort(p)
+    p, h = p[order], h[order]
+    if float(target_pressure_hpa) < p[0] or float(target_pressure_hpa) > p[-1]:
+        return None
+    return float(np.interp(float(target_pressure_hpa), p, h))
+
 def _metpy_derived_fields(path: Path, latitude, longitude, values):
     result = {}
     try:
