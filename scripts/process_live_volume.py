@@ -15,7 +15,7 @@ from math import asin, atan2, cos, degrees, radians, sin, sqrt
 import numpy as np
 
 from acquisition.level2_reader import read_level2, resolve_fields, volume_metadata
-from processing.object_detector import detect_reflectivity_objects
+from processing.object_detector import ObjectDetectionConfig, detect_reflectivity_objects
 from processing.object_tracker import CentroidTracker
 from processing.radar_grid import grid_field_2d, grid_latlon, grid_lowest_sweep, grid_lowest_available_sweep
 from processing.radar_storm_motion import attach_radar_storm_motion
@@ -293,7 +293,12 @@ def process_volume(
             *np.gradient(field, 1.0, edge_order=1)
         )
 
-    detections = detect_reflectivity_objects(data, velocity=gridded.get("velocity"))
+    live_detection_config = ObjectDetectionConfig(min_candidate_rank_score=35.0)
+    detections = detect_reflectivity_objects(
+        data,
+        config=live_detection_config,
+        velocity=gridded.get("velocity"),
+    )
     metadata = volume_metadata(radar, path)
     metadata["radar_origin"] = list(radar_origin) if radar_origin is not None else None
     raw_timestamp = metadata["scan_time_utc"]
