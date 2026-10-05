@@ -134,6 +134,26 @@ def score_site(site: str, live_root: Path, model_root: Path) -> tuple[dict, list
             track_history = [dict(props)]
         frame = build_live_feature_frame(track_history, track_id)
         frame, national_pretraining = augment_national_pretraining(frame, model_root)
+
+        # Preserve explicit track chronology in the shadow payload so the
+        # browser can plot one probability point for every observed scan.
+        track_datetimes = []
+        for row in track_history:
+            try:
+                track_datetimes.append(
+                    datetime.fromisoformat(
+                        str(row.get("timestamp")).replace("Z", "+00:00")
+                    ).astimezone(timezone.utc)
+                )
+            except (TypeError, ValueError):
+                continue
+        first_track_dt = min(track_datetimes) if track_datetimes else current_dt
+        track_age_min = (
+            max(0.0, (current_dt - first_track_dt).total_seconds() / 60.0)
+            if current_dt is not None and first_track_dt is not None
+            else None
+        )
+
         environment_readiness = assess_environment(
             frame.tail(1).iloc[0].to_dict() if not frame.empty else {},
             radar_time=current_timestamp,
@@ -144,12 +164,36 @@ def score_site(site: str, live_root: Path, model_root: Path) -> tuple[dict, list
             for runtime in runtimes.values()
             if runtime.model is not None
         )
+        current_frame_row = frame.tail(1).iloc[0].to_dict() if not frame.empty else {}
+        environment_keys = (
+            "snsq", "cape_jkg", "mlcape_jkg", "mucape_jkg", "mlcin_jkg",
+            "mucin_jkg", "dcape_jkg", "pwat_mm", "mean_rh_0_2km_pct",
+            "thetae_delta_0_2km_k", "srh01_m2s2", "srh03_m2s2",
+            "shear_0_6km_kt", "shear_0_6km_ms", "wetbulb_2m_c",
+            "temperature_2m_k", "dewpoint_2m_k", "rh_2m_pct",
+        )
+        environment_snapshot = {
+            key: current_frame_row.get(key)
+            for key in environment_keys
+            if key in current_frame_row
+        }
+        forecast_keys = {
+            key[len("expected_30min_"):]: value
+            for key, value in props.items()
+            if str(key).startswith("expected_30min_")
+        }
+
         record = {
             "radar_site": site,
             "track_id": str(track_id),
             "timestamp": props.get("timestamp") or geo.get("metadata", {}).get("scan_time_utc"),
+            "track_first_scan_utc": first_track_dt.isoformat() if first_track_dt is not None else None,
+            "track_age_min": track_age_min,
+            "track_scan_count": len(track_history),
             "max_reflectivity_dbz": props.get("max_reflectivity_dbz"),
             "data_quality": props.get("data_quality"),
+            "environment_snapshot": environment_snapshot,
+            "environment_forecast_30min_snapshot": forecast_keys,
             "environment_readiness": environment_readiness,
             "environment_confidence": (
                 "fresh"
