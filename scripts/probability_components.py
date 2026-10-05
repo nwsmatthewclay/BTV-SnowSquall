@@ -143,7 +143,7 @@ def environment_component(record: Mapping) -> tuple[float, dict]:
     return round(current, 2), {
         "current": round(current, 2),
         "forecast_30": round(forecast_score, 2) if forecast_score is not None else None,
-        "coverage": round(sum(v is not None for v in risk.values() if isinstance(v, (int, float))) / 6.0, 3),
+        "coverage": round(sum(risk.get(f"{key}_risk") is not None for key in ("cape_jkg", "mean_rh_0_2km_pct", "thetae_delta_0_2km_k", "mean_wind_0_2km_ms", "lapse_rate_0_3km_c_km", "snsq")) / 6.0, 3),
     }
 
 
