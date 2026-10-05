@@ -1,461 +1,233 @@
-const map=L.map("liveMap",{zoomControl:true,preferCanvas:true}).setView([44.15,-73.65],8);
-map.createPane("radarMosaicPane");
-map.getPane("radarMosaicPane").style.zIndex=250;
-L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{maxZoom:12,attribution:"© OpenStreetMap contributors"}).addTo(map);
-const layers={KCXX:L.layerGroup().addTo(map),KTYX:L.layerGroup().addTo(map)};
-const radarLocations={KCXX:[44.511,-73.166],KTYX:[43.756,-75.680]};
-const LIVE_BASE="https://raw.githubusercontent.com/nwsmatthewclay/BTV-SnowSquall/snow-squall-live-data/viewer/data/live/";
-const SHADOW_BASE="https://raw.githubusercontent.com/nwsmatthewclay/BTV-SnowSquall/snow-squall-shadow-data/viewer/data/shadow/";
-let datasets={},selected=null,refreshTimer=null,hasInitialExtent=false,radarMosaicLayer=L.layerGroup().addTo(map),radarMosaic=null,radarMode="clean",qcdRadarLayer=null;
 
-const num=(v,d=1)=>v==null||Number.isNaN(Number(v))?"—":Number(v).toFixed(d); const shadowScoreFor=(p)=>{const r=shadowRecord(p.radar_site,p.track_id)?.research_probabilities||{};const v=r["15"]??r["15min"];return Number.isFinite(Number(v))?Number(v):null;};
-const fmt=t=>t?new Date(t).toLocaleString(undefined,{month:"short",day:"numeric",hour:"numeric",minute:"2-digit",second:"2-digit"}):"—";
-const ageMinutes=t=>t?Math.max(0,(Date.now()-new Date(t).getTime())/60000):Infinity;
-const esc=s=>String(s??"—").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[m]));
-const ktFromMs=v=>v==null||Number.isNaN(Number(v))?null:Number(v)*1.943844492;
-const cFromK=v=>v==null||Number.isNaN(Number(v))?null:Number(v)-273.15;
-const url=name=>LIVE_BASE+name+"?cb="+Date.now();
-const shadowUrl=name=>SHADOW_BASE+name+"?cb="+Date.now();
-const mosaicMetaUrl=()=>LIVE_BASE+"radar_mosaic.json?cb="+Date.now();
-const mosaicImageUrl=(mode="clean")=>{
-  const product=radarMosaic?.display_products||{};
-  const name=mode==="raw"?(product.raw_image||"radar_mosaic_raw.png"):(product.clean_image||"radar_mosaic_clean.png");
-  return LIVE_BASE+name+"?cb="+Date.now();
-};
+(function(){
+"use strict";
 
-function markerIcon(site){
-  return L.divIcon({className:"radar-station",iconSize:[12,12],iconAnchor:[6,6],html:""});
+var map=L.map("liveMap",{zoomControl:true,preferCanvas:true}).setView([44.15,-73.65],8);
+var radarPane=map.createPane("liveRadarPane");radarPane.style.zIndex=240;
+var hitPane=map.createPane("liveHitPane");hitPane.style.zIndex=650;
+L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",{maxZoom:12,attribution:"Tiles © Esri — Source: Esri, Maxar, Earthstar Geographics, and the GIS User Community"}).addTo(map);
+L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}",{maxZoom:12,opacity:.78,attribution:"Labels © Esri"}).addTo(map);
+
+var layers={KCXX:L.layerGroup().addTo(map),KTYX:L.layerGroup().addTo(map),labels:L.layerGroup().addTo(map),motion:L.layerGroup().addTo(map)};
+var radarLayer=L.layerGroup().addTo(map),radarMosaic=null,radarMode="clean";
+var radarLocations={KCXX:[44.511,-73.166],KTYX:[43.756,-75.680],KBTV:[44.472,-73.154]};
+var BTV=[44.472,-73.154];
+var datasets={},allObjects=[],selected=null,objectNumbers=true,refreshTimer=null;
+
+var LIVE_BASE="https://raw.githubusercontent.com/nwsmatthewclay/BTV-SnowSquall/snow-squall-live-data/viewer/data/live/";
+var SHADOW_BASE="https://raw.githubusercontent.com/nwsmatthewclay/BTV-SnowSquall/snow-squall-shadow-data/viewer/data/shadow/";
+
+function q(id){return document.getElementById(id)}
+function setText(id,v){var e=q(id);if(e)e.textContent=v==null?"—":v}
+function num(v,d){if(d===undefined)d=1;var n=Number(v);return v==null||!Number.isFinite(n)?"—":n.toFixed(d)}
+function esc(v){return String(v==null?"—":v).replace(/[&<>"']/g,function(m){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}})}
+function fmtTime(t){return t?new Date(t).toLocaleString(undefined,{month:"short",day:"numeric",hour:"numeric",minute:"2-digit"}):"—"}
+function fmtUTC(t){return t?new Date(t).toISOString().replace("T"," ").replace(/\.\d{3}Z$/,"Z"):"—"}
+function ageMinutes(t){return t?Math.max(0,(Date.now()-new Date(t).getTime())/60000):Infinity}
+function msToKt(v){return v==null||!Number.isFinite(Number(v))?"—":Number(v)*1.943844492}
+function kToC(v){return v==null||!Number.isFinite(Number(v))?"—":Number(v)-273.15}
+function fieldValue(obj,key){if(!obj||obj[key]==null)return null;return obj[key]&&typeof obj[key]==="object"&&"value" in obj[key]?obj[key].value:obj[key]}
+function fieldUnits(obj,key){return obj&&obj[key]&&typeof obj[key]==="object"?obj[key].units||"":""}
+function envField(p,key){var e=p&&p.environment||{},f=e.fields||{};return fieldValue(f,key)??fieldValue(e,key)??p?.[key]}
+function compass(deg){var d=Number(deg);if(!Number.isFinite(d))return "—";var names=["N","NNE","NE","ENE","E","ESE","SE","SSE","S","SSW","SW","WSW","W","WNW","NW","NNW"];return names[Math.round(((d%360)+360)%360/22.5)%16]}
+function haversineMi(lat,lon,lat2,lon2){var R=3958.7613,rad=Math.PI/180,p1=Number(lat)*rad,p2=Number(lat2)*rad,dp=(Number(lat2)-Number(lat))*rad,dl=(Number(lon2)-Number(lon))*rad,a=Math.sin(dp/2)**2+Math.cos(p1)*Math.cos(p2)*Math.sin(dl/2)**2;return R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a))}
+function shadowRecord(site,trackId){return datasets[site]?.shadow?.records?.find(function(r){return String(r.track_id)===String(trackId)})||null}
+function shadowRows(site,trackId){return (datasets[site]?.shadowHistory||[]).filter(function(r){return String(r.track_id)===String(trackId)}).sort(function(a,b){return String(a.timestamp).localeCompare(String(b.timestamp))})}
+function probValue(r,h){var v=r?.research_probabilities;if(!v)return null;return v[h]??v[String(h).replace("min","")]??null}
+function riskScore(p){var s=shadowRecord(p.radar_site,p.track_id),v=probValue(s,"15");if(Number.isFinite(Number(v)))return Number(v);var rank=Number(p.candidate_rank_score);if(Number.isFinite(rank))return rank/100;var z=Number(p.max_reflectivity_dbz);if(z>=45)return .85;if(z>=35)return .62;if(z>=25)return .38;return .16}
+function objectRisk(p){var s=riskScore(p);return s>=.70?"#ff4d3d":s>=.45?"#ff9a3c":s>=.25?"#efcd48":"#54b6ee"}
+function objectOrdinal(p){var idx=allObjects.findIndex(function(x){return x.radar_site===p.radar_site&&String(x.track_id)===String(p.track_id)});return String(idx+1).padStart(2,"0")}
+function latestForSelected(){
+  if(!selected)return null;
+  var x=allObjects.find(function(p){return p.radar_site===selected.radar_site&&String(p.track_id)===String(selected.track_id)});
+  if(x)return x;
+  var rows=shadowRows(selected.radar_site,selected.track_id);if(rows.length){var r=rows.at(-1);return Object.assign({},r,{radar_site:selected.radar_site})}
+  return selected;
 }
+function trackHistory(p){
+  var rows=datasets[p.radar_site]?.history||[];
+  var res=rows.filter(function(r){return String(r.track_id)===String(p.track_id)}).sort(function(a,b){return String(a.timestamp).localeCompare(String(b.timestamp))});
+  return res;
+}
+function durationText(rows){if(rows.length<2)return rows.length+" scan";var d=(new Date(rows.at(-1).timestamp)-new Date(rows[0].timestamp))/60000;return num(d,0)+" min"}
+function currentHistoryRow(p){var rows=trackHistory(p);return rows.at(-1)||p}
 
-function addRadarMarkers(){
-  Object.entries(radarLocations).forEach(([site,loc])=>{
-    L.marker(loc,{icon:markerIcon(site),interactive:false,title:site}).addTo(map);
+function addStations(){
+  Object.entries(radarLocations).forEach(function(entry){var site=entry[0],loc=entry[1];L.marker(loc,{icon:L.divIcon({className:"radar-station",iconSize:[12,12],iconAnchor:[6,6],html:""}),interactive:false,title:site}).addTo(map)});
+}
+function mosaicMetaUrl(){return LIVE_BASE+"radar_mosaic.json?cb="+Date.now()}
+function mosaicImageUrl(mode){var product=radarMosaic?.display_products||{},name=mode==="raw"?(product.raw_image||"radar_mosaic_raw.png"):(product.clean_image||"radar_mosaic_clean.png");return LIVE_BASE+name+"?cb="+Date.now()}
+function addNoaaFallback(){
+  var u="https://mapservices.weather.noaa.gov/eventdriven/rest/services/radar/radar_base_reflectivity/MapServer/export?bbox=-76.91,41.86,-70.39,46.40&bboxSR=4326&imageSR=4326&size=1400,900&format=png32&transparent=true&f=image";
+  L.imageOverlay(u,[[41.86,-76.91],[46.40,-70.39]],{pane:"liveRadarPane",opacity:.56,interactive:false,crossOrigin:true}).addTo(radarLayer);
+}
+async function renderRadarMosaic(){
+  radarLayer.clearLayers();
+  try{
+    var response=await fetch(mosaicMetaUrl(),{cache:"no-store"});if(!response.ok)throw new Error(response.status);
+    radarMosaic=await response.json();
+  }catch(_){radarMosaic=null}
+  if(!radarMosaic||radarMosaic.status!=="ready"||!radarMosaic.bounds){setText("radarStatus","Local mosaic unavailable • NOAA QC fallback");addNoaaFallback();return}
+  var src=(radarMosaic.sources||[]).map(function(x){return x.radar}).filter(Boolean);setText("radarStatus","Mosaic READY • "+(src.join(" + ")||"KCXX + KTYX"));
+  var ov=L.imageOverlay(mosaicImageUrl(radarMode),radarMosaic.bounds,{pane:"liveRadarPane",opacity:radarMode==="raw"?.66:.84,interactive:false,crossOrigin:true});ov.addTo(radarLayer);
+  if(!map._sqExtent){map.fitBounds(radarMosaic.bounds,{padding:[25,25],maxZoom:8});map._sqExtent=true}
+}
+function setRadarMode(mode){radarMode=mode;document.querySelectorAll(".display-btn").forEach(function(b){b.classList.toggle("active",b.dataset.radarMode===mode)});renderRadarMosaic()}
+function cellPoints(p){
+  var lat=Number(p.centroid_lat),lon=Number(p.centroid_lon);if(!Number.isFinite(lat)||!Number.isFinite(lon))return [];
+  var major=Number(p.length_km);if(!Number.isFinite(major)||major<=0)major=2;
+  var minor=Number(p.width_km);if(!Number.isFinite(minor)||minor<=0)minor=Math.max(1,major*.45);
+  var angle=(Number(p.orientation_deg)||0)*Math.PI/180,pts=[],n=16;
+  for(var i=0;i<n;i++){var t=i/n*Math.PI*2,x=Math.min(35,Math.max(1.5,major))/2*Math.cos(t),y=Math.min(20,Math.max(.8,minor))/2*Math.sin(t),east=x*Math.cos(angle)-y*Math.sin(angle),north=x*Math.sin(angle)+y*Math.cos(angle);pts.push([lat+north/111,lon+east/(111*Math.max(.2,Math.cos(lat*Math.PI/180)))])}
+  return pts;
+}
+function renderMap(){
+  Object.values(layers).forEach(function(l){l.clearLayers()});
+  if(!allObjects.length)return;
+  allObjects.forEach(function(p){
+    var c=objectRisk(p),sel=selected&&selected.radar_site===p.radar_site&&String(selected.track_id)===String(p.track_id),pts=cellPoints(p);if(pts.length<3)return;
+    var poly=L.polygon(pts,{color:sel?"#fff":c,weight:sel?3:1.7,fillColor:c,fillOpacity:sel?.28:0,opacity:sel?1:.92,interactive:true,lineJoin:"round"}).addTo(layers[p.radar_site]);
+    poly.bindTooltip("<b>OBJECT "+objectOrdinal(p)+"</b><br>"+p.radar_site+" • Track "+p.track_id+"<br>"+num(p.max_reflectivity_dbz)+" dBZ • "+num(p.area_km2)+" km²",{sticky:true});
+    poly.on("click",function(){selectObject(p)});
+    var hit=L.polygon(pts,{pane:"liveHitPane",color:"#fff",weight:12,opacity:.001,fillColor:"#fff",fillOpacity:.001,bubblingMouseEvents:false}).addTo(layers[p.radar_site]);hit.on("click",function(){selectObject(p)});
+    var lat=Number(p.centroid_lat),lon=Number(p.centroid_lon);
+    if(objectNumbers&&Number.isFinite(lat)&&Number.isFinite(lon))L.marker([lat,lon],{icon:L.divIcon({className:"sq-object-label-wrap",iconSize:null,iconAnchor:[0,0],html:"<div class='sq-object-label "+(sel?"":"dim")+"'>"+objectOrdinal(p)+"</div>"}),interactive:false}).addTo(layers.labels);
+    var speed=Number(p.motion_speed_kt),dir=Number(p.motion_direction_deg??p.motion_dir_deg);
+    if(Number.isFinite(speed)&&Number.isFinite(dir)&&speed<=75){var km=Math.max(5,Math.min(14,4+speed*.18)),br=dir*Math.PI/180,lat2=lat+km*Math.cos(br)/111,lon2=lon+km*Math.sin(br)/(111*Math.max(.2,Math.cos(lat*Math.PI/180)));L.polyline([[lat,lon],[lat2,lon2]],{color:sel?"#fff":"#d7e7ef",weight:sel?2.7:1.4,opacity:sel?.95:.72,interactive:false}).addTo(layers.motion);L.circleMarker([lat2,lon2],{radius:sel?4:2.5,color:sel?"#fff":"#d7e7ef",fillColor:"#fff",fillOpacity:.85,weight:0,interactive:false}).addTo(layers.motion)}
   });
 }
-
-const OBJECT_FEED_SUFFIX="_objects.geojson";
-function feedUrl(site,kind){
-  return kind==="objects"
-    ? url(site+OBJECT_FEED_SUFFIX)
-    : url(site+"_"+kind+".json");
+function renderInventory(){
+  var box=q("objectPicker");setText("objectCount",allObjects.length+" active");
+  if(!allObjects.length){box.innerHTML="<div class='history-empty'>No current radar objects are available.</div>";return}
+  box.innerHTML=allObjects.slice(0,24).map(function(p){var c=objectRisk(p),sel=selected&&selected.radar_site===p.radar_site&&String(selected.track_id)===String(p.track_id);return "<button type='button' class='object-pick "+(sel?"active":"")+"' data-id='"+esc(p.radar_site+"|"+p.track_id)+"'><b><span class='risk-dot' style='background:"+c+"'></span>OBJECT "+objectOrdinal(p)+"</b><span>"+p.radar_site+" • "+num(p.max_reflectivity_dbz,0)+" dBZ • "+num(p.motion_speed_kt,0)+" kt</span></button>"}).join("");
+  box.querySelectorAll("[data-id]").forEach(function(btn){btn.onclick=function(){var s=btn.dataset.id.split("|");var p=allObjects.find(function(x){return x.radar_site===s[0]&&String(x.track_id)===s[1]});if(p)selectObject(p)}});
 }
-
-async function fetchOptionalJson(target,fallback){
-  try{
-    const response=await fetch(target);
-    if(!response.ok)return fallback;
-    return await response.json();
-  }catch(_){
-    return fallback;
-  }
+function selectDefault(){if(selected&&allObjects.some(function(p){return p.radar_site===selected.radar_site&&String(p.track_id)===String(selected.track_id)}))return;var sorted=allObjects.slice().sort(function(a,b){var d=riskScore(b)-riskScore(a);return d||Number(b.max_reflectivity_dbz||0)-Number(a.max_reflectivity_dbz||0)});selected=sorted[0]||null}
+function renderObjectCard(){
+  var p=latestForSelected();if(!p){setText("objectTitle","OBJECT —");setText("objectSubtitle","No current object selected.");setText("objectBadge","NO SELECTION");q("objectAccent").style.background="#526776";return}
+  var rows=trackHistory(p),last=rows.at(-1)||p,first=rows[0]||p,dist=haversineMi(p.centroid_lat,p.centroid_lon,BTV[0],BTV[1]),speed=Number(p.motion_speed_kt),dir=Number(p.motion_direction_deg??p.motion_dir_deg),age=Number(p.age_scans);
+  q("objectAccent").style.background=objectRisk(p);
+  setText("objectTitle","OBJECT "+objectOrdinal(p));
+  setText("objectSubtitle",p.radar_site+" • Track "+p.track_id);
+  setText("objectTime",fmtTime(p.timestamp)+" • "+fmtUTC(p.timestamp));
+  var z=Number(p.max_reflectivity_dbz);setText("objectBadge",riskScore(p)>=.70?"ELEVATED":riskScore(p)>=.45?"WATCH":"CANDIDATE");
+  setText("objectTrack",p.radar_site+" • "+p.track_id);
+  setText("objectLatLon",num(p.centroid_lat,2)+"°N / "+num(Math.abs(Number(p.centroid_lon)),2)+"°W");
+  setText("objectMotion",Number.isFinite(speed)?Math.round(speed)+" kt • "+num(dir,0)+"° ("+compass(dir)+")":"Motion —");
+  setText("objectDistance",Number.isFinite(dist)?num(dist,0)+" mi":"—");
+  setText("objectAge",Number.isFinite(age)?age+" scans":"< 1 scan");
+  setText("objectDuration",durationText(rows));
+  setText("objectQuality",p.track_quality||p.data_quality||"—");
+  setText("objectDataQuality",p.data_quality||"good");
 }
-
-async function getFeed(site){
-  const [geo,state,history,health,shadow,shadowHistory]=await Promise.all([
-    fetch(feedUrl(site,"objects")).then(r=>r.ok?r.json():Promise.reject(new Error(site+" objects HTTP "+r.status))),
-    fetch(feedUrl(site,"state")).then(r=>r.ok?r.json():Promise.reject(new Error(site+" state HTTP "+r.status))),
-    fetchOptionalJson(feedUrl(site,"history"),[]),
-    fetchOptionalJson(feedUrl(site,"health"),null),
-    fetchOptionalJson(shadowUrl(site+"_shadow.json"),null),
-    fetchOptionalJson(shadowUrl(site+"_shadow_history.json"),[])
-  ]);
-  return {geo,state,history,health,shadow,shadowHistory};
-}
-async function getRadarMosaic(){
-  try{
-    const response=await fetch(mosaicMetaUrl());
-    if(!response.ok)return null;
-    return await response.json();
-  }catch(_){return null;}
-}
-function renderRadarMosaic(meta){
-  radarMosaicLayer.clearLayers();
-  if(mrmsFallbackLayer){try{map.removeLayer(mrmsFallbackLayer)}catch(_){} mrmsFallbackLayer=null;}
-  if(qcdRadarLayer){try{map.removeLayer(qcdRadarLayer)}catch(_){} qcdRadarLayer=null;}
-  radarMosaic=meta;
-  const status=document.getElementById("mosaicStatus");
-  const sources=document.getElementById("mosaicSources");
-  const time=document.getElementById("mosaicTime");
-  const modeLabel=document.getElementById("hudMode");
-  if(!meta||meta.status!=="ready"||!meta.bounds){
-    if(status)status.textContent="Local mosaic unavailable";
-    if(sources)sources.textContent="NOAA QC fallback";
-    if(time)time.textContent="Live NOAA feed";
-    if(modeLabel)modeLabel.textContent="NOAA QC FALLBACK";
-    addMrmsFallback();
-    return;
-  }
-
-  const src=(meta.sources||[]).map(x=>x.radar).filter(Boolean);
-  if(status)status.textContent=src.length===2?"READY • KCXX + KTYX":("READY • "+src.join(" + "));
-  if(sources)sources.textContent=src.join(" + ")||"—";
-  const times=(meta.sources||[]).map(x=>x.scan_time_utc).filter(Boolean).sort();
-  if(time)time.textContent=times.length?fmt(times[times.length-1]):fmt(meta.updated_utc);
-  if(modeLabel)modeLabel.textContent=radarMode==="raw"?"RAW DISPLAY":(radarMode==="qcd"?"NOAA QC DISPLAY":"CLEAN DISPLAY");
-
-  if(radarMode==="qcd"){
-    addMrmsFallback();
+function renderProbability(){
+  var p=latestForSelected();if(!p){return}
+  var shadow=shadowRecord(p.radar_site,p.track_id),hist=shadowRows(p.radar_site,p.track_id),score=probValue(shadow,15),prev=hist.length>1?probValue(hist.at(-2),15):null;
+  if(score==null){
+    q("probabilityValue").classList.add("na");setText("probabilityValue","—");setText("probabilityDelta","GATED • waiting for coverage");q("probabilityDelta").className="prob-delta flat";
+    var cov=shadow?.feature_coverage?.["15"]?.fraction;setText("probabilityNote",cov==null?"No live research score is attached to this object yet.":("Feature coverage "+(Number(cov)*100).toFixed(0)+"% • candidate threshold 80% • probability remains gated."));
   }else{
-    const overlay=L.imageOverlay(mosaicImageUrl(radarMode),meta.bounds,{
-      pane:"radarMosaicPane",
-      opacity:radarMode==="raw"?.66:.84,
-      interactive:false,
-      crossOrigin:true
-    });
-    overlay.once("error",()=>{
-      radarMosaicLayer.clearLayers();
-      if(status)status.textContent="Local image failed • NOAA QC fallback";
-      addMrmsFallback();
-    });
-    overlay.addTo(radarMosaicLayer);
+    q("probabilityValue").classList.remove("na");setText("probabilityValue",(Number(score)*100).toFixed(0)+"%");var d=prev==null?null:Number(score)-Number(prev);setText("probabilityDelta",d==null?"Score attached":(d>=0?"▲ +":"▼ ")+(Math.abs(d)*100).toFixed(1)+" pp");q("probabilityDelta").className="prob-delta "+(d==null?"flat":d>=0?"up":"down");setText("probabilityNote","Isolated research shadow score • candidate only • never an operational warning recommendation.");
   }
-
-  if(!hasInitialExtent){map.fitBounds(meta.bounds,{padding:[25,25],maxZoom:8});hasInitialExtent=true;}
+  var vals=[["Model",score,"#1f90e9"],["Analog",shadow?.analog_probability,"#f0c54c"],["Environment",shadow?.environment_signal,"#62ce73"],["Overall",shadow?.ensemble_probability,"#ff5648"]];
+  q("probComponents").innerHTML=vals.map(function(x){return "<div class='prob-component'><span><i class='comp-dot' style='background:"+x[2]+"'></i>"+x[0]+"</span><b>"+(x[1]==null?"—":(Number(x[1])*100).toFixed(0)+"%")+"</b></div>"}).join("")+"<div style='margin-top:5px;font-size:8px;color:#748a9b'>Fields populate as their corresponding model evidence becomes available.</div>";
+  renderProbabilityChart(hist);
 }
-function setRadarMode(mode){
-  radarMode=mode;
-  document.querySelectorAll(".display-btn").forEach(btn=>btn.classList.toggle("active",btn.dataset.radarMode===mode));
-  if(radarMosaic)renderRadarMosaic(radarMosaic);
-  const subtitle=document.getElementById("hudMode");
-  if(subtitle)subtitle.textContent=mode==="raw"?"RAW DISPLAY":(mode==="qcd"?"NOAA QC DISPLAY":"CLEAN DISPLAY");
+function renderProbabilityChart(hist){
+  var svg=q("probChart");svg.innerHTML="";
+  if(!hist.length||!hist.some(function(r){return Object.values(r.research_probabilities||{}).some(function(v){return Number.isFinite(Number(v))})})){svg.innerHTML="<text x='210' y='70' text-anchor='middle' class='chart-text'>Research probability history is warming up</text>";return}
+  var W=420,H=142,P=24,points=hist.map(function(r){var v=r.research_probabilities||{};return [v["15"]??v["15min"],v["30"]??v["30min"],v["45"]??v["45min"],v["60"]??v["60min"]].map(function(x){return x==null?null:Number(x)})}),obs=points.flatMap(function(x){return x}).filter(function(v){return Number.isFinite(v)}),maxY=Math.max(.1,Math.min(1,(Math.max.apply(null,obs)||.1)*1.15));
+  for(var g=0;g<=4;g++){var yy=H-P-g*(H-2*P)/4;svg.innerHTML+="<line x1='"+P+"' y1='"+yy+"' x2='"+(W-P)+"' y2='"+yy+"' class='chart-gridline'/><text x='"+(P-4)+"' y='"+(yy+3)+"' text-anchor='end' class='chart-text'>"+Math.round(maxY*(1-g/4)*100)+"</text>"}
+  svg.innerHTML+="<line x1='"+P+"' y1='"+(H-P)+"' x2='"+(W-P)+"' y2='"+(H-P)+"' class='chart-axis'/>";
+  var cls=["chart-line-15","chart-line-30","chart-line-45","chart-line-60"];
+  var x=function(i){return P+(points.length===1?0:i*(W-2*P)/(points.length-1))},y=function(v){return H-P-Math.max(0,Math.min(maxY,v))/maxY*(H-2*P)};
+  for(var j=0;j<4;j++){var valid=points.map(function(pt,i){return {i:i,v:pt[j]}}).filter(function(x){return Number.isFinite(x.v)});if(!valid.length)continue;var path=valid.map(function(pt,n){return (n?"L":"M")+x(pt.i).toFixed(1)+" "+y(pt.v).toFixed(1)}).join(" ");svg.innerHTML+="<path d='"+path+"' class='chart-path "+cls[j]+"'/>"}
+  var xx=x(points.length-1);svg.innerHTML+="<line x1='"+xx+"' y1='"+P+"' x2='"+xx+"' y2='"+(H-P)+"' class='chart-current'/>";
 }
-
-let mrmsFallbackLayer=null;
-function addMrmsFallback(){
-  if(mrmsFallbackLayer)return;
-  try{
-    const url="https://mapservices.weather.noaa.gov/eventdriven/rest/services/radar/radar_base_reflectivity/MapServer/export";
-    const imageUrl=url+"?bbox=-76.9075,41.861,-70.3925,46.3983&bboxSR=4326&imageSR=4326&size=1400,900&format=png32&transparent=true&f=image";
-    mrmsFallbackLayer=L.imageOverlay(imageUrl,[[41.861,-76.908],[46.398,-70.392]],{
-      pane:"radarMosaicPane",opacity:.62,interactive:false,crossOrigin:true
-    }).addTo(radarMosaicLayer);
-  }catch(_){}
+function renderKeyTrends(){
+  var p=latestForSelected();if(!p){q("keyTrends").innerHTML="";return}var rows=trackHistory(p),first=rows[0]||p;
+  var delta=function(a,b){var x=Number(a),y=Number(b);return Number.isFinite(x)&&Number.isFinite(y)?x-y:null}
+  var items=[["MAX REFLECTIVITY",num(p.max_reflectivity_dbz,0)+" dBZ",delta(p.max_reflectivity_dbz,first.max_reflectivity_dbz),"dBZ"],["OBJECT AREA",num(p.area_km2,0)+" km²",delta(p.area_km2,first.area_km2),"km²"],["MOTION SPEED",num(p.motion_speed_kt,0)+" kt",delta(p.motion_speed_kt,first.motion_speed_kt),"kt"],["FEATURE COVERAGE",shadowRecord(p.radar_site,p.track_id)?.feature_coverage?.["15"]?.fraction==null?"—":(Number(shadowRecord(p.radar_site,p.track_id).feature_coverage["15"].fraction)*100).toFixed(0)+"%",null,""]];
+  q("keyTrends").innerHTML=items.map(function(x){var d=x[2];return "<div class='trend-tile'><div class='label'>"+x[0]+"</div><div class='value'>"+x[1]+"</div><div class='delta "+(d==null?"neutral":"")+"'>"+(d==null?"Live snapshot":(d>=0?"▲ +":"▼ ")+Math.abs(d).toFixed(0)+" "+x[3])+"</div></div>"}).join("");
 }
-
-function summarize(site,item){
-  const {geo,state,history,health,shadow,shadowHistory}=item;
-  const features=geo.features||[];
-  const last=state.last_scan_time_utc||geo.metadata?.scan_time_utc||geo.metadata?.last_scan_utc;
-  const age=ageMinutes(last);
-  const good=age<=30;
-  return {site,features,state,geo,history,health,shadow,shadowHistory,last,age,good};
-}
-
-function renderRadarCards(summary){
-  document.getElementById("radarCards").innerHTML=summary.map(x=>{
-    if(x.error){
-      return "<div class='live-card'><h3>"+esc(x.site)+" <span class='chip'>ERROR</span></h3>"+
-        "<div class='live-stat'><span>Feed</span><b>Unavailable</b></div>"+
-        "<div class='live-stat'><span>Reason</span><b>"+esc(x.error)+"</b></div>"+
-        "<div class='live-stat'><span>Live shadow</span><b>"+(x.shadow?.scored_object_count??0)+" scored</b></div></div>";
-    }
-    const quality=x.good?"LIVE":"STALE";
-    return "<div class='live-card'><h3>"+x.site+" <span class='chip'>"+quality+"</span></h3>"+
-      "<div class='live-stat'><span>Last scan</span><b>"+esc(fmt(x.last))+"</b></div>"+
-      "<div class='live-stat'><span>Age</span><b>"+(Number.isFinite(x.age)?num(x.age,1)+" min":"—")+"</b></div>"+
-      "<div class='live-stat'><span>Objects</span><b>"+x.features.length+"</b></div>"+
-      "<div class='live-stat'><span>History</span><b>"+x.history.length.toLocaleString()+" records</b></div>"+
-      "<div class='live-stat'><span>Publish state</span><b>"+esc(x.health?.status||"unknown")+"</b></div>"+
-      "<div class='live-stat'><span>Live shadow</span><b>"+(x.shadow?.scored_object_count??0)+" scored</b></div></div>";
-  }).join("");
-}
-
-function objectColor(p){
-  const z=Number(p.max_reflectivity_dbz);
-  if(z>=45)return "#ff6b6b";
-  if(z>=35)return "#ffd166";
-  return "#57bbff";
-}
-
-function renderMap(summary){
-  Object.values(layers).forEach(l=>l.clearLayers());
-  const bounds=[];
-  summary.filter(x=>!x.error).forEach(x=>{
-    (x.features||[]).forEach(f=>{
-      const p=f.properties||{};
-      const id=String(p.track_id??"—");
-      const isSelected=selected&&String(selected.track_id)===id&&selected.radar_site===x.site;
-      const fill=objectColor(p);
-      const layer=L.geoJSON(f,{style:{color:isSelected?"#ffffff":fill,fillColor:fill,fillOpacity:isSelected?.50:.18,weight:isSelected?3:1.5}}).addTo(layers[x.site]);
-      layer.bindTooltip("<b>"+esc(x.site)+" • Object "+esc(id)+"</b><br>"+num(p.max_reflectivity_dbz)+" dBZ • "+num(p.area_km2)+" km² • "+num(p.motion_speed_kt)+" kt",{sticky:true,direction:"top"});
-      layer.on("click",()=>selectObject({...p,radar_site:x.site}));
-      if(isSelected&&p.centroid_lat!=null&&p.centroid_lon!=null){
-        L.marker([Number(p.centroid_lat),Number(p.centroid_lon)],{icon:L.divIcon({className:"live-object-label-wrap",iconSize:null,iconAnchor:[0,0],html:"<div class='live-object-label selected'>"+esc(x.site)+"-"+esc(id)+"</div>"}),interactive:false}).addTo(layers[x.site]).bringToFront();
-      }
-      const b=layer.getBounds?.();
-      if(b&&b.isValid())bounds.push(b);
-    });
-  });
-  if(bounds.length&&!hasInitialExtent){
-    let b=bounds[0];
-    for(let i=1;i<bounds.length;i++)b=b.extend(bounds[i]);
-    map.fitBounds(b,{padding:[30,30],maxZoom:9});
-    hasInitialExtent=true;
-  }
-}
-function renderObjectList(summary){
-  let all=[];
-  summary.filter(x=>!x.error).forEach(x=>(x.features||[]).forEach(f=>all.push({...f.properties,radar_site:x.site,source_kind:"current"})));
-  all.sort((a,b)=>{const as=shadowScoreFor(a),bs=shadowScoreFor(b);if(as!=null||bs!=null)return (bs??-1)-(as??-1);return Number(b.candidate_rank_score??-1)-Number(a.candidate_rank_score??-1)||Number(b.max_reflectivity_dbz||0)-Number(a.max_reflectivity_dbz||0);});
-
-  let usingHistory=false;
-  if(!all.length){
-    usingHistory=true;
-    summary.filter(x=>!x.error).forEach(x=>{
-      const latestByTrack=new Map();
-      (x.history||[]).forEach(r=>{
-        if(r.track_id==null)return;
-        const id=String(r.track_id);
-        const prior=latestByTrack.get(id);
-        if(!prior || String(r.timestamp)>String(prior.timestamp)) latestByTrack.set(id,r);
-      });
-      latestByTrack.forEach(r=>all.push({...r,radar_site:x.site,source_kind:"recent"}));
-    });
-    all.sort((a,b)=>String(b.timestamp||"").localeCompare(String(a.timestamp||"")));
-  }
-
-  // Current objects are the operational map inventory. Retained history is
-  // shown only when there are no current objects, and is explicitly marked.
-  document.getElementById("objectCount").textContent=String(all.length)+(usingHistory?" recent":" active");
-  if(!all.length){
-    document.getElementById("objectList").innerHTML="<div class='live-card'>No current or recent tracked objects are available.</div>";
-    return;
-  }
-
-  document.getElementById("objectList").innerHTML=all.slice(0,20).map(p=>{
-    const shadow=shadowRecord(p.radar_site,p.track_id);
-    const rp=shadow?.research_probabilities||{};
-    const score=rp["15"];
-    const state=lifecycleState(p);
-    return "<div class='live-object "+(selected&&selected.track_id===p.track_id&&selected.radar_site===p.radar_site?"selected":"")+"' data-id='"+esc(p.radar_site+"|"+p.track_id)+"'>"+
-    "<div class='title'>"+esc(p.radar_site)+" • Track "+esc(p.track_id)+" <span class='chip'>"+esc(state)+"</span><span class='chip'>"+(p.source_kind==="recent"?"RECENT":"ACTIVE")+"</span></div>"+
-    "<div class='sub'>"+esc(fmt(p.timestamp))+(p.source_kind==="recent"?" • latest retained track sample":"")+"</div>"+
-    "<div class='chips'><span class='chip'>"+num(p.max_reflectivity_dbz)+" dBZ</span><span class='chip'>"+num(p.motion_speed_kt)+" kt</span><span class='chip'>"+num(p.area_km2)+" km²</span>"+(p.candidate_rank_score==null?"":"<span class='chip'>Rank "+Number(p.candidate_rank_score).toFixed(0)+"</span>")+(score==null?"":"<span class='chip research-chip'>15m "+(Number(score)*100).toFixed(0)+"% RESEARCH</span>")+"<span class='chip'>"+esc(p.data_quality||"—")+"</span></div></div>";
-  }).join("");
-
-  document.querySelectorAll(".live-object").forEach(el=>el.onclick=()=>{
-    const [site,id]=el.dataset.id.split("|");
-    const item=all.find(p=>p.radar_site===site&&String(p.track_id)===String(id));
-    if(item)selectObject(item);
-  });
-}
-
-function shadowRecord(site,trackId){
-  const records=datasets[site]?.shadow?.records||[];
-  return records.find(r=>String(r.track_id)===String(trackId))||null;
-}
-function shadowGrid(record){
-  const probs=record?.research_probabilities||{};
-  const coverage=record?.feature_coverage||{};
-  const errors=record?.score_errors||{};
-  if(!Object.keys(probs).length){
-    const detail=Object.keys(errors).length
-      ? " "+Object.entries(errors).map(([h,e])=>h+" min: "+e).join(" • ")
-      : "";
-    return "<div class='shadow-note'>No live research score is available yet."+esc(detail)+"</div>";
-  }
-  return "<div class='shadow-grid'>" + [15,30,45,60].map(h=>{
-    const p=probs[String(h)];
-    const fraction=coverage[String(h)]?.fraction;
-    const err=errors[String(h)];
-    const sub=err?"error":(fraction==null?"coverage —":(Number(fraction)*100<80?"warming up • coverage "+(Number(fraction)*100).toFixed(0)+"%":"coverage "+(Number(fraction)*100).toFixed(0)+"%"));
-    return "<div class='shadow-cell'><span>"+h+" min</span><b>"+(p==null?(err?"ERROR":"—"):""+(Number(p)*100).toFixed(1)+"%")+"</b><span>"+esc(sub)+"</span></div>";
-  }).join("")+"</div>";
-}
-
-function renderShadowCard(summary){
-  const box=document.getElementById("shadowCardBody");
-  if(!box)return;
-  const rows=summary.filter(x=>x.shadow).map(x=>({
-    site:x.site,
-    updated:x.shadow.updated_utc,
-    scored:Number(x.shadow.scored_object_count||0),
-    total:Number(x.shadow.current_object_count||0),
-    status:x.shadow.operational_release_status||"unknown"
-  }));
-  if(!rows.length){
-    box.innerHTML="<div class='shadow-note'>No published shadow feed is available yet.</div>";
-    return;
-  }
-  box.innerHTML=rows.map(row=>
-    "<div class='live-stat'><span>"+esc(row.site)+"</span><b>"+row.scored+" / "+row.total+" scored</b></div>"+
-    "<div class='live-stat'><span>Updated</span><b>"+esc(fmt(row.updated))+"</b></div>"+
-    "<div class='live-stat'><span>Status</span><b>"+esc(row.status)+"</b></div>"
-  ).join("")+
-    "<div class='shadow-note'>The operational object feed remains probability-free. Scores shown here come from the isolated research shadow branch.</div>";
-}
-function renderEnvironment(fields){
-  const env=fields||{};
-  const rows=[
-    ["SBCAPE","cape_jkg",v=>num(v,0)+" J/kg"],
-    ["SBCIN","cin_jkg",v=>num(v,0)+" J/kg"],
-    ["MLCAPE","mlcape_jkg",v=>num(v,0)+" J/kg"],
-    ["MLCIN","mlcin_jkg",v=>num(v,0)+" J/kg"],
-    ["MUCAPE","mucape_jkg",v=>num(v,0)+" J/kg"],
-    ["PWAT","pwat_mm",v=>num(v,1)+" mm"],
-    ["0–1 km SRH","srh01_m2s2",v=>num(v,0)+" m²/s²"],
-    ["0–6 km shear","shear_0_6km_ms",v=>num(ktFromMs(v),1)+" kt"],
-    ["2 m temp","temperature_2m_k",v=>num(cFromK(v),1)+" °C"],
-    ["2 m dewpoint","dewpoint_2m_k",v=>num(cFromK(v),1)+" °C"],
-    ["Surface gust","gust_ms",v=>num(ktFromMs(v),1)+" kt"],
-    ["SNSQ","snsq",v=>num(v,2)],
-    ["SNSQ 0–2 km RH","mean_rh_0_2km_pct",v=>num(v,0)+"%"],
-    ["SNSQ Δθe 0–2 km","thetae_delta_0_2km_k",v=>num(v,1)+" K"],
-    ["SNSQ 0–2 km wind","mean_wind_0_2km_ms",v=>num(ktFromMs(v),1)+" kt"],
-    ["2 m wet-bulb","wetbulb_2m_c",v=>num(v,1)+" °C"],
+function fmtLiveEnv(v,key){if(v==null)return "—";if(key.indexOf("cape")>=0||key.indexOf("cin")>=0||key==="dcape_jkg")return num(v,0);if(key==="srh01_m2s2"||key.indexOf("shear")>=0&&key!=="shear_0_6km_ms")return num(v,0);return num(v,1)}
+function renderEnvironment(){
+  var p=latestForSelected();if(!p){q("environmentTable").innerHTML="";return}
+  var fields=[
+    ["SBCAPE","cape_jkg"],["MLCAPE","mlcape_jkg"],["MUCAPE","mucape_jkg"],["MLCIN","mlcin_jkg"],["DCAPE","dcape_jkg"],["PWAT","pwat_mm"],["LCL","lcl_m"],["0–1 km SRH","srh01_m2s2"],["0–6 km shear","shear_0_6km_ms"],["2 m temp","temperature_2m_k"],["2 m dewpoint","dewpoint_2m_k"],["Surface gust","gust_ms"],["SNSQ","snsq"],["SNSQ 0–2 km RH","mean_rh_0_2km_pct"],["SNSQ Δθe 0–2 km","thetae_delta_0_2km_k"],["SNSQ 0–2 km wind","mean_wind_0_2km_ms"],["2 m wet-bulb","wetbulb_2m_c"]
   ];
-  return "<div class='live-env-grid'>"+rows.map(([label,key,format])=>{
-    const value=env[key];
-    return "<div class='env-item'><span>"+label+"</span><b>"+(value==null?"—":format(value))+"</b></div>";
-  }).join("")+"</div>";
+  var rows=trackHistory(p),current=p,prev=rows.length>1?rows[Math.max(0,rows.length-2)]:null,next=null;
+  var header="<thead><tr><th>Parameter</th><th>−30 min</th><th>Current</th><th>Next scan</th></tr></thead><tbody>";
+  header+=fields.map(function(x){
+    var pv=prev?envField(prev,x[1]):null,cv=envField(current,x[1]),nv=null;
+    var format=function(val,key){if(val==null)return "—";if(key==="temperature_2m_k"||key==="dewpoint_2m_k")return num(kToC(val),1)+" °C";if(key==="gust_ms"||key==="shear_0_6km_ms"||key==="mean_wind_0_2km_ms")return num(msToKt(val),0)+" kt";return fmtLiveEnv(val,key)};
+    return "<tr><td>"+x[0]+"</td><td class='ctx-prev'>"+format(pv,x[1])+"</td><td class='ctx-current'>"+format(cv,x[1])+"</td><td class='ctx-next ctx-na'>—</td></tr>";
+  }).join("");
+  q("environmentTable").innerHTML=header+"</tbody>";
+  var e=p.environment||{};setText("envSource",(e.source||p.environment_source||"RAP")+(e.age_minutes==null?"":" • "+num(e.age_minutes,0)+" min"));
 }
-
-function lifecycleState(p){const age=Number(p?.age_scans||0),trend=Number(p?.reflectivity_trend_dbz_per_hr);if(age<=2)return "NEW";if(Number.isFinite(trend)&&trend>=3)return "INTENSIFYING";if(Number.isFinite(trend)&&trend<=-3)return "WEAKENING";return "STEADY";}
-function liveSpark(rows,key,label,unit){const vals=rows.map(r=>Number(r[key])).filter(Number.isFinite);if(!vals.length)return "<div class='live-spark-row'><span>"+label+"</span><div class='trend-empty'>No data</div></div>";const W=300,H=58,P=7,min=Math.min(...vals),max=Math.max(...vals),range=Math.max(max-min,.1),pts=rows.map((r,i)=>{const v=Number(r[key]);return Number.isFinite(v)?{i,v}:null}).filter(Boolean),x=i=>P+(rows.length===1?0:i*(W-2*P)/Math.max(1,rows.length-1)),y=v=>(H-P)-(v-min)/range*(H-2*P),path=pts.map((pt,i)=>(i?"L":"M")+x(pt.i).toFixed(1)+" "+y(pt.v).toFixed(1)).join(" "),last=pts[pts.length-1],digits=label==="Max Z"?0:1;return "<div class='live-spark-row'><div class='live-spark-label'><span>"+label+"</span><b>"+num(last.v,digits)+" "+unit+"</b></div><svg class='live-spark' viewBox='0 0 "+W+" "+H+"'><line x1='"+P+"' y1='"+(H-P)+"' x2='"+(W-P)+"' y2='"+(H-P)+"' class='trend-axis'/><path d='"+path+"' class='trend-path'/><circle cx='"+x(last.i).toFixed(1)+"' cy='"+y(last.v).toFixed(1)+"' r='3.5' class='trend-current'/></svg></div>";}
-function renderLiveTrend(p){const box=document.getElementById("liveTrend");if(!box)return;if(!p){box.innerHTML="<div class='history-empty'>Select a live object to see its evolution.</div>";return;}const rows=(datasets[p.radar_site]?.history||[]).filter(r=>String(r.track_id)===String(p.track_id)).sort((a,b)=>String(a.timestamp).localeCompare(String(b.timestamp)));if(!rows.length){box.innerHTML="<div class='history-empty'>No retained history for this object.</div>";return;}box.innerHTML="<div class='live-trend-head'><span>Track "+esc(p.track_id)+"</span><b>"+lifecycleState(p)+"</b><small>"+rows.length+" retained scans</small></div>"+liveSpark(rows,"max_reflectivity_dbz","Max Z","dBZ")+liveSpark(rows,"area_km2","Area","km²")+liveSpark(rows,"motion_speed_kt","Motion","kt");const scored=(datasets[p.radar_site]?.shadowHistory||[]).filter(r=>String(r.track_id)===String(p.track_id)).sort((a,b)=>String(a.timestamp).localeCompare(String(b.timestamp))),latest=scored.at(-1),any=scored.some(r=>Object.values(r.research_probabilities||{}).some(v=>v!=null));if(any){box.innerHTML+="<div class='live-prob-trend'><div class='live-trend-head'><span>Research probability evolution</span><b>RESEARCH ONLY</b></div><div class='live-prob-grid'>"+[["15 min",latest?.research_probabilities?.["15"]],["30 min",latest?.research_probabilities?.["30"]],["45 min",latest?.research_probabilities?.["45"]],["60 min",latest?.research_probabilities?.["60"]]].map(x=>"<div><span>"+x[0]+"</span><b>"+(x[1]==null?"—":(Number(x[1])*100).toFixed(1)+"%")+"</b></div>").join("")+"</div><div class='mosaic-note'>Latest available shadow score. Early scans may be unscored while temporal predictors warm up.</div></div>";}}
-function renderSelectedHistory(p){
-  const box=document.getElementById("liveHistory");
-  const count=document.getElementById("liveTrackCount");
-  if(!p){
-    count.textContent="—";
-    box.innerHTML="<div class='history-empty'>Select a current object to see its scan-to-scan history.</div>";
-    return;
-  }
-  const summary=datasets[p.radar_site];
-  const rows=(summary?.history||[])
-    .filter(r=>String(r.track_id)===String(p.track_id))
-    .sort((a,b)=>String(a.timestamp).localeCompare(String(b.timestamp)));
-  count.textContent=rows.length+" scans";
-  if(!rows.length){
-    box.innerHTML="<div class='history-empty'>No persisted history is available for this track yet.</div>";
-    return;
-  }
-  const currentTimestamp=p.timestamp;
-  box.innerHTML="<div class='history-scroll'><table class='history-table'><thead><tr>"+
-    "<th>Time</th><th>Max Z</th><th>Area</th><th>L × W</th><th>Motion</th><th>Z trend</th><th>Env</th>"+
-    "</tr></thead><tbody>"+
-    rows.map(r=>{
-      const current=String(r.timestamp)===String(currentTimestamp)?" class='current'":"";
-      return "<tr"+current+" data-ts='"+esc(r.timestamp)+"'>"+
-        "<td>"+esc(fmt(r.timestamp))+"</td>"+
-        "<td>"+num(r.max_reflectivity_dbz)+" dBZ</td>"+
-        "<td>"+num(r.area_km2)+" km²</td>"+
-        "<td>"+num(r.length_km)+" × "+num(r.width_km)+" km</td>"+
-        "<td>"+num(r.motion_speed_kt)+" kt</td>"+
-        "<td>"+num(r.reflectivity_trend_dbz_per_hr)+" dBZ/hr</td>"+
-        "<td>"+esc(r.environment_status||"—")+"</td>"+
-      "</tr>";
-    }).join("")+
-    "</tbody></table></div>";
+function evidenceItem(icon,cls,title,body){return "<div class='evidence-card'><div class='evidence-icon "+(cls||"")+"'>"+icon+"</div><div><b>"+title+"</b><span>"+body+"</span></div></div>"}
+function renderEvidence(){
+  var p=latestForSelected();if(!p){q("evidenceGrid").innerHTML="";return}
+  var e=p.environment||{},f=e.fields||{},vis=fieldValue(f,"visibility_m")??fieldValue(e,"visibility_m")??p.visibility_m,gust=fieldValue(f,"gust_ms")??fieldValue(e,"gust_ms")??p.gust_ms,geo=datasets[p.radar_site]?.geo,fields=geo?.metadata?.fields||{};
+  var mping=p.mping_reports||p.mping_count||p.mping_support,shadow=shadowRecord(p.radar_site,p.track_id),cov=shadow?.feature_coverage?.["15"]?.fraction;
+  q("evidenceGrid").innerHTML=
+    evidenceItem(vis!=null?"✓":"—",vis!=null?"":"warn","METAR / ASOS context",vis!=null?"Visibility "+num(vis/1609.344,1)+" mi"+(gust!=null?" • gust "+num(msToKt(gust),0)+" kt":""):"Surface observation not attached to this object")+
+    evidenceItem(mping?"✓":"—",mping?"":"warn","MPING reports",mping?(String(mping)+" attached report(s)"):"No MPING report field in current live object")+
+    evidenceItem(cov!=null&&cov>=.8?"✓":"!",cov!=null&&cov>=.8?"":"warn","Model feature coverage",cov==null?"No candidate score package attached":(Number(cov)*100).toFixed(0)+"% of 15-min predictors available • target ≥80%")+
+    evidenceItem(fields.velocity?"✓":"!",fields.velocity?"":"warn","Radar inputs",fields.velocity?"Base velocity present • dual-pol fields tracked": "Radar velocity field not confirmed in feed metadata");
 }
-
-function selectObject(p){
-  selected=p;
-  document.getElementById("selectionState").textContent="Selected: "+p.radar_site+" track "+p.track_id;
-
-  const env=p.environment||{};
-  const nested=env.fields||{};
-  const envFields={
-    ...nested,
-    cape_jkg: nested.cape_jkg?.value ?? p.cape_jkg,
-    cin_jkg: nested.cin_jkg?.value ?? p.cin_jkg,
-    mlcape_jkg: nested.mlcape_jkg?.value ?? p.mlcape_jkg,
-    mlcin_jkg: nested.mlcin_jkg?.value ?? p.mlcin_jkg,
-    mucape_jkg: nested.mucape_jkg?.value ?? p.mucape_jkg,
-    pwat_mm: nested.pwat_mm?.value ?? p.pwat_mm,
-    srh01_m2s2: nested.srh01_m2s2?.value ?? p.srh01_m2s2,
-    shear_0_6km_ms: nested.shear_0_6km_ms?.value ?? p.shear_0_6km_ms,
-    temperature_2m_k: nested.temperature_2m_k?.value ?? p.temperature_2m_k,
-    dewpoint_2m_k: nested.dewpoint_2m_k?.value ?? p.dewpoint_2m_k,
-    gust_ms: nested.gust_ms?.value ?? p.gust_ms,
-    visibility_m: nested.visibility_m?.value ?? p.visibility_m
-  };
-  const envSource=env.source||p.environment_source||"—";
-  const envStatus=p.environment_status||env.status||"—";
-  const motionDir=p.motion_direction_deg ?? p.motion_dir_deg;
-  document.getElementById("selectedSummary").innerHTML=
-    "<div class='live-stat'><span>Radar</span><b>"+esc(p.radar_site)+"</b></div>"+
-    "<div class='live-stat'><span>Track</span><b>"+esc(p.track_id)+"</b></div>"+
-    "<div class='live-stat'><span>Time</span><b>"+esc(fmt(p.timestamp))+"</b></div>"+
-    "<div class='live-stat'><span>Max Z</span><b>"+num(p.max_reflectivity_dbz)+" dBZ</b></div>"+
-    "<div class='live-stat'><span>Mean Z</span><b>"+num(p.mean_reflectivity_dbz)+" dBZ</b></div>"+
-    "<div class='live-stat'><span>Area</span><b>"+num(p.area_km2)+" km²</b></div>"+
-    "<div class='live-stat'><span>Candidate rank</span><b>"+(p.candidate_rank_score==null?"—":Number(p.candidate_rank_score).toFixed(0)+"/100")+"</b></div>"+
-    "<div class='live-stat'><span>Shape</span><b>"+num(p.length_km)+" × "+num(p.width_km)+" km</b></div>"+
-    "<div class='live-stat'><span>Motion</span><b>"+num(p.motion_speed_kt)+" kt @ "+num(motionDir,0)+"°</b></div>"+
-    "<div class='live-stat'><span>Age</span><b>"+(p.age_scans==null?"—":esc(p.age_scans+" scans"))+"</b></div>"+
-    "<div class='live-stat'><span>Z trend</span><b>"+num(p.reflectivity_trend_dbz_per_hr)+" dBZ/hr</b></div>"+
-    "<div class='live-stat'><span>Environment</span><b>"+esc(envSource)+" • "+esc(envStatus)+"</b></div>"+
-    renderEnvironment(envFields)+
-    "<div class='live-card'><h3>Live research shadow</h3>"+shadowGrid(shadowRecord(p.radar_site,p.track_id))+
-    "<div class='shadow-note'>Candidate model scored this live object separately from the operational feed. Research only.</div></div>"+
-    "<div class='live-stat'><span>Data quality</span><b>"+esc(p.data_quality||"—")+"</b></div>";
-  renderSelectedHistory(p);
-  renderLiveTrend(p);
+function renderHistory(){
+  var p=latestForSelected(),rows=p?trackHistory(p):[];setText("historyCount",rows.length+" retained scans");if(!rows.length){q("historyChart").innerHTML="<text x='260' y='70' text-anchor='middle' class='chart-text'>No retained track history</text>";q("historyTable").innerHTML="";return}
+  var W=520,H=145,P=28,vals=rows.map(function(r){return {z:Number(r.max_reflectivity_dbz),a:Number(r.area_km2),m:Number(r.motion_speed_kt)}}),z=vals.map(x=>x.z).filter(Number.isFinite),a=vals.map(x=>x.a).filter(Number.isFinite),m=vals.map(x=>x.m).filter(Number.isFinite),minZ=z.length?Math.min(...z):0,maxZ=z.length?Math.max(...z):1,minA=a.length?Math.min(...a):0,maxA=a.length?Math.max(...a):1,minM=m.length?Math.min(...m):0,maxM=m.length?Math.max(...m):1;
+  var norm=function(v,min,max){return Number.isFinite(v)?(v-min)/(Math.max(.001,max-min)):null};var x=function(i){return P+(rows.length===1?0:i*(W-2*P)/(rows.length-1))},y=function(v){return H-P-v*(H-2*P)},svg="<line x1='"+P+"' y1='"+(H-P)+"' x2='"+(W-P)+"' y2='"+(H-P)+"' class='chart-axis'/><text x='3' y='12' class='chart-text'>100</text><text x='7' y='"+(H/2+3)+"' class='chart-text'>50</text><text x='7' y='"+(H-P+3)+"' class='chart-text'>0</text>";
+  [["max_reflectivity_dbz","#d34bc0",minZ,maxZ,"z"],["area_km2","#1f90e9",minA,maxA,"a"],["motion_speed_kt","#54c56b",minM,maxM,"m"]].forEach(function(line){var path=rows.map(function(r,i){var key=line[4],val=norm(Number(r[key]),line[2],line[3]);return val==null?null:(i?"L":"M")+x(i).toFixed(1)+" "+y(val).toFixed(1)}).filter(Boolean).join(" ");if(path)svg+="<path d='"+path+"' fill='none' stroke='"+line[1]+"' stroke-width='2.1' stroke-linecap='round' stroke-linejoin='round'/>"});
+  var xx=x(rows.length-1);svg+="<line x1='"+xx+"' y1='"+P+"' x2='"+xx+"' y2='"+(H-P)+"' class='chart-current'/>";q("historyChart").innerHTML=svg+"<text x='"+P+"' y='"+(H-2)+"' class='chart-text'>"+fmtTime(rows[0].timestamp)+"</text><text x='"+(W-P)+"' y='"+(H-2)+"' text-anchor='end' class='chart-text'>"+fmtTime(rows.at(-1).timestamp)+"</text>";
+  q("historyTable").innerHTML="<thead><tr><th>Time</th><th>Max Z</th><th>Area</th><th>L × W</th><th>Motion</th><th>Z trend</th><th>Env</th></tr></thead><tbody>"+rows.slice(-60).reverse().map(function(r){var cur=p&&String(r.timestamp)===String(p.timestamp);return "<tr class='"+(cur?"current":"")+"' data-ts='"+esc(r.timestamp)+"'><td>"+fmtTime(r.timestamp)+"</td><td>"+num(r.max_reflectivity_dbz,0)+" dBZ</td><td>"+num(r.area_km2,0)+" km²</td><td>"+num(r.length_km,1)+" × "+num(r.width_km,1)+" km</td><td>"+num(r.motion_speed_kt,0)+" kt</td><td>"+num(r.reflectivity_trend_dbz_per_hr,1)+"</td><td>"+esc(r.environment_status||"—")+"</td></tr>"}).join("")+"</tbody>";
 }
-
+function renderModelStatus(){
+  var rows=Object.values(datasets).filter(function(x){return x.shadow}).map(function(x){var s=x.shadow;return {site:x.site,scored:s.scored_object_count||0,total:s.current_object_count||0,status:s.operational_release_status||"unknown"}});
+  var selectedShadow=selected?shadowRecord(selected.radar_site,selected.track_id):null,cov=selectedShadow?.feature_coverage?.["15"]?.fraction;
+  setText("modelStatus",cov==null?"GATED":(cov>=.8?"CANDIDATE READY":"GATED"));
+  q("modelStatusCard").innerHTML=rows.map(function(r){return "<div class='status-cell'><span>"+r.site+" shadow</span><b>"+r.scored+" / "+r.total+" scored</b></div>"}).join("")+
+    "<div class='status-cell'><span>15-min coverage</span><b>"+(cov==null?"—":(Number(cov)*100).toFixed(0)+"%")+"</b></div>"+
+    "<div class='status-cell'><span>Release</span><b>Candidate only</b></div>";
+  q("liveGate").style.display="flex";
+  setText("liveGateText",cov==null?"Research shadow data are not attached to this object yet.":(Number(cov)*100).toFixed(0)+"% 15-min feature coverage for selected object; probability stays gated below the 80% candidate threshold.");
+}
+async function fetchOptional(url,fallback){try{var r=await fetch(url,{cache:"no-store"});if(!r.ok)return fallback;return await r.json()}catch(_){return fallback}}
+async function getSite(site){
+  var base=LIVE_BASE;
+  var results=await Promise.all([
+    fetch(base+site+"_objects.geojson?cb="+Date.now(),{cache:"no-store"}).then(function(r){if(!r.ok)throw new Error(site+" objects HTTP "+r.status);return r.json()}),
+    fetch(base+site+"_state.json?cb="+Date.now(),{cache:"no-store"}).then(function(r){if(!r.ok)throw new Error(site+" state HTTP "+r.status);return r.json()}),
+    fetchOptional(base+site+"_history.json?cb="+Date.now(),[]),
+    fetchOptional(base+site+"_health.json?cb="+Date.now(),null),
+    fetchOptional(SHADOW_BASE+site+"_shadow.json?cb="+Date.now(),null),
+    fetchOptional(SHADOW_BASE+site+"_shadow_history.json?cb="+Date.now(),[])
+  ]);
+  return {site:site,geo:results[0],state:results[1],history:results[2],health:results[3],shadow:results[4],shadowHistory:results[5]};
+}
 async function refresh(){
-  document.getElementById("overallTitle").textContent="Refreshing live feeds…";
-  document.getElementById("overallText").textContent="Fetching latest persisted KCXX/KTYX objects and histories.";
+  setText("feedSummary","Refreshing KCXX + KTYX…");
   try{
-    const sites=["KCXX","KTYX"];
-    const mosaicPromise=getRadarMosaic();
-    const results=await Promise.all(sites.map(async site=>{
-      try{
-        return summarize(site,await getFeed(site));
-      }catch(err){
-        return {site,error:String(err.message||err),features:[],history:[],state:{},geo:{},good:false};
-      }
-    }));
-    const summary=results;
-    datasets=Object.fromEntries(summary.map(x=>[x.site,x]));
-    renderRadarMosaic(await mosaicPromise);
-    renderRadarCards(summary);
-    renderShadowCard(summary);
-    renderMap(summary);
-    renderObjectList(summary);
-
-    if(selected){
-      const latest=summary
-        .flatMap(x=>(x.features||[]).map(f=>({...f.properties,radar_site:x.site})))
-        .find(p=>p.radar_site===selected.radar_site&&String(p.track_id)===String(selected.track_id));
-      if(latest)selectObject(latest);
-      else renderSelectedHistory(selected);
-    }
-
-    const degraded=summary.filter(x=>x.error||!x.good);
-    const allObjects=summary.reduce((n,x)=>n+x.features.length,0);
-    const hudScan=document.getElementById("hudScan");
-    const hudSources=document.getElementById("hudSources");
-    const hudObjects=document.getElementById("hudObjects");
-    const feedBadge=document.getElementById("feedBadge");
-    const empty=document.getElementById("mapEmptyState");
-    if(hudScan)hudScan.textContent=fmt(summary.map(x=>x.last).filter(Boolean).sort().at(-1));
-    if(hudSources)hudSources.textContent=summary.filter(x=>!x.error).map(x=>x.site).join(" + ")||"NO DATA";
-    if(hudObjects)hudObjects.textContent=allObjects+" objects";
-    if(feedBadge)feedBadge.textContent=degraded.length?"DEGRADED":"HEALTHY";
-    if(empty){
-      empty.classList.toggle("visible",allObjects===0);
-      empty.querySelector("strong").textContent=degraded.length?"Radar data unavailable":"No significant echoes";
-      empty.querySelector("span").textContent=degraded.length?"Waiting for a valid radar product.":"Radar feed is healthy. Weak returns below the display threshold are intentionally muted.";
-    }
-    document.getElementById("overallTitle").textContent=degraded.length?"Live feed degraded":"Live feeds healthy";
-    document.getElementById("overallText").textContent=degraded.length?
-      degraded.map(x=>x.site+" "+(x.error?"unavailable":"stale")).join(", ")+" • "+allObjects+" current objects":
-      "KCXX/KTYX current object feeds • "+allObjects+" candidate objects • live research shadow "+summary.reduce((n,x)=>n+(x.shadow?.scored_object_count||0),0)+" scored";
-    document.getElementById("overallStatus").classList.toggle("degraded",degraded.length>0);
-    document.getElementById("subtitle").textContent="Last successful refresh: "+fmt(new Date().toISOString());
-  }catch(err){
-    document.getElementById("overallTitle").textContent="Live feed unavailable";
-    document.getElementById("overallText").textContent=String(err);
-    document.getElementById("overallStatus").classList.add("degraded");
-  }
+    var got=await Promise.all(["KCXX","KTYX"].map(function(site){return getSite(site).catch(function(e){return {site:site,error:String(e.message||e),geo:{features:[]},state:{},history:[],shadow:null}})}));
+    datasets=Object.fromEntries(got.map(function(x){return [x.site,x]}));
+    allObjects=got.flatMap(function(x){return (x.geo.features||[]).map(function(f){return Object.assign({},f.properties,{radar_site:x.site})})});
+    allObjects.sort(function(a,b){var d=riskScore(b)-riskScore(a);return d||Number(b.max_reflectivity_dbz||0)-Number(a.max_reflectivity_dbz||0)});
+    selectDefault();
+    await renderRadarMosaic();
+    renderMap();renderInventory();renderObjectCard();renderProbability();renderKeyTrends();renderEnvironment();renderEvidence();renderHistory();renderModelStatus();
+    var latest=got.map(function(x){return x.state?.last_scan_time_utc||x.geo?.metadata?.scan_time_utc}).filter(Boolean).sort().at(-1);
+    setText("liveTime",latest?fmtTime(latest)+" • "+fmtUTC(latest):"No scan time available");
+    setText("mapScanLabel",latest?fmtTime(latest):"No live radar");
+    setText("feedSummary",(allObjects.length)+" active objects • "+got.map(function(x){return x.site+" "+(x.error?"OFFLINE":(ageMinutes(x.state?.last_scan_time_utc)<=30?"LIVE":"STALE"))}).join(" • "));
+    var degraded=got.filter(function(x){return x.error||ageMinutes(x.state?.last_scan_time_utc)>30}).length>0;
+    q("liveBadge").classList.toggle("gated",degraded);if(degraded)setText("liveBadge","DEGRADED");
+  }catch(e){setText("feedSummary","Live feed error: "+e.message);q("liveBadge").classList.add("gated");setText("liveBadge","DEGRADED")}
 }
-
-addRadarMarkers();
-const liveTrackToggle=document.getElementById("showAllLiveTracks");
-if(liveTrackToggle)liveTrackToggle.onchange=e=>{showAllLiveTracks=e.target.checked;renderMap(Object.values(datasets))};
-document.getElementById("refreshBtn").onclick=refresh;
-document.querySelectorAll(".display-btn").forEach(btn=>btn.onclick=()=>setRadarMode(btn.dataset.radarMode));
-refresh();
-refreshTimer=setInterval(refresh,60000);
+document.querySelectorAll(".display-btn").forEach(function(b){b.onclick=function(){setRadarMode(b.dataset.radarMode)}});
+document.querySelectorAll("[data-jump]").forEach(function(btn){btn.onclick=function(){var el=q(btn.dataset.jump);if(el)el.scrollIntoView({behavior:"smooth",block:"start"});document.querySelectorAll("[data-jump]").forEach(function(b){b.classList.toggle("active",b===btn)})}});
+q("refreshBtn").onclick=refresh;q("refreshBtn2").onclick=refresh;q("objectNumbersBtn").onclick=function(){objectNumbers=!objectNumbers;q("objectNumbersBtn").classList.toggle("active",objectNumbers);renderMap()};
+addStations();refresh();refreshTimer=setInterval(refresh,60000);
+})();
