@@ -83,31 +83,39 @@ def grid_radar(path: Path, radar: str):
         raise RuntimeError(f"{radar}: reflectivity field has no valid sweep")
 
     data = grid_field_2d(refl_grid, reflectivity)
+    # Treat each radar moment independently. A problem gridding velocity or
+    # dual-pol must never discard an otherwise usable reflectivity volume.
     velocity_data = None
     velocity_field = fields.get("velocity")
     if velocity_field:
-        velocity_grid = grid_lowest_available_sweep(
-            radar_obj,
-            velocity_field,
-            origin_lat=CENTER_LAT,
-            origin_lon=CENTER_LON,
-            grid_size_km=GRID_SIZE_KM,
-            spacing_km=SPACING_KM,
-        )
-        if velocity_grid is not None:
-            velocity_data = grid_field_2d(velocity_grid, velocity_field)
+        try:
+            velocity_grid = grid_lowest_available_sweep(
+                radar_obj,
+                velocity_field,
+                origin_lat=CENTER_LAT,
+                origin_lon=CENTER_LON,
+                grid_size_km=GRID_SIZE_KM,
+                spacing_km=SPACING_KM,
+            )
+            if velocity_grid is not None:
+                velocity_data = grid_field_2d(velocity_grid, velocity_field)
+        except Exception as exc:
+            print(f"{radar}: base velocity gridding unavailable: {type(exc).__name__}: {exc}")
     rho = None
     if rhohv:
-        rho_grid = grid_lowest_available_sweep(
-            radar_obj,
-            rhohv,
-            origin_lat=CENTER_LAT,
-            origin_lon=CENTER_LON,
-            grid_size_km=GRID_SIZE_KM,
-            spacing_km=SPACING_KM,
-        )
-        if rho_grid is not None:
-            rho = grid_field_2d(rho_grid, rhohv)
+        try:
+            rho_grid = grid_lowest_available_sweep(
+                radar_obj,
+                rhohv,
+                origin_lat=CENTER_LAT,
+                origin_lon=CENTER_LON,
+                grid_size_km=GRID_SIZE_KM,
+                spacing_km=SPACING_KM,
+            )
+            if rho_grid is not None:
+                rho = grid_field_2d(rho_grid, rhohv)
+        except Exception as exc:
+            print(f"{radar}: rhoHV gridding unavailable: {type(exc).__name__}: {exc}")
     lat, lon = grid_latlon(refl_grid)
     return data, velocity_data, rho, lat, lon, meta.get("scan_time_utc"), meta.get("radar_id") or radar
 
