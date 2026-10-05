@@ -104,7 +104,13 @@
         </div>
         <div class="prob-components" id="probComponents"></div>
       </div>
-      <div class="chart-box"><svg class="mini-chart" id="probChart" viewBox="0 0 420 142" role="img" aria-label="Snow squall probability evolution"></svg><div class="chart-legend-row"><span class="chart-key"><i style="background:#ff5648"></i>15m</span><span class="chart-key"><i style="background:#1f90e9"></i>30m</span><span class="chart-key"><i style="background:#f0c54c"></i>45m</span><span class="chart-key"><i style="background:#62ce73"></i>60m</span></div></div>
+      <div class="track-evolution-summary" id="probabilitySummary">No scored track history yet.</div>
+      <div class="chart-box track-probability-box">
+        <svg class="mini-chart track-probability-chart" id="probChart" viewBox="0 0 520 190" role="img" aria-label="Snow squall probability evolution by tracked scan"></svg>
+        <div class="chart-legend-row"><span class="chart-key"><i style="background:#ff5648"></i>15m</span><span class="chart-key"><i style="background:#1f90e9"></i>30m</span><span class="chart-key"><i style="background:#f0c54c"></i>45m</span><span class="chart-key"><i style="background:#62ce73"></i>60m</span><span class="chart-key chart-key-muted">Each point = one radar scan</span></div>
+      </div>
+      <div class="env-outlook-label">ENVIRONMENT TRAJECTORY • CURRENT → NEXT AVAILABLE SCAN</div>
+      <div class="environment-outlook" id="environmentOutlook"></div>
     </div>
 
     <div class="section-block" id="motionSection">
@@ -123,7 +129,7 @@
     </div>
 
     <div class="section-block" id="historySection">
-      <div class="section-header"><h2>RECENT HISTORY</h2><span id="historyCount">—</span></div>
+      <div class="section-header"><h2>TRACK HISTORY</h2><span id="historyCount">—</span></div>
       <div class="history-chart-wrap"><svg class="history-chart" id="historyChart" viewBox="0 0 520 145" role="img" aria-label="Selected object recent history"></svg></div>
       <div class="history-table-wrap"><table class="history-table" id="historyTable"></table></div>
     </div>
