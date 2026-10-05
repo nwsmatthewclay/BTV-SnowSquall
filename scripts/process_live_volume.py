@@ -297,11 +297,11 @@ def process_volume(
     # high-gradient pixels. Keep the general detector unchanged for training
     # while using a more spatially coherent configuration for the live view.
     live_detection_config = ObjectDetectionConfig(
-        min_pixels=16,
+        min_pixels=10,
         close_iterations=2,
         open_iterations=0,
         split_merged=False,
-        min_candidate_rank_score=40.0,
+        min_candidate_rank_score=35.0,
     )
     detections = detect_reflectivity_objects(
         data,
