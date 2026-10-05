@@ -87,12 +87,17 @@ jobs:
           fi
 
       - name: Download model bundle
+        id: download
         if: steps.model.outputs.skip != 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
+          rm -rf model_bundle
           gh run download "${{ steps.model.outputs.run_id }}" --name "${{ steps.model.outputs.artifact_name }}" --dir model_bundle
+          model_root="$(find model_bundle -type d -name 'candidate_ensemble_refresh_15m' -print -quit | xargs -r dirname)"
+          test -n "$model_root"
+          echo "model_root=$model_root" >> "$GITHUB_OUTPUT"
 
       - name: Set up Python
         if: steps.model.outputs.skip != 'true'
@@ -112,7 +117,7 @@ jobs:
           set -euo pipefail
           python scripts/shadow_live_model_scorer.py \
             --live-root live_data \
-            --model-root model_bundle \
+            --model-root "${{ steps.download.outputs.model_root }}" \
             --output-root shadow_data
 
       - name: Publish isolated shadow branch
