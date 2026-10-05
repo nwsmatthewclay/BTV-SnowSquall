@@ -72,38 +72,87 @@ jobs:
         run: |
           python scripts/live_object_worker.py             --radar KTYX             --poll-seconds 2             --max-polls 1             --state viewer/data/live/KTYX_state.json             --output viewer/data/live/KTYX_objects.geojson             --history-jsonl viewer/data/live/KTYX_history.jsonl             --history-csv data/derived/KTYX_history.csv
 
-      - name: Ensure last processed Level-II volumes are available for radar display
+      - name: Ensure exact processed Level-II volumes are available for radar display
         run: |
           set -euo pipefail
           python - <<'PY'
           import json
+          from datetime import datetime, timezone
           from pathlib import Path
-          from acquisition.radar_watcher import make_s3_client, download_volume, find_recent_volumes
+          from acquisition.radar_watcher import (
+              archive_prefix, find_recent_volumes, make_s3_client, download_volume
+          )
 
           s3 = make_s3_client()
           for radar in ("KCXX", "KTYX"):
               state_path = Path(f"viewer/data/live/{radar}_state.json")
               state = json.loads(state_path.read_text(encoding="utf-8")) if state_path.exists() else {}
               source = Path(str(state.get("last_source", ""))).name
-              candidates = find_recent_volumes(s3, radar, lookback_hours=6)
-              match = next(((key, when) for key, when in candidates if Path(key).name == source), None) if source else None
-              if match:
-                  key, when = match
-                  target = Path("data/raw") / radar / Path(key).name
-                  if not target.exists() or target.stat().st_size == 0:
-                      print(f"{radar}: restoring processed volume {Path(key).name}")
+              target = Path("data/raw") / radar / source if source else None
+
+              # The worker normally leaves its processed volume in data/raw.
+              # If not, recover that exact source first; do not silently switch
+              # the radar display to an unrelated older volume.
+              if source and target and target.exists() and target.stat().st_size > 0:
+                  print(f"{radar}: exact processed source present: {target.name} ({target.stat().st_size} bytes)")
+                  continue
+
+              recovered = False
+              if source:
+                  for key, when in find_recent_volumes(s3, radar, lookback_hours=8):
+                      if Path(key).name == source:
+                          print(f"{radar}: restoring exact processed source {source}")
+                          download_volume(s3, radar, key, when)
+                          recovered = True
+                          break
+
+              if not recovered:
+                  # If the state source has aged out of the archive, use the
+                  # newest available volume only as a last-resort display source.
+                  candidates = find_recent_volumes(s3, radar, lookback_hours=2)
+                  if candidates:
+                      key, when = candidates[-1]
+                      print(f"{radar}: exact source unavailable; using newest display source {Path(key).name}")
                       download_volume(s3, radar, key, when)
-              elif candidates:
-                  key, when = candidates[-1]
-                  print(f"{radar}: persisted source not in archive listing; using newest available {Path(key).name} for radar rendering")
-                  download_volume(s3, radar, key, when)
-              else:
-                  print(f"{radar}: no Level-II archive volume available")
+                  else:
+                      print(f"{radar}: no Level-II archive volume available")
           PY
+
+          echo "Raw radar files available:"
+          find data/raw/KCXX data/raw/KTYX -maxdepth 1 -type f -size +0c -printf '%p %s bytes\n' | tail -20 || true
+
       - name: Build KCXX KTYX live radar mosaic
         run: |
           set -euo pipefail
           python scripts/build_live_radar_mosaic.py             --raw-root data/raw             --kcxx-state viewer/data/live/KCXX_state.json             --ktyx-state viewer/data/live/KTYX_state.json             --output-image viewer/data/live/radar_mosaic.png             --output-json viewer/data/live/radar_mosaic.json
+
+      - name: Verify radar display payload before publish
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          p=Path("viewer/data/live/radar_mosaic.json")
+          if not p.exists():
+              raise SystemExit("Radar mosaic metadata was not created.")
+          d=json.loads(p.read_text(encoding="utf-8"))
+          status=d.get("status")
+          bounds=d.get("bounds")
+          products=d.get("display_products") or {}
+          velocity=products.get("base_velocity") or {}
+          print("radar mosaic status:", status)
+          print("radar sources:", d.get("sources"))
+          print("velocity products:", sorted(velocity))
+          if status not in {"ready","stale"} or not bounds:
+              raise SystemExit("Radar display is unavailable; refusing to publish a broken live payload.")
+          if status == "ready" and not velocity:
+              raise SystemExit("Radar reflectivity built but no base velocity product was generated.")
+          for site,item in velocity.items():
+              for key in ("clean_image","raw_image"):
+                  path=Path("viewer/data/live")/str(item[key])
+                  if not path.exists() or path.stat().st_size == 0:
+                      raise SystemExit(f"Missing velocity image: {path}")
+          PY
 
       - name: Normalize persisted live timestamps
         run: |
