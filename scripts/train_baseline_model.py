@@ -482,6 +482,8 @@ def main():
         "predictor_columns": predictors,
         "operational_predictor_policy": "live_compatible_subset_from_feature_schema",
         "training_rows": int(len(data)),
+        "reviewed_negative_window_count": int(data["reviewed_negative_window"].sum()),
+        "reviewed_negative_row_count": int((data["population"].eq("winter_null_candidate") & data["reviewed_negative_window"]).sum()),
         "training_groups": int(data["split_group"].nunique()),
         "location_predictor_policy": schema.get("location_predictor_policy", "unspecified"),
         "evaluation_unit": "episode_or_case_or_null_group",
