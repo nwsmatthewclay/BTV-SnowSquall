@@ -783,6 +783,36 @@ jobs:
           print('Cumulative feature rows:', len(d))
           print('Unique object-timestep rows:', d['row_identity_key'].nunique() if 'row_identity_key' in d.columns else 'not-present')
           PY
+      - name: Reconcile human-reviewed hard-negative windows
+        run: |
+          set -euo pipefail
+          queue=data/derived/snow_squall_hard_negative_review_queue
+          surface=data/raw/ASOS_IEM_null_expansion
+          existing=''
+          if [ -f data/reviews/snow_squall_hard_negative_review.csv ]; then
+            existing='--existing-review data/reviews/snow_squall_hard_negative_review.csv'
+          fi
+          if [ -d "$surface" ]; then
+            python scripts/build_hard_negative_review_queue.py \
+              data/derived/snow_squall_model_features_cumulative.csv \
+              --surface-root "$surface" \
+              --output "$queue"
+          else
+            python scripts/build_hard_negative_review_queue.py \
+              data/derived/snow_squall_model_features_cumulative.csv \
+              --output "$queue"
+          fi
+          python scripts/build_hard_negative_review_packet.py \
+            --queue "${queue}.csv" \
+            --output data/derived/snow_squall_hard_negative_review_packet.csv \
+            --promoted-output data/derived/snow_squall_reviewed_negative_nulls.csv \
+            --summary data/derived/snow_squall_hard_negative_review_packet.summary.json \
+            $existing
+          python - <<'PY'
+          import pandas as pd
+          p=pd.read_csv('data/derived/snow_squall_reviewed_negative_nulls.csv')
+          print('Human-reviewed hard-negative training windows:', len(p))
+          PY
       - name: Enforce cumulative radar + environment training contract
         run: |
           set -euo pipefail
@@ -827,6 +857,7 @@ jobs:
               data/derived/snow_squall_model_features_cumulative.csv \
               --schema data/derived/snow_squall_model_features_expanded.schema.json \
               --target squall_onset_within_${h}m \
+              --reviewed-negative-manifest data/derived/snow_squall_reviewed_negative_nulls.csv \
               --output-dir data/derived/baseline_expansion_${h}m
           done
           python scripts/summarize_baseline_horizons.py \
@@ -840,6 +871,7 @@ jobs:
               data/derived/snow_squall_model_features_cumulative.csv \
               --schema data/derived/snow_squall_model_features_expanded.schema.json \
               --target squall_onset_within_${h}m \
+              --reviewed-negative-manifest data/derived/snow_squall_reviewed_negative_nulls.csv \
               --output-dir data/derived/candidate_ensemble_expansion_${h}m
           done
       - name: Compare expanded research candidate models
@@ -975,6 +1007,11 @@ jobs:
             data/derived/snow_squall_national_pretraining_feature_summary.json
             data/derived/next_expansion_batch.json
             data/derived/snow_squall_expansion_provenance.json
+            data/derived/snow_squall_hard_negative_review_queue.csv
+            data/derived/snow_squall_hard_negative_review_queue.summary.csv
+            data/derived/snow_squall_hard_negative_review_packet.csv
+            data/derived/snow_squall_hard_negative_review_packet.summary.json
+            data/derived/snow_squall_reviewed_negative_nulls.csv
             data/manifests/snow_squall_expansion/snow_squall_expansion_cases.csv
             data/manifests/snow_squall_expansion/snow_squall_verified_cases.csv
       - name: Upload lightweight live-model bundle
@@ -1013,6 +1050,10 @@ jobs:
             data/derived/baseline_expansion_*m
             data/derived/snow_squall_expanded_horizon_summary.json
             data/derived/snow_squall_expansion_provenance.json
+            data/derived/snow_squall_hard_negative_review_queue.csv
+            data/derived/snow_squall_hard_negative_review_packet.csv
+            data/derived/snow_squall_hard_negative_review_packet.summary.json
+            data/derived/snow_squall_reviewed_negative_nulls.csv
             data/raw/ASOS_IEM_expansion
             data/raw/ASOS_IEM_null_expansion
             data/raw/RAP_expansion
