@@ -388,7 +388,7 @@ function renderProbabilityChart(hist){
   }).filter(function(p){return Number.isFinite(p.x)&&Number.isFinite(p.v)});
 
   var latestProbs=latest.research_probabilities||{};
-  /* The current 15-minute score is the anchor at NOW; the horizon fields
+  /* The current 15-minute score anchors the observed line; horizon fields
      are the forward projection at +15/+30/+45/+60 minutes. */
   var currentProb=Number(latestProbs["15"]??latestProbs["15min"]);
   var forecast=[
