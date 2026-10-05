@@ -115,17 +115,9 @@ jobs:
         run: |
           python scripts/audit_validation_training_separation.py
 
-      - name: Trigger candidate archived replay
+      - name: Hand off to archived replay
         if: success()
-        run: |
-          set -euo pipefail
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          printf 'Validation completed successfully.\n' > .github/archived-replay-trigger
-          git add .github/archived-replay-trigger
-          git commit -m "Trigger protected candidate replay"
-          git push origin HEAD:snow-squall-model-foundation
-          echo "Triggered archived candidate replay through the branch trigger file."
+        run: echo "Modern validation passed; archived replay will start from the workflow_run dependency."
       - name: Upload modern validation package
         uses: actions/upload-artifact@v4
         with:
