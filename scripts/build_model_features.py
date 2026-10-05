@@ -58,7 +58,11 @@ OPERATIONAL_LIVE_PREDICTORS = {
     "zdr_mean_db_delta", "zdr_mean_db_rate_per_min", "rhohv_mean_delta", "rhohv_mean_rate_per_min",
     "kdp_mean_degkm_delta", "kdp_mean_degkm_rate_per_min", "velocity_mean_kt_delta", "velocity_mean_kt_rate_per_min",
     "cape_jkg", "cin_jkg", "snsq", "mean_rh_0_2km_pct", "thetae_delta_0_2km_k", "mean_wind_0_2km_ms", "wetbulb_2m_c", "snsq_moisture_factor", "snsq_instability_factor", "snsq_wind_factor",
-    "shear_0_6km_kt", "temperature_dewpoint_spread_k",
+    "sbcape_jkg", "sbcin_jkg", "rh_0_2km_pct", "wind_0_1km_kt", "wind_0_3km_kt",
+    "shear_0_1km_kt", "shear_0_3km_kt", "shear_0_6km_kt",
+    "lapse_rate_0_3km_c_km", "lapse_rate_0_7_5km_c_km", "wet_bulb_0_3km_c",
+    "lcl_m", "lfc_m", "el_m", "dcape_jkg", "freezing_level_m",
+    "temperature_dewpoint_spread_k",
     "frontogenesis", "dcva", "omega", "epv",
     "cloud_layer_depth_m", "cloud_layer_rh_pct", "cloud_layer_mean_wind_kt", "cloud_layer_shear_kt",
     "cape_shear_product", "reflectivity_core_excess",
@@ -159,6 +163,27 @@ def haversine_km(lat1, lon1, lat2, lon2):
 
 def build_features(frame: pd.DataFrame) -> pd.DataFrame:
     df = frame.copy()
+
+    # Normalize environment aliases so historical and live scoring share one
+    # canonical predictor vocabulary.
+    environment_aliases = {
+        "sbcape_jkg": "cape_jkg",
+        "sbcin_jkg": "cin_jkg",
+        "rh_0_2km_pct": "mean_rh_0_2km_pct",
+        "lapse_rate_0_3km_c_km": "lr03_Ckm",
+        "lapse_rate_0_7_5km_c_km": "lr75_Ckm",
+        "wet_bulb_0_3km_c": "wet_bulb_0_3km_c",
+    }
+    for target, source in environment_aliases.items():
+        if target not in df.columns and source in df.columns:
+            df[target] = df[source]
+
+    if "shear_0_6km_kt" not in df.columns and {"shear_u_0_6km_ms", "shear_v_0_6km_ms"}.issubset(df.columns):
+        su = pd.to_numeric(df["shear_u_0_6km_ms"], errors="coerce")
+        sv = pd.to_numeric(df["shear_v_0_6km_ms"], errors="coerce")
+        df["shear_0_6km_kt"] = np.hypot(su, sv) * 1.943844492
+    if "shear_0_6km_kt" not in df.columns and "shear_0_6km_ms" in df.columns:
+        df["shear_0_6km_kt"] = pd.to_numeric(df["shear_0_6km_ms"], errors="coerce") * 1.943844492
 
     # Normalize the shared motion vocabulary before temporal derivation. Radar
     # motion is optional in historical records, so absent fields are explicit
