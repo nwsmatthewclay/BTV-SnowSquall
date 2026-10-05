@@ -28,7 +28,7 @@ class TrackerConfig:
     grid_spacing_km:float=1.0
     max_motion_kt:float=75.0
     min_gate_distance_km:float=4.0
-    max_time_gap_minutes:float=15.0
+    max_time_gap_minutes:float=30.0
     max_missed_scans:int=2
     max_area_ratio:float=16.0
     prediction_weight:float=0.72
