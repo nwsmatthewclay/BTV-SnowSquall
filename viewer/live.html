@@ -6,7 +6,7 @@
 <title>BTV Snow Squall • Live Object Monitor</title>
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
-<link rel="stylesheet" href="style.css?v=20261005-object-monitor-23">
+<link rel="stylesheet" href="style.css?v=20261005-observed-forecast-01">
 </head>
 <body class="live-dashboard-page">
 <header>
@@ -102,7 +102,7 @@
         </div>
         <div class="prob-components" id="probComponents"></div>
       </div>
-      <div class="chart-box"><svg class="mini-chart" id="probChart" viewBox="0 0 420 142" role="img" aria-label="Live research probability evolution"></svg><div class="chart-legend-row"><span class="chart-key"><i style="background:#ff5648"></i>15m</span><span class="chart-key"><i style="background:#1f90e9"></i>30m</span><span class="chart-key"><i style="background:#f0c54c"></i>45m</span><span class="chart-key"><i style="background:#62ce73"></i>60m</span></div></div>
+      <div class="chart-box probability-evolution-box"><div class="probability-chart-head"><div><strong>PROBABILITY EVOLUTION</strong><span>Observed history → 60-minute projection</span></div><div class="probability-chart-state" id="probabilityChartState">OBSERVED / FORECAST</div></div><svg class="mini-chart" id="probChart" viewBox="0 0 420 142" role="img" aria-label="Observed and projected snow squall probability evolution"></svg><div class="chart-legend-row probability-legend"><span class="chart-key observed-key"><i></i>Observed probability</span><span class="chart-key forecast-key"><i></i>Projected probability</span><span class="chart-key now-key"><i></i>NOW</span></div><div class="probability-chart-note">Solid = probability observed through the latest radar scan. Dotted = current forward projection for the next 60 minutes.</div></div>
     </div>
 
     <div class="section-block" id="motionSection">
