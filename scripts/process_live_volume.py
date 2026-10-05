@@ -21,7 +21,7 @@ from processing.radar_grid import grid_field_2d, grid_latlon, grid_lowest_sweep,
 from processing.radar_storm_motion import attach_radar_storm_motion
 from processing.radar_features import object_field_summary, velocity_object_summary
 from processing.vertical_structure import summarize_vertical_structure
-from acquisition.rap_environment import acquire_for_radar_time
+from acquisition.rap_environment import acquire_for_radar_time, acquire_forecast_for_radar_time
 from processing.rap_features import extract_features
 from processing.radar_sites import apply_radar_origin, radar_origin_for_site
 from scripts.live_model_features import build_live_feature_frame
@@ -316,6 +316,12 @@ def process_volume(
     except Exception as exc:
         print(f"RAP acquisition warning: {type(exc).__name__}: {exc}")
 
+    rap_forecast_30_result = None
+    try:
+        rap_forecast_30_result = acquire_forecast_for_radar_time(radar_dt, target_minutes=30)
+    except Exception as exc:
+        print(f"RAP +30 min forecast warning: {type(exc).__name__}: {exc}")
+
     previous_reflectivity, previous_radar_time = load_previous_radar_field(state_path)
     radar_motion = None
     if previous_reflectivity is not None and previous_radar_time is not None:
@@ -497,11 +503,46 @@ def process_volume(
                     "fields": {},
                 }
 
+        environment_forecast_30 = {"status": "unavailable", "source": "RAP", "fields": {}}
+        forecast_30_valid_time = None
+        if rap_forecast_30_result is not None and centroid_lat is not None and centroid_lon is not None:
+            forecast_30_match, forecast_30_path = rap_forecast_30_result
+            forecast_30_valid_time = forecast_30_match.valid_time
+            try:
+                environment_forecast_30 = extract_features(
+                    forecast_30_path,
+                    centroid_lat,
+                    centroid_lon,
+                    radar_dt,
+                    expected_valid_time=forecast_30_match.valid_time,
+                    allow_future=True,
+                )
+                environment_forecast_30["forecast_run_time_utc"] = forecast_30_match.cycle_time.isoformat().replace("+00:00", "Z")
+                environment_forecast_30["forecast_valid_time_utc"] = forecast_30_match.valid_time.isoformat().replace("+00:00", "Z")
+                environment_forecast_30["forecast_lead_hours"] = int(forecast_30_match.lead_hours)
+                environment_forecast_30["target_minutes"] = 30
+            except Exception as exc:
+                environment_forecast_30 = {
+                    "source": "RAP",
+                    "status": "error",
+                    "error": f"{type(exc).__name__}: {exc}",
+                    "fields": {},
+                }
+
         environment_readiness = assess_environment(
             {**environment.get("fields", {}), "environment": environment, "timestamp": timestamp},
             radar_time=timestamp,
         )
+        forecast_reference_time = (
+            forecast_30_valid_time.isoformat().replace("+00:00", "Z")
+            if forecast_30_valid_time is not None else timestamp
+        )
+        environment_forecast_30_readiness = assess_environment(
+            {**environment_forecast_30.get("fields", {}), "environment": environment_forecast_30, "timestamp": forecast_reference_time},
+            radar_time=forecast_reference_time,
+        )
         environment_fields = environment.get("fields") or {}
+        environment_forecast_30_fields = environment_forecast_30.get("fields") or {}
 
         features.append({
             "track_id": track_key,
@@ -584,7 +625,15 @@ def process_volume(
             "environment_model_ready": bool(environment_readiness["ready"]),
             "environment_missing_fields": environment_readiness["missing_fields"],
             "environment_age_minutes": environment_readiness["age_minutes"],
+            "environment_forecast_30min": environment_forecast_30,
+            "environment_forecast_30min_model_ready": bool(environment_forecast_30_readiness["ready"]),
+            "environment_forecast_30min_missing_fields": environment_forecast_30_readiness["missing_fields"],
+            "environment_forecast_30min_age_minutes": environment_forecast_30_readiness["age_minutes"],
+            "environment_forecast_30min_valid_time_utc": environment_forecast_30.get("forecast_valid_time_utc"),
+            "environment_forecast_30min_run_time_utc": environment_forecast_30.get("forecast_run_time_utc"),
+            "environment_forecast_30min_lead_hours": environment_forecast_30.get("forecast_lead_hours"),
             **environment_fields,
+            **{f"expected_30min_{key}": value for key, value in environment_forecast_30_fields.items()},
             "data_quality": "degraded" if obj.get("touches_grid_edge", False) else "good",
             "model_version": "live-object-foundation-v2",
         })
