@@ -107,6 +107,20 @@ def environment_component(record: Mapping) -> tuple[float, dict]:
         return 50.0, {"status": "unavailable", "source": "RAP", "coverage": 0.0}
 
     current = 100.0 * _clamp(base)
+
+    # Snow squalls require a plausible snow-at-surface environment. Prevent
+    # CAPE/RH/shear from producing a high score when the existing RAP/MetPy
+    # snow-temperature gate says the profile cannot support snow at the surface.
+    snow_pass = record.get("snow_temperature_pass")
+    wetbulb = _num(record.get("wetbulb_2m_c"))
+    freezing_level = _num(record.get("freezing_level_m"))
+    if snow_pass is False:
+        current *= 0.15
+    elif snow_pass is None and wetbulb is not None and wetbulb > 3.0:
+        current *= 0.25
+    if freezing_level is not None and freezing_level > 1800.0:
+        current *= 0.70
+
     forecast = record.get("environment_forecast_30min")
     forecast_fields = forecast.get("fields") if isinstance(forecast, Mapping) else None
     forecast_score = None
@@ -115,6 +129,13 @@ def environment_component(record: Mapping) -> tuple[float, dict]:
         fr = _num(forecast_risk.get("snow_squall_environment_score"))
         if fr is not None:
             forecast_score = 100.0 * _clamp(fr)
+            if forecast_fields.get("snow_temperature_pass") is False:
+                forecast_score *= 0.15
+            elif forecast_fields.get("snow_temperature_pass") is None and _num(forecast_fields.get("wetbulb_2m_c")) is not None and _num(forecast_fields.get("wetbulb_2m_c")) > 3.0:
+                forecast_score *= 0.25
+            forecast_freezing = _num(forecast_fields.get("freezing_level_m"))
+            if forecast_freezing is not None and forecast_freezing > 1800.0:
+                forecast_score *= 0.70
 
     # Current environment is primary. A valid +30 RAP forecast contributes
     # increasingly to the longer horizons; 45/60 extrapolate cautiously from
