@@ -159,8 +159,7 @@ jobs:
             python scripts/add_national_pretraining_features.py               --features data/derived/snow_squall_model_features_cumulative_prior.csv               --model-root data/derived               --output data/derived/snow_squall_model_features_cumulative.csv               --summary data/derived/snow_squall_national_pretraining_feature_summary_refresh.json               --schema data/derived/snow_squall_model_features_expanded.schema.json
           else
             cp data/derived/snow_squall_model_features_cumulative_prior.csv               data/derived/snow_squall_model_features_cumulative.csv
-            printf '%s
-' '{"status":"national_pretraining_not_available","mode":"btv_only_candidate"}'               > data/derived/snow_squall_national_pretraining_feature_summary_refresh.json
+            printf '%s\\n' '{"status":"national_pretraining_not_available","mode":"btv_only_candidate"}'               > data/derived/snow_squall_national_pretraining_feature_summary_refresh.json
           fi
           python - <<'PY'
           import pandas as pd
