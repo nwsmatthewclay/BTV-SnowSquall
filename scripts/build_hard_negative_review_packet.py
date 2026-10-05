@@ -99,6 +99,7 @@ def build_packet(
         & d["final_class"].isin(FINAL_CLASSES - {"pending"})
         & d["radar_target_present"].isin({"yes", "no"})
         & d["event_evidence_present"].isin({"yes", "no"})
+        & d["surface_evidence_interpreted"].isin({"yes", "no"})
         & d["reviewer"].ne("")
         & d["reviewed_at_utc"].ne("")
     )
@@ -165,6 +166,7 @@ def validate_packet(packet: pd.DataFrame) -> list[str]:
             and final_class == "reviewed_negative"
             and radar == "no"
             and event == "no"
+            and str(row["surface_evidence_interpreted"]).strip() in {"yes", "no"}
             and str(row["reviewer"]).strip() != ""
             and str(row["reviewed_at_utc"]).strip() != ""
         )
