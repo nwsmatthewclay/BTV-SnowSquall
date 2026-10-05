@@ -288,3 +288,41 @@ def test_limited_data_bundle_uses_reduced_shadow_coverage_floor(tmp_path, monkey
     assert rows[0]["coverage_policy"]["15"]["mode"] == "limited_data_bootstrap"
     assert rows[0]["coverage_policy"]["15"]["minimum_fraction"] == 0.40
     assert rows[0]["research_probabilities"]
+
+
+def test_shadow_payload_exposes_track_timeline_environment_and_forecast(tmp_path, monkeypatch):
+    live = tmp_path / "live"
+    models = tmp_path / "models"
+    live.mkdir()
+    models.mkdir()
+    make_model_dirs(models)
+
+    current = rich_props(timestamp="2026-01-01T12:10:00Z", max_z=30.0)
+    current["track_age_scans"] = 3
+    current["expected_30min_snsq"] = 1.4
+    current["expected_30min_mucape_jkg"] = 220.0
+    previous = rich_props(timestamp="2026-01-01T12:00:00Z", max_z=25.0)
+
+    (live / "KCXX_objects.geojson").write_text(json.dumps({
+        "metadata": {"scan_time_utc": current["timestamp"]},
+        "features": [{"type": "Feature", "geometry": None, "properties": current}],
+    }), encoding="utf-8")
+    (live / "KCXX_history.json").write_text(
+        json.dumps([previous, rich_props(timestamp="2026-01-01T12:05:00Z")]),
+        encoding="utf-8",
+    )
+    write_empty_site(live, "KTYX")
+
+    monkeypatch.setattr(
+        "scripts.shadow_live_model_scorer.ModelRuntime.load",
+        lambda directory: FakeRuntime(int(directory.name.split("_")[-1].replace("m", ""))),
+    )
+    payload, rows = score_site("KCXX", live, models)
+
+    record = rows[0]
+    assert record["track_age_min"] == 10.0
+    assert record["track_scan_count"] == 3
+    assert record["track_first_scan_utc"].startswith("2026-01-01T12:00:00")
+    assert record["environment_snapshot"]["cape_jkg"] == 100.0
+    assert record["environment_forecast_30min_snapshot"]["snsq"] == 1.4
+    assert record["environment_forecast_30min_snapshot"]["mucape_jkg"] == 220.0
