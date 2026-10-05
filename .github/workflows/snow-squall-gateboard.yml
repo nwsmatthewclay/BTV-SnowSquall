@@ -92,12 +92,20 @@ jobs:
 
           exp_text = Path(".github/workflows/snow-squall-expansion-dataset.yml").read_text()
           ctrl_text = Path(".github/workflows/snow-squall-expansion-controller.yml").read_text()
-          archive_ok = "'auto_continue': False," in exp_text and "Historical expansion is archived" in ctrl_text
+          state_text = Path(".github/historical-downloader-state.json").read_text()
+          expansion_archived = "'auto_continue': False," in exp_text and "Historical expansion is archived" in ctrl_text
+          candidate_id_state = "processed_candidate_ids" in state_text and "exclude-candidate-ids" in exp_text
           checks.append({
-              "gate": "historical_archive_lock",
-              "status": "green" if archive_ok else "red",
-              "ok": archive_ok,
-              "reason": "expansion workflow/controller stop automatic historical continuation" if archive_ok else "archive lock missing",
+              "gate": "historical_expansion_control",
+              "status": "green" if candidate_id_state and not expansion_archived else ("yellow" if expansion_archived else "red"),
+              "ok": candidate_id_state and not expansion_archived,
+              "reason": (
+                  "candidate-ID acquisition state and automatic continuation are enabled"
+                  if candidate_id_state and not expansion_archived
+                  else "historical expansion is explicitly archived"
+                  if expansion_archived
+                  else "historical acquisition control contract is incomplete"
+              ),
           })
 
           gate_specs = [
@@ -111,8 +119,9 @@ jobs:
               ("archived_replay_smoke", "Snow Squall Archived Replay Smoke", None),
               ("live_object_worker", "Snow Squall Live Object Worker Test", None),
               ("live_shadow", "Publish Live Snow Squall Model Shadow", None),
-              ("case_heldout_model_gate", "Case-Held-Out Model Gate", "Awaiting a successful Snow Squall Expansion Dataset feature artifact; historical expansion is intentionally archived."),
-              ("candidate_model_release_audit", "Candidate Model Release Audit", "Awaiting a successful Snow Squall Candidate Model Refresh bundle; no candidate bundle is currently available to audit."),
+              ("case_heldout_model_gate", "Case-Held-Out Model Gate", "Awaiting a successful Snow Squall Expansion Dataset feature artifact."),
+              ("candidate_model_release_audit", "Candidate Model Release Audit", "Awaiting a successful Snow Squall Candidate Model Refresh bundle."),
+              ("research_operational_candidate", "Snow Squall Research-Operational Candidate Gate", "Awaiting a successful candidate model refresh and readiness gate."),
           ]
           for name, workflow, dependency_reason in gate_specs:
               check = status_gate(name, workflow)
