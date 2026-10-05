@@ -18,7 +18,60 @@ def numeric(df: pd.DataFrame, col: str) -> pd.Series:
     ) if col in df.columns else pd.Series(float("nan"), index=df.index)
 
 
-def build(frame: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
+def load_surface(root: Path | None) -> pd.DataFrame:
+    if root is None or not root.exists():
+        return pd.DataFrame()
+    frames = []
+    for path in root.rglob("*.csv"):
+        if path.name in {"null_surface_download_manifest.csv", "null_surface_download_errors.csv"}:
+            continue
+        try:
+            d = pd.read_csv(path)
+        except Exception:
+            continue
+        if "null_id" in d.columns:
+            frames.append(d)
+    if not frames:
+        return pd.DataFrame()
+    return pd.concat(frames, ignore_index=True, sort=False)
+
+
+def surface_summary(surface: pd.DataFrame) -> pd.DataFrame:
+    if surface.empty or "null_id" not in surface.columns:
+        return pd.DataFrame(columns=[
+            "null_id", "surface_report_count", "surface_min_visibility_m",
+            "surface_max_gust_kt", "surface_snow_reports",
+            "surface_mixed_reports", "surface_freezing_rain_reports",
+        ])
+    d = surface.copy()
+    d["null_id"] = d["null_id"].astype(str)
+    d["visibility_m"] = numeric(d, "visibility_m")
+    d["wind_gust_kt"] = numeric(d, "wind_gust_kt")
+    wx = d.get("wxcodes", pd.Series("", index=d.index)).fillna("").astype(str).str.upper()
+    return (
+        pd.DataFrame({
+            "null_id": d["null_id"],
+            "surface_report_count": 1,
+            "surface_visibility_m": d["visibility_m"],
+            "surface_gust_kt": d["wind_gust_kt"],
+            "surface_snow_report": wx.str.contains(r"SN|SG|SHSN|BLSN", regex=True),
+            "surface_mixed_report": wx.str.contains(r"PL|IP|RASN|SNRA", regex=True),
+            "surface_freezing_rain_report": wx.str.contains(r"FZRA|FZDZ", regex=True),
+        })
+        .groupby("null_id", dropna=False)
+        .agg(
+            surface_report_count=("surface_report_count", "sum"),
+            surface_min_visibility_m=("surface_visibility_m", "min"),
+            surface_max_gust_kt=("surface_gust_kt", "max"),
+            surface_snow_reports=("surface_snow_report", "sum"),
+            surface_mixed_reports=("surface_mixed_report", "sum"),
+            surface_freezing_rain_reports=("surface_freezing_rain_report", "sum"),
+        )
+        .reset_index()
+    )
+
+
+def build(frame: pd.DataFrame, surface: pd.DataFrame | None = None) -> tuple[pd.DataFrame, pd.DataFrame]:
     d = frame.copy()
     nulls = d[d["population"].eq("winter_null_candidate")].copy()
     if nulls.empty:
@@ -42,6 +95,19 @@ def build(frame: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
         if "environment_contract_ok" in d.columns
         else False
     )
+
+    surf = surface_summary(surface if surface is not None else pd.DataFrame())
+    if not surf.empty:
+        d = d.merge(surf, on="null_id", how="left")
+    for col in (
+        "surface_report_count", "surface_snow_reports",
+        "surface_mixed_reports", "surface_freezing_rain_reports",
+    ):
+        if col not in d.columns:
+            d[col] = 0
+        d[col] = pd.to_numeric(d[col], errors="coerce").fillna(0)
+    d["surface_min_visibility_m"] = numeric(d, "surface_min_visibility_m")
+    d["surface_max_gust_kt"] = numeric(d, "surface_max_gust_kt")
 
     rows = []
     for null_id, g in nulls.groupby("null_id", dropna=True):
@@ -78,6 +144,19 @@ def build(frame: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
             score += 1
             reasons.append("persistent_three_or_more_scans")
 
+        surface_snow = pd.to_numeric(g.get("surface_snow_reports", pd.Series(0, index=g.index)), errors="coerce").fillna(0).sum()
+        surface_vis = pd.to_numeric(g.get("surface_min_visibility_m", pd.Series(float("nan"), index=g.index)), errors="coerce").min()
+        surface_gust = pd.to_numeric(g.get("surface_max_gust_kt", pd.Series(float("nan"), index=g.index)), errors="coerce").max()
+        if surface_snow > 0:
+            score += 2
+            reasons.append("nearby_surface_snow_report")
+        if pd.notna(surface_vis) and surface_vis <= 800:
+            score += 2
+            reasons.append("nearby_surface_visibility_le_0p8km")
+        if pd.notna(surface_gust) and surface_gust >= 25:
+            score += 1
+            reasons.append("nearby_surface_gust_ge_25kt")
+
         activity = (
             str(g["activity_class"].dropna().iloc[0])
             if "activity_class" in g.columns and g["activity_class"].notna().any()
@@ -94,6 +173,10 @@ def build(frame: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
             "max_area_km2": float(max_area) if pd.notna(max_area) else None,
             "max_track_scan_count_to_date": float(max_scans) if pd.notna(max_scans) else None,
             "environment_contract_fraction": float(g["environment_contract_ok"].mean()),
+            "surface_report_count": int(pd.to_numeric(g["surface_report_count"], errors="coerce").fillna(0).max()),
+            "surface_min_visibility_m": float(surface_vis) if pd.notna(surface_vis) else None,
+            "surface_max_gust_kt": float(surface_gust) if pd.notna(surface_gust) else None,
+            "surface_snow_reports": int(surface_snow),
             "activity_class": activity,
             "hard_negative_score": int(score),
             "review_recommended": bool(score >= 3),
@@ -124,6 +207,7 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("features")
     parser.add_argument("--output", required=True)
+    parser.add_argument("--surface-root", default=None)
     args = parser.parse_args()
 
     frame = pd.read_csv(args.features)
@@ -132,7 +216,8 @@ def main() -> None:
     if missing:
         raise SystemExit(f"Missing required columns: {missing}")
 
-    table, summary = build(frame)
+    surface = load_surface(Path(args.surface_root)) if args.surface_root else pd.DataFrame()
+    table, summary = build(frame, surface=surface)
     out = Path(args.output)
     out.parent.mkdir(parents=True, exist_ok=True)
     table.to_csv(out.with_suffix(".csv"), index=False)
