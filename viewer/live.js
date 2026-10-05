@@ -339,20 +339,21 @@ function renderProbability(){
   var p=latestForSelected();if(!p){return}
   var probs=p.research_probabilities||{};
   var horizons=[15,30,45,60];
-  var score=probs["15min"]??probs["15"]??p.probability_15min;
-  var prevRows=trackHistory(p).slice(0,-1),prev=prevRows.length?(prevRows.at(-1).research_probabilities||{}):null;
-  var prev15=prev?.["15min"]??prev?.["15"]??null;
-  if(score==null){
+  var nowScore=p.research_probability_now??p.probability_now??probs.now;
+  if(nowScore==null) nowScore=probs["15min"]??probs["15"]??p.probability_15min;
+  var prevRows=trackHistory(p).slice(0,-1),prev=prevRows.length?prevRows.at(-1):null;
+  var prevNow=prev?.research_probability_now??prev?.probability_now??prev?.research_probabilities?.now;
+  if(prevNow==null&&prev) prevNow=prev.research_probabilities?.["15min"]??prev.research_probabilities?.["15"]??null;
+  if(nowScore==null){
     q("probabilityValue").classList.add("na");setText("probabilityValue","—");setText("probabilityDelta","Awaiting weighted score");q("probabilityDelta").className="prob-delta flat";
     setText("probabilityNote","Research component score is waiting for a usable radar/environment object record. Analog guidance remains provisional.");
   }else{
-    q("probabilityValue").classList.remove("na");setText("probabilityValue",(Number(score)*100).toFixed(1)+"%");
-    var d=prev15==null?null:Number(score)-Number(prev15);
-    setText("probabilityDelta",d==null?"50/35/15 weighted score":(d>=0?"▲ +":"▼ ")+(Math.abs(d)*100).toFixed(1)+" pp");
+    q("probabilityValue").classList.remove("na");setText("probabilityValue",(Number(nowScore)*100).toFixed(1)+"%");
+    var d=prevNow==null?null:Number(nowScore)-Number(prevNow);
+    setText("probabilityDelta",d==null?"Current weighted score":(d>=0?"▲ +":"▼ ")+(Math.abs(d)*100).toFixed(1)+" pp");
     q("probabilityDelta").className="prob-delta "+(d==null?"flat":d>=0?"up":"down");
-    setText("probabilityNote","Research guidance only • Radar 50% + Environment 35% + Analog 15%. Each component is independently reported on a 0–100 scale.");
+    setText("probabilityNote","NOW = current object-state score • +15/+30/+45/+60 = forward guidance. Research only; Radar 50% + Environment 35% + Analog 15%.");
   }
-  var comps=p.probability_components?.["15"]||{};
   var radar=p.radar_component_score,env=p.environment_component_score,analog=p.analog_component_score;
   var cards=[
     ["RADAR","50%",radar,"#ff5648"],
@@ -361,14 +362,15 @@ function renderProbability(){
   ];
   var cardHtml=cards.map(function(x){return "<div class='prob-component'><span><i class='comp-dot' style='background:"+x[3]+"'></i>"+x[0]+" <small style='color:#748a9b'>("+x[1]+")</small></span><b>"+(x[2]==null?"—":Number(x[2]).toFixed(1)+"%")+"</b></div>"}).join("");
   var horizonHtml="<div style='display:grid;grid-template-columns:repeat(4,1fr);gap:4px;margin-top:7px'>"+horizons.map(function(h){var v=probs[h+"min"]??probs[String(h)];return "<div style='border:1px solid rgba(190,210,220,.14);padding:5px;text-align:center'><span style='display:block;font-size:8px;color:#748a9b'>+"+h+" MIN</span><b style='font-size:13px'>"+(v==null?"—":(Number(v)*100).toFixed(1)+"%")+"</b></div>"}).join("")+"</div>";
-  q("probComponents").innerHTML=cardHtml+horizonHtml+"<div style='margin-top:6px;font-size:8px;color:#748a9b'>Weighted = Radar × 0.50 + Environment × 0.35 + Analog × 0.15. Analog status: "+esc(p.probability_component_detail?.analog?.status||"provisional")+".</div>";
+  q("probComponents").innerHTML=cardHtml+horizonHtml+"<div style='margin-top:6px;font-size:8px;color:#748a9b'>NOW = current weighted state. Forward horizons use the transparent radar/environment/analog projection. Analog status: "+esc(p.probability_component_detail?.analog?.status||"provisional")+".</div>";
   renderProbabilityChart(trackHistory(p));
 }
 function renderProbabilityChart(hist){
   var svg=q("probChart");svg.innerHTML="";
   var rows=(hist||[]).filter(function(r){
-    var v=r.research_probabilities||{};
-    return Number.isFinite(Number(v["15"]??v["15min"]));
+    var v=r.research_probability_now??r.probability_now??r.research_probabilities?.now;
+    if(v==null)v=r.research_probabilities?.["15min"]??r.research_probabilities?.["15"];
+    return Number.isFinite(Number(v));
   });
   if(!rows.length){
     svg.innerHTML="<text x='210' y='70' text-anchor='middle' class='chart-text'>Observed probability history is warming up</text>";
@@ -381,25 +383,23 @@ function renderProbabilityChart(hist){
   var latestTime=new Date(latest.timestamp||Date.now()).getTime();
   var observed=rows.map(function(r){
     var t=new Date(r.timestamp||latest.timestamp).getTime();
-    return {
-      x:(t-latestTime)/60000,
-      v:Number((r.research_probabilities||{})["15"]??(r.research_probabilities||{})["15min"])
-    };
-  }).filter(function(p){return Number.isFinite(p.x)&&Number.isFinite(p.v)});
+    var v=r.research_probability_now??r.probability_now??r.research_probabilities?.now;
+    if(v==null)v=r.research_probabilities?.["15min"]??r.research_probabilities?.["15"];
+    return {x:(t-latestTime)/60000,v:Number(v)};
+  }).filter(function(pt){return Number.isFinite(pt.x)&&Number.isFinite(pt.v)});
 
   var latestProbs=latest.research_probabilities||{};
-  /* The current 15-minute score anchors the observed line; horizon fields
-     are the forward projection at +15/+30/+45/+60 minutes. */
-  var currentProb=Number(latestProbs["15"]??latestProbs["15min"]);
+  var currentNow=latest.research_probability_now??latest.probability_now??latestProbs.now;
+  if(currentNow==null)currentNow=latestProbs["15min"]??latestProbs["15"]??latest.probability_15min;
   var forecast=[
-    [0,currentProb],
+    [0,Number(currentNow)],
     [15,Number(latestProbs["15"]??latestProbs["15min"])],
     [30,Number(latestProbs["30"]??latestProbs["30min"])],
     [45,Number(latestProbs["45"]??latestProbs["45min"])],
     [60,Number(latestProbs["60"]??latestProbs["60min"])]
-  ].filter(function(p){return Number.isFinite(p[1])});
+  ].filter(function(pt){return Number.isFinite(pt[1])});
 
-  var minX=Math.min(-60,observed.length?Math.min.apply(null,observed.map(function(p){return p.x})):0);
+  var minX=Math.min(-60,observed.length?Math.min.apply(null,observed.map(function(pt){return pt.x})):0);
   var maxX=60;
   var x=function(v){return P+(v-minX)/(maxX-minX)*(W-2*P)};
   var y=function(v){return H-BOTTOM-Math.max(0,Math.min(1,v))*(H-TOP-BOTTOM)};
@@ -416,21 +416,17 @@ function renderProbabilityChart(hist){
   if(observed.length){
     var observedPath=observed.map(function(pt,n){return (n?"L":"M")+x(pt.x).toFixed(1)+" "+y(pt.v).toFixed(1)}).join(" ");
     svg.innerHTML+="<path d='"+observedPath+"' class='prob-observed'/>";
-    observed.forEach(function(pt){
-      svg.innerHTML+="<circle cx='"+x(pt.x).toFixed(1)+"' cy='"+y(pt.v).toFixed(1)+"' r='2.5' fill='#eaf4f8'/>";
-    });
+    observed.forEach(function(pt){svg.innerHTML+="<circle cx='"+x(pt.x).toFixed(1)+"' cy='"+y(pt.v).toFixed(1)+"' r='2.5' fill='#eaf4f8'/>"});
   }
 
   if(forecast.length){
     var forecastPath=forecast.map(function(pt,n){return (n?"L":"M")+x(pt[0]).toFixed(1)+" "+y(pt[1]).toFixed(1)}).join(" ");
     svg.innerHTML+="<path d='"+forecastPath+"' class='prob-forecast'/>";
-    forecast.forEach(function(pt){
-      svg.innerHTML+="<circle cx='"+x(pt[0]).toFixed(1)+"' cy='"+y(pt[1]).toFixed(1)+"' r='2.5' fill='#6fb8e5'/>";
-    });
+    forecast.forEach(function(pt){svg.innerHTML+="<circle cx='"+x(pt[0]).toFixed(1)+"' cy='"+y(pt[1]).toFixed(1)+"' r='2.5' fill='#6fb8e5'/>"});
   }
 
   svg.innerHTML+="<line x1='"+x(0)+"' y1='"+TOP+"' x2='"+x(0)+"' y2='"+(H-BOTTOM)+"' class='prob-now'/>";
-  setText("probabilityChartState",forecast.length>1?"OBSERVED / FORECAST":"OBSERVED ONLY");
+  setText("probabilityChartState",forecast.length>1?"NOW / FORECAST":"NOW ONLY");
 }
 function renderKeyTrends(){
   var p=latestForSelected();if(!p){q("keyTrends").innerHTML="";return}var rows=trackHistory(p),first=rows[0]||p;
