@@ -56,8 +56,10 @@ def test_radar_or_event_evidence_blocks_promotion():
     packet.loc[idx, "final_class"] = "reviewed_negative"
     packet.loc[idx, "radar_target_present"] = "yes"
     packet.loc[idx, "event_evidence_present"] = "no"
+    packet.loc[idx, "surface_evidence_interpreted"] = "yes"
     packet.loc[idx, "reviewer"] = "forecaster"
     packet.loc[idx, "reviewed_at_utc"] = "2026-10-05T16:00:00Z"
+    packet.loc[idx, "review_notes"] = "Radar target evidence is present, so this window is not promotable."
 
     packet = build_packet(packet)
     row = packet.loc[packet["null_id"].eq("N1")].iloc[0]

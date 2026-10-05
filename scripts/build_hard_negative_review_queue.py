@@ -41,9 +41,10 @@ def load_surface(root: Path | None) -> pd.DataFrame:
 def surface_summary(surface: pd.DataFrame) -> pd.DataFrame:
     if surface.empty or "null_id" not in surface.columns:
         return pd.DataFrame(columns=[
-            "null_id", "surface_report_count", "surface_min_visibility_m",
-            "surface_max_gust_kt", "surface_snow_reports",
+            "null_id", "surface_report_count", "surface_station_count",
+            "surface_min_visibility_m", "surface_max_gust_kt", "surface_snow_reports",
             "surface_mixed_reports", "surface_freezing_rain_reports",
+            "surface_snow_station_count", "surface_mixed_station_count",
         ])
     d = surface.copy()
     d["null_id"] = d["null_id"].astype(str)
@@ -114,8 +115,10 @@ def build(
     if not surf.empty:
         d = d.merge(surf, on="null_id", how="left")
     for col in (
-        "surface_report_count", "surface_snow_reports",
-        "surface_mixed_reports", "surface_freezing_rain_reports",
+        "surface_report_count", "surface_station_count",
+        "surface_snow_reports", "surface_mixed_reports",
+        "surface_freezing_rain_reports", "surface_snow_station_count",
+        "surface_mixed_station_count",
     ):
         if col not in d.columns:
             d[col] = 0

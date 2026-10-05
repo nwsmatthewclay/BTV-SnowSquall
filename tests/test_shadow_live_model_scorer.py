@@ -285,7 +285,7 @@ def test_limited_data_bundle_uses_reduced_shadow_coverage_floor(tmp_path, monkey
     payload, rows = score_site("KCXX", live, models)
 
     assert payload["scored_object_count"] == 1
-    assert rows[0]["coverage_policy"]["15"]["mode"] == "limited_data_bootstrap"
+    assert rows[0]["coverage_policy"]["15"]["mode"] == "limited_data_shadow"
     assert rows[0]["coverage_policy"]["15"]["minimum_fraction"] == 0.40
     assert rows[0]["research_probabilities"]
 
@@ -368,5 +368,5 @@ def test_shadow_scoring_uses_current_object_when_history_lags(tmp_path, monkeypa
 
     assert payload["scored_object_count"] == 1
     assert captured
-    assert captured[0]["timestamp"].isoformat().startswith("2026-01-01T12:05:00")
+    assert str(captured[0]["timestamp"]).startswith("2026-01-01T12:05:00")
     assert captured[0]["max_reflectivity_dbz"] == 42.0

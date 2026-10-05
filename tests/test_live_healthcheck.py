@@ -110,3 +110,29 @@ def test_live_healthcheck_detects_state_output_timestamp_mismatch(tmp_path):
     assert report["status"] == "degraded"
     assert report["checks"]["scan_timestamp_coherent"] is False
     assert report["checks"]["object_timestamps_coherent"] is True
+
+ 
+def test_live_healthcheck_accepts_research_scored_product(tmp_path):
+    now = datetime.now(timezone.utc).replace(microsecond=0).isoformat()
+    state = {
+        "last_source": "KCXX-test",
+        "last_scan_time_utc": now,
+        "last_object_count": 0,
+    }
+    geo = {
+        "type": "FeatureCollection",
+        "features": [],
+        "metadata": {
+            "probability_status": "research_scored",
+            "scan_time_utc": now,
+            "object_count": 0,
+        },
+    }
+    sp = tmp_path / "state.json"
+    gp = tmp_path / "objects.geojson"
+    sp.write_text(json.dumps(state), encoding="utf-8")
+    gp.write_text(json.dumps(geo), encoding="utf-8")
+
+    report = healthcheck(sp, gp, max_age_minutes=15)
+    assert report["status"] == "healthy"
+    assert report["checks"]["probability_disabled"] is True

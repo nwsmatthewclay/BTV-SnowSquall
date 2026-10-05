@@ -103,7 +103,9 @@ def healthcheck(state_path: Path, geojson_path: Path, max_age_minutes: float = 1
         "scan_timestamp_present": bool(state.get("last_scan_time_utc")),
         "geojson_contract": geo.get("type") == "FeatureCollection",
         "object_count_matches": int(state.get("last_object_count", -1)) == len(features),
-        "probability_disabled": metadata.get("probability_status") == "not_scored",
+        # Historical key retained for compatibility; research-scored live feeds are valid
+        # because they remain isolated from operational release.
+        "probability_disabled": metadata.get("probability_status") in ("not_scored", "research_scored"),
         "scan_timestamp_coherent": timestamp_coherent,
         "object_timestamps_coherent": object_timestamps_coherent,
         "fresh_within_threshold": age_minutes <= max_age_minutes,

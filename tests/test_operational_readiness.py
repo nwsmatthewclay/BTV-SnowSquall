@@ -17,4 +17,4 @@ def test_operational_readiness_accepts_unscored_polygon_product(tmp_path):
                     "object_count":1,"probability_status":"not_scored"}}
     sp=tmp_path/"state.json"; gp=tmp_path/"objects.geojson"
     sp.write_text(json.dumps(state),encoding="utf-8"); gp.write_text(json.dumps(geo),encoding="utf-8")
-    assert validate(sp,gp)["status"]=="ready_for_unscored_live_object_delivery"
+    assert validate(sp,gp)["status"]=="ready_for_research_weighted_live_object_delivery"

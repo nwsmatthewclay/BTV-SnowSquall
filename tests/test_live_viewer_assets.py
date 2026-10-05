@@ -9,7 +9,8 @@ def test_live_viewer_references_operational_feed_assets():
     assert "live.js" in html
     assert "KCXX" in js and "KTYX" in js
     assert "_objects.geojson" in js
-    assert 'kind==="objects"' in js
+    assert 'fetch(base+site+"_objects.geojson?cb="+Date.now()' in js
+    assert 'fetch(base+site+"_state.json?cb="+Date.now()' in js
     assert '"history"' in js
     assert '+".json"' in js
     assert "probability scoring disabled" in html.lower()
@@ -64,7 +65,7 @@ def test_object_dataset_pilot_uses_latest_run_for_science_branch():
 def test_live_viewer_degrades_per_radar_without_taking_down_other_feed():
     root = Path(__file__).resolve().parents[1]
     js = (root / "viewer/live.js").read_text(encoding="utf-8")
-    assert 'return {site,error:String(err.message||err)' in js
+    assert 'return {site:site,error:String(e.message||e)' in js
     assert 'summary.filter(x=>!x.error)' in js
     assert 'degraded.map(x=>x.site' in js
 
@@ -73,7 +74,7 @@ def test_live_viewer_consumes_radar_health_status():
     root = Path(__file__).resolve().parents[1]
     js = (root / "viewer/live.js").read_text(encoding="utf-8")
     workflow = (root / ".github" / "workflows" / "live-object-publisher.yml").read_text(encoding="utf-8")
-    assert 'feedUrl(site,"health")' in js
+    assert 'fetchOptional(base+site+"_health.json?cb="+Date.now(),null)' in js
     assert "Restore prior live feed history" in workflow
     assert "Build bounded browser history payloads" in workflow
     assert "Validate KCXX live product" in workflow
