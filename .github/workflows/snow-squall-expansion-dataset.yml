@@ -788,6 +788,12 @@ jobs:
             --schema data/derived/snow_squall_model_features_expanded.schema.json \
             --output data/derived/snow_squall_cumulative_dataset_audit.json
 
+      - name: Profile cumulative training population
+        run: |
+          python scripts/audit_training_population.py \
+            data/derived/snow_squall_model_features_cumulative.csv \
+            --output data/derived/snow_squall_training_population_audit.json
+
       - name: Audit expanded model feature policy
         run: |
           python - <<'PY'
@@ -950,6 +956,7 @@ jobs:
             data/derived/snow_squall_expansion_dataset_audit.json
             data/derived/snow_squall_expansion_object_detection_audit.json
             data/derived/snow_squall_cumulative_dataset_audit.json
+            data/derived/snow_squall_training_population_audit.json
             data/derived/snow_squall_national_pretraining_feature_summary.json
             data/derived/next_expansion_batch.json
             data/derived/snow_squall_expansion_provenance.json
