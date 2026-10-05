@@ -124,6 +124,14 @@ def main():
     parser.add_argument("--schema",required=True)
     parser.add_argument("--target",required=True)
     parser.add_argument("--output-dir",required=True)
+    parser.add_argument(
+        "--reviewed-negative-manifest",
+        default=None,
+        help=(
+            "Optional human-reviewed hard-negative manifest. Only rows explicitly "
+            "marked reviewed_negative are admitted as null negatives."
+        ),
+    )
     parser.add_argument("--allow-limited-data", action="store_true",
                         help="Allow explicit research-only bootstrap training when the full radar/environment contract is unavailable.")
     args=parser.parse_args()
@@ -133,6 +141,11 @@ def main():
     data,predictors=prepare_dataset(
         source, schema, args.target,
         enforce_training_contract=not args.allow_limited_data,
+        reviewed_negative_manifest=(
+            Path(args.reviewed_negative_manifest)
+            if args.reviewed_negative_manifest
+            else None
+        ),
     )
     # Enforce the same live-compatible predictor contract as the baseline.
     operational=set(schema.get("operational_predictor_columns") or predictors)
