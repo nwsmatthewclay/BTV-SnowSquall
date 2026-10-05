@@ -108,6 +108,12 @@ jobs:
             --summary data/derived/snow_squall_hard_negative_review_packet.summary.json \
             $existing
 
+      - name: Build browser review board
+        run: |
+          python scripts/build_hard_negative_review_board.py \
+            --packet data/derived/snow_squall_hard_negative_review_packet.csv \
+            --output data/derived/snow_squall_hard_negative_review_board.html
+
       - name: Persist new review candidates to foundation ledger
         run: |
           set -euo pipefail
@@ -173,5 +179,6 @@ jobs:
             data/derived/snow_squall_hard_negative_review_queue.summary.csv
             data/derived/snow_squall_hard_negative_review_packet.csv
             data/derived/snow_squall_hard_negative_review_packet.summary.json
+            data/derived/snow_squall_hard_negative_review_board.html
             data/derived/snow_squall_reviewed_negative_nulls.csv
             data/reviews/snow_squall_hard_negative_review.csv
