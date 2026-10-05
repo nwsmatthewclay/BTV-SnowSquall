@@ -55,7 +55,300 @@ jobs:
           GH_TOKEN: ${{secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
-          validation_run="${{inputs.validation_run_id }}"
+          validation_run="${{ inputs.validation_run_id }}"
+          candidate_run="${{ inputs.candidate_model_run_id }}"
+          if [ -z "$validation_run" ]; then
+            validation_run="$(gh run list --workflow "snow-squall-modern-validation.yml" --branch snow-squall-model-foundation --status success --limit 10 --json databaseId --jq '.[].databaseId' | head -n 1 || true)"
+          fi
+          if [ -z "$candidate_run" ]; then
+            candidate_run="$(gh run list --workflow "snow-squall-candidate-model-refresh.yml" --branch snow-squall-model-foundation --status success --limit 10 --json databaseId --jq '.[].databaseId' | head -n 1 || true)"
+          fi
+
+          verify_artifact() {
+            local run_id="$1"
+            local artifact="$2"
+            [ -n "$run_id" ] || return 1
+            [ "$run_id" != "null" ] || return 1
+            gh api "/repos/$GITHUB_REPOSITORY/actions/runs/$run_id/artifacts?per_page=100" -q "[.artifacts[] | select(.name==\"$artifact\" and .expired==false)] | length" | grep -q '^1
+
+
+
+          test -n "$validation_run" && test "$validation_run" != "null"
+          test -n "$candidate_run" && test "$candidate_run" != "null"
+
+          rm -rf model_bundle
+          gh run download "$candidate_run" \
+            --repo "$GITHUB_REPOSITORY" \
+            --name snow-squall-refreshed-model-bundles \
+            --dir model_bundle
+
+          model_root="$(find model_bundle -type d -name 'candidate_ensemble_refresh_15m' -print -quit | xargs -r dirname)"
+          test -n "$model_root"
+          echo "validation_run=$validation_run" >> "$GITHUB_OUTPUT"
+          echo "candidate_run=$candidate_run" >> "$GITHUB_OUTPUT"
+          echo "model_root=$model_root" >> "$GITHUB_OUTPUT"
+          echo "Using candidate refresh run $candidate_run with model root $model_root"
+
+      - name: Download protected validation archive
+        env:
+          GH_TOKEN: ${{secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          mkdir -p validation_artifact
+          gh run download "${{steps.runs.outputs.validation_run }}" \
+            --name snow-squall-modern-validation \
+            --dir validation_artifact
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install science dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt -r requirements-science.txt
+
+      - name: Locate and isolate archived case volumes
+        id: inputs
+        run: |
+          set -euo pipefail
+          level2_root="$(find validation_artifact -type d -name modern_validation_level2 -print -quit)"
+          cases_csv="$(find validation_artifact -type f -name modern_validation_cases.csv -print -quit)"
+          test -n "$level2_root"
+          test -n "$cases_csv"
+          test -n "$(find "$level2_root" -type f -print -quit)"
+
+          requested_case="${{ inputs.case_id }}"
+          if [ -z "$requested_case" ]; then
+            requested_case="$(python - "$cases_csv" <<'PY'
+          import sys
+          import pandas as pd
+          cases = pd.read_csv(sys.argv[1])
+          if cases.empty:
+              raise SystemExit("Modern validation manifest contains no cases")
+          print(str(cases.iloc[0]["case_id"]))
+          PY
+            )"
+          fi
+          echo "Replay case: $requested_case"
+
+          python - "$cases_csv" "$level2_root" "replay_input" "$requested_case" <<'PY'
+          import json
+          import shutil
+          import sys
+          from pathlib import Path
+
+          import pandas as pd
+
+          from scripts.historical_operational_replay import scan_time
+
+          cases_csv, source_root, output_root, case_id = sys.argv[1:]
+          cases = pd.read_csv(cases_csv)
+          rows = cases[cases["case_id"].astype(str) == case_id]
+          if rows.empty:
+              raise SystemExit(f"Case not found in protected validation manifest: {case_id}")
+
+          row = rows.iloc[0]
+          radar = str(row["radar_site"]).strip().upper()
+          start = pd.to_datetime(row["analysis_window_start_utc"], utc=True)
+          end = pd.to_datetime(row["analysis_window_end_utc"], utc=True)
+          destination = Path(output_root)
+          destination.mkdir(parents=True, exist_ok=True)
+
+          selected = []
+          for path in Path(source_root).rglob("*"):
+              if not path.is_file() or path.name.endswith((".part", ".tmp")):
+                  continue
+              if not path.name.upper().startswith(radar):
+                  continue
+              try:
+                  when = pd.Timestamp(scan_time(path))
+              except ValueError:
+                  continue
+              if start <= when <= end:
+                  shutil.copy2(path, destination / path.name)
+                  selected.append(path.name)
+
+          if not selected:
+              raise SystemExit(
+                  f"No Level-II files matched {case_id} / {radar} / "
+                  f"{start.isoformat()}..{end.isoformat()}"
+              )
+
+          print(f"Case: {case_id}")
+          print(f"Radar: {radar}")
+          print(f"Window: {start.isoformat()} .. {end.isoformat()}")
+          print(f"Selected volumes: {len(selected)}")
+          Path("replay_input_case.json").write_text(
+              json.dumps({
+                  "case_id": case_id,
+                  "radar_site": radar,
+                  "window_start_utc": start.isoformat(),
+                  "window_end_utc": end.isoformat(),
+                  "level2_volume_count": len(selected),
+              }, indent=2) + "\n"
+          )
+          PY
+
+          echo "level2_root=$PWD/replay_input" >> "$GITHUB_OUTPUT"
+          echo "case_id=$requested_case" >> "$GITHUB_OUTPUT"
+          radar_site="$(python -c 'import json; print(json.load(open("replay_input_case.json"))["radar_site"])')"
+          echo "radar_site=$radar_site" >> "$GITHUB_OUTPUT"
+
+      - name: Validate candidate bundle layout
+        run: |
+          set -euo pipefail
+          for h in 15 30 45 60; do
+            test -f "${{ steps.runs.outputs.model_root }}/candidate_ensemble_refresh_${h}m/metrics.json"
+            test -f "${{ steps.runs.outputs.model_root }}/candidate_ensemble_refresh_${h}m/baseline_model.joblib"
+            test -f "${{ steps.runs.outputs.model_root }}/candidate_ensemble_refresh_${h}m/probability_calibrator.joblib"
+          done
+
+      - name: Replay four candidate horizons through live processor
+        run: |
+          set -euo pipefail
+          rm -rf replay
+          for h in 15 30 45 60; do
+            python scripts/historical_operational_replay.py \
+              --case-id "${{steps.inputs.outputs.case_id }}" \
+              --input-dir "${{steps.inputs.outputs.level2_root }}" \
+              --output-dir "replay/${h}m" \
+              --model-dir "${{ steps.runs.outputs.model_root }}/candidate_ensemble_refresh_${h}m" \
+              --continue-on-error
+          done
+
+      - name: Audit candidate replay outputs
+        run: |
+          python scripts/audit_candidate_replay.py replay
+
+      - name: Merge four-horizon replay score timeline
+        run: |
+          python scripts/merge_replay_horizon_scores.py \
+            replay \
+            --output replay/score_timeline.json
+
+      - name: Build compatibility schema from 15-minute model
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          metrics = json.loads(Path("${{ steps.runs.outputs.model_root }}/candidate_ensemble_refresh_15m/metrics.json").read_text())
+          schema = {
+              "schema_version": "replay_model_bundle_compatibility_v1",
+              "future_information_policy": "one_scan_at_a_time",
+              "operational_predictor_columns": metrics.get("predictor_columns") or [],
+          }
+          Path("replay/replay_model.schema.json").write_text(json.dumps(schema, indent=2) + "\n")
+          PY
+
+      - name: Audit historical to live feature parity
+        run: |
+          python scripts/audit_live_feature_parity.py \
+            --history replay/15m/replay_object_history.csv \
+            --schema replay/replay_model.schema.json \
+            --output replay/live_feature_parity.json \
+            --max-tracks 20
+
+      - name: Build replay diagnostics
+        run: |
+          python scripts/replay_diagnostics.py \
+            replay/score_timeline.json \
+            --output replay/replay_diagnostics.json
+
+      - name: Build viewer-ready replay case
+        run: |
+          python scripts/build_replay_viewer_case.py \
+            --base-dir replay/15m \
+            --timeline replay/score_timeline.json \
+            --output replay/viewer_case.geojson
+
+      - name: Build replay viewer manifest
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          import pandas as pd
+          info = json.loads(Path('replay_input_case.json').read_text())
+          pd.DataFrame([info]).rename(columns={
+              'window_start_utc': 'window_start_utc',
+              'window_end_utc': 'window_end_utc',
+          })[['case_id','radar_site','window_start_utc','window_end_utc']].to_csv(
+              'replay_viewer_manifest.csv', index=False
+          )
+          PY
+          rm -rf replay_viewer
+          python scripts/export_viewer_radar_frames.py \
+            --manifest replay_viewer_manifest.csv \
+            --input replay_input \
+            --output-dir replay_viewer
+          python scripts/build_replay_static_viewer.py \
+            --case-id "${{ steps.inputs.outputs.case_id }}" \
+            --radar-site "${{ steps.inputs.outputs.radar_site }}" \
+            --replay-case replay/viewer_case.geojson \
+            --timeline replay/score_timeline.json \
+            --frames-root replay_viewer \
+            --output-dir replay_viewer
+          cp viewer/index.html viewer/app.js viewer/style.css replay_viewer/
+
+      - name: Validate replay viewer package
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          catalog=json.loads(Path('replay_viewer/data/catalog.json').read_text())
+          assert catalog['data_status'] == 'research_replay'
+          assert catalog['probability_status'] == 'research_replay'
+          assert catalog['research_probability_status'] == 'candidate_only_not_operational'
+          case=catalog['cases'][0]
+          assert case['radar_frames']
+          geo=json.loads(Path('replay_viewer/data/'+case['file']).read_text())
+          scored=sum(bool((f.get('properties') or {}).get('research_probabilities')) for f in geo.get('features',[]))
+          assert scored > 0
+          print('Replay viewer validation: PASS')
+          print('Scored features:', scored)
+          print('Radar frames:', len(case['radar_frames']))
+          PY
+
+      - name: Hand off to operational release review
+        if: success()
+        run: echo "Archived replay passed; operational release review will start from the workflow_run dependency."
+      - name: Upload replay viewer package
+        uses: actions/upload-artifact@v4
+        with:
+          name: snow-squall-archived-replay-viewer
+          retention-days: 14
+          path: replay_viewer
+      - name: Upload replay smoke package
+        uses: actions/upload-artifact@v4
+        with:
+          name: snow-squall-archived-replay-smoke
+          retention-days: 14
+          path: |
+            replay
+            replay_input_case.json
+
+          }
+
+          if ! verify_artifact "$validation_run" "snow-squall-modern-validation"; then
+            validation_run=""
+            for run_id in $(gh run list --workflow "snow-squall-modern-validation.yml" --branch snow-squall-model-foundation --status success --limit 10 --json databaseId --jq '.[].databaseId'); do
+              if verify_artifact "$run_id" "snow-squall-modern-validation"; then
+                validation_run="$run_id"
+                break
+              fi
+            done
+          fi
+
+          if ! verify_artifact "$candidate_run" "snow-squall-refreshed-model-bundles"; then
+            candidate_run=""
+            for run_id in $(gh run list --workflow "snow-squall-candidate-model-refresh.yml" --branch snow-squall-model-foundation --status success --limit 10 --json databaseId --jq '.[].databaseId'); do
+              if verify_artifact "$run_id" "snow-squall-refreshed-model-bundles"; then
+                candidate_run="$run_id"
+                break
+              fi
+            done
+          fi
           if [ -z "$validation_run" ]; then
             validation_run="$(gh run list --workflow "snow-squall-modern-validation.yml" --branch snow-squall-model-foundation --status success --limit 1 --json databaseId --jq '.[0].databaseId')"
           fi
