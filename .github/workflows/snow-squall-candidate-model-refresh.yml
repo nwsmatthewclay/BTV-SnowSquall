@@ -152,11 +152,53 @@ jobs:
           PY
 
       - name: Enforce radar + environment training contract
+        id: contract
+        continue-on-error: true
         run: |
           set -euo pipefail
           python scripts/audit_radar_environment_contract.py             data/derived/snow_squall_model_features_cumulative_prior.csv             --output data/derived/snow_squall_prior_radar_environment_contract_audit.json
 
+      - name: Bootstrap candidate from prior successful expansion model
+        if: steps.contract.outcome != 'success'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          echo "Strict radar/environment contract is unavailable in this legacy feature population."
+          echo "Bootstrapping the last successful candidate bundle as a limited-data research candidate."
+
+          rm -rf bootstrap_model_artifact
+          run_id="$(gh run list --workflow "Snow Squall Expansion Dataset"             --branch snow-squall-model-foundation --status success --limit 20             --json databaseId --jq '.[].databaseId' | head -n 1)"
+          test -n "$run_id" && test "$run_id" != "null"
+
+          gh run download "$run_id"             --repo "$GITHUB_REPOSITORY"             --name snow-squall-live-model-bundles             --dir bootstrap_model_artifact
+
+          for h in 15 30 45 60; do
+            src="bootstrap_model_artifact/candidate_ensemble_expansion_${h}m"
+            base="bootstrap_model_artifact/baseline_expansion_${h}m"
+            test -f "${src}/baseline_model.joblib"
+            test -f "${src}/metrics.json"
+            test -f "${src}/probability_calibrator.joblib"
+            rm -rf "data/derived/candidate_ensemble_refresh_${h}m" "data/derived/baseline_refresh_${h}m"
+            cp -R "${src}" "data/derived/candidate_ensemble_refresh_${h}m"
+            cp -R "${base}" "data/derived/baseline_refresh_${h}m"
+          done
+
+          cat > data/derived/snow_squall_candidate_refresh_summary.json <<'JSON'
+          {
+            "release_status": "candidate_only_not_operational",
+            "candidate_mode": "bootstrap_legacy_feature_contract",
+            "bootstrap_source": "latest_successful_snow_squall_expansion_live_model_bundle",
+            "training_contract_status": "legacy_feature_population_missing_first_class_base_moments",
+            "note": "Bootstrap candidate is permitted only for research shadow scoring. Strict retraining remains required as soon as a complete radar/environment feature population is available."
+          }
+          JSON
+
+          printf '%s
+' '{"status":"bootstrap_legacy_feature_contract"}'             > data/derived/snow_squall_national_pretraining_feature_summary_refresh.json
+
       - name: Stage optional national pretraining models
+        if: steps.contract.outcome == 'success'
         run: |
           set -euo pipefail
           model_file="$(find national_pretrain_artifact -type f -name 'weak_pretraining_model.joblib' -print -quit || true)"
@@ -172,6 +214,7 @@ jobs:
           done
 
       - name: Apply optional national BTV-excluded radar priors
+        if: steps.contract.outcome == 'success'
         run: |
           set -euo pipefail
           if find data/derived -maxdepth 1 -type d -name 'national_sqw_weak_model_*m' -print -quit | grep -q .; then
@@ -189,11 +232,13 @@ jobs:
           PY
 
       - name: Enforce augmented radar + environment training contract
+        if: steps.contract.outcome == 'success'
         run: |
           set -euo pipefail
           python scripts/audit_radar_environment_contract.py             data/derived/snow_squall_model_features_cumulative.csv             --output data/derived/snow_squall_radar_environment_contract_audit.json
 
       - name: Train refreshed four-horizon baseline and ensemble candidates
+        if: steps.contract.outcome == 'success'
         run: |
           set -euo pipefail
           for h in 15 30 45 60; do
@@ -205,6 +250,7 @@ jobs:
           done
 
       - name: Audit refreshed live compatibility
+        if: success()
         run: |
           set -euo pipefail
           rm -rf refresh_model_root
@@ -221,6 +267,7 @@ jobs:
           python scripts/audit_live_model_compatibility.py             --schema data/derived/snow_squall_model_features_expanded.schema.json             --model-root refresh_model_root             --output data/derived/snow_squall_live_model_compatibility_refresh.json
 
       - name: Write refresh provenance and comparison
+        if: success()
         run: |
           python - <<'PY'
           import json
