@@ -164,9 +164,7 @@ def _metpy_derived_fields(path: Path, latitude, longitude, values):
         from metpy.calc import (
             bulk_shear, downdraft_cape, el, lcl, lfc, mixed_layer_cape_cin,
             most_unstable_cape_cin, parcel_profile, relative_humidity_from_dewpoint,
-            dewpoint_from_relative_humidity, dewpoint_from_specific_humidity,
-            relative_humidity_from_specific_humidity, storm_relative_helicity,
-            surface_based_cape_cin, wet_bulb_temperature,
+            storm_relative_helicity, surface_based_cape_cin, wet_bulb_temperature,
         )
         from metpy.units import units
     except Exception:
@@ -180,6 +178,8 @@ def _metpy_derived_fields(path: Path, latitude, longitude, values):
                 return result
         t_levels, t_values = profile["t"]
         pressure = np.asarray(t_levels, dtype=float)
+        if np.nanmedian(pressure) > 2000:
+            pressure = pressure / 100.0
         temp = np.asarray(t_values, dtype=float)
 
         def align(pair):
@@ -521,9 +521,10 @@ def extract_features(
     values.update(snsq)
 
     metpy_derived = _metpy_derived_fields(path, latitude, longitude, values)
+    metpy_error = metpy_derived.get("__metpy_error")
     metpy_derived_fields = []
     for key, value in metpy_derived.items():
-        if key == "metpy_derived_fields":
+        if key.startswith("__"):
             continue
         if values.get(key) is None and value is not None:
             values[key] = value
@@ -552,6 +553,8 @@ def extract_features(
         ),
         "fields": values,
         "metpy_derived_fields": sorted(set(metpy_derived_fields)),
+        "metpy_status": "error" if metpy_error else ("derived" if metpy_derived_fields else "not_needed"),
+        "metpy_error": metpy_error,
         "missing_fields": sorted(remaining_missing),
         "status": "complete" if not remaining_missing else "partial",
     }
