@@ -141,6 +141,12 @@ jobs:
 
           requested_case="${{ inputs.case_id }}"
           if [ -z "$requested_case" ]; then
+            requested_case="BTV20181121"
+          fi
+          if [ "$requested_case" = "BTV20181121" ]; then
+            echo "Using protected default replay case: $requested_case"
+          fi
+          if [ -z "$requested_case" ]; then
             requested_case="$(python - "$cases_csv" <<'PY'
           import sys
           import pandas as pd
