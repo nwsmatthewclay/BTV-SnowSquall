@@ -123,6 +123,7 @@ def _synthetic_history() -> list[dict]:
         "visibility_m": 1609.344,
         "cape_jkg": 50.0,
         "cin_jkg": -25.0,
+        "environment_age_minutes": 60.0,
     }
     newer = dict(base)
     newer["scan_time_utc"] = "2026-01-01T00:06:00Z"
