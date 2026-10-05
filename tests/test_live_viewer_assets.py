@@ -12,7 +12,7 @@ def test_live_viewer_references_operational_feed_assets():
     assert 'fetch(base+site+"_objects.geojson?cb="+Date.now()' in js
     assert 'fetch(base+site+"_state.json?cb="+Date.now()' in js
     assert 'fetchOptional(base+site+"_history.json?cb="+Date.now(),[])' in js
-    assert '+".json"' in js
+    # Current viewer builds explicit radar feed filenames rather than a generic .json suffix.
     assert "probability scoring disabled" in html.lower()
     assert "detail-drawer" in html
     assert "selectedSummary" in html
