@@ -127,22 +127,86 @@ function renderProbability(){
     q("probabilityValue").classList.add("na");setText("probabilityValue","—");setText("probabilityDelta","GATED • waiting for coverage");q("probabilityDelta").className="prob-delta flat";
     var cov=shadow?.feature_coverage?.["15"]?.fraction;setText("probabilityNote",cov==null?"No live research score is attached to this object yet.":("Feature coverage "+(Number(cov)*100).toFixed(0)+"% • candidate threshold 80% • probability remains gated."));
   }else{
-    q("probabilityValue").classList.remove("na");setText("probabilityValue",(Number(score)*100).toFixed(0)+"%");var d=prev==null?null:Number(score)-Number(prev);setText("probabilityDelta",d==null?"Score attached":(d>=0?"▲ +":"▼ ")+(Math.abs(d)*100).toFixed(1)+" pp");q("probabilityDelta").className="prob-delta "+(d==null?"flat":d>=0?"up":"down");setText("probabilityNote","Isolated research shadow score • candidate only • never an operational warning recommendation.");
+    q("probabilityValue").classList.remove("na");setText("probabilityValue",(Number(score)*100).toFixed(0)+"%");
+    var d=prev==null?null:Number(score)-Number(prev);
+    setText("probabilityDelta",d==null?"Score attached":(d>=0?"▲ +":"▼ ")+(Math.abs(d)*100).toFixed(1)+" pp");
+    q("probabilityDelta").className="prob-delta "+(d==null?"flat":d>=0?"up":"down");
+    setText("probabilityNote","Each radar scan is rescored from its own causal feature state. The 15/30/45/60 curves show what the model was expecting from that scan onward • candidate only.");
   }
   var vals=[["Model",score,"#1f90e9"],["Analog",shadow?.analog_probability,"#f0c54c"],["Environment",shadow?.environment_signal,"#62ce73"],["Overall",shadow?.ensemble_probability,"#ff5648"]];
-  q("probComponents").innerHTML=vals.map(function(x){return "<div class='prob-component'><span><i class='comp-dot' style='background:"+x[2]+"'></i>"+x[0]+"</span><b>"+(x[1]==null?"—":(Number(x[1])*100).toFixed(0)+"%")+"</b></div>"}).join("")+"<div style='margin-top:5px;font-size:8px;color:#748a9b'>Fields populate as their corresponding model evidence becomes available.</div>";
+  q("probComponents").innerHTML=vals.map(function(x){return "<div class='prob-component'><span><i class='comp-dot' style='background:"+x[2]+"'></i>"+x[0]+"</span><b>"+(x[1]==null?"—":(Number(x[1])*100).toFixed(0)+"%")+"</b></div>"}).join("")+"<div style='margin-top:5px;font-size:8px;color:#748a9b'>The timeline below is the selected track, scan by scan; it is not a time series of the same frozen probability.</div>";
+  var scored=hist.filter(function(r){return Object.values(r.research_probabilities||{}).some(function(v){return Number.isFinite(Number(v))})});
+  var peak=scored.reduce(function(best,r){var v=probValue(r,15);return v!=null&&(best==null||v>best.v)?{v:v,ts:r.timestamp}:best},null);
+  var age=shadow?.track_age_min;
+  var peakText=peak?(Number(peak.v)*100).toFixed(0)+"% peak 15m":"—";
+  setText("probabilitySummary",(age!=null?num(age,0)+" min track":"Track duration unavailable")+" • "+scored.length+" scored scans • current "+(score==null?"—":(Number(score)*100).toFixed(0)+"%")+" • "+peakText);
   renderProbabilityChart(hist);
+  renderEnvironmentOutlook(p,hist);
 }
+
 function renderProbabilityChart(hist){
-  var svg=q("probChart");svg.innerHTML="";
-  if(!hist.length||!hist.some(function(r){return Object.values(r.research_probabilities||{}).some(function(v){return Number.isFinite(Number(v))})})){svg.innerHTML="<text x='210' y='70' text-anchor='middle' class='chart-text'>Research probability history is warming up</text>";return}
-  var W=420,H=142,P=24,points=hist.map(function(r){var v=r.research_probabilities||{};return [v["15"]??v["15min"],v["30"]??v["30min"],v["45"]??v["45min"],v["60"]??v["60min"]].map(function(x){return x==null?null:Number(x)})}),obs=points.flatMap(function(x){return x}).filter(function(v){return Number.isFinite(v)}),maxY=Math.max(.1,Math.min(1,(Math.max.apply(null,obs)||.1)*1.15));
-  for(var g=0;g<=4;g++){var yy=H-P-g*(H-2*P)/4;svg.innerHTML+="<line x1='"+P+"' y1='"+yy+"' x2='"+(W-P)+"' y2='"+yy+"' class='chart-gridline'/><text x='"+(P-4)+"' y='"+(yy+3)+"' text-anchor='end' class='chart-text'>"+Math.round(maxY*(1-g/4)*100)+"</text>"}
-  svg.innerHTML+="<line x1='"+P+"' y1='"+(H-P)+"' x2='"+(W-P)+"' y2='"+(H-P)+"' class='chart-axis'/>";
+  var svg=q("probChart");if(!svg)return;svg.innerHTML="";
+  var rows=hist.filter(function(r){return Object.values(r.research_probabilities||{}).some(function(v){return Number.isFinite(Number(v))})});
+  if(!rows.length){
+    svg.setAttribute("viewBox","0 0 520 190");
+    svg.innerHTML="<text x='260' y='92' text-anchor='middle' class='chart-text'>Probability history will populate as each scan is rescored</text>";
+    return;
+  }
+  var W=520,H=190,L=38,R=10,T=18,B=28,PLOTW=W-L-R, PLOTH=H-T-B;
+  var ageOf=function(r,i){var n=Number(r.track_age_min);return Number.isFinite(n)?n:i*5};
+  var ages=rows.map(ageOf),maxAge=Math.max(5,ages[ages.length-1]||0);
+  var x=function(i){return L+(rows.length===1?PLOTW/2:i*(PLOTW)/(rows.length-1))};
+  var y=function(v){return T+(1-Math.max(0,Math.min(1,Number(v)||0)))*PLOTH};
+  for(var g=0;g<=4;g++){
+    var pct=g*25,yy=y(pct/100);
+    svg.innerHTML+="<line x1='"+L+"' y1='"+yy.toFixed(1)+"' x2='"+(W-R)+"' y2='"+yy.toFixed(1)+"' class='chart-gridline'/>";
+    svg.innerHTML+="<text x='"+(L-6)+"' y='"+(yy+3).toFixed(1)+"' text-anchor='end' class='chart-text'>"+pct+"%</text>";
+  }
+  [0,maxAge].forEach(function(a,i){
+    var xx=i?W-R:L;svg.innerHTML+="<text x='"+xx+"' y='"+(H-7)+"' text-anchor='"+(i?"end":"start")+"' class='chart-text'>"+num(a,0)+" min</text>";
+  });
+  svg.innerHTML+="<line x1='"+L+"' y1='"+(H-B)+"' x2='"+(W-R)+"' y2='"+(H-B)+"' class='chart-axis'/>";
   var cls=["chart-line-15","chart-line-30","chart-line-45","chart-line-60"];
-  var x=function(i){return P+(points.length===1?0:i*(W-2*P)/(points.length-1))},y=function(v){return H-P-Math.max(0,Math.min(maxY,v))/maxY*(H-2*P)};
-  for(var j=0;j<4;j++){var valid=points.map(function(pt,i){return {i:i,v:pt[j]}}).filter(function(x){return Number.isFinite(x.v)});if(!valid.length)continue;var path=valid.map(function(pt,n){return (n?"L":"M")+x(pt.i).toFixed(1)+" "+y(pt.v).toFixed(1)}).join(" ");svg.innerHTML+="<path d='"+path+"' class='chart-path "+cls[j]+"'/>"}
-  var xx=x(points.length-1);svg.innerHTML+="<line x1='"+xx+"' y1='"+P+"' x2='"+xx+"' y2='"+(H-P)+"' class='chart-current'/>";
+  for(var j=0;j<4;j++){
+    var valid=rows.map(function(r,i){var v=probValue(r,String([15,30,45,60][j]));return {i:i,v:v}}).filter(function(pt){return Number.isFinite(Number(pt.v))});
+    if(!valid.length)continue;
+    var path=valid.map(function(pt,n){return (n?"L":"M")+x(pt.i).toFixed(1)+" "+y(pt.v).toFixed(1)}).join(" ");
+    svg.innerHTML+="<path d='"+path+"' class='chart-path "+cls[j]+"' />";
+    valid.forEach(function(pt){
+      var rr=rows[pt.i],title="Scan "+fmtTime(rr.timestamp)+" • age "+num(ageOf(rr,pt.i),0)+" min • "+[15,30,45,60][j]+"m "+(Number(pt.v)*100).toFixed(1)+"%";
+      svg.innerHTML+="<circle cx='"+x(pt.i).toFixed(1)+"' cy='"+y(pt.v).toFixed(1)+"' r='2.8' class='prob-point "+cls[j]+"'><title>"+esc(title)+"</title></circle>";
+    });
+  }
+  var latestX=x(rows.length-1);
+  svg.innerHTML+="<line x1='"+latestX.toFixed(1)+"' y1='"+T+"' x2='"+latestX.toFixed(1)+"' y2='"+(H-B)+"' class='chart-current'/>";
+  svg.innerHTML+="<text x='"+latestX.toFixed(1)+"' y='"+(T-5)+"' text-anchor='middle' class='chart-text'>CURRENT</text>";
+}
+
+function renderEnvironmentOutlook(p,hist){
+  var box=q("environmentOutlook");if(!box)return;
+  var shadowRowsForTrack=hist.slice().reverse();
+  var currentShadow=shadowRowsForTrack.find(function(r){return r.environment_snapshot})||null;
+  var snap=currentShadow?.environment_snapshot||{};
+  var forecast=currentShadow?.environment_forecast_30min_snapshot||{};
+  var fallback=function(key){var v=p[key];return v==null?null:Number(v)};
+  var current=function(key){var v=snap[key];return v==null?fallback(key):Number(v)};
+  var defs=[
+    ["SNSQ","snsq","",2],
+    ["MUCAPE","mucape_jkg","J/kg",0],
+    ["0–6 km shear","shear_0_6km_kt","kt",0],
+    ["0–1 km SRH","srh01_m2s2","m²/s²",0],
+    ["PWAT","pwat_mm","mm",1],
+    ["RH 0–2 km","mean_rh_0_2km_pct","%",0]
+  ];
+  var out=defs.map(function(d){
+    var now=current(d[1]),later=forecast[d[1]];
+    if(later==null && p["expected_30min_"+d[1]]!=null)later=Number(p["expected_30min_"+d[1]]);
+    var delta=(now!=null&&later!=null)?Number(later)-Number(now):null;
+    var arrow=delta==null?"→":Math.abs(delta)<(d[1]==="snsq"?.05:.5)?"→":delta>0?"↑":"↓";
+    var value=function(v){return v==null?"—":(d[1]==="snsq"?num(v,2):num(v,d[3]))+(d[2]?" "+d[2]:"")};
+    return "<div class='env-outlook-tile'><span>"+d[0]+"</span><b>"+value(now)+"</b><i>"+arrow+" "+(later==null?"no +30m value":value(later))+"</i></div>";
+  }).join("");
+  box.innerHTML=out||"<div class='history-empty'>Environmental trajectory unavailable.</div>";
 }
 function renderKeyTrends(){
   var p=latestForSelected();if(!p){q("keyTrends").innerHTML="";return}var rows=trackHistory(p),first=rows[0]||p;
