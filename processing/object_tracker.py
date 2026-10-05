@@ -180,6 +180,9 @@ class CentroidTracker:
             obj["track_association_gate_px"]=float(gate)
             obj["track_association_cost"]=float(cost_value)
             obj["track_age_scans"]=int(track.age_scans); obj["track_missed_scans"]=0
+            obj["track_first_scan_utc"]=self._as_datetime(track.first_time).isoformat()
+            obj["track_age_min"]=max(0.0,(self._as_datetime(timestamp)-self._as_datetime(track.first_time)).total_seconds()/60.0)
+            obj["track_status"]="active"
             obj["track_velocity_row_per_min"]=float(track.velocity_row)
             obj["track_velocity_column_per_min"]=float(track.velocity_column)
             if radar_motion:
