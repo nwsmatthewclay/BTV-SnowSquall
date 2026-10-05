@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import shutil
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -463,8 +464,8 @@ def build_direct_fallback(raw_root: Path, states: dict[str, Path]):
             print(f"{radar}: direct display fallback failed: {type(exc).__name__}: {exc}")
     if not products: return None
     output_dir=raw_root.parent/"viewer"/"data"/"live"
-    bounds,_=_direct_render(products,output_dir,product_name="radar_mosaic_clean.png",clean=True)
-    _direct_render(products,output_dir,product_name="radar_mosaic_raw.png",clean=False)
+    bounds,_=_direct_render(products,output_dir,product_name="radar_mosaic_native_clean.png",clean=True)
+    _direct_render(products,output_dir,product_name="radar_mosaic_native_raw.png",clean=False)
     velocity_products={}
     for item in products:
         if item.get("velocity") is None: continue
@@ -535,6 +536,15 @@ def main():
         raw_output = args.output_image.with_name("radar_mosaic_raw.png")
         render_clean(mosaic, latlon, clean_output, rhohv=rhohv)
         render_raw(mosaic, latlon, raw_output)
+        # Replace the browser-facing display with the native-gate product after
+        # the gridded products are generated. The model/cursor still use the
+        # 1-km Cartesian mosaic above.
+        native_clean = args.output_image.parent / "radar_mosaic_native_clean.png"
+        native_raw = args.output_image.parent / "radar_mosaic_native_raw.png"
+        if native_clean.exists():
+            shutil.copyfile(native_clean, clean_output)
+        if native_raw.exists():
+            shutil.copyfile(native_raw, raw_output)
         if args.output_image.name != "radar_mosaic_clean.png":
             args.output_image.unlink(missing_ok=True)
             # Preserve the existing viewer contract name as the clean product.
