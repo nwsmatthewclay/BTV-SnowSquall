@@ -168,7 +168,8 @@ def _metpy_derived_fields(path: Path, latitude, longitude, values):
             storm_relative_helicity, surface_based_cape_cin, wet_bulb_temperature,
         )
         from metpy.units import units
-    except Exception:
+    except Exception as exc:
+        result["__metpy_error"] = f"{type(exc).__name__}: {exc}"
         return result
 
     try:
@@ -176,6 +177,7 @@ def _metpy_derived_fields(path: Path, latitude, longitude, values):
         for name in ("gh", "t", "u", "v"):
             profile[name] = _nearest_profile(_open_profile(path, name), latitude, longitude)
             if profile[name] is None:
+                result["__metpy_error"] = f"profile_{name}_unavailable"
                 return result
         t_levels, t_values = profile["t"]
         pressure = np.asarray(t_levels, dtype=float)
@@ -185,6 +187,8 @@ def _metpy_derived_fields(path: Path, latitude, longitude, values):
 
         def align(pair):
             levels, vals = np.asarray(pair[0], dtype=float), np.asarray(pair[1], dtype=float)
+            finite = np.isfinite(levels) & np.isfinite(vals)
+            levels, vals = levels[finite], vals[finite]
             order = np.argsort(levels)
             return np.interp(pressure, levels[order], vals[order])
 
@@ -220,6 +224,7 @@ def _metpy_derived_fields(path: Path, latitude, longitude, values):
                 dtype=float,
             )
         else:
+            result["__metpy_error"] = "profile_moisture_unavailable"
             return result
         if rh is None:
             rh = np.asarray(
@@ -231,7 +236,11 @@ def _metpy_derived_fields(path: Path, latitude, longitude, values):
 
         orog = _nearest(_open_field(path, "surface", "orog", None), latitude, longitude)
         sp = values.get("surface_pressure_pa")
-        if orog is None or sp is None:
+        if orog is None:
+            result["__metpy_error"] = "terrain_unavailable"
+            return result
+        if sp is None:
+            result["__metpy_error"] = "surface_pressure_unavailable"
             return result
         heights = gh - float(orog)
 
@@ -388,6 +397,10 @@ def _metpy_derived_fields(path: Path, latitude, longitude, values):
                 wetbulb_2m_c=result.get("wetbulb_2m_c") or values.get("wetbulb_2m_c"),
             )
             result.update({k: v for k, v in snsq_result.items() if v is not None})
+            if result.get("cloud_layer_mean_wind_ms") is not None:
+                result["cloud_layer_mean_wind_kt"] = float(result["cloud_layer_mean_wind_ms"]) * 1.943844492
+            if result.get("cloud_layer_shear_ms") is not None:
+                result["cloud_layer_shear_kt"] = float(result["cloud_layer_shear_ms"]) * 1.943844492
         except Exception:
             pass
     except Exception as exc:
