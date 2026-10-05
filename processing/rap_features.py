@@ -26,11 +26,11 @@ FIELD_SPECS = {
     "surface_temperature_k": ("heightAboveGround", "2t", 2),
     "cape_jkg": ("surface", "cape", None),
     "cin_jkg": ("surface", "cin", None),
-    "pwat_mm": ("entireAtmosphere", "pwat", None),
-    "mlcape_jkg": ("heightAboveGroundLayer", "cape", (180, 0)),
-    "mlcin_jkg": ("heightAboveGroundLayer", "cin", (180, 0)),
-    "mucape_jkg": ("heightAboveGroundLayer", "cape", (255, 0)),
-    "mucin_jkg": ("heightAboveGroundLayer", "cin", (255, 0)),
+    "pwat_mm": ("atmosphereSingleLayer", "pwat", None),
+    "mlcape_jkg": ("pressureFromGroundLayer", "cape", 9000),
+    "mlcin_jkg": ("pressureFromGroundLayer", "cin", 9000),
+    "mucape_jkg": ("pressureFromGroundLayer", "cape", 18000),
+    "mucin_jkg": ("pressureFromGroundLayer", "cin", 18000),
     "srh01_m2s2": ("heightAboveGroundLayer", "hlcy", (1000, 0)),
     "srh03_m2s2": ("heightAboveGroundLayer", "hlcy", (3000, 0)),
     "shear_u_0_6km_ms": ("heightAboveGroundLayer", "vucsh", (6000, 0)),
@@ -67,7 +67,7 @@ def _open_field(path: Path, type_of_level: str, short_name: str, level=None):
 
     filters = {"typeOfLevel": type_of_level, "shortName": short_name}
     if level is not None:
-        if type_of_level == "heightAboveGround":
+        if type_of_level in ("heightAboveGround", "pressureFromGroundLayer"):
             filters["level"] = level
         elif type_of_level == "heightAboveGroundLayer":
             top, bottom = level
