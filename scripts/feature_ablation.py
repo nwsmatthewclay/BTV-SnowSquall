@@ -66,8 +66,12 @@ def evaluate(df,target):
             fam_cols=[c for c in family(fam,cols) if data.iloc[train][c].notna().any() and data.iloc[train][c].nunique(dropna=True)>=2]
             if not fam_cols: continue
             from src.snow_squall.training import case_scan_balanced_weights
+            from scripts.train_baseline_model import class_balanced_weights
             m=fit_model()
-            weights=case_scan_balanced_weights(data.iloc[train])
+            weights = (
+                case_scan_balanced_weights(data.iloc[train])
+                * class_balanced_weights(y[train])
+            )
             m.fit(data.iloc[train][fam_cols], y[train], model__sample_weight=weights)
             oof[fam][test]=m.predict_proba(data.iloc[test][fam_cols])[:,1]
         folds.append(info)
