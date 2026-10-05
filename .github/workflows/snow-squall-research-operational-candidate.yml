@@ -151,7 +151,14 @@ jobs:
       - name: Determine research-operational candidate status
         run: |
           set -euo pipefail
-          python scripts/audit_research_operational_candidate.py             --model-root "${{ steps.locate.outputs.model_root }}"             --candidate-audit candidate_gate/candidate_release_audit.json             --case-heldout-gate candidate_gate/case_heldout_gate/metrics.json             --output candidate_gate/research_operational_candidate_status.json
+          summary="$(find candidate_bundle -name snow_squall_candidate_refresh_summary.json -type f -print -quit)"
+          test -n "$summary"
+          python scripts/audit_research_operational_candidate.py \
+            --model-root "${{ steps.locate.outputs.model_root }}" \
+            --candidate-audit candidate_gate/candidate_release_audit.json \
+            --case-heldout-gate candidate_gate/case_heldout_gate/metrics.json \
+            --candidate-summary "$summary" \
+            --output candidate_gate/research_operational_candidate_status.json
 
       - name: Upload research-operational candidate package
         if: always()
