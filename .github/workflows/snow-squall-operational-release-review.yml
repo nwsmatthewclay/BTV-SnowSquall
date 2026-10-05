@@ -2,6 +2,11 @@ name: Snow Squall Operational Release Review
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - snow-squall-model-foundation
+    paths:
+      - .github/operational-review-trigger
   workflow_run:
     workflows:
       - Snow Squall Research-Operational Candidate Gate
