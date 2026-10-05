@@ -32,6 +32,7 @@ class ObjectDetectionConfig:
     velocity_rescue_reflectivity_dbz: float = 15.0
     velocity_rescue_contrast_kt: float = 8.0
     velocity_rescue_gradient_ktkm: float = 6.0
+    min_candidate_rank_score: float = 0.0
 
 
 def _core_seed_split(component, field, config):
@@ -421,6 +422,8 @@ def detect_reflectivity_objects(reflectivity, config=ObjectDetectionConfig(), ve
                 velocity_contrast_kt if np.isfinite(velocity_contrast_kt) else None,
                 velocity_gradient_p90_ktkm if np.isfinite(velocity_gradient_p90_ktkm) else None,
             )
+            if rank_score < float(config.min_candidate_rank_score):
+                continue
             objects.append({
                 "object_id":next_id,
                 "pixel_count":int(len(xx)),
