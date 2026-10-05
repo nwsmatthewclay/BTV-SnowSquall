@@ -120,3 +120,14 @@ def test_track_age_is_persistent_and_emitted_on_each_observation():
     assert first["track_age_min"] == 0.0
     assert second["track_age_min"] == 5.0
     assert second["track_first_scan_utc"].startswith("2026-01-01T12:00:00")
+
+
+def test_moving_object_keeps_identity_through_short_action_gap():
+    t = CentroidTracker()
+    first = t.update("2026-01-01T12:00:00Z", [obj(10, 10)])[0]["object_id"]
+    # Simulates an Actions delay long enough to miss several radar scans but
+    # still within the live track-retention window.
+    second = t.update("2026-01-01T12:25:00Z", [obj(10, 30)])[0]
+    assert second["object_id"] == first
+    assert second["track_association_status"] == "matched"
+    assert second["track_association_distance_px"] > 0
