@@ -188,12 +188,16 @@ async function renderRadarMosaic(){
     setText("legendNote","Lowest-valid-sweep KCXX + KTYX velocity. Signed inbound/outbound flow is shown for cell analysis.");
   }else{
     var frame=radarHistoryFrame();
-    var useStoredFrame=!!(frame&&frame.image&&frame.image!=="iem-wms");
+    var isLatestHistoryFrame=!!(frame&&radarHistory.frames&&radarHistory.frames.length&&radarHistoryIndex===radarHistory.frames.length-1);
+    var useStoredFrame=!!(frame&&frame.image&&frame.image!=="iem-wms"&&!isLatestHistoryFrame);
     var imageName=useStoredFrame?frame.image.split("/").pop():"";
-    var imageUrl=useStoredFrame?(LIVE_BASE+"radar_history/"+imageName+"?cb="+Date.now()):mosaicImageUrl("reflectivity");
+    // Use the current raw reflectivity product for the newest frame. The clean
+    // product intentionally removes weak echo and can look blank when the
+    // precipitation is light. Historical frames remain the retained mosaic.
+    var imageUrl=useStoredFrame?(LIVE_BASE+"radar_history/"+imageName+"?cb="+Date.now()):mosaicImageUrl("raw");
     var ov=L.imageOverlay(imageUrl,radarMosaic.bounds,{pane:"liveRadarPane",opacity:.96,interactive:false,crossOrigin:true});
     ov.addTo(radarLayer);
-    setText("radarStatus","Reflectivity mosaic "+(radarMosaic.status==="stale"?"RETAINED":"READY")+" • KCXX + KTYX");
+    setText("radarStatus","Reflectivity "+(isLatestHistoryFrame?"current raw mosaic":"historical mosaic")+" • "+(radarMosaic.status==="stale"?"RETAINED":"READY")+" • KCXX + KTYX");
     setText("legendTitle","REFLECTIVITY • dBZ");
     setText("legendNote","KCXX + KTYX reflectivity mosaic. Object footprints are clickable and expose full attributes.");
   }
