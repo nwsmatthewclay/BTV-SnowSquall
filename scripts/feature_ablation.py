@@ -7,6 +7,7 @@ from sklearn.ensemble import HistGradientBoostingClassifier
 from sklearn.impute import SimpleImputer
 from sklearn.metrics import average_precision_score, brier_score_loss, roc_auc_score
 from sklearn.pipeline import Pipeline
+from scripts.evaluate_temporal_holdout import load_reviewed_negative_ids, filter_evaluation_population
 
 HORIZONS=(15,30,45,60)
 BLOCKED_PREFIXES=("case_","label_","squall_","track_event_","association_","truth_","surface_")
@@ -88,8 +89,15 @@ def evaluate(df,target):
             "positive":int(y.sum()),"negative":int((1-y).sum()),"candidate_predictors":len(cols),"folds":folds,"families":results}
 
 def main():
-    ap=argparse.ArgumentParser(); ap.add_argument("features_csv"); ap.add_argument("--output-dir",required=True); args=ap.parse_args()
-    df=pd.read_csv(args.features_csv); out=Path(args.output_dir); out.mkdir(parents=True,exist_ok=True)
+    ap=argparse.ArgumentParser()
+    ap.add_argument("features_csv")
+    ap.add_argument("--output-dir",required=True)
+    ap.add_argument("--reviewed-negative-manifest",default=None,help="Optional human-reviewed hard-negative manifest used to define the evaluation population.")
+    args=ap.parse_args()
+    df=pd.read_csv(args.features_csv)
+    reviewed_negative_ids=load_reviewed_negative_ids(Path(args.reviewed_negative_manifest) if args.reviewed_negative_manifest else None)
+    df=filter_evaluation_population(df, reviewed_negative_ids)
+    out=Path(args.output_dir); out.mkdir(parents=True,exist_ok=True)
     policy="unknown"
     if "future_information_policy" in df.columns and df["future_information_policy"].notna().any(): policy=str(df["future_information_policy"].dropna().iloc[0])
     report={"version":"feature-ablation-v1","future_information_policy":policy,"horizons":{}}
