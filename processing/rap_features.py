@@ -23,7 +23,7 @@ _NEAREST_INDEX_CACHE = OrderedDict()
 FIELD_SPECS = {
     "visibility_m": ("surface", "vis", None),
     "gust_ms": ("surface", "gust", None),
-    "surface_temperature_k": ("surface", "tmp", None),
+    "surface_temperature_k": ("heightAboveGround", "2t", 2),
     "cape_jkg": ("surface", "cape", None),
     "cin_jkg": ("surface", "cin", None),
     "pwat_mm": ("entireAtmosphere", "pwat", None),
@@ -35,11 +35,11 @@ FIELD_SPECS = {
     "srh03_m2s2": ("heightAboveGroundLayer", "hlcy", (3000, 0)),
     "shear_u_0_6km_ms": ("heightAboveGroundLayer", "vucsh", (6000, 0)),
     "shear_v_0_6km_ms": ("heightAboveGroundLayer", "vvcsh", (6000, 0)),
-    "u10_ms": ("heightAboveGround", "u", 10),
-    "v10_ms": ("heightAboveGround", "v", 10),
+    "u10_ms": ("heightAboveGround", "10u", 10),
+    "v10_ms": ("heightAboveGround", "10v", 10),
     "temperature_2m_k": ("heightAboveGround", "tmp", 2),
-    "dewpoint_2m_k": ("heightAboveGround", "dpt", 2),
-    "rh_2m_pct": ("heightAboveGround", "r", 2),
+    "dewpoint_2m_k": ("heightAboveGround", "2d", 2),
+    "rh_2m_pct": ("heightAboveGround", "2r", 2),
     "surface_pressure_pa": ("surface", "sp", None),
 }
 
