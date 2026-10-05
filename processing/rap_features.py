@@ -158,84 +158,234 @@ def _height_from_pressure(target_pressure_hpa, pressure_hpa, heights_m):
     return float(np.interp(float(target_pressure_hpa), p, h))
 
 def _metpy_derived_fields(path: Path, latitude, longitude, values):
+    """Derive missing sounding diagnostics from the colocated RAP profile with MetPy."""
     result = {}
     try:
-        from metpy.calc import bulk_shear, downdraft_cape, el, lcl, lfc, surface_based_cape_cin, mixed_layer_cape_cin, most_unstable_cape_cin
+        from metpy.calc import (
+            bulk_shear, downdraft_cape, el, lcl, lfc, mixed_layer_cape_cin,
+            most_unstable_cape_cin, parcel_profile, relative_humidity_from_dewpoint,
+            dewpoint_from_relative_humidity, dewpoint_from_specific_humidity,
+            relative_humidity_from_specific_humidity, storm_relative_helicity,
+            surface_based_cape_cin, wet_bulb_temperature,
+        )
         from metpy.units import units
-        profiles = {}
-        for name in ('gh','t','dpt','u','v'):
-            profiles[name] = _nearest_profile(_open_profile(path, name), latitude, longitude)
-            if profiles[name] is None:
-                return result
-        _, temp = profiles['t']
-        p = np.asarray(profiles['t'][0], dtype=float)
-        def interp_profile(pair):
-            lev, val = np.asarray(pair[0],dtype=float), np.asarray(pair[1],dtype=float)
-            order = np.argsort(lev)
-            return np.interp(p, lev[order], val[order])
-        gh = interp_profile(profiles['gh'])
-        td = interp_profile(profiles['dpt'])
-        u = interp_profile(profiles['u'])
-        v = interp_profile(profiles['v'])
-        temp = np.asarray(temp,dtype=float)
-        orog = _nearest(_open_field(path,'surface','orog',None),latitude,longitude)
-        sp = values.get('surface_pressure_pa')
-        if orog is None or sp is None:
-            return result
-        h = gh - float(orog)
-        spt = values.get('temperature_2m_k')
-        sptd = values.get('dewpoint_2m_k')
-        spu, spv = values.get('u10_ms'), values.get('v10_ms')
-        if spt is not None and sptd is not None:
-            p = np.concatenate([[float(sp)/100.0],p]); temp=np.concatenate([[float(spt)],temp]); td=np.concatenate([[float(sptd)],td]); h=np.concatenate([[0.0],h])
-            u=np.concatenate([[float(spu) if spu is not None else u[0]],u]); v=np.concatenate([[float(spv) if spv is not None else v[0]],v])
-        order=np.argsort(p)[::-1]; p,temp,td,u,v,h=[np.asarray(x)[order] for x in (p,temp,td,u,v,h)]
-        mask=np.isfinite(p)&np.isfinite(temp)&np.isfinite(td)&np.isfinite(u)&np.isfinite(v)&np.isfinite(h)
-        p,temp,td,u,v,h=[np.asarray(x)[mask] for x in (p,temp,td,u,v,h)]
-        if len(p)<5:return result
-        pq=p*units.hPa; tq=temp*units.kelvin; tdq=td*units.kelvin; hq=h*units.meter; uq=u*units('m/s'); vq=v*units('m/s')
-        def val(q,unit):
-            try:return float(q.to(unit).magnitude)
-            except Exception:return None
-        if values.get('lcl_m') is None:
-            try: result['lcl_m']=_height_from_pressure(val(lcl(pq[0],tq[0],tdq[0])[0],units.hPa),p,h)
-            except Exception: pass
-        if values.get('lfc_m') is None:
-            try: result['lfc_m']=_height_from_pressure(val(lfc(pq,tq,tdq)[0],units.hPa),p,h)
-            except Exception: pass
-        if values.get('el_m') is None:
-            try: result['el_m']=_height_from_pressure(val(el(pq,tq,tdq)[0],units.hPa),p,h)
-            except Exception: pass
-        if values.get('dcape_jkg') is None:
-            try: result['dcape_jkg']=val(downdraft_cape(pq,tq,tdq)[0],units('J/kg'))
-            except Exception: pass
-        try:
-            for depth,key in ((1,'bs01_kt'),(3,'bs03_kt'),(6,'bs06_kt')):
-                du,dv=bulk_shear(pq,uq,vq,height=hq,depth=depth*units.km)
-                su=val(du,units('m/s')); sv=val(dv,units('m/s'))
-                if su is not None and sv is not None:
-                    result[key]=float(np.hypot(su,sv))*1.943844492
-                    if depth==6:
-                        result['shear_u_0_6km_ms']=su
-                        result['shear_v_0_6km_ms']=sv
-                        result['shear_0_6km_ms']=float(np.hypot(su,sv))
-        except Exception: pass
-        hs=np.argsort(h); hh=h[hs]; tt=temp[hs]
-        for target,key in ((3000.0,'lr03_Ckm'),(7500.0,'lr75_Ckm')):
-            if hh[0]<=0 and hh[-1]>=target:
-                t0=float(np.interp(0.0,hh,tt)); tx=float(np.interp(target,hh,tt)); result[key]=(t0-tx)/(target/1000.0)
-        if values.get('cape_jkg') is None:
-            try: result['cape_jkg']=val(surface_based_cape_cin(pq,tq,tdq)[0],units('J/kg'))
-            except Exception: pass
-        if values.get('mlcape_jkg') is None:
-            try: result['mlcape_jkg']=val(mixed_layer_cape_cin(pq,tq,tdq)[0],units('J/kg'))
-            except Exception: pass
-        if values.get('mucape_jkg') is None:
-            try: result['mucape_jkg']=val(most_unstable_cape_cin(pq,tq,tdq)[0],units('J/kg'))
-            except Exception: pass
     except Exception:
         return result
-    return {k:v for k,v in result.items() if v is not None}
+
+    try:
+        profile = {}
+        for name in ("gh", "t", "u", "v"):
+            profile[name] = _nearest_profile(_open_profile(path, name), latitude, longitude)
+            if profile[name] is None:
+                return result
+        t_levels, t_values = profile["t"]
+        pressure = np.asarray(t_levels, dtype=float)
+        temp = np.asarray(t_values, dtype=float)
+
+        def align(pair):
+            levels, vals = np.asarray(pair[0], dtype=float), np.asarray(pair[1], dtype=float)
+            order = np.argsort(levels)
+            return np.interp(pressure, levels[order], vals[order])
+
+        gh = align(profile["gh"])
+        u = align(profile["u"])
+        v = align(profile["v"])
+
+        dpt_pair = _nearest_profile(_open_profile(path, "dpt"), latitude, longitude)
+        rh_pair = _nearest_profile(_open_profile(path, "r"), latitude, longitude)
+        q_pair = _nearest_profile(_open_profile(path, "q"), latitude, longitude)
+        rh = align(rh_pair) if rh_pair is not None else None
+        if dpt_pair is not None:
+            dewpoint = align(dpt_pair)
+        elif rh is not None:
+            dewpoint = np.asarray(
+                dewpoint_from_relative_humidity(
+                    temp * units.kelvin, np.clip(rh / 100.0, 0.001, 1.0) * units.dimensionless
+                ).to("kelvin").magnitude,
+                dtype=float,
+            )
+        elif q_pair is not None:
+            q = align(q_pair)
+            dewpoint = np.asarray(
+                dewpoint_from_specific_humidity(
+                    pressure * units.hPa, specific_humidity=q * units.dimensionless
+                ).to("kelvin").magnitude,
+                dtype=float,
+            )
+        else:
+            return result
+        if rh is None:
+            rh = np.asarray(
+                relative_humidity_from_dewpoint(
+                    temp * units.kelvin, dewpoint * units.kelvin
+                ).to("dimensionless").magnitude * 100.0,
+                dtype=float,
+            )
+
+        orog = _nearest(_open_field(path, "surface", "orog", None), latitude, longitude)
+        sp = values.get("surface_pressure_pa")
+        if orog is None or sp is None:
+            return result
+        heights = gh - float(orog)
+
+        surface_t = values.get("temperature_2m_k")
+        surface_td = values.get("dewpoint_2m_k")
+        surface_u = values.get("u10_ms")
+        surface_v = values.get("v10_ms")
+        if surface_t is not None and surface_td is not None:
+            pressure = np.concatenate([[float(sp) / 100.0], pressure])
+            temp = np.concatenate([[float(surface_t)], temp])
+            dewpoint = np.concatenate([[float(surface_td)], dewpoint])
+            rh_surface = values.get("rh_2m_pct")
+            if rh_surface is not None:
+                rh = np.concatenate([[float(rh_surface)], rh])
+            else:
+                rh = np.concatenate([[float(relative_humidity_from_dewpoint(float(surface_t) * units.kelvin, float(surface_td) * units.kelvin).to("dimensionless").magnitude * 100.0)], rh])
+            heights = np.concatenate([[0.0], heights])
+            u = np.concatenate([[float(surface_u) if surface_u is not None else u[0]], u])
+            v = np.concatenate([[float(surface_v) if surface_v is not None else v[0]], v])
+
+        order = np.argsort(pressure)[::-1]
+        pressure = pressure[order]; temp = temp[order]; dewpoint = dewpoint[order]
+        rh = rh[order]; u = u[order]; v = v[order]; heights = heights[order]
+        mask = np.isfinite(pressure) & np.isfinite(temp) & np.isfinite(dewpoint) & np.isfinite(rh) & np.isfinite(u) & np.isfinite(v) & np.isfinite(heights)
+        pressure = pressure[mask]; temp = temp[mask]; dewpoint = dewpoint[mask]; rh = rh[mask]; u = u[mask]; v = v[mask]; heights = heights[mask]
+        if len(pressure) < 5:
+            return result
+
+        pq = pressure * units.hPa; tq = temp * units.kelvin; tdq = dewpoint * units.kelvin
+        uq = u * units("m/s"); vq = v * units("m/s"); hq = heights * units.meter
+
+        def mag(value, unit):
+            try:
+                return float(value.to(unit).magnitude)
+            except Exception:
+                return None
+
+        parcel = None
+        try:
+            parcel = parcel_profile(pq, tq[0], tdq[0])
+        except Exception:
+            parcel = None
+
+        if values.get("lcl_m") is None:
+            try:
+                lp, _ = lcl(pq[0], tq[0], tdq[0])
+                result["lcl_m"] = _height_from_pressure(mag(lp, units.hPa), pressure, heights)
+            except Exception:
+                pass
+        if values.get("lfc_m") is None:
+            try:
+                lp, _ = lfc(pq, tq, tdq, parcel_temperature_profile=parcel) if parcel is not None else lfc(pq, tq, tdq)
+                result["lfc_m"] = _height_from_pressure(mag(lp, units.hPa), pressure, heights)
+            except Exception:
+                pass
+        if values.get("el_m") is None:
+            try:
+                ep, _ = el(pq, tq, tdq, parcel_temperature_profile=parcel) if parcel is not None else el(pq, tq, tdq)
+                result["el_m"] = _height_from_pressure(mag(ep, units.hPa), pressure, heights)
+            except Exception:
+                pass
+
+        for func, keyc, keyi in (
+            (surface_based_cape_cin, "cape_jkg", "cin_jkg"),
+            (mixed_layer_cape_cin, "mlcape_jkg", "mlcin_jkg"),
+            (most_unstable_cape_cin, "mucape_jkg", "mucin_jkg"),
+        ):
+            try:
+                cape, cin = func(pq, tq, tdq)
+                if values.get(keyc) is None:
+                    result[keyc] = mag(cape, units("J/kg"))
+                if values.get(keyi) is None:
+                    result[keyi] = mag(cin, units("J/kg"))
+            except Exception:
+                pass
+        if values.get("dcape_jkg") is None:
+            try:
+                result["dcape_jkg"] = mag(downdraft_cape(pq, tq, tdq)[0], units("J/kg"))
+            except Exception:
+                pass
+
+        for depth, key in ((1, "shear_0_1km_kt"), (3, "shear_0_3km_kt"), (6, "shear_0_6km_kt")):
+            try:
+                du, dv = bulk_shear(pq, uq, vq, height=hq, depth=depth * units.km)
+                su = mag(du, units("m/s")); sv = mag(dv, units("m/s"))
+                if su is not None and sv is not None:
+                    result[key] = float(np.hypot(su, sv) * 1.943844492)
+                    if depth == 6:
+                        result["shear_u_0_6km_ms"] = su
+                        result["shear_v_0_6km_ms"] = sv
+                        result["shear_0_6km_ms"] = float(np.hypot(su, sv))
+            except Exception:
+                pass
+
+        height_order = np.argsort(heights)
+        hs = heights[height_order]; ts = temp[height_order]; us = u[height_order]; vs = v[height_order]; rhs = rh[height_order]
+        def layer_mean(values_arr, top_m):
+            if hs[0] > 0 or hs[-1] < top_m:
+                return None
+            mask_layer = (hs >= 0) & (hs <= top_m)
+            x = hs[mask_layer]; y = np.asarray(values_arr)[mask_layer]
+            if x.size < 2:
+                return None
+            if x[0] > 0:
+                x = np.insert(x, 0, 0.0); y = np.insert(y, 0, np.interp(0.0, hs, values_arr))
+            if x[-1] < top_m:
+                x = np.append(x, top_m); y = np.append(y, np.interp(top_m, hs, values_arr))
+            integrator = np.trapezoid if hasattr(np, "trapezoid") else np.trapz
+            return float(integrator(y, x) / top_m)
+
+        result["wind_0_1km_kt"] = (layer_mean(np.hypot(us, vs), 1000.0) * 1.943844492) if layer_mean(np.hypot(us, vs), 1000.0) is not None else None
+        result["wind_0_3km_kt"] = (layer_mean(np.hypot(us, vs), 3000.0) * 1.943844492) if layer_mean(np.hypot(us, vs), 3000.0) is not None else None
+        if hs[0] <= 0 and hs[-1] >= 3000:
+            t0 = float(np.interp(0.0, hs, ts)); t3 = float(np.interp(3000.0, hs, ts))
+            result["lapse_rate_0_3km_c_km"] = (t0 - t3) / 3.0
+        if hs[0] <= 0 and hs[-1] >= 7500:
+            t0 = float(np.interp(0.0, hs, ts)); t75 = float(np.interp(7500.0, hs, ts))
+            result["lapse_rate_0_7_5km_c_km"] = (t0 - t75) / 7.5
+
+        try:
+            wb = wet_bulb_temperature(pq, tq, tdq).to("degC").magnitude
+            wb = np.asarray(wb, dtype=float)[height_order]
+            result["wet_bulb_0_3km_c"] = layer_mean(wb, 3000.0)
+        except Exception:
+            pass
+        if values.get("wetbulb_2m_c") is None and surface_t is not None and surface_td is not None:
+            try:
+                result["wetbulb_2m_c"] = mag(wet_bulb_temperature(float(sp) / 100.0 * units.hPa, float(surface_t) * units.kelvin, float(surface_td) * units.kelvin), units.degC)
+            except Exception:
+                pass
+
+        if values.get("srh01_m2s2") is None:
+            try:
+                result["srh01_m2s2"] = mag(storm_relative_helicity(hq, uq, vq, depth=1 * units.km)[2], units("m^2/s^2"))
+            except Exception:
+                pass
+        if values.get("srh03_m2s2") is None:
+            try:
+                result["srh03_m2s2"] = mag(storm_relative_helicity(hq, uq, vq, depth=3 * units.km)[2], units("m^2/s^2"))
+            except Exception:
+                pass
+
+        freezing = np.where((ts[:-1] - 273.15) * (ts[1:] - 273.15) <= 0)[0]
+        if freezing.size:
+            j = int(freezing[0])
+            if ts[j + 1] != ts[j]:
+                result["freezing_level_m"] = float(hs[j] + (273.15 - ts[j]) * (hs[j + 1] - hs[j]) / (ts[j + 1] - ts[j]))
+
+        try:
+            snsq_result = build_snsq_profile(
+                hs, np.asarray(pressure)[height_order], ts, np.asarray(dewpoint)[height_order], rhs,
+                us, vs, float(sp) / 100.0, surface_t, surface_td,
+                surface_rh_pct=values.get("rh_2m_pct"), surface_u_ms=surface_u, surface_v_ms=surface_v,
+                wetbulb_2m_c=result.get("wetbulb_2m_c") or values.get("wetbulb_2m_c"),
+            )
+            result.update({k: v for k, v in snsq_result.items() if v is not None})
+        except Exception:
+            pass
+    except Exception:
+        return result
+    return {k: v for k, v in result.items() if v is not None}
 def _open_profile(path: Path, short_name: str):
     return _open_field(path, "isobaricInhPa", short_name, None)
 
