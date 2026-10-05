@@ -302,6 +302,7 @@ jobs:
 
       - name: Launch operational release review snapshot
         if: success()
+        continue-on-error: true
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
