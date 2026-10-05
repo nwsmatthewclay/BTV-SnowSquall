@@ -39,20 +39,23 @@ def build_packet(
     d = queue.copy()
     d["null_id"] = _clean_text(d["null_id"])
     d = d[d["null_id"].ne("")].drop_duplicates("null_id").copy()
+    if "review_recommended" in d.columns:
+        d = d[d["review_recommended"].fillna(False).astype(bool)].copy()
 
+    existing = None
     if existing_review is not None and not existing_review.empty:
         if "null_id" not in existing_review.columns:
             raise ValueError("Existing review file must contain null_id")
-        review = existing_review.copy()
-        review["null_id"] = _clean_text(review["null_id"])
-        review = review[review["null_id"].ne("")].drop_duplicates("null_id", keep="last")
-        review_lookup = review.set_index("null_id")
+        existing = existing_review.copy()
+        existing["null_id"] = _clean_text(existing["null_id"])
+        existing = existing[existing["null_id"].ne("")].drop_duplicates("null_id", keep="last")
+        review_lookup = existing.set_index("null_id")
         protected = [
             c for c in (
                 "review_status", "final_class", "radar_target_present",
                 "event_evidence_present", "surface_evidence_interpreted",
                 "reviewer", "reviewed_at_utc", "review_notes"
-            ) if c in review.columns
+            ) if c in existing.columns
         ]
         for col in protected:
             mapped = d["null_id"].map(review_lookup[col])
@@ -62,6 +65,15 @@ def build_packet(
                 current = d[col]
                 missing = current.isna() | current.astype(str).str.strip().eq("")
                 d.loc[missing, col] = mapped.loc[missing]
+
+        # Preserve previously reviewed windows even when they are no longer in
+        # the current diagnostic candidate set.
+        existing_ids = set(existing["null_id"])
+        current_ids = set(d["null_id"])
+        missing_ids = sorted(existing_ids - current_ids)
+        if missing_ids:
+            carry = existing[existing["null_id"].isin(missing_ids)].copy()
+            d = pd.concat([d, carry], ignore_index=True, sort=False)
     defaults = {
         "review_status": "pending",
         "final_class": "pending",
