@@ -61,6 +61,7 @@ jobs:
 
       - name: Normalize protected modern validation cases
         run: |
+          mkdir -p data/manifests/modern_validation
           python scripts/build_modern_validation_manifest.py \
             --input data/manifests/modern_independent_validation_cases.csv \
             --output data/manifests/modern_validation/modern_validation_cases.csv \
