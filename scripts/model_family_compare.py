@@ -14,6 +14,7 @@ from sklearn.metrics import average_precision_score, brier_score_loss, roc_auc_s
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
 from src.snow_squall.training import case_scan_balanced_weights, case_weighted_metrics
+from scripts.evaluate_temporal_holdout import load_reviewed_negative_ids, filter_evaluation_population
 
 HORIZONS = (15, 30, 45, 60)
 BLOCKED_PREFIXES = ("case_", "label_", "squall_", "track_event_", "association_", "truth_", "surface_")
@@ -195,8 +196,17 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("features_csv")
     ap.add_argument("--output-dir", required=True)
+    ap.add_argument(
+        "--reviewed-negative-manifest",
+        default=None,
+        help="Optional human-reviewed hard-negative manifest used to define the evaluation population.",
+    )
     args = ap.parse_args()
     source = pd.read_csv(args.features_csv)
+    reviewed_negative_ids = load_reviewed_negative_ids(
+        Path(args.reviewed_negative_manifest) if args.reviewed_negative_manifest else None
+    )
+    source = filter_evaluation_population(source, reviewed_negative_ids)
     out = Path(args.output_dir)
     out.mkdir(parents=True, exist_ok=True)
     overall = {
