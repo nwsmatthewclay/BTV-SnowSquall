@@ -6,7 +6,7 @@
 <title>BTV Snow Squall • Live Object Monitor</title>
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
-<link rel="stylesheet" href="style.css?v=20261005-object-monitor">
+<link rel="stylesheet" href="style.css?v=20261005-object-monitor-22">
 </head>
 <body class="live-dashboard-page">
 <header>
@@ -38,15 +38,24 @@
     </div>
     <div class="map-controls">
       <span class="label">DISPLAY</span>
-      <button class="active display-btn" data-radar-mode="clean">Clean</button>
-      <button class="display-btn" data-radar-mode="raw">Raw</button>
-      <button class="display-btn" data-radar-mode="qcd">NOAA QC</button>
+      <button class="active display-btn" data-radar-mode="reflectivity">Reflectivity</button>
+      <button class="display-btn" data-radar-mode="velocity">Velocity</button>
       <button id="objectNumbersBtn" class="active">Object IDs</button>
     </div>
+    <div id="cursorReadout" style="position:absolute;left:12px;bottom:12px;z-index:800;background:rgba(10,18,24,.86);border:1px solid rgba(190,210,220,.28);border-radius:4px;padding:6px 9px;font:12px/1.25 monospace;color:#eaf2f5;pointer-events:none">CURSOR — | Z — dBZ | V —</div>
+    <div class="radar-timeline" id="radarTimeline">
+      <div class="radar-timeline-head"><span>RADAR TIMELAPSE</span><b id="radarTimelineLabel">Live</b></div>
+      <div class="radar-timeline-controls">
+        <button id="radarPlayBtn" type="button">▶ PLAY</button>
+        <input id="radarTimelineSlider" type="range" min="0" max="0" value="0" step="1" aria-label="Radar timelapse frame">
+        <button id="radarLiveBtn" type="button">LIVE</button>
+      </div>
+      <div class="radar-timeline-note">Rolling 90-minute reflectivity archive • 5-minute cadence when scans are available</div>
+    </div>
     <div class="map-legend">
-      <div class="map-legend-title">REFLECTIVITY • dBZ</div>
+      <div class="map-legend-title" id="legendTitle">REFLECTIVITY • dBZ</div>
       <div class="map-legend-bar"><span>0</span><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><span>70+</span></div>
-      <div class="map-legend-note">Local KCXX/KTYX mosaic when available; NOAA QC fallback remains available. White outline marks the selected object.</div>
+      <div class="map-legend-note" id="legendNote">Clean KCXX/KTYX reflectivity mosaic. Object outlines remain clickable above the radar.</div>
     </div>
   </section>
 
@@ -83,7 +92,7 @@
     </div>
 
     <div class="section-block" id="probabilitySection">
-      <div class="section-header"><h2>SNOW SQUALL PROBABILITY (15 MIN)</h2><span class="dashboard-pill gated" id="probBadge">GATED</span></div>
+      <div class="section-header"><h2>SNOW SQUALL PROBABILITY (15 MIN)</h2><span class="dashboard-pill gated" id="probBadge">RESEARCH LIVE</span></div>
       <div class="prob-wrap">
         <div class="prob-main">
           <div class="prob-label">Live research candidate</div>
@@ -93,13 +102,7 @@
         </div>
         <div class="prob-components" id="probComponents"></div>
       </div>
-      <div class="track-evolution-summary" id="probabilitySummary">No scored track history yet.</div>
-      <div class="chart-box track-probability-box">
-        <svg class="mini-chart track-probability-chart" id="probChart" viewBox="0 0 520 190" role="img" aria-label="Live snow squall probability evolution by tracked scan"></svg>
-        <div class="chart-legend-row"><span class="chart-key"><i style="background:#ff5648"></i>15m</span><span class="chart-key"><i style="background:#1f90e9"></i>30m</span><span class="chart-key"><i style="background:#f0c54c"></i>45m</span><span class="chart-key"><i style="background:#62ce73"></i>60m</span><span class="chart-key chart-key-muted">Each point = one tracked radar scan</span></div>
-      </div>
-      <div class="env-outlook-label">ENVIRONMENT TRAJECTORY • CURRENT → RAP +30 MIN</div>
-      <div class="environment-outlook" id="environmentOutlook"></div>
+      <div class="chart-box"><svg class="mini-chart" id="probChart" viewBox="0 0 420 142" role="img" aria-label="Live research probability evolution"></svg><div class="chart-legend-row"><span class="chart-key"><i style="background:#ff5648"></i>15m</span><span class="chart-key"><i style="background:#1f90e9"></i>30m</span><span class="chart-key"><i style="background:#f0c54c"></i>45m</span><span class="chart-key"><i style="background:#62ce73"></i>60m</span></div></div>
     </div>
 
     <div class="section-block" id="motionSection">
@@ -109,7 +112,7 @@
 
     <div class="section-block" id="environmentSection">
       <div class="section-header"><h2>ENVIRONMENT AT OBJECT</h2><span id="envSource">—</span></div>
-      <table class="environment-table" id="environmentTable"></table>
+      <div class="environment-table" id="environmentTable" role="table" aria-label="Environmental parameters"></div>
     </div>
 
     <div class="section-block" id="evidenceSection">
@@ -118,20 +121,20 @@
     </div>
 
     <div class="section-block" id="historySection">
-      <div class="section-header"><h2>TRACK HISTORY</h2><span id="historyCount">—</span></div>
+      <div class="section-header"><h2>RECENT HISTORY</h2><span id="historyCount">—</span></div>
       <div class="history-chart-wrap"><svg class="history-chart" id="historyChart" viewBox="0 0 520 145" role="img" aria-label="Selected live object recent history"></svg></div>
       <div class="history-table-wrap"><table class="history-table" id="historyTable"></table></div>
     </div>
 
     <div class="section-block">
       <div class="section-header"><h2>MODEL / LIVE STATUS</h2><span id="modelStatus">—</span></div>
-      <div id="liveGate" class="live-model-gate"><strong>Probability gated.</strong><span id="liveGateText">Waiting for current feature coverage.</span></div>
+      <div id="liveGate" class="live-model-gate"><strong>Operational release gated.</strong><span id="liveGateText">Waiting for current feature coverage.</span></div>
       <div class="status-card" id="modelStatusCard" style="margin-top:6px"></div>
     </div>
   </aside>
 </main>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<script src="live.js?v=20261005-object-monitor"></script>
+<script src="live.js?v=20261005-object-monitor-22"></script>
 </body>
 </html>
