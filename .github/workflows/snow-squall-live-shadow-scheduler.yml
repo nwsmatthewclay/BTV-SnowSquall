@@ -1,6 +1,12 @@
 name: Snow Squall Live Shadow Scheduler
 
 on:
+  push:
+    branches:
+      - main
+    paths:
+      - scripts/shadow_live_model_scorer.py
+      - .github/workflows/snow-squall-live-shadow-scheduler.yml
   schedule:
     - cron: "*/5 * * * *"
   workflow_dispatch:
