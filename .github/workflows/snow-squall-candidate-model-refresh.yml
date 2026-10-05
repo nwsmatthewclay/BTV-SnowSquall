@@ -158,43 +158,26 @@ jobs:
           set -euo pipefail
           python scripts/audit_radar_environment_contract.py             data/derived/snow_squall_model_features_cumulative_prior.csv             --output data/derived/snow_squall_prior_radar_environment_contract_audit.json
 
-      - name: Bootstrap candidate from prior successful expansion model
+      - name: Prepare limited-data bootstrap candidate
+        id: mode
         if: steps.contract.outcome != 'success'
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
-          echo "Strict radar/environment contract is unavailable in this legacy feature population."
-          echo "Bootstrapping the last successful candidate bundle as a limited-data research candidate."
+          cp data/derived/snow_squall_model_features_cumulative_prior.csv \
+            data/derived/snow_squall_model_features_cumulative.csv
+          printf '%s\n' '{"status":"national_pretraining_not_available","mode":"limited_data_bootstrap"}' \
+            > data/derived/snow_squall_national_pretraining_feature_summary_refresh.json
+          echo "candidate_mode=limited_data_bootstrap" >> "$GITHUB_OUTPUT"
+          echo "training_contract_status=limited_data_bootstrap" >> "$GITHUB_OUTPUT"
+          echo "Limited-data bootstrap mode enabled: training will proceed without the strict first-class base-moment contract."
+          echo "This candidate remains research-shadow only."
 
-          rm -rf bootstrap_model_artifact
-          run_id="$(gh run list --workflow "Snow Squall Expansion Dataset"             --branch snow-squall-model-foundation --status success --limit 20             --json databaseId --jq '.[].databaseId' | head -n 1)"
-          test -n "$run_id" && test "$run_id" != "null"
-
-          gh run download "$run_id"             --repo "$GITHUB_REPOSITORY"             --name snow-squall-live-model-bundles             --dir bootstrap_model_artifact
-
-          for h in 15 30 45 60; do
-            src="bootstrap_model_artifact/candidate_ensemble_expansion_${h}m"
-            base="bootstrap_model_artifact/baseline_expansion_${h}m"
-            test -f "${src}/baseline_model.joblib"
-            test -f "${src}/metrics.json"
-            test -f "${src}/probability_calibrator.joblib"
-            rm -rf "data/derived/candidate_ensemble_refresh_${h}m" "data/derived/baseline_refresh_${h}m"
-            cp -R "${src}" "data/derived/candidate_ensemble_refresh_${h}m"
-            cp -R "${base}" "data/derived/baseline_refresh_${h}m"
-          done
-
-          cat > data/derived/snow_squall_candidate_refresh_summary.json <<'JSON'
-          {
-            "release_status": "candidate_only_not_operational",
-            "candidate_mode": "bootstrap_legacy_feature_contract",
-            "bootstrap_source": "latest_successful_snow_squall_expansion_live_model_bundle",
-            "training_contract_status": "legacy_feature_population_missing_first_class_base_moments",
-            "note": "Bootstrap candidate is permitted only for research shadow scoring. Strict retraining remains required as soon as a complete radar/environment feature population is available."
-          }
-          JSON
-
-          printf '%s\\n' '{"status":"bootstrap_legacy_feature_contract"}'             > data/derived/snow_squall_national_pretraining_feature_summary_refresh.json
+      - name: Establish candidate training mode
+        id: mode
+        if: steps.contract.outcome == 'success'
+        run: |
+          echo "candidate_mode=full_contract" >> "$GITHUB_OUTPUT"
+          echo "training_contract_status=full_radar_environment_contract" >> "$GITHUB_OUTPUT"
 
       - name: Stage optional national pretraining models
         if: steps.contract.outcome == 'success'
@@ -231,21 +214,38 @@ jobs:
           PY
 
       - name: Enforce augmented radar + environment training contract
-        if: steps.contract.outcome == 'success'
+        if: steps.mode.outputs.candidate_mode == 'full_contract'
         run: |
           set -euo pipefail
           python scripts/audit_radar_environment_contract.py             data/derived/snow_squall_model_features_cumulative.csv             --output data/derived/snow_squall_radar_environment_contract_audit.json
 
       - name: Train refreshed four-horizon baseline and ensemble candidates
-        if: steps.contract.outcome == 'success'
+        if: success()
         run: |
           set -euo pipefail
+          baseline_args=()
+          ensemble_args=()
+          if [ "${{ steps.mode.outputs.candidate_mode }}" = "limited_data_bootstrap" ]; then
+            baseline_args+=(--allow-limited-data)
+            ensemble_args+=(--allow-limited-data)
+          fi
           for h in 15 30 45 60; do
-            python scripts/train_baseline_model.py               data/derived/snow_squall_model_features_cumulative.csv               --schema data/derived/snow_squall_model_features_expanded.schema.json               --target squall_onset_within_${h}m               --output-dir data/derived/baseline_refresh_${h}m
+            python scripts/train_baseline_model.py \
+              data/derived/snow_squall_model_features_cumulative.csv \
+              --schema data/derived/snow_squall_model_features_expanded.schema.json \
+              --target squall_onset_within_${h}m \
+              --output-dir data/derived/baseline_refresh_${h}m \
+              "${baseline_args[@]}"
 
-            python scripts/train_candidate_ensemble.py               data/derived/snow_squall_model_features_cumulative.csv               --schema data/derived/snow_squall_model_features_expanded.schema.json               --target squall_onset_within_${h}m               --output-dir data/derived/candidate_ensemble_refresh_${h}m
+            python scripts/train_candidate_ensemble.py \
+              data/derived/snow_squall_model_features_cumulative.csv \
+              --schema data/derived/snow_squall_model_features_expanded.schema.json \
+              --target squall_onset_within_${h}m \
+              --output-dir data/derived/candidate_ensemble_refresh_${h}m \
+              "${ensemble_args[@]}"
 
-            python scripts/calibrate_model_bundle.py               --model-dir data/derived/candidate_ensemble_refresh_${h}m
+            python scripts/calibrate_model_bundle.py \
+              --model-dir data/derived/candidate_ensemble_refresh_${h}m
           done
 
       - name: Audit refreshed live compatibility
@@ -294,6 +294,8 @@ jobs:
           summary = {
               **prior,
               "release_status": "candidate_only_not_operational",
+              "candidate_mode": "${{ steps.mode.outputs.candidate_mode }}",
+              "training_contract_status": "${{ steps.mode.outputs.training_contract_status }}",
               "national_pretraining_source": (
                   prior.get("national_pretraining_source")
                   or "BTV-excluded national SQW warning/radar weak supervision"
