@@ -326,3 +326,47 @@ def test_shadow_payload_exposes_track_timeline_environment_and_forecast(tmp_path
     assert record["environment_snapshot"]["cape_jkg"] == 100.0
     assert record["environment_forecast_30min_snapshot"]["snsq"] == 1.4
     assert record["environment_forecast_30min_snapshot"]["mucape_jkg"] == 220.0
+
+
+def test_shadow_scoring_uses_current_object_when_history_lags(tmp_path, monkeypatch):
+    live = tmp_path / "live"
+    models = tmp_path / "models"
+    live.mkdir()
+    models.mkdir()
+    make_model_dirs(models)
+
+    current = rich_props(timestamp="2026-01-01T12:05:00Z", max_z=42.0)
+    stale = rich_props(timestamp="2026-01-01T12:00:00Z", max_z=20.0)
+
+    (live / "KCXX_objects.geojson").write_text(json.dumps({
+        "metadata": {"scan_time_utc": current["timestamp"]},
+        "features": [{"type": "Feature", "geometry": None, "properties": current}],
+    }), encoding="utf-8")
+    (live / "KCXX_history.json").write_text(
+        json.dumps([stale]), encoding="utf-8"
+    )
+    write_empty_site(live, "KTYX")
+
+    captured = []
+    class CurrentRuntime:
+        def __init__(self):
+            self.model = object()
+            self.metadata = {
+                "model_version": "current-test",
+                "operational_release_status": "candidate_only",
+            }
+            self.feature_columns = ["max_reflectivity_dbz"]
+        def score_candidate(self, frame):
+            captured.append(frame.tail(1)[["timestamp", "max_reflectivity_dbz"]].iloc[0].to_dict())
+            return [0.42]
+
+    monkeypatch.setattr(
+        "scripts.shadow_live_model_scorer.ModelRuntime.load",
+        lambda directory: CurrentRuntime(),
+    )
+    payload, rows = score_site("KCXX", live, models)
+
+    assert payload["scored_object_count"] == 1
+    assert captured
+    assert captured[0]["timestamp"].isoformat().startswith("2026-01-01T12:05:00")
+    assert captured[0]["max_reflectivity_dbz"] == 42.0
