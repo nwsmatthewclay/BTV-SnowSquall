@@ -306,9 +306,8 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
-          gh workflow run "Snow Squall Operational Release Review" \
-            --repo "$GITHUB_REPOSITORY" \
-            --ref snow-squall-model-foundation
+          gh api --method POST "/repos/$GITHUB_REPOSITORY/actions/workflows/snow-squall-operational-release-review.yml/dispatches" \
+            -f ref="snow-squall-model-foundation"
           echo "Dispatched operational release review snapshot."
       - name: Upload replay viewer package
         uses: actions/upload-artifact@v4
