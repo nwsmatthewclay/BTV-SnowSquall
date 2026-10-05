@@ -357,14 +357,40 @@ def _metpy_derived_fields(path: Path, latitude, longitude, values):
             integrator = np.trapezoid if hasattr(np, "trapezoid") else np.trapz
             return float(integrator(y, x) / top_m)
 
-        result["wind_0_1km_kt"] = (layer_mean(np.hypot(us, vs), 1000.0) * 1.943844492) if layer_mean(np.hypot(us, vs), 1000.0) is not None else None
-        result["wind_0_3km_kt"] = (layer_mean(np.hypot(us, vs), 3000.0) * 1.943844492) if layer_mean(np.hypot(us, vs), 3000.0) is not None else None
+        wind_speed_profile = np.hypot(us, vs)
+        wind_01 = layer_mean(wind_speed_profile, 1000.0)
+        wind_03 = layer_mean(wind_speed_profile, 3000.0)
+        wind_02 = layer_mean(wind_speed_profile, 2000.0)
+        rh_02 = layer_mean(rhs, 2000.0)
+        result["wind_0_1km_kt"] = wind_01 * 1.943844492 if wind_01 is not None else None
+        result["wind_0_3km_kt"] = wind_03 * 1.943844492 if wind_03 is not None else None
+        if rh_02 is not None:
+            result["mean_rh_0_2km_pct"] = rh_02
+        if wind_02 is not None:
+            result["mean_wind_0_2km_ms"] = wind_02
         if hs[0] <= 0 and hs[-1] >= 3000:
             t0 = float(np.interp(0.0, hs, ts)); t3 = float(np.interp(3000.0, hs, ts))
             result["lapse_rate_0_3km_c_km"] = (t0 - t3) / 3.0
         if hs[0] <= 0 and hs[-1] >= 7500:
             t0 = float(np.interp(0.0, hs, ts)); t75 = float(np.interp(7500.0, hs, ts))
             result["lapse_rate_0_7_5km_c_km"] = (t0 - t75) / 7.5
+
+        try:
+            from metpy.calc import equivalent_potential_temperature
+            thetae = np.asarray(
+                equivalent_potential_temperature(
+                    np.asarray(pressure)[height_order] * units.hPa,
+                    ts * units.kelvin,
+                    np.asarray(dewpoint)[height_order] * units.kelvin,
+                ).to("kelvin").magnitude,
+                dtype=float,
+            )
+            thetae_0 = float(thetae[0])
+            if hs[0] <= 0 and hs[-1] >= 2000:
+                thetae_2 = float(np.interp(2000.0, hs, thetae))
+                result["thetae_delta_0_2km_k"] = thetae_2 - thetae_0
+        except Exception:
+            pass
 
         try:
             wb = wet_bulb_temperature(pq, tq, tdq).to("degC").magnitude
@@ -394,6 +420,25 @@ def _metpy_derived_fields(path: Path, latitude, longitude, values):
             j = int(freezing[0])
             if ts[j + 1] != ts[j]:
                 result["freezing_level_m"] = float(hs[j] + (273.15 - ts[j]) * (hs[j + 1] - hs[j]) / (ts[j + 1] - ts[j]))
+
+        if result.get("snsq") is None:
+            try:
+                rh02 = result.get("mean_rh_0_2km_pct")
+                de02 = result.get("thetae_delta_0_2km_k")
+                wind02 = result.get("mean_wind_0_2km_ms")
+                wb2 = result.get("wetbulb_2m_c") or values.get("wetbulb_2m_c")
+                if rh02 is not None and de02 is not None and wind02 is not None:
+                    moisture = max(0.0, (float(rh02) - 60.0) / 15.0)
+                    instability = max(0.0, (4.0 - float(de02)) / 4.0)
+                    wind_factor = max(0.0, float(wind02) / 9.0)
+                    temp_pass = wb2 is None or float(wb2) <= 1.0
+                    result["snsq"] = float(moisture * instability * wind_factor) if temp_pass else 0.0
+                    result["moisture_factor"] = float(moisture)
+                    result["instability_factor"] = float(instability)
+                    result["wind_factor"] = float(wind_factor)
+                    result["snow_temperature_pass"] = bool(temp_pass)
+            except Exception:
+                pass
 
         try:
             snsq_result = build_snsq_profile(
