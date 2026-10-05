@@ -16,6 +16,15 @@ HORIZONS = (15, 30, 45, 60)
 SITES = ("KCXX", "KTYX")
 MIN_FEATURE_COVERAGE = 0.80
 MAX_ENVIRONMENT_AGE_MINUTES = 180.0
+ENVIRONMENT_PREDICTORS = {
+    "cape_jkg", "cin_jkg", "snsq", "mean_rh_0_2km_pct", "thetae_delta_0_2km_k",
+    "mean_wind_0_2km_ms", "wetbulb_2m_c", "snsq_moisture_factor",
+    "snsq_instability_factor", "snsq_wind_factor", "shear_0_6km_kt",
+    "pwat_mm", "mlcape_jkg", "mlcin_jkg", "mucape_jkg", "mucin_jkg",
+    "srh01_m2s2", "srh03_m2s2", "shear_u_0_6km_ms", "shear_v_0_6km_ms",
+    "shear_0_6km_ms", "u10_ms", "v10_ms", "temperature_2m_k", "dewpoint_2m_k",
+    "rh_2m_pct", "temperature_dewpoint_spread_k",
+}
 MIN_INSTANTANEOUS_FEATURES = {
     "max_reflectivity_dbz",
     "mean_reflectivity_dbz",
@@ -132,7 +141,12 @@ def score_site(site: str, live_root: Path, model_root: Path) -> tuple[dict, list
                 "minimum_feature_coverage": MIN_FEATURE_COVERAGE,
                 "max_environment_age_minutes": MAX_ENVIRONMENT_AGE_MINUTES,
                 "fresh_environment_target_minutes": 90,
-                "requires_complete_environment": True,
+                "requires_complete_environment": environment_required,
+                "environment_requirement": (
+                    "model_predictors_require_environment"
+                    if environment_required
+                    else "bootstrap_radar_object_model_does_not_use_environment_predictors"
+                ),
                 "stale_but_usable_policy": "complete_RAP_environment_up_to_180m_is_scored_with_degraded_freshness",
             },
         }
@@ -140,6 +154,10 @@ def score_site(site: str, live_root: Path, model_root: Path) -> tuple[dict, list
             runtime = runtimes[horizon]
             coverage = feature_coverage(frame.tail(1), runtime.feature_columns)
             record["feature_coverage"][str(horizon)] = coverage
+            environment_required = bool(set(runtime.feature_columns) & ENVIRONMENT_PREDICTORS)
+            record.setdefault("environment_requirement", {})[str(horizon)] = (
+                "required" if environment_required else "not_used_by_model"
+            )
             available_instantaneous = [
                 c for c in MIN_INSTANTANEOUS_FEATURES
                 if c in frame.columns and frame.tail(1)[c].notna().any()
@@ -153,11 +171,11 @@ def score_site(site: str, live_root: Path, model_root: Path) -> tuple[dict, list
                     if coverage["fraction"] < MIN_FEATURE_COVERAGE
                     else "insufficient_instantaneous_object_features"
                 )
-                if not environment_readiness["ready"]:
+                if environment_required and not environment_readiness["ready"]:
                     reason += ";environment_not_model_ready:" + ",".join(environment_readiness["reasons"])
                 record["score_errors"][str(horizon)] = reason
                 continue
-            if not environment_readiness["ready"]:
+            if environment_required and not environment_readiness["ready"]:
                 record["score_errors"][str(horizon)] = (
                     "environment_not_model_ready:" + ",".join(environment_readiness["reasons"])
                 )
