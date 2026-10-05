@@ -97,7 +97,7 @@ jobs:
               "human_review_required": True,
           }
 
-          if checks[checks["strong_candidate_status"] and checks["scored_modern_validation_success"] and checks["archived_replay_success"]:
+          if checks["strong_candidate_status"] and checks["scored_modern_validation_success"] and checks["archived_replay_success"]:
               review_status = "ready_for_human_operational_review"
           elif checks["candidate_status"]:
               review_status = "research_candidate_not_yet_operational_ready"
