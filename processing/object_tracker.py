@@ -10,6 +10,7 @@ from scipy.optimize import linear_sum_assignment
 @dataclass
 class Track:
     object_id:int
+    first_time:object
     last_time:object
     row:float
     column:float
@@ -27,8 +28,8 @@ class TrackerConfig:
     grid_spacing_km:float=1.0
     max_motion_kt:float=75.0
     min_gate_distance_km:float=4.0
-    max_time_gap_minutes:float=10.0
-    max_missed_scans:int=1
+    max_time_gap_minutes:float=15.0
+    max_missed_scans:int=2
     max_area_ratio:float=16.0
     prediction_weight:float=0.72
     size_weight:float=0.16
@@ -202,8 +203,11 @@ class CentroidTracker:
             else:
                 motion_source="object_only"
                 radar_weight=0.0
-            self.tracks[tid]=Track(tid,timestamp,float(obj["row_centroid"]),float(obj["column_centroid"]),velocity_row=initial_vr,velocity_column=initial_vc,area_km2=self._area(obj),max_reflectivity_dbz=self._z(obj))
+            self.tracks[tid]=Track(tid,timestamp,timestamp,float(obj["row_centroid"]),float(obj["column_centroid"]),velocity_row=initial_vr,velocity_column=initial_vc,area_km2=self._area(obj),max_reflectivity_dbz=self._z(obj))
             obj["track_association_status"]="new"; obj["track_association_distance_px"]=float("nan"); obj["track_association_gate_px"]=float("nan"); obj["track_association_cost"]=float("nan"); obj["track_age_scans"]=1; obj["track_missed_scans"]=0
+            obj["track_first_scan_utc"]=self._as_datetime(timestamp).isoformat()
+            obj["track_age_min"]=0.0
+            obj["track_status"]="active"
             obj["track_motion_source"]=motion_source
             obj["track_motion_radar_weight"]=float(radar_weight)
             obj["track_velocity_row_per_min"]=float(initial_vr)
@@ -228,7 +232,7 @@ class CentroidTracker:
         return output
 
     def to_state(self):
-        return {"next_id":self.next_id,"tracks":{str(tid):{"object_id":track.object_id,"last_time":self._as_datetime(track.last_time).isoformat(),"row":track.row,"column":track.column,"age_scans":track.age_scans,"velocity_row":track.velocity_row,"velocity_column":track.velocity_column,"area_km2":track.area_km2,"max_reflectivity_dbz":track.max_reflectivity_dbz,"missed_scans":track.missed_scans} for tid,track in self.tracks.items()}}
+        return {"next_id":self.next_id,"tracks":{str(tid):{"object_id":track.object_id,"first_time":self._as_datetime(track.first_time).isoformat(),"last_time":self._as_datetime(track.last_time).isoformat(),"row":track.row,"column":track.column,"age_scans":track.age_scans,"velocity_row":track.velocity_row,"velocity_column":track.velocity_column,"area_km2":track.area_km2,"max_reflectivity_dbz":track.max_reflectivity_dbz,"missed_scans":track.missed_scans} for tid,track in self.tracks.items()}}
 
     @classmethod
     def from_state(cls,state,config=TrackerConfig()):
@@ -236,5 +240,5 @@ class CentroidTracker:
         if not state:return tracker
         tracker.next_id=int(state.get("next_id",1))
         for tid_text,raw in state.get("tracks",{}).items():
-            tid=int(tid_text); tracker.tracks[tid]=Track(object_id=int(raw["object_id"]),last_time=raw["last_time"],row=float(raw["row"]),column=float(raw["column"]),age_scans=int(raw.get("age_scans",1)),velocity_row=float(raw.get("velocity_row",0.0)),velocity_column=float(raw.get("velocity_column",0.0)),area_km2=raw.get("area_km2"),max_reflectivity_dbz=raw.get("max_reflectivity_dbz"),missed_scans=int(raw.get("missed_scans",0)))
+            tid=int(tid_text); tracker.tracks[tid]=Track(object_id=int(raw["object_id"]),first_time=raw.get("first_time",raw["last_time"]),last_time=raw["last_time"],row=float(raw["row"]),column=float(raw["column"]),age_scans=int(raw.get("age_scans",1)),velocity_row=float(raw.get("velocity_row",0.0)),velocity_column=float(raw.get("velocity_column",0.0)),area_km2=raw.get("area_km2"),max_reflectivity_dbz=raw.get("max_reflectivity_dbz"),missed_scans=int(raw.get("missed_scans",0)))
         return tracker
