@@ -64,6 +64,23 @@ def load_candidate_summary(model_root: Path) -> dict:
     return {}
 
 
+
+
+def lifecycle_object_id(track_first_scan_utc, track_id):
+    """Stable human-facing object ID: YYMMDD + tracker number."""
+    try:
+        dt = datetime.fromisoformat(str(track_first_scan_utc).replace("Z", "+00:00")).astimezone(timezone.utc)
+        date_part = dt.strftime("%y%m%d")
+    except (TypeError, ValueError):
+        date_part = "000000"
+    try:
+        number = int(str(track_id))
+        suffix = str(number).zfill(3)
+    except (TypeError, ValueError):
+        suffix = str(track_id)[-3:].zfill(3)
+    return date_part + suffix
+
+
 def score_site(site: str, live_root: Path, model_root: Path) -> tuple[dict, list[dict]]:
     objects_path = live_root / f"{site}_objects.geojson"
     history_path = live_root / f"{site}_history.json"
@@ -208,6 +225,7 @@ def score_site(site: str, live_root: Path, model_root: Path) -> tuple[dict, list
         record = {
             "radar_site": site,
             "track_id": str(track_id),
+            "object_id": lifecycle_object_id(first_track_dt.isoformat() if first_track_dt is not None else current_timestamp, track_id),
             "timestamp": props.get("timestamp") or geo.get("metadata", {}).get("scan_time_utc"),
             "track_first_scan_utc": first_track_dt.isoformat() if first_track_dt is not None else None,
             "track_age_min": track_age_min,
