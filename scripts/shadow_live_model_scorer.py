@@ -290,8 +290,52 @@ def main():
         cleaned = cleaned[-20000:]
         history_path.write_text(json.dumps(cleaned, separators=(",", ":")) + "\n", encoding="utf-8")
 
+    site_health = {}
+    for site, payload in all_site_payloads.items():
+        probabilities = []
+        ready = 0
+        for record in payload.get("records", []):
+            probabilities.extend(
+                float(value)
+                for value in (record.get("research_probabilities") or {}).values()
+                if value is not None
+            )
+            if (record.get("environment_readiness") or {}).get("ready"):
+                ready += 1
+
+        probabilities.sort()
+        count = len(probabilities)
+        site_health[site] = {
+            "current_objects": payload["current_object_count"],
+            "scored_objects": payload["scored_object_count"],
+            "score_fraction": (
+                payload["scored_object_count"] / payload["current_object_count"]
+                if payload["current_object_count"] else 0.0
+            ),
+            "environment_ready_fraction": (
+                ready / len(payload.get("records", []))
+                if payload.get("records") else 0.0
+            ),
+            "probability_max": max(probabilities) if probabilities else None,
+            "probability_median": probabilities[count // 2] if probabilities else None,
+            "probability_p90": (
+                probabilities[min(count - 1, int(round((count - 1) * 0.90)))]
+                if probabilities else None
+            ),
+            "probability_ge_10pct": sum(value >= 0.10 for value in probabilities),
+            "probability_ge_20pct": sum(value >= 0.20 for value in probabilities),
+            "probability_ge_50pct": sum(value >= 0.50 for value in probabilities),
+            "candidate_only_not_operational": True,
+        }
+
     (args.output_root / "shadow_health.json").write_text(
-        json.dumps({"status": "healthy", "mode": "live_shadow_research", "updated_utc": datetime.now(timezone.utc).isoformat(), "sites": {s: {"current_objects": p["current_object_count"], "scored_objects": p["scored_object_count"]} for s, p in all_site_payloads.items()}}, indent=2) + "\n",
+        json.dumps({
+            "status": "healthy",
+            "mode": "live_shadow_research",
+            "operational_release_status": "candidate_only_not_operational",
+            "updated_utc": datetime.now(timezone.utc).isoformat(),
+            "sites": site_health,
+        }, indent=2) + "\n",
         encoding="utf-8"
     )
 
