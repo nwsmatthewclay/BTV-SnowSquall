@@ -221,6 +221,7 @@ def extract_features(
     longitude: float,
     radar_time: datetime,
     expected_valid_time: datetime | None = None,
+    allow_future: bool = False,
 ) -> dict:
     radar_time = radar_time.astimezone(timezone.utc)
     expected_valid_time = (
@@ -236,7 +237,7 @@ def extract_features(
             ds = _open_field(path, level_type, short_name, level)
             valid = _dataset_valid_time(ds) or expected_valid_time
             if valid is not None:
-                if valid > radar_time:
+                if valid > radar_time and not allow_future:
                     raise ValueError(
                         f"future RAP analysis {valid.isoformat()} > "
                         f"radar {radar_time.isoformat()}"
