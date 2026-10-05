@@ -1,0 +1,124 @@
+name: Snow Squall Operational Release Review
+
+on:
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: read
+
+concurrency:
+  group: snow-squall-operational-release-review
+  cancel-in-progress: false
+
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      PYTHONUNBUFFERED: "1"
+
+    steps:
+      - name: Check out model foundation
+        uses: actions/checkout@v4
+        with:
+          ref: snow-squall-model-foundation
+
+      - name: Resolve latest successful evidence gates
+        id: resolve
+        shell: bash
+        run: |
+          set -euo pipefail
+          candidate="$(gh run list --workflow "Snow Squall Research-Operational Candidate Gate" --branch snow-squall-model-foundation --status success --limit 1 --json databaseId,headSha,createdAt --jq '.[0]')"
+          modern="$(gh run list --workflow "Modern Independent Validation" --branch snow-squall-model-foundation --status success --limit 1 --json databaseId,headSha,createdAt --jq '.[0]')"
+          replay="$(gh run list --workflow "Snow Squall Archived Replay Smoke" --branch snow-squall-model-foundation --status success --limit 1 --json databaseId,headSha,createdAt --jq '.[0]')"
+          test "$candidate" != "null"
+          test "$modern" != "null"
+          test "$replay" != "null"
+          printf "%s\n" "$candidate" > candidate_run.json
+          printf "%s\n" "$modern" > modern_run.json
+          printf "%s\n" "$replay" > replay_run.json
+          echo "candidate_run=$(jq -r .databaseId candidate_run.json)" >> "$GITHUB_OUTPUT"
+          echo "modern_run=$(jq -r .databaseId modern_run.json)" >> "$GITHUB_OUTPUT"
+          echo "replay_run=$(jq -r .databaseId replay_run.json)" >> "$GITHUB_OUTPUT"
+
+      - name: Download research-operational candidate package
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          rm -rf candidate_gate
+          gh run download "${{ steps.resolve.outputs.candidate_run }}" \
+            --repo "$GITHUB_REPOSITORY" \
+            --name snow-squall-research-operational-candidate \
+            --dir candidate_gate
+          test -n "$(find candidate_gate -name research_operational_candidate_status.json -type f -print -quit)"
+
+      - name: Read candidate status
+        id: status
+        run: |
+          set -euo pipefail
+          status_file="$(find candidate_gate -name research_operational_candidate_status.json -type f -print -quit)"
+          test -n "$status_file"
+          status="$(jq -r .status "$status_file")"
+          echo "status=$status" >> "$GITHUB_OUTPUT"
+          echo "Candidate status: $status"
+
+      - name: Build release-review decision
+        run: |
+          set -euo pipefail
+          python - candidate_run.json modern_run.json replay_run.json candidate_gate "${{ steps.status.outputs.status }}" <<'PY'
+          import json
+          import sys
+          from datetime import datetime, timezone
+          from pathlib import Path
+
+          candidate_path, modern_path, replay_path, gate_root, candidate_status = sys.argv[1:]
+          candidate = json.loads(Path(candidate_path).read_text())
+          modern = json.loads(Path(modern_path).read_text())
+          replay = json.loads(Path(replay_path).read_text())
+          status_file = next(Path(gate_root).rglob("research_operational_candidate_status.json"))
+          candidate_evidence = json.loads(status_file.read_text())
+
+          checks = {
+              "candidate_status": candidate_status in {"research_operational_candidate", "limited_data_candidate"},
+              "strong_candidate_status": candidate_status == "research_operational_candidate",
+              "modern_validation_success": bool(modern.get("databaseId")),
+              "archived_replay_success": bool(replay.get("databaseId")),
+              "operational_probability_enabled": False,
+              "human_review_required": True,
+          }
+
+          if checks["strong_candidate_status"] and checks["modern_validation_success"] and checks["archived_replay_success"]:
+              review_status = "ready_for_human_operational_review"
+          elif checks["candidate_status"]:
+              review_status = "research_candidate_not_yet_operational_ready"
+          else:
+              review_status = "blocked_candidate_gate"
+
+          result = {
+              "schema_version": "operational-release-review-v1",
+              "status": review_status,
+              "operational_release_status": "candidate_only_not_operational",
+              "probability_enablement": False,
+              "candidate_run": candidate,
+              "modern_validation_run": modern,
+              "archived_replay_run": replay,
+              "candidate_evidence": candidate_evidence,
+              "checks": checks,
+              "review_note": "No operational probability switch is changed by this workflow. A human operational release decision remains required.",
+              "generated_utc": datetime.now(timezone.utc).isoformat(),
+          }
+          Path("operational_release_review.json").write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")
+          print(json.dumps(result, indent=2))
+          PY
+
+      - name: Upload operational release review package
+        uses: actions/upload-artifact@v4
+        with:
+          name: snow-squall-operational-release-review
+          retention-days: 30
+          path: |
+            operational_release_review.json
+            candidate_gate/**
