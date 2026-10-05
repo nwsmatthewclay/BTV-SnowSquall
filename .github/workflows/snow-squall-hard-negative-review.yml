@@ -1,0 +1,79 @@
+name: Snow Squall Hard Negative Review Queue
+
+on:
+  workflow_run:
+    workflows:
+      - Snow Squall Expansion Dataset
+    types:
+      - completed
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: read
+
+concurrency:
+  group: snow-squall-hard-negative-review
+  cancel-in-progress: true
+
+jobs:
+  build-queue:
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Check out model-foundation code
+        uses: actions/checkout@v4
+        with:
+          ref: snow-squall-model-foundation
+          fetch-depth: 1
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt -r requirements-science.txt
+
+      - name: Resolve expansion run
+        id: run
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "workflow_run" ]; then
+            run_id="${{ github.event.workflow_run.id }}"
+          else
+            run_id="$(gh run list               --workflow "Snow Squall Expansion Dataset"               --branch snow-squall-model-foundation               --status success               --limit 1               --json databaseId               --jq '.[0].databaseId')"
+          fi
+          test -n "$run_id" && test "$run_id" != "null"
+          echo "run_id=$run_id" >> "$GITHUB_OUTPUT"
+
+      - name: Download cumulative feature batch
+        uses: actions/download-artifact@v4
+        with:
+          name: snow-squall-expansion-feature-batch
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          repository: ${{ github.repository }}
+          run-id: ${{ steps.run.outputs.run_id }}
+          path: feature_artifact
+
+      - name: Locate cumulative features
+        id: input
+        run: |
+          set -euo pipefail
+          features="$(find feature_artifact -name snow_squall_model_features_cumulative.csv -type f -print -quit)"
+          test -n "$features"
+          echo "features=$features" >> "$GITHUB_OUTPUT"
+
+      - name: Build hard-negative review queue
+        run: |
+          python scripts/build_hard_negative_review_queue.py             "${{ steps.input.outputs.features }}"             --output data/derived/snow_squall_hard_negative_review_queue
+
+      - name: Upload review queue
+        uses: actions/upload-artifact@v4
+        with:
+          name: snow-squall-hard-negative-review
+          retention-days: 60
+          path: |
+            data/derived/snow_squall_hard_negative_review_queue.csv
+            data/derived/snow_squall_hard_negative_review_queue.summary.csv
