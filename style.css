@@ -643,3 +643,16 @@ body.live-dashboard-page header{
 .radar-timeline-controls button:hover{background:#233944}
 .radar-timeline-controls input{width:100%}
 .radar-timeline-note{margin-top:4px;font:9px/1.2 monospace;color:#748b98}
+
+/* 2026-10-05 operational environment readability + cursor placement */
+.live-dashboard-main #environmentTable{font-size:11px!important;background:#0b141b;border:1px solid #2b414d;border-radius:4px}
+.live-dashboard-main #environmentTable .env-grid-row{grid-template-columns:minmax(150px,1.55fr) minmax(92px,.85fr) minmax(92px,.85fr) minmax(120px,1fr)!important;gap:3px!important}
+.live-dashboard-main #environmentTable .env-grid-row>div{padding:7px 8px!important;min-height:30px;display:flex;align-items:center;justify-content:center;overflow:visible!important;text-overflow:clip!important;white-space:nowrap!important;font-size:11px!important;line-height:1.15;font-variant-numeric:tabular-nums;letter-spacing:.01em}
+.live-dashboard-main #environmentTable .env-grid-row .env-grid-name{justify-content:flex-start;font-size:10px!important;letter-spacing:.035em;text-transform:uppercase}
+.live-dashboard-main #environmentTable .env-grid-head>div{min-height:26px;font-size:9px!important;letter-spacing:.08em;text-transform:uppercase;color:#d7e5ec!important;background:#172832!important}
+.live-dashboard-main #environmentTable .env-risk-green{background:#173d29!important;color:#b9f0c8!important;border-left:3px solid #42b86a}
+.live-dashboard-main #environmentTable .env-risk-yellow{background:#574b12!important;color:#ffe98a!important;border-left:3px solid #e0bd38}
+.live-dashboard-main #environmentTable .env-risk-red{background:#5c201d!important;color:#ffd0ca!important;border-left:3px solid #ef5b52}
+.live-dashboard-main #environmentTable .env-risk-na,.live-dashboard-main #environmentTable .env-risk-neutral{background:#1a2831!important;color:#aebfc9!important;border-left:3px solid #526772}
+#cursorReadout{left:auto!important;right:300px!important;bottom:12px!important;z-index:920!important;white-space:nowrap}
+@media(max-width:900px){.live-dashboard-main #environmentTable .env-grid-row{grid-template-columns:minmax(125px,1.35fr) repeat(3,minmax(78px,.8fr))!important}.live-dashboard-main #environmentTable .env-grid-row>div{padding:6px 5px!important;font-size:10px!important}#cursorReadout{right:285px!important}}
