@@ -6,7 +6,7 @@
 <title>BTV Snow Squall • Live Object Monitor</title>
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
-<link rel="stylesheet" href="style.css?v=20261005-object-monitor-21">
+<link rel="stylesheet" href="style.css?v=20261005-object-monitor-22">
 </head>
 <body class="live-dashboard-page">
 <header>
@@ -43,6 +43,15 @@
       <button id="objectNumbersBtn" class="active">Object IDs</button>
     </div>
     <div id="cursorReadout" style="position:absolute;left:12px;bottom:12px;z-index:800;background:rgba(10,18,24,.86);border:1px solid rgba(190,210,220,.28);border-radius:4px;padding:6px 9px;font:12px/1.25 monospace;color:#eaf2f5;pointer-events:none">CURSOR — | Z — dBZ | V —</div>
+    <div class="radar-timeline" id="radarTimeline">
+      <div class="radar-timeline-head"><span>RADAR TIMELAPSE</span><b id="radarTimelineLabel">Live</b></div>
+      <div class="radar-timeline-controls">
+        <button id="radarPlayBtn" type="button">▶ PLAY</button>
+        <input id="radarTimelineSlider" type="range" min="0" max="0" value="0" step="1" aria-label="Radar timelapse frame">
+        <button id="radarLiveBtn" type="button">LIVE</button>
+      </div>
+      <div class="radar-timeline-note">Rolling 90-minute reflectivity archive • 5-minute cadence when scans are available</div>
+    </div>
     <div class="map-legend">
       <div class="map-legend-title" id="legendTitle">REFLECTIVITY • dBZ</div>
       <div class="map-legend-bar"><span>0</span><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><span>70+</span></div>
@@ -126,6 +135,6 @@
 </main>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<script src="live.js?v=20261005-object-monitor-21"></script>
+<script src="live.js?v=20261005-object-monitor-22"></script>
 </body>
 </html>
