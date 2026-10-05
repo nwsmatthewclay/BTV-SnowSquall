@@ -176,7 +176,24 @@ jobs:
               raise SystemExit(f"Case not found in protected validation manifest: {case_id}")
 
           row = rows.iloc[0]
-          radar = str(row["radar_site"]).strip().upper()
+          radar_sites = []
+          for column in ("radar_site", "radar", "site"):
+              if column in row.index and pd.notna(row[column]):
+                  value = str(row[column]).strip().upper()
+                  if value in ("KCXX", "KTYX") and value not in radar_sites:
+                      radar_sites.append(value)
+
+          if not radar_sites:
+              for candidate in ("KCXX", "KTYX"):
+                  if any(
+                      path.is_file() and path.name.upper().startswith(candidate)
+                      for path in Path(source_root).rglob("*")
+                  ):
+                      radar_sites.append(candidate)
+
+          if not radar_sites:
+              raise SystemExit(f"No KCXX/KTYX radar source could be inferred for {case_id}")
+
           start = pd.to_datetime(row["analysis_window_start_utc"], utc=True)
           end = pd.to_datetime(row["analysis_window_end_utc"], utc=True)
           destination = Path(output_root)
@@ -186,7 +203,7 @@ jobs:
           for path in Path(source_root).rglob("*"):
               if not path.is_file() or path.name.endswith((".part", ".tmp")):
                   continue
-              if not path.name.upper().startswith(radar):
+              if not any(path.name.upper().startswith(radar) for radar in radar_sites):
                   continue
               try:
                   when = pd.Timestamp(scan_time(path))
@@ -203,13 +220,14 @@ jobs:
               )
 
           print(f"Case: {case_id}")
-          print(f"Radar: {radar}")
+          print(f"Radar: {','.join(radar_sites)}")
           print(f"Window: {start.isoformat()} .. {end.isoformat()}")
           print(f"Selected volumes: {len(selected)}")
           Path("replay_input_case.json").write_text(
               json.dumps({
                   "case_id": case_id,
-                  "radar_site": radar,
+                  "radar_site": radar_sites[0],
+                  "radar_sites": radar_sites,
                   "window_start_utc": start.isoformat(),
                   "window_end_utc": end.isoformat(),
                   "level2_volume_count": len(selected),
