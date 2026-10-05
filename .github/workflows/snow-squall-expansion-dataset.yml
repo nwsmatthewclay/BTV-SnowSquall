@@ -667,6 +667,13 @@ jobs:
             --manifest data/manifests/snow_squall_expansion/snow_squall_null_windows.csv \
             --output data/derived/snow_squall_expansion_null_activity.csv
 
+      - name: Acquire nearby ASOS/METAR evidence for null windows
+        run: |
+          python acquisition/null_surface.py \
+            --manifest data/manifests/snow_squall_expansion/snow_squall_null_windows.csv \
+            --output data/raw/ASOS_IEM_null_expansion \
+            --workers 6
+
       - name: Build unified expanded training dataset
         run: |
           python scripts/build_unified_object_dataset.py \
@@ -1007,5 +1014,6 @@ jobs:
             data/derived/snow_squall_expanded_horizon_summary.json
             data/derived/snow_squall_expansion_provenance.json
             data/raw/ASOS_IEM_expansion
+            data/raw/ASOS_IEM_null_expansion
             data/raw/RAP_expansion
             data/raw/RUC_expansion
