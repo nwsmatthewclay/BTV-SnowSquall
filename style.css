@@ -701,3 +701,10 @@ body.live-dashboard-page header{
 @media(max-width:900px){
   .live-dashboard-main .live-map-column .radar-timeline-controls{grid-template-columns:auto auto minmax(80px,1fr) auto auto}
 }
+
+/* Probability lifecycle chart: observed history + forward guidance */
+.prob-observed{fill:none;stroke:#e8f2f7;stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round}
+.prob-forecast{fill:none;stroke:#72c7ee;stroke-width:2.2;stroke-dasharray:4 4;stroke-linecap:round;stroke-linejoin:round}
+.prob-now{stroke:#ffffff;stroke-width:1;stroke-dasharray:2 3;opacity:.75}
+.prob-observed-dot{fill:#e8f2f7;stroke:#0d1720;stroke-width:1}
+.prob-forecast-dot{fill:#72c7ee;stroke:#0d1720;stroke-width:1}
