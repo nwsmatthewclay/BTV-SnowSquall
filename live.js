@@ -370,12 +370,21 @@ function fmtLiveEnv(v,key){if(v==null)return "—";if(key.indexOf("cape")>=0||ke
 function envRiskClass(key,val){
   if(val==null||!Number.isFinite(Number(val)))return "env-risk-na";
   var v=Number(val),y=null,r=null,hi=true;
-  if(key==="cape_jkg"){y=10;r=50}
+  // Research-informed ingredient thresholds. These are display bins, not
+  // calibrated probabilities; the BTV training set will eventually replace
+  // them with local percentile/skill-based thresholds.
+  if(key==="cape_jkg"||key==="mlcape_jkg"||key==="mucape_jkg"){y=25;r=75}
+  else if(key==="dcape_jkg"){y=50;r=150}
+  else if(key==="sbcin_jkg"||key==="mlcin_jkg"||key==="mucin_jkg"){y=-50;r=-10;hi=false}
   else if(key==="mean_rh_0_2km_pct"){y=60;r=75}
   else if(key==="thetae_delta_0_2km_k"){y=4;r=0;hi=false}
   else if(key==="mean_wind_0_2km_ms"){y=9;r=13.1}
+  else if(key==="snsq"){y=.6;r=1}
   else if(key==="lapse_rate_0_3km_c_km"){y=6;r=7}
-  else if(key==="snsq"){y=.5;r=1}
+  else if(key==="shear_0_1km_kt"){y=10;r=20}
+  else if(key==="shear_0_3km_kt"){y=15;r=25}
+  else if(key==="shear_0_6km_kt"){y=25;r=35}
+  else if(key==="srh01_m2s2"){y=25;r=75}
   else return "env-risk-neutral";
   var s=hi?(v<=y?0:v>=r?1:(v-y)/(r-y)):(v>=y?0:v<=r?1:(y-v)/(y-r));
   return s>=1?"env-risk-red":s>0?"env-risk-yellow":"env-risk-green";
@@ -383,33 +392,32 @@ function envRiskClass(key,val){
 function renderEnvironment(){
   var p=latestForSelected();if(!p){q("environmentTable").innerHTML="";return}
   var fields=[
-    ["SBCAPE","cape_jkg"],["MLCAPE","mlcape_jkg"],["MUCAPE","mucape_jkg"],["MLCIN","mlcin_jkg"],["DCAPE","dcape_jkg"],["PWAT","pwat_mm"],["LCL","lcl_m"],["LFC","lfc_m"],["EL","el_m"],
-    ["0–1 km SRH","srh01_m2s2"],["0–1 km shear","shear_0_1km_kt"],["0–3 km shear","shear_0_3km_kt"],["0–6 km shear","shear_0_6km_kt"],
-    ["0–3 km lapse","lapse_rate_0_3km_c_km"],["0–7.5 km lapse","lapse_rate_0_7_5km_c_km"],["Freezing level","freezing_level_m"],
-    ["2 m temp","temperature_2m_k"],["2 m dewpoint","dewpoint_2m_k"],["Surface gust","gust_ms"],
-    ["SNSQ","snsq"],["SNSQ 0–2 km RH","mean_rh_0_2km_pct"],["SNSQ Δθe 0–2 km","thetae_delta_0_2km_k"],["SNSQ 0–2 km wind","mean_wind_0_2km_ms"],["2 m wet-bulb","wetbulb_2m_c"]
+    ["SBCAPE","cape_jkg"],["MLCAPE","mlcape_jkg"],["MUCAPE","mucape_jkg"],["DCAPE","dcape_jkg"],
+    ["SBCIN","sbcin_jkg"],["MLCIN","mlcin_jkg"],["MUCIN","mucin_jkg"],
+    ["0–1 km shear","shear_0_1km_kt"],["0–3 km shear","shear_0_3km_kt"],["0–6 km shear","shear_0_6km_kt"],["0–1 km SRH","srh01_m2s2"],
+    ["0–3 km lapse","lapse_rate_0_3km_c_km"],
+    ["SNSQ","snsq"],["SNSQ 0–2 km RH","mean_rh_0_2km_pct"],["SNSQ Δθe 0–2 km","thetae_delta_0_2km_k"],["SNSQ 0–2 km wind","mean_wind_0_2km_ms"]
   ];
   var rows=trackHistory(p),current=p,prev=rows.length>1?rows[Math.max(0,rows.length-2)]:null;
-  var forecast=p.environment_forecast_30min||{},forecastFields=forecast.fields||{};
-  var forecastReady=p.environment_forecast_30min_model_ready;
+  var forecast=p.environment_forecast_30min||{},forecastFields=forecast.fields||{},forecastReady=p.environment_forecast_30min_model_ready;
   var format=function(val,key){
     if(val==null)return "—";
-    if(key==="temperature_2m_k"||key==="dewpoint_2m_k")return num(kToC(val),1)+" °C";
     if(key==="gust_ms"||key==="mean_wind_0_2km_ms")return num(msToKt(val),0)+" kt";
     if(key==="shear_0_1km_kt"||key==="shear_0_3km_kt"||key==="shear_0_6km_kt")return num(val,0)+" kt";
-    if(key==="lapse_rate_0_3km_c_km"||key==="lapse_rate_0_7_5km_c_km")return num(val,2)+" °C/km";
-    if(key==="lcl_m"||key==="lfc_m"||key==="el_m"||key==="freezing_level_m")return num(val/1000,2)+" km";
-    if(key==="wetbulb_2m_c")return num(val,1)+" °C";
+    if(key==="srh01_m2s2")return num(val,0)+" m²/s²";
+    if(key==="lapse_rate_0_3km_c_km")return num(val,2)+" °C/km";
     return fmtLiveEnv(val,key);
   };
-  var html="<div class='env-grid-row env-grid-head' role='row'><div role='columnheader'>Parameter</div><div role='columnheader'>−30 min</div><div role='columnheader'>Current</div><div role='columnheader'>Expected +30 min</div></div>";
+  var html="<div class='env-grid-row env-grid-head' role='row'><div role='columnheader'>Ingredient</div><div role='columnheader'>−30 min</div><div role='columnheader'>Current</div><div role='columnheader'>Expected +30 min</div></div>";
   html+=fields.map(function(x){
     var pv=prev?envField(prev,x[1]):null,cv=envField(current,x[1]),nv=forecastFields[x[1]];
-    return "<div class='env-grid-row' role='row'><div class='env-grid-name' role='rowheader'>"+x[0]+"</div><div role='cell'>"+format(pv,x[1])+"</div><div class='"+envRiskClass(x[1],cv)+"' role='cell'>"+format(cv,x[1])+"</div><div class='"+envRiskClass(x[1],nv)+" "+(forecastReady?"":"env-risk-na")+"' role='cell'>"+format(nv,x[1])+"</div></div>";
+    var pc=envRiskClass(x[1],pv),cc=envRiskClass(x[1],cv),nc=envRiskClass(x[1],nv);
+    if(!forecastReady&&nv==null)nc="env-risk-na";
+    return "<div class='env-grid-row' role='row'><div class='env-grid-name' role='rowheader'>"+x[0]+"</div><div class='"+pc+"' role='cell'>"+format(pv,x[1])+"</div><div class='"+cc+"' role='cell'>"+format(cv,x[1])+"</div><div class='"+nc+"' role='cell'>"+format(nv,x[1])+"</div></div>";
   }).join("");
   q("environmentTable").innerHTML=html;
   var e=p.environment||{},forecastLabel=forecast.valid_time_utc||forecast.forecast_valid_time_utc,derivedCount=(e.metpy_derived_fields||[]).length;
-  setText("envSource",(e.source||p.environment_source||"RAP")+(e.age_minutes==null?"":" • "+num(e.age_minutes,0)+" min")+(derivedCount?" • MetPy "+derivedCount+" derived":"")+" • +30 RAP "+(forecastLabel?fmtUTC(forecastLabel):"unavailable"));
+  setText("envSource",(e.source||p.environment_source||"RAP")+(e.age_minutes==null?"":" • "+num(e.age_minutes,0)+" min")+(derivedCount?" • MetPy "+derivedCount+" derived":"")+" • research bins");
 }
 function evidenceItem(icon,cls,title,body){return "<div class='evidence-card'><div class='evidence-icon "+(cls||"")+"'>"+icon+"</div><div><b>"+title+"</b><span>"+body+"</span></div></div>"}
 function renderEvidence(){
@@ -483,6 +491,10 @@ document.querySelectorAll(".display-btn").forEach(function(b){b.onclick=function
 document.querySelectorAll("[data-jump]").forEach(function(btn){btn.onclick=function(){var el=q(btn.dataset.jump);if(el)el.scrollIntoView({behavior:"smooth",block:"start"});document.querySelectorAll("[data-jump]").forEach(function(b){b.classList.toggle("active",b===btn)})}});
 q("refreshBtn").onclick=refresh;q("refreshBtn2").onclick=refresh;
 q("radarPlayBtn").onclick=playRadarAnimation;
+function stepRadar(delta){var frames=radarHistory.frames||[];if(!frames.length)return;setRadarHistoryIndex((radarHistoryIndex<0?frames.length-1:radarHistoryIndex)+delta)}
+q("radarPrevBtn").onclick=function(){stepRadar(-1)};
+q("radarNextBtn").onclick=function(){stepRadar(1)};
+document.addEventListener("keydown",function(e){if(e.target&&(/input|textarea|select/i.test(e.target.tagName)))return;if(e.key==="ArrowLeft"){e.preventDefault();stepRadar(-1)}else if(e.key==="ArrowRight"){e.preventDefault();stepRadar(1)}});
 q("radarLiveBtn").onclick=function(){stopRadarAnimation();radarHistoryIndex=(radarHistory.frames||[]).length-1;updateRadarTimelineUI();renderRadarMosaic()};
 q("radarTimelineSlider").oninput=function(){setRadarHistoryIndex(this.value)};
 q("objectNumbersBtn").onclick=function(){objectNumbers=!objectNumbers;q("objectNumbersBtn").classList.toggle("active",objectNumbers);renderMap()};
