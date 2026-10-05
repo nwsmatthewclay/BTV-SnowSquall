@@ -96,9 +96,13 @@ def evaluate(df: pd.DataFrame, target: str):
     data = df.loc[valid].copy()
     y = y_series.loc[valid].astype(int).to_numpy()
     groups = (
-        data["case_id"].astype(str).to_numpy()
-        if "case_id" in data
-        else np.arange(len(data)).astype(str)
+        data["split_group"].astype(str).to_numpy()
+        if "split_group" in data.columns
+        else (
+            data["case_id"].fillna("").astype(str).to_numpy()
+            if "case_id" in data.columns
+            else np.arange(len(data)).astype(str)
+        )
     )
     unique = np.asarray(sorted(set(groups)))
     if unique.size < 3:
@@ -164,7 +168,7 @@ def evaluate(df: pd.DataFrame, target: str):
         "records": int(len(data)),
         "positive": int(y.sum()),
         "negative": int((1 - y).sum()),
-        "groups": int(len(unique)),
+        "independent_groups": int(len(unique)),
         "candidate_predictor_count": len(predictor_cols),
         "folds": folds,
         "models": {},
