@@ -22,7 +22,6 @@ from snow_squall.evolution import ENVIRONMENTAL_EVOLUTION_COLUMNS, add_environme
 
 OPERATIONAL_LIVE_PREDICTORS = {
     "area_km2", "length_km", "width_km", "aspect_ratio",
-    "environment_age_minutes",
     "bbox_aspect_ratio", "is_band",
     "reflectivity_gradient_p90_dbkm", "gradient_fraction_above_5dbkm",
     "background_reflectivity_dbz", "reflectivity_contrast_db",
