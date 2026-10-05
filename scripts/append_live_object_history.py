@@ -15,6 +15,8 @@ from pathlib import Path
 
 CSV_FIELDS = [
     "timestamp", "radar_site", "source_file", "track_id",
+    "track_first_scan_utc", "track_age_min", "track_age_scans",
+    "track_missed_scans", "track_association_status", "track_status",
     "centroid_lat", "centroid_lon", "pixel_count", "area_km2",
     "length_km", "width_km", "aspect_ratio", "orientation_deg",
     "max_reflectivity_dbz", "mean_reflectivity_dbz", "core_pixel_count",
@@ -57,8 +59,10 @@ def flatten(feature, source_file):
     row = {key: None for key in CSV_FIELDS}
 
     direct = [
-        "timestamp", "radar_site", "track_id", "centroid_lat", "centroid_lon",
-        "pixel_count", "area_km2", "length_km", "width_km", "aspect_ratio",
+        "timestamp", "radar_site", "track_id",
+        "track_first_scan_utc", "track_age_min", "track_age_scans",
+        "track_missed_scans", "track_association_status", "track_status",
+        "centroid_lat", "centroid_lon", "pixel_count", "area_km2", "length_km", "width_km", "aspect_ratio",
         "orientation_deg", "max_reflectivity_dbz", "mean_reflectivity_dbz",
         "core_pixel_count", "core_fraction", "motion_speed_kt",
         "motion_dir_deg", "age_scans", "reflectivity_trend_dbz_per_hr",
