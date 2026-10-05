@@ -54,7 +54,9 @@ def test_research_operational_candidate_requires_minimum_support(tmp_path: Path)
     audit.write_text(json.dumps({"status": "pass"}), encoding="utf-8")
     gate = tmp_path / "gate.json"
     _write_gate(gate, {15, 30, 45})
-    result = evaluate(tmp_path, audit, gate)
+    summary = tmp_path / "summary.json"
+    summary.write_text(json.dumps({"candidate_mode": "strict_refresh"}), encoding="utf-8")
+    result = evaluate(tmp_path, audit, gate, summary)
     assert result["status"] == "research_operational_candidate"
     assert result["probability_enablement"] is False
 
