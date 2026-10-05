@@ -22,7 +22,7 @@ from matplotlib.colors import BoundaryNorm, ListedColormap
 from scipy import ndimage
 
 from acquisition.level2_reader import read_level2, resolve_fields, volume_metadata
-from processing.radar_grid import grid_field_2d, grid_latlon, grid_lowest_available_sweep
+from processing.radar_grid import grid_field_2d, grid_latlon, grid_lowest_available_sweep, lowest_valid_sweep
 from processing.radar_sites import apply_radar_origin, radar_origin_for_site
 
 
