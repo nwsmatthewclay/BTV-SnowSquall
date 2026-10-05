@@ -210,10 +210,15 @@ def _metpy_derived_fields(path: Path, latitude, longitude, values):
             try: result['dcape_jkg']=val(downdraft_cape(pq,tq,tdq)[0],units('J/kg'))
             except Exception: pass
         try:
-            du,dv=bulk_shear(pq,uq,vq,height=hq,depth=6*units.km)
-            result['shear_u_0_6km_ms']=val(du,units('m/s')); result['shear_v_0_6km_ms']=val(dv,units('m/s'))
-            result['shear_0_6km_ms']=float(np.hypot(result['shear_u_0_6km_ms'],result['shear_v_0_6km_ms']))
-            result['bs06_kt']=result['shear_0_6km_ms']*1.943844492
+            for depth,key in ((1,'bs01_kt'),(3,'bs03_kt'),(6,'bs06_kt')):
+                du,dv=bulk_shear(pq,uq,vq,height=hq,depth=depth*units.km)
+                su=val(du,units('m/s')); sv=val(dv,units('m/s'))
+                if su is not None and sv is not None:
+                    result[key]=float(np.hypot(su,sv))*1.943844492
+                    if depth==6:
+                        result['shear_u_0_6km_ms']=su
+                        result['shear_v_0_6km_ms']=sv
+                        result['shear_0_6km_ms']=float(np.hypot(su,sv))
         except Exception: pass
         hs=np.argsort(h); hh=h[hs]; tt=temp[hs]
         for target,key in ((3000.0,'lr03_Ckm'),(7500.0,'lr75_Ckm')):
