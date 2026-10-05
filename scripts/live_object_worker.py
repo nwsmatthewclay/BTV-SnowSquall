@@ -32,6 +32,7 @@ def run(
     output: Path,
     history_jsonl: Path | None,
     history_csv: Path | None,
+    max_volumes_per_run: int = 2,
 ):
     setup_logging(radar)
     logging.info("=" * 72)
@@ -84,8 +85,13 @@ def run(
             # Keep each scheduled publisher run bounded. Process the oldest
             # unprocessed volumes first so track history remains chronological;
             # any remaining backlog is picked up by the next cycle.
-            if len(recent) > 8:
-                recent = recent[:8]
+            # Keep the scheduled live publisher bounded. Two volumes per
+            # radar is enough to preserve normal scan-to-scan continuity while
+            # preventing a temporary archive gap from turning one run into a
+            # multi-volume backlog processor that starves the live feed.
+            limit = max(1, int(max_volumes_per_run))
+            if len(recent) > limit:
+                recent = recent[:limit]
             # A brand-new state starts from the newest available volume; an
             # existing state catches up all unprocessed volumes in order.
             if since is None and recent:
@@ -138,6 +144,12 @@ def main():
     parser.add_argument("--output", default="data/derived/live_objects.geojson")
     parser.add_argument("--history-jsonl", default=None)
     parser.add_argument("--history-csv", default=None)
+    parser.add_argument(
+        "--max-volumes-per-run",
+        type=int,
+        default=2,
+        help="Maximum unprocessed Level-II volumes to process per scheduled run.",
+    )
     args = parser.parse_args()
     run(
         args.radar,
@@ -147,6 +159,7 @@ def main():
         Path(args.output),
         Path(args.history_jsonl) if args.history_jsonl else None,
         Path(args.history_csv) if args.history_csv else None,
+        max_volumes_per_run=max(1, args.max_volumes_per_run),
     )
 
 
