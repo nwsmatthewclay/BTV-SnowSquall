@@ -37,9 +37,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          candidate="$(gh run list --workflow "Snow Squall Research-Operational Candidate Gate" --branch snow-squall-model-foundation --status success --limit 1 --json databaseId,headSha,createdAt --jq '.[0] // {}')"
-          modern="$(gh run list --workflow "Snow Squall Modern Independent Validation" --branch snow-squall-model-foundation --status success --limit 1 --json databaseId,headSha,createdAt --jq '.[0] // {}')"
-          replay="$(gh run list --workflow "Snow Squall Archived Replay Smoke" --branch snow-squall-model-foundation --status success --limit 1 --json databaseId,headSha,createdAt --jq '.[0] // {}')"
+          candidate="$(gh run list --workflow "snow-squall-research-operational-candidate.yml" --branch snow-squall-model-foundation --status success --limit 1 --json databaseId,headSha,createdAt --jq '.[0] // {}')"
+          modern="$(gh run list --workflow "snow-squall-modern-validation.yml" --branch snow-squall-model-foundation --status success --limit 1 --json databaseId,headSha,createdAt --jq '.[0] // {}')"
+          replay="$(gh run list --workflow "snow-squall-archived-replay-smoke.yml" --branch snow-squall-model-foundation --status success --limit 1 --json databaseId,headSha,createdAt --jq '.[0] // {}')"
           printf "%s\n" "$candidate" > candidate_run.json
           printf "%s\n" "$modern" > modern_run.json
           printf "%s\n" "$replay" > replay_run.json
