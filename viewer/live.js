@@ -147,7 +147,19 @@ async function renderRadarMosaic(){
     var response=await fetch(mosaicMetaUrl(),{cache:"no-store"});if(!response.ok)throw new Error(response.status);
     radarMosaic=await response.json();
   }catch(_){radarMosaic=null}
-  if(!radarMosaic||!radarMosaic.bounds){if(radarMode==="velocity"){setText("radarStatus","Local velocity unavailable • waiting for Level-II volume");setText("legendTitle","RADIAL VELOCITY • kt");setText("legendNote","No retained KCXX/KTYX velocity image is currently published.");}else{setText("radarStatus","Local mosaic unavailable • NOAA QC fallback");setText("legendTitle","REFLECTIVITY • dBZ");setText("legendNote","NOAA fallback is display-only; local object analysis remains independent.");addNoaaFallback();}return}
+  if(!radarMosaic||!radarMosaic.bounds){
+    var histFrame=radarHistoryFrame();
+    if(histFrame&&radarMode==="reflectivity"){
+      var histBounds=histFrame.bounds||[[41.90,-76.78],[46.40,-70.52]];
+      var histName=histFrame.image.split("/").pop();
+      L.imageOverlay(LIVE_BASE+"radar_history/"+histName+"?cb="+Date.now(),histBounds,{pane:"liveRadarPane",opacity:.96,interactive:false,crossOrigin:true}).addTo(radarLayer);
+      setText("radarStatus","Historical radar frame • "+fmtTime(histFrame.timestamp)+" • live acquisition unavailable");
+      setText("legendTitle","REFLECTIVITY • dBZ");
+      setText("legendNote","Historical frame retained locally while the live radar publisher recovers.");
+      if(!map._sqExtent){map.fitBounds(histBounds,{padding:[25,25],maxZoom:8});map._sqExtent=true}
+      return;
+    }
+    if(radarMode==="velocity"){setText("radarStatus","Local velocity unavailable • waiting for Level-II volume");setText("legendTitle","RADIAL VELOCITY • kt");setText("legendNote","No retained KCXX/KTYX velocity image is currently published.");}else{setText("radarStatus","Local mosaic unavailable • NOAA QC fallback");setText("legendTitle","REFLECTIVITY • dBZ");setText("legendNote","NOAA fallback is display-only; local object analysis remains independent.");addNoaaFallback();}return}
   var src=(radarMosaic.sources||[]).map(function(x){return x.radar}).filter(Boolean);var freshness=radarMosaic.status==="stale"?"RETAINED":"READY";setText("radarStatus","Mosaic "+freshness+" • "+(src.join(" + ")||"KCXX + KTYX"));
   if(radarMode==="velocity"){
     var vp=radarMosaic.display_products?.base_velocity||{};
