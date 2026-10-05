@@ -191,9 +191,15 @@ def _metpy_derived_fields(path: Path, latitude, longitude, values):
         u = align(profile["u"])
         v = align(profile["v"])
 
-        dpt_pair = _nearest_profile(_open_profile(path, "dpt"), latitude, longitude)
-        rh_pair = _nearest_profile(_open_profile(path, "r"), latitude, longitude)
-        q_pair = _nearest_profile(_open_profile(path, "q"), latitude, longitude)
+        def optional_profile(name):
+            try:
+                return _nearest_profile(_open_profile(path, name), latitude, longitude)
+            except Exception:
+                return None
+
+        dpt_pair = optional_profile("dpt")
+        rh_pair = optional_profile("r")
+        q_pair = optional_profile("q")
         rh = align(rh_pair) if rh_pair is not None else None
         if dpt_pair is not None:
             dewpoint = align(dpt_pair)
