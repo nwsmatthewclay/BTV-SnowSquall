@@ -119,7 +119,12 @@ def score_site(site: str, live_root: Path, model_root: Path) -> tuple[dict, list
             radar_time=current_timestamp,
             max_age_minutes=MAX_ENVIRONMENT_AGE_MINUTES,
         )
-        record = {
+        any_runtime_environment_required = any(
+        bool(set(runtime.feature_columns) & ENVIRONMENT_PREDICTORS)
+        for runtime in runtimes.values()
+        if runtime.model is not None
+    )
+    record = {
             "radar_site": site,
             "track_id": str(track_id),
             "timestamp": props.get("timestamp") or geo.get("metadata", {}).get("scan_time_utc"),
@@ -144,7 +149,7 @@ def score_site(site: str, live_root: Path, model_root: Path) -> tuple[dict, list
                 "requires_complete_environment": "per_horizon",
                 "environment_requirement": (
                     "model_predictors_require_environment"
-                    if environment_required
+                    if any_runtime_environment_required
                     else "bootstrap_radar_object_model_does_not_use_environment_predictors"
                 ),
                 "stale_but_usable_policy": "complete_RAP_environment_up_to_180m_is_scored_with_degraded_freshness",
