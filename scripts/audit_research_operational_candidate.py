@@ -17,9 +17,12 @@ def load_json(path: Path) -> dict:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
-def evaluate(model_root: Path, audit_path: Path, gate_path: Path) -> dict:
+def evaluate(model_root: Path, audit_path: Path, gate_path: Path, summary_path: Path | None = None) -> dict:
     audit = load_json(audit_path)
     gate = load_json(gate_path)
+    summary = load_json(summary_path) if summary_path and summary_path.exists() else {}
+    candidate_mode = str(summary.get("candidate_mode") or "strict_refresh")
+    bootstrap_mode = candidate_mode.startswith("bootstrap")
 
     horizon = {}
     all_bundle_ok = True
@@ -70,7 +73,7 @@ def evaluate(model_root: Path, audit_path: Path, gate_path: Path) -> dict:
         and gate[str(h)].get("status") == "ok"
     ]
 
-    if (all_bundle_ok and all_calibrated and minimum_support_ok
+    if (not bootstrap_mode and all_bundle_ok and all_calibrated and minimum_support_ok
             and len(gate_ok_horizons) >= 3 and skill_evidence >= 2):
         status = "research_operational_candidate"
     elif all_bundle_ok and all_calibrated:
@@ -84,6 +87,8 @@ def evaluate(model_root: Path, audit_path: Path, gate_path: Path) -> dict:
         "probability_enablement": False,
         "live_shadow_enablement": all_bundle_ok and all_calibrated,
         "operational_release_status": "candidate_only_not_operational",
+        "candidate_mode": candidate_mode,
+        "bootstrap_mode": bootstrap_mode,
         "minimum_positive_case_groups_per_horizon": 3,
         "minimum_gate_horizons": 3,
         "minimum_horizons_beating_climatology_brier": 2,
@@ -110,10 +115,11 @@ def main() -> None:
     parser.add_argument("--model-root", type=Path, required=True)
     parser.add_argument("--candidate-audit", type=Path, required=True)
     parser.add_argument("--case-heldout-gate", type=Path, required=True)
+    parser.add_argument("--candidate-summary", type=Path, default=None)
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
 
-    result = evaluate(args.model_root, args.candidate_audit, args.case_heldout_gate)
+    result = evaluate(args.model_root, args.candidate_audit, args.case_heldout_gate, args.candidate_summary)
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")
     print(json.dumps(result, indent=2))
