@@ -830,6 +830,7 @@ jobs:
           python scripts/evaluate_temporal_holdout.py \
             data/derived/snow_squall_model_features_cumulative.csv \
             --schema data/derived/snow_squall_model_features_expanded.schema.json \
+            --reviewed-negative-manifest data/derived/snow_squall_reviewed_negative_nulls.csv \
             --output data/derived/snow_squall_temporal_holdout.json
 
       - name: Profile cumulative training population
