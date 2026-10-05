@@ -34,6 +34,7 @@ def test_only_explicit_human_review_promotes_negative():
     packet.loc[idx, "final_class"] = "reviewed_negative"
     packet.loc[idx, "radar_target_present"] = "no"
     packet.loc[idx, "event_evidence_present"] = "no"
+    packet.loc[idx, "surface_evidence_interpreted"] = "yes"
     packet.loc[idx, "reviewer"] = "forecaster"
     packet.loc[idx, "reviewed_at_utc"] = "2026-10-05T16:00:00Z"
     packet = build_packet(packet)
@@ -100,3 +101,20 @@ def test_packet_contains_review_candidates_not_entire_null_population():
     packet = build_packet(queue)
 
     assert set(packet["null_id"]) == {"N1"}
+
+
+def test_surface_interpretation_is_required_for_promotion():
+    packet = build_packet(queue_frame())
+    idx = packet.index[packet["null_id"].eq("N1")][0]
+
+    packet.loc[idx, "review_status"] = "reviewed"
+    packet.loc[idx, "final_class"] = "reviewed_negative"
+    packet.loc[idx, "radar_target_present"] = "no"
+    packet.loc[idx, "event_evidence_present"] = "no"
+    packet.loc[idx, "surface_evidence_interpreted"] = "unknown"
+    packet.loc[idx, "reviewer"] = "forecaster"
+    packet.loc[idx, "reviewed_at_utc"] = "2026-10-05T16:00:00Z"
+
+    packet = build_packet(packet)
+    row = packet.loc[packet["null_id"].eq("N1")].iloc[0]
+    assert not bool(row["training_eligible"])
