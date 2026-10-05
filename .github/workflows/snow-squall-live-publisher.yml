@@ -74,6 +74,78 @@ jobs:
         run: |
           python scripts/build_live_radar_mosaic.py             --raw-root data/raw             --kcxx-state viewer/data/live/KCXX_state.json             --ktyx-state viewer/data/live/KTYX_state.json             --output-image viewer/data/live/radar_mosaic.png             --output-json viewer/data/live/radar_mosaic.json
 
+      - name: Archive rolling radar animation frames
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json, re
+          from datetime import datetime, timezone
+          from pathlib import Path
+          import shutil
+
+          root = Path("viewer/data/live")
+          history = root / "radar_history"
+          history.mkdir(parents=True, exist_ok=True)
+          meta_path = history / "manifest.json"
+
+          try:
+              manifest = json.loads(meta_path.read_text(encoding="utf-8"))
+          except Exception:
+              manifest = {"version": 1, "retention_frames": 18, "frames": []}
+
+          payload = json.loads((root / "radar_mosaic.json").read_text(encoding="utf-8"))
+          sources = payload.get("sources") or []
+          times = [s.get("scan_time_utc") for s in sources if s.get("scan_time_utc")]
+          if not times:
+              print("No radar source timestamp; skipping frame archive.")
+              raise SystemExit(0)
+
+          timestamp = max(times)
+          safe = re.sub(r"[^0-9]", "", timestamp)[:14]
+          frame_name = f"mosaic_{safe}.png"
+          src = root / "radar_mosaic_clean.png"
+          if not src.exists():
+              print("No current radar image; skipping frame archive.")
+              raise SystemExit(0)
+
+          dst = history / frame_name
+          shutil.copy2(src, dst)
+
+          velocities = {}
+          for site in ("KCXX", "KTYX"):
+              src_v = root / f"{site}_base_velocity_clean.png"
+              if src_v.exists():
+                  name = f"{site}_velocity_{safe}.png"
+                  shutil.copy2(src_v, history / name)
+                  velocities[site] = name
+
+          frames = [f for f in manifest.get("frames", []) if f.get("timestamp") != timestamp]
+          frames.append({
+              "timestamp": timestamp,
+              "image": f"radar_history/{frame_name}",
+              "velocity": velocities,
+          })
+          frames.sort(key=lambda x: x.get("timestamp", ""))
+          frames = frames[-18:]
+
+          keep = {Path(f["image"]).name for f in frames}
+          keep.update(Path(v).name for f in frames for v in (f.get("velocity") or {}).values())
+          for path in history.glob("*.png"):
+              if path.name not in keep:
+                  path.unlink(missing_ok=True)
+
+          manifest = {
+              "version": 1,
+              "retention_frames": 18,
+              "interval_hint_minutes": 5,
+              "updated_utc": datetime.now(timezone.utc).isoformat(),
+              "frames": frames,
+          }
+          meta_path.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
+          print("Archived radar frames:", len(frames))
+          print("Latest:", timestamp)
+          PY
+
       - name: Build bounded browser history payloads
         run: |
           python - <<'PY'
