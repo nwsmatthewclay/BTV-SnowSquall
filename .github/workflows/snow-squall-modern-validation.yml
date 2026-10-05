@@ -109,6 +109,19 @@ jobs:
         run: |
           python scripts/audit_validation_training_separation.py
 
+      - name: Launch candidate archived replay
+        if: success()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          gh workflow run "Snow Squall Archived Replay Smoke" \
+            --repo "$GITHUB_REPOSITORY" \
+            --ref snow-squall-model-foundation \
+            -f validation_run_id="${{ github.run_id }}" \
+            -f candidate_model_run_id="" \
+            -f case_id="BTV20181121"
+          echo "Dispatched archived candidate replay from scored modern validation."
       - name: Upload modern validation package
         uses: actions/upload-artifact@v4
         with:
