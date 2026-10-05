@@ -46,6 +46,7 @@ def build_packet(
         review = existing_review.copy()
         review["null_id"] = _clean_text(review["null_id"])
         review = review[review["null_id"].ne("")].drop_duplicates("null_id", keep="last")
+        review_lookup = review.set_index("null_id")
         protected = [
             c for c in (
                 "review_status", "final_class", "radar_target_present",
@@ -53,18 +54,14 @@ def build_packet(
                 "reviewer", "reviewed_at_utc", "review_notes"
             ) if c in review.columns
         ]
-        if protected:
-            d = d.merge(
-                review[["null_id"] + protected],
-                on="null_id",
-                how="left",
-                suffixes=("", "_existing"),
-                validate="one_to_one",
-            )
-            for col in protected:
-                d[col] = d[col].fillna(d[f"{col}_existing"])
-                d.drop(columns=[f"{col}_existing"], inplace=True)
-
+        for col in protected:
+            mapped = d["null_id"].map(review_lookup[col])
+            if col not in d.columns:
+                d[col] = mapped
+            else:
+                current = d[col]
+                missing = current.isna() | current.astype(str).str.strip().eq("")
+                d.loc[missing, col] = mapped.loc[missing]
     defaults = {
         "review_status": "pending",
         "final_class": "pending",
