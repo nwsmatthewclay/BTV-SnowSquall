@@ -366,19 +366,15 @@ function renderProbabilityChart(hist){
   }).filter(function(p){return Number.isFinite(p.x)&&Number.isFinite(p.v)});
 
   var latestProbs=latest.research_probabilities||{};
+  /* The current 15-minute score is the anchor at NOW; the horizon fields
+     are the forward projection at +15/+30/+45/+60 minutes. */
+  var currentProb=Number(latestProbs["15"]??latestProbs["15min"]);
   var forecast=[
-    [0,Number(latestProbs["15"]??latestProbs["15min"])],
-    [15,Number(latestProbs["30"]??latestProbs["30min"])],
-    [30,Number(latestProbs["45"]??latestProbs["45min"])],
-    [45,Number(latestProbs["60"]??latestProbs["60min"])]
-  ].filter(function(p){return Number.isFinite(p[1])});
-  /* The horizon fields describe probability at +15/+30/+45/+60 from NOW.
-     Build the x coordinates explicitly so the forecast portion is genuinely forward-looking. */
-  forecast=[
-    [0,Number(latestProbs["15"]??latestProbs["15min"])],
-    [15,Number(latestProbs["30"]??latestProbs["30min"])],
-    [30,Number(latestProbs["45"]??latestProbs["45min"])],
-    [45,Number(latestProbs["60"]??latestProbs["60min"])]
+    [0,currentProb],
+    [15,Number(latestProbs["15"]??latestProbs["15min"])],
+    [30,Number(latestProbs["30"]??latestProbs["30min"])],
+    [45,Number(latestProbs["45"]??latestProbs["45min"])],
+    [60,Number(latestProbs["60"]??latestProbs["60min"])]
   ].filter(function(p){return Number.isFinite(p[1])});
 
   var minX=Math.min(-60,observed.length?Math.min.apply(null,observed.map(function(p){return p.x})):0);
