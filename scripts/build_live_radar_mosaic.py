@@ -205,7 +205,7 @@ def _render(mosaic, latlon, output_path: Path, *, mode="clean", rhohv=None):
     data = _clean_field(mosaic, rhohv) if mode == "clean" else np.asarray(mosaic, dtype=float)
     masked = np.ma.masked_invalid(data)
 
-    fig = plt.figure(figsize=(8.5, 6.5), dpi=120)
+    fig = plt.figure(figsize=(12.0, 9.0), dpi=180)
     ax = fig.add_axes([0, 0, 1, 1])
     ax.set_axis_off()
     ax.set_xlim(float(np.nanmin(lon)), float(np.nanmax(lon)))
@@ -257,7 +257,7 @@ def _render_velocity(velocity, latlon, output_path: Path, *, raw=False):
     cmap = plt.get_cmap("RdBu_r").copy()
     cmap.set_bad((0, 0, 0, 0))
     limit = 80.0 if raw else 60.0
-    fig = plt.figure(figsize=(8.5, 6.5), dpi=120)
+    fig = plt.figure(figsize=(12.0, 9.0), dpi=180)
     ax = fig.add_axes([0, 0, 1, 1])
     ax.set_axis_off()
     ax.set_xlim(float(np.nanmin(lon)), float(np.nanmax(lon)))
@@ -366,7 +366,7 @@ def _direct_render(sweep_products, output_dir: Path, *, product_name: str, clean
     """Render native lowest-sweep gates directly in geographic coordinates."""
     if not sweep_products:
         return None, {}
-    fig = plt.figure(figsize=(8.5, 6.5), dpi=120)
+    fig = plt.figure(figsize=(12.0, 9.0), dpi=180)
     ax = fig.add_axes([0, 0, 1, 1])
     ax.set_axis_off()
     ax.set_xlim(-76.78, -70.52)
@@ -417,7 +417,7 @@ def _direct_velocity_render(item, output_dir: Path, site: str):
     masked = np.ma.masked_invalid(data)
     if not masked.count():
         return None
-    fig = plt.figure(figsize=(8.5, 6.5), dpi=120)
+    fig = plt.figure(figsize=(12.0, 9.0), dpi=180)
     ax = fig.add_axes([0, 0, 1, 1])
     ax.set_axis_off()
     ax.set_xlim(-76.78, -70.52)
@@ -530,7 +530,7 @@ def main():
     }
 
     if mosaic is not None:
-        bounds = render_clean(mosaic, latlon, args.output_image, rhohv=rhohv)
+        # Keep the 1-km Cartesian mosaic for model/cursor work, but use the native Level-II gate display for the browser whenever it is available.\n        # This preserves actual radar sampling instead of enlarging a coarse grid.\n        bounds = render_clean(mosaic, latlon, args.output_image, rhohv=rhohv)\n        if direct_fallback is not None and (args.output_image.parent / "radar_mosaic_clean.png").exists():\n            bounds = direct_fallback["bounds"]
         clean_output = args.output_image.with_name("radar_mosaic_clean.png")
         raw_output = args.output_image.with_name("radar_mosaic_raw.png")
         render_clean(mosaic, latlon, clean_output, rhohv=rhohv)
