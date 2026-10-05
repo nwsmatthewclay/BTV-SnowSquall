@@ -551,6 +551,11 @@ def main():
             clean_output.replace(args.output_image)
             # Re-create the clean product at its explicit canonical name.
             render_clean(mosaic, latlon, clean_output, rhohv=rhohv)
+            # The final browser contract remains the clean filename, but its
+            # pixels should come from the native Level-II gate rendering.
+            if native_clean.exists():
+                shutil.copyfile(native_clean, clean_output)
+                shutil.copyfile(native_clean, args.output_image)
         payload["bounds"] = bounds
         site_products = render_site_products(
             site_fields,
