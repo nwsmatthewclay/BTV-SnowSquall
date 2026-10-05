@@ -408,7 +408,7 @@ def _direct_render(sweep_products, output_dir: Path, *, product_name: str, clean
             ax.pcolormesh(item["lon"], item["lat"], masked, **kwargs)
     output_dir.mkdir(parents=True, exist_ok=True)
     path = output_dir / product_name
-    fig.savefig(path, format="png", transparent=True, dpi=120, pad_inches=0)
+    fig.savefig(path, format="png", transparent=True, dpi=180, pad_inches=0)
     plt.close(fig)
     return [[41.90, -76.78], [46.40, -70.52]], path.name
 
