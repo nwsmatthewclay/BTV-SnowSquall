@@ -33,7 +33,7 @@ concurrency:
 jobs:
   publish-live-objects:
     runs-on: ubuntu-latest
-    timeout-minutes: 12
+    timeout-minutes: 20
     env:
       PYTHONPATH: ${{ github.workspace }}
       PYTHONUNBUFFERED: "1"
@@ -67,11 +67,11 @@ jobs:
 
       - name: Process latest KCXX volume
         run: |
-          python scripts/live_object_worker.py             --radar KCXX             --poll-seconds 2             --max-polls 1             --state viewer/data/live/KCXX_state.json             --output viewer/data/live/KCXX_objects.geojson             --history-jsonl viewer/data/live/KCXX_history.jsonl             --history-csv data/derived/KCXX_history.csv
+          python scripts/live_object_worker.py             --radar KCXX             --poll-seconds 2             --max-polls 1             --max-volumes-per-run 2             --state viewer/data/live/KCXX_state.json             --output viewer/data/live/KCXX_objects.geojson             --history-jsonl viewer/data/live/KCXX_history.jsonl             --history-csv data/derived/KCXX_history.csv
 
       - name: Process latest KTYX volume
         run: |
-          python scripts/live_object_worker.py             --radar KTYX             --poll-seconds 2             --max-polls 1             --state viewer/data/live/KTYX_state.json             --output viewer/data/live/KTYX_objects.geojson             --history-jsonl viewer/data/live/KTYX_history.jsonl             --history-csv data/derived/KTYX_history.csv
+          python scripts/live_object_worker.py             --radar KTYX             --poll-seconds 2             --max-polls 1             --max-volumes-per-run 2             --state viewer/data/live/KTYX_state.json             --output viewer/data/live/KTYX_objects.geojson             --history-jsonl viewer/data/live/KTYX_history.jsonl             --history-csv data/derived/KTYX_history.csv
 
       - name: Ensure exact processed Level-II volumes are available for radar display
         run: |
