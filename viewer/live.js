@@ -73,7 +73,7 @@ function haversineMi(lat,lon,lat2,lon2){var R=3958.7613,rad=Math.PI/180,p1=Numbe
 function shadowRecord(site,trackId){return datasets[site]?.shadow?.records?.find(function(r){return String(r.track_id)===String(trackId)})||null}
 function shadowRows(site,trackId){return (datasets[site]?.shadowHistory||[]).filter(function(r){return String(r.track_id)===String(trackId)}).sort(function(a,b){return String(a.timestamp).localeCompare(String(b.timestamp))})}
 function probValue(r,h){var v=r?.research_probabilities;if(!v)return null;return v[h]??v[String(h).replace("min","")]??null}
-function riskScore(p){var s=shadowRecord(p.radar_site,p.track_id),v=probValue(s,"15");if(Number.isFinite(Number(v)))return Number(v);var rank=Number(p.candidate_rank_score);if(Number.isFinite(rank))return rank/100;var z=Number(p.max_reflectivity_dbz);if(z>=45)return .85;if(z>=35)return .62;if(z>=25)return .38;return .16}
+function riskScore(p){var v=p?.research_probabilities?.["15min"]??p?.research_probabilities?.["15"]??p?.probability_15min; if(Number.isFinite(Number(v)))return Number(v); var s=shadowRecord(p.radar_site,p.track_id),sv=probValue(s,"15"); if(Number.isFinite(Number(sv)))return Number(sv); var rank=Number(p.candidate_rank_score);if(Number.isFinite(rank))return rank/100;var z=Number(p.max_reflectivity_dbz);if(z>=45)return .85;if(z>=35)return .62;if(z>=25)return .38;return .16}
 function objectRisk(p){var s=riskScore(p);return s>=.70?"#ff4d3d":s>=.45?"#ff9a3c":s>=.25?"#efcd48":"#54b6ee"}
 function objectOrdinal(p){var idx=allObjects.findIndex(function(x){return x.radar_site===p.radar_site&&String(x.track_id)===String(p.track_id)});return String(idx+1).padStart(2,"0")}
 function latestForSelected(){
@@ -313,16 +313,32 @@ function renderObjectCard(){
 }
 function renderProbability(){
   var p=latestForSelected();if(!p){return}
-  var shadow=shadowRecord(p.radar_site,p.track_id),hist=shadowRows(p.radar_site,p.track_id),score=probValue(shadow,15),prev=hist.length>1?probValue(hist.at(-2),15):null;
+  var probs=p.research_probabilities||{};
+  var horizons=[15,30,45,60];
+  var score=probs["15min"]??probs["15"]??p.probability_15min;
+  var prevRows=trackHistory(p).slice(0,-1),prev=prevRows.length?(prevRows.at(-1).research_probabilities||{}):null;
+  var prev15=prev?.["15min"]??prev?.["15"]??null;
   if(score==null){
-    q("probabilityValue").classList.add("na");setText("probabilityValue","—");setText("probabilityDelta","GATED • waiting for coverage");q("probabilityDelta").className="prob-delta flat";
-    var cov=shadow?.feature_coverage?.["15"]?.fraction;setText("probabilityNote",cov==null?"No live research score is attached to this object yet.":("Feature coverage "+(Number(cov)*100).toFixed(0)+"% • research shadow threshold "+(SHADOW_MIN_COVERAGE*100).toFixed(0)+"% • candidate-only score."));
+    q("probabilityValue").classList.add("na");setText("probabilityValue","—");setText("probabilityDelta","Awaiting weighted score");q("probabilityDelta").className="prob-delta flat";
+    setText("probabilityNote","Research component score is waiting for a usable radar/environment object record. Analog guidance remains provisional.");
   }else{
-    q("probabilityValue").classList.remove("na");setText("probabilityValue",(Number(score)*100).toFixed(1)+"%");var d=prev==null?null:Number(score)-Number(prev);setText("probabilityDelta",d==null?"Score attached":(d>=0?"▲ +":"▼ ")+(Math.abs(d)*100).toFixed(1)+" pp");q("probabilityDelta").className="prob-delta "+(d==null?"flat":d>=0?"up":"down");setText("probabilityNote","Isolated research shadow score • candidate only • never an operational warning recommendation.");
+    q("probabilityValue").classList.remove("na");setText("probabilityValue",(Number(score)*100).toFixed(1)+"%");
+    var d=prev15==null?null:Number(score)-Number(prev15);
+    setText("probabilityDelta",d==null?"50/35/15 weighted score":(d>=0?"▲ +":"▼ ")+(Math.abs(d)*100).toFixed(1)+" pp");
+    q("probabilityDelta").className="prob-delta "+(d==null?"flat":d>=0?"up":"down");
+    setText("probabilityNote","Research guidance only • Radar 50% + Environment 35% + Analog 15%. Each component is independently reported on a 0–100 scale.");
   }
-  var vals=[["Model",score,"#1f90e9"],["Analog",shadow?.analog_probability,"#f0c54c"],["Environment",shadow?.environment_signal,"#62ce73"],["Overall",shadow?.ensemble_probability,"#ff5648"]];
-  q("probComponents").innerHTML=vals.map(function(x){return "<div class='prob-component'><span><i class='comp-dot' style='background:"+x[2]+"'></i>"+x[0]+"</span><b>"+(x[1]==null?"—":(Number(x[1])*100).toFixed(1)+"%")+"</b></div>"}).join("")+"<div style='margin-top:5px;font-size:8px;color:#748a9b'>Fields populate as their corresponding model evidence becomes available.</div>";
-  renderProbabilityChart(hist);
+  var comps=p.probability_components?.["15"]||{};
+  var radar=p.radar_component_score,env=p.environment_component_score,analog=p.analog_component_score;
+  var cards=[
+    ["RADAR","50%",radar,"#ff5648"],
+    ["ENVIRONMENT","35%",env,"#62ce73"],
+    ["ANALOG","15%",analog,"#f0c54c"]
+  ];
+  var cardHtml=cards.map(function(x){return "<div class='prob-component'><span><i class='comp-dot' style='background:"+x[3]+"'></i>"+x[0]+" <small style='color:#748a9b'>("+x[1]+")</small></span><b>"+(x[2]==null?"—":Number(x[2]).toFixed(1)+"%")+"</b></div>"}).join("");
+  var horizonHtml="<div style='display:grid;grid-template-columns:repeat(4,1fr);gap:4px;margin-top:7px'>"+horizons.map(function(h){var v=probs[h+"min"]??probs[String(h)];return "<div style='border:1px solid rgba(190,210,220,.14);padding:5px;text-align:center'><span style='display:block;font-size:8px;color:#748a9b'>+"+h+" MIN</span><b style='font-size:13px'>"+(v==null?"—":(Number(v)*100).toFixed(1)+"%")+"</b></div>"}).join("")+"</div>";
+  q("probComponents").innerHTML=cardHtml+horizonHtml+"<div style='margin-top:6px;font-size:8px;color:#748a9b'>Weighted = Radar × 0.50 + Environment × 0.35 + Analog × 0.15. Analog status: "+esc(p.probability_component_detail?.analog?.status||"provisional")+".</div>";
+  renderProbabilityChart(trackHistory(p));
 }
 function renderProbabilityChart(hist){
   var svg=q("probChart");svg.innerHTML="";
