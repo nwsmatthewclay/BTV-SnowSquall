@@ -70,7 +70,8 @@ def evaluate(model_root: Path, audit_path: Path, gate_path: Path) -> dict:
         and gate[str(h)].get("status") == "ok"
     ]
 
-    if all_bundle_ok and all_calibrated and minimum_support_ok and len(gate_ok_horizons) >= 3:
+    if (all_bundle_ok and all_calibrated and minimum_support_ok
+            and len(gate_ok_horizons) >= 3 and skill_evidence >= 2):
         status = "research_operational_candidate"
     elif all_bundle_ok and all_calibrated:
         status = "limited_data_candidate"
@@ -85,6 +86,7 @@ def evaluate(model_root: Path, audit_path: Path, gate_path: Path) -> dict:
         "operational_release_status": "candidate_only_not_operational",
         "minimum_positive_case_groups_per_horizon": 3,
         "minimum_gate_horizons": 3,
+        "minimum_horizons_beating_climatology_brier": 2,
         "horizons_with_case_heldout_evidence": gate_ok_horizons,
         "horizons_beating_climatology_brier": skill_evidence,
         "candidate_bundle_integrity": all_bundle_ok,
