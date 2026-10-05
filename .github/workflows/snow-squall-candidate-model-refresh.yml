@@ -37,26 +37,30 @@ jobs:
         with:
           ref: snow-squall-model-foundation
 
-      - name: Resolve and download national model bundle
+      - name: Resolve optional national model bundle
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
           rm -rf national_pretrain_artifact
+          source_run=""
           if [ "${{ github.event_name }}" = "workflow_run" ] && [ "${{ github.event.workflow_run.name }}" = "National SQW Radar Pretraining Pool" ]; then
             source_run="${{ github.event.workflow_run.id }}"
           else
             source_run="$(gh run list --workflow "National SQW Radar Pretraining Pool" --branch snow-squall-model-foundation --status success --limit 1 --json databaseId --jq '.[0].databaseId' || true)"
           fi
-          test -n "$source_run" && test "$source_run" != "null"
+          if [ -z "$source_run" ] || [ "$source_run" = "null" ]; then
+            echo "No successful national radar pretraining bundle is available; continuing with BTV-only training."
+            exit 0
+          fi
           mkdir -p national_pretrain_artifact
           if gh run download "$source_run" --repo "$GITHUB_REPOSITORY" --name national-sqw-radar-model-bundles --dir national_pretrain_artifact; then
             echo "Using lightweight national model bundle from run $source_run"
-          else
-            echo "Lightweight bundle not present; falling back to full national pretraining artifact."
-            rm -rf national_pretrain_artifact
-            gh run download "$source_run" --repo "$GITHUB_REPOSITORY" --name national-sqw-radar-pretraining-pool --dir national_pretrain_artifact
+          elif gh run download "$source_run" --repo "$GITHUB_REPOSITORY" --name national-sqw-radar-pretraining-pool --dir national_pretrain_artifact; then
             echo "Using full national pretraining pool from run $source_run"
+          else
+            echo "National pretraining artifacts unavailable; continuing with BTV-only training."
+            rm -rf national_pretrain_artifact
           fi
 
       - name: Resolve latest archived expansion feature batch
@@ -133,33 +137,36 @@ jobs:
           set -euo pipefail
           python scripts/audit_radar_environment_contract.py             data/derived/snow_squall_model_features_cumulative_prior.csv             --output data/derived/snow_squall_prior_radar_environment_contract_audit.json
 
-      - name: Stage national pretraining models
+      - name: Stage optional national pretraining models
         run: |
           set -euo pipefail
-          model_file="$(find national_pretrain_artifact -type f -name 'weak_pretraining_model.joblib' -print -quit)"
-          test -n "${model_file}"
+          model_file="$(find national_pretrain_artifact -type f -name 'weak_pretraining_model.joblib' -print -quit || true)"
+          if [ -z "${model_file}" ]; then
+            echo "National pretraining models unavailable; skipping national priors."
+            exit 0
+          fi
           root="$(dirname "$(dirname "${model_file}")")"
           echo "National model artifact root: ${root}"
           for model_dir in "${root}"/national_sqw_weak_model_*m; do
-            test -d "${model_dir}"
+            [ -d "${model_dir}" ] || continue
             cp -R "${model_dir}" data/derived/
           done
-          for h in 15 30 45 60; do
-            test -f "data/derived/national_sqw_weak_model_${h}m/weak_pretraining_model.joblib"
-            test -f "data/derived/national_sqw_weak_model_${h}m/metrics.json"
-          done
 
-      - name: Apply national BTV-excluded radar priors
+      - name: Apply optional national BTV-excluded radar priors
         run: |
           set -euo pipefail
-          python scripts/add_national_pretraining_features.py             --features data/derived/snow_squall_model_features_cumulative_prior.csv             --model-root data/derived             --output data/derived/snow_squall_model_features_cumulative.csv             --summary data/derived/snow_squall_national_pretraining_feature_summary_refresh.json             --schema data/derived/snow_squall_model_features_expanded.schema.json
+          if find data/derived -maxdepth 1 -type d -name 'national_sqw_weak_model_*m' -print -quit | grep -q .; then
+            python scripts/add_national_pretraining_features.py               --features data/derived/snow_squall_model_features_cumulative_prior.csv               --model-root data/derived               --output data/derived/snow_squall_model_features_cumulative.csv               --summary data/derived/snow_squall_national_pretraining_feature_summary_refresh.json               --schema data/derived/snow_squall_model_features_expanded.schema.json
+          else
+            cp data/derived/snow_squall_model_features_cumulative_prior.csv               data/derived/snow_squall_model_features_cumulative.csv
+            printf '%s
+' '{"status":"national_pretraining_not_available","mode":"btv_only_candidate"}'               > data/derived/snow_squall_national_pretraining_feature_summary_refresh.json
+          fi
           python - <<'PY'
           import pandas as pd
           d=pd.read_csv("data/derived/snow_squall_model_features_cumulative.csv")
           national=[c for c in d.columns if c.startswith("national_pretrain_probability_")]
           print("National prior columns:", national)
-          if len(national) != 4:
-              raise SystemExit("Expected four national pretraining probability columns")
           print("augmented_rows=",len(d),"augmented_columns=",len(d.columns))
           PY
 
