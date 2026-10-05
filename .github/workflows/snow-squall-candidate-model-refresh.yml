@@ -12,6 +12,13 @@ on:
       - snow-squall-model-foundation
     paths:
       - .github/model-refresh-trigger
+  workflow_dispatch:
+    inputs:
+      expansion_run_id:
+        description: "Successful Snow Squall Expansion Dataset run containing a feature batch; blank uses latest usable."
+        required: false
+        default: ""
+        type: string
 
 permissions:
   actions: read
@@ -71,7 +78,19 @@ jobs:
         run: |
           set -euo pipefail
           selected=""
-          if [ "${{ github.event_name }}" = "workflow_run" ] && [ "${{ github.event.workflow_run.name }}" = "Snow Squall Expansion Dataset" ]; then
+          requested_run="${{ inputs.expansion_run_id }}"
+          if [ -n "$requested_run" ]; then
+            echo "Checking explicitly requested expansion run $requested_run for feature artifact..."
+            rm -rf /tmp/expansion_probe
+            if gh run download "$requested_run" --repo "$GITHUB_REPOSITORY" --name snow-squall-expansion-feature-batch --dir /tmp/expansion_probe >/dev/null 2>&1; then
+              selected="$requested_run"
+              echo "Using explicitly requested expansion run $selected"
+            else
+              echo "Requested expansion run $requested_run does not contain a usable feature artifact."
+              exit 1
+            fi
+          fi
+          if [ -z "$selected" ] && [ "${{ github.event_name }}" = "workflow_run" ] && [ "${{ github.event.workflow_run.name }}" = "Snow Squall Expansion Dataset" ]; then
             trigger_run="${{ github.event.workflow_run.id }}"
             echo "Checking triggering expansion run $trigger_run for feature artifact..."
             rm -rf /tmp/expansion_probe
