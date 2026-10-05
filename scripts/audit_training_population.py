@@ -97,13 +97,15 @@ def audit(path: Path) -> dict:
     if "activity_class" in df.columns:
         report["null_activity_counts"] = _distribution(df, "activity_class")
 
-    report["radar_population_counts"] = (
-        df.groupby([c for c in ["radar_site", "population"] if c in df.columns], dropna=False)
-        .size()
-        .to_dict()
-        if "radar_site" in df.columns and "population" in df.columns
-        else {}
-    )
+    if "radar_site" in df.columns and "population" in df.columns:
+        table = (
+            df.groupby(["radar_site", "population"], dropna=False)
+            .size()
+            .reset_index(name="rows")
+        )
+        report["radar_population_counts"] = table.to_dict("records")
+    else:
+        report["radar_population_counts"] = []
 
     if "scan_time_utc" in df.columns:
         years = pd.to_datetime(df["scan_time_utc"], utc=True, errors="coerce").dt.year
