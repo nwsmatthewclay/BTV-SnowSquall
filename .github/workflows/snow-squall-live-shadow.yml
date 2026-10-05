@@ -50,7 +50,7 @@ jobs:
             run_id="${{ github.event.workflow_run.id }}"
             artifact_name="snow-squall-research-operational-candidate"
           else
-            run_id="$(gh run list --workflow "Snow Squall Research-Operational Candidate Gate" --branch snow-squall-model-foundation --status success --limit 1 --json databaseId --jq '.[0].databaseId' || true)"
+            run_id="$(gh run list --workflow "snow-squall-research-operational-candidate.yml" --branch snow-squall-model-foundation --status success --limit 1 --json databaseId --jq '.[0].databaseId' || true)"
             if [ -n "$run_id" ] && [ "$run_id" != "null" ]; then
               if gh api "/repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}/artifacts?per_page=100" -q '[.artifacts[] | select(.name=="snow-squall-research-operational-candidate" and .expired==false)] | length' | grep -q '^1$'; then
                 artifact_name="snow-squall-research-operational-candidate"
