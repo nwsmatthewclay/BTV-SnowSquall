@@ -21,6 +21,7 @@ from sklearn.impute import SimpleImputer
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import average_precision_score, brier_score_loss, roc_auc_score
 from sklearn.pipeline import Pipeline
+from sklearn.model_selection import StratifiedGroupKFold
 from sklearn.preprocessing import StandardScaler
 from src.snow_squall.training import case_scan_balanced_weights, case_weighted_metrics
 
@@ -63,15 +64,18 @@ def choose_predictors(df: pd.DataFrame, target: str) -> list[str]:
         raise ValueError("No numeric forecast-time predictors remain after leakage controls.")
     return cols
 
-def event_folds(groups: pd.Series, n_splits: int = 5):
-    unique = pd.Series(groups.dropna().unique())
-    if len(unique) < 2:
+def event_folds(groups: pd.Series, y: pd.Series, n_splits: int = 5):
+    """Create stratified group folds so held-out tests contain both classes when possible."""
+    unique_count = int(groups.nunique(dropna=True))
+    if unique_count < 2:
         return []
-    n = min(n_splits, len(unique))
-    rng = np.random.default_rng(42)
-    shuffled = unique.to_numpy().copy()
-    rng.shuffle(shuffled)
-    return [shuffled[i::n] for i in range(n)]
+    n = min(n_splits, unique_count)
+    X = np.zeros((len(groups), 1), dtype=float)
+    splitter = StratifiedGroupKFold(n_splits=n, shuffle=True, random_state=42)
+    out = []
+    for _, test_idx in splitter.split(X, y.astype(int).to_numpy(), groups.astype(str).to_numpy()):
+        out.append(np.asarray(groups.iloc[test_idx].astype(str).unique()))
+    return out
 
 def fit_pipeline() -> Pipeline:
     return Pipeline([
@@ -87,15 +91,18 @@ def evaluate(df: pd.DataFrame, target: str, predictors: list[str]) -> dict:
     valid = y.notna()
     work = df.loc[valid].copy()
     y = y.loc[valid].astype(int)
-    groups = work["case_id"].astype(str) if "case_id" in work else pd.Series(
-        np.arange(len(work)), index=work.index
-    )
+    if "split_group" in work.columns:
+        groups = work["split_group"].astype(str)
+    elif "case_id" in work.columns:
+        groups = work["case_id"].astype(str)
+    else:
+        groups = pd.Series(np.arange(len(work)), index=work.index).astype(str)
 
     if y.nunique() < 2:
         return {"status": "insufficient_class_diversity", "n": int(len(y)), "classes": y.value_counts().to_dict()}
     row_weights = case_scan_balanced_weights(work)
 
-    folds = event_folds(groups)
+    folds = event_folds(groups, y)
     fold_rows = []
     for i, held_groups in enumerate(folds, 1):
         test_mask = groups.isin(set(held_groups))
