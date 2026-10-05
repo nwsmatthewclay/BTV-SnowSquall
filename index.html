@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>BTV Snow Squall • Archive Object Monitor</title>
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<link rel="stylesheet" href="style.css?v=20261005-object-monitor">
+</head>
+<body class="dashboard-page archive-dashboard">
+<header>
+  <div class="dashboard-header-left">
+    <div class="dashboard-title-row"><span class="header-dot"></span><h1>Snow Squall Object Monitor <span style="font-weight:500;color:#8da1b1">(Archive)</span></h1></div>
+    <div class="dashboard-subtitle" id="subtitle">Historical replay • object-level research diagnostics</div>
+  </div>
+  <div class="dashboard-header-center">
+    <div class="dashboard-header-context"><b id="archiveSite">KCXX • BTV CWA</b><span id="archiveTime">Loading archived scan…</span></div>
+  </div>
+  <div class="dashboard-nav">
+    <button class="active" data-jump="objectSection">Objects</button>
+    <button data-jump="historySection">Tracks</button>
+    <button data-jump="motionSection">Motion</button>
+    <button data-jump="environmentSection">Environment</button>
+    <button data-jump="evidenceSection">Reports</button>
+    <a href="live.html">Live</a>
+    <button id="detailsBtn" title="Viewer data status">⚙</button>
+    <span class="dashboard-pill research" id="archiveBadge">RESEARCH REPLAY</span>
+  </div>
+</header>
+
+<main class="dashboard-main">
+  <section id="map" class="dashboard-map" aria-label="Historical snow squall radar object map">
+    <div class="map-hud-main">
+      <b id="mapRadarLabel">KCXX • ARCHIVE</b>
+      <strong id="mapScanLabel">Loading radar scan…</strong>
+      <span id="radarStatus">Historical Level-II reflectivity reconstruction</span>
+    </div>
+    <div class="map-controls">
+      <span class="label">RADAR</span>
+      <button class="active" data-radar-mode="archive">Reflectivity</button>
+      <button id="objectNumbersBtn" class="active">Object IDs</button>
+    </div>
+    <div class="map-legend">
+      <div class="map-legend-title">REFLECTIVITY • dBZ</div>
+      <div class="map-legend-bar"><span>0</span><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><span>70+</span></div>
+      <div class="map-legend-note">Historical Level-II display. Outlines identify trackable radar object candidates; white outline marks the selected object.</div>
+    </div>
+    <div class="timeline-overlay">
+      <div class="timeline-top">
+        <div><strong id="timelineTime">—</strong><small id="timelineNote">Replay scan</small></div>
+        <div class="timeline-buttons"><button id="prevBtn">◀</button><button id="playBtn">▶ Play</button><button id="nextBtn">▶</button></div>
+      </div>
+      <input id="slider" type="range" min="0" max="0" value="0" aria-label="Historical replay timeline">
+    </div>
+  </section>
+
+  <aside class="dashboard-panel" id="panel">
+    <div class="section-block">
+      <div class="case-select-row">
+        <div>
+          <span class="case-select-label">Archive case</span>
+          <select id="caseSelect"></select>
+        </div>
+        <span class="dashboard-pill research" id="caseBadge">PILOT</span>
+      </div>
+      <div id="caseTitle" style="margin-top:7px;font-weight:850;font-size:15px">Loading case…</div>
+      <div id="caseMeta" style="font-size:9px;color:#879baa;margin-top:2px">—</div>
+    </div>
+
+    <div class="section-block" id="objectSection">
+      <div class="section-header"><h2>OBJECT INVENTORY</h2><span id="objectCount">0 objects</span></div>
+      <div class="object-picker" id="objectPicker"><button class="object-pick">Loading objects…</button></div>
+    </div>
+
+    <div class="section-block object-card">
+      <div class="object-title-row">
+        <div class="object-accent" id="objectAccent"></div>
+        <div>
+          <div class="object-title" id="objectTitle">OBJECT —</div>
+          <div class="object-subtitle" id="objectSubtitle">Select an object on the map or from the inventory.</div>
+          <div class="object-time" id="objectTime">—</div>
+        </div>
+        <div class="object-badge" id="objectBadge">NO SELECTION</div>
+      </div>
+      <div class="object-facts">
+        <div class="object-fact"><span>Lat/Lon</span><b id="objectLatLon">—</b></div>
+        <div class="object-fact"><span>Motion</span><b id="objectMotion">—</b></div>
+        <div class="object-fact"><span>Distance to BTV</span><b id="objectDistance">—</b></div>
+        <div class="object-fact"><span>Track age</span><b id="objectAge">—</b></div>
+        <div class="object-fact"><span>Duration</span><b id="objectDuration">—</b></div>
+        <div class="object-fact"><span>Track quality</span><b id="objectQuality">—</b></div>
+      </div>
+    </div>
+
+    <div class="section-block" id="probabilitySection">
+      <div class="section-header"><h2>SNOW SQUALL PROBABILITY (15 MIN)</h2><span class="dashboard-pill gated" id="probBadge">RESEARCH</span></div>
+      <div class="prob-wrap">
+        <div class="prob-main">
+          <div class="prob-label">Current research candidate</div>
+          <div class="prob-value na" id="probabilityValue">—</div>
+          <div class="prob-delta flat" id="probabilityDelta">No score attached</div>
+          <div class="prob-status" id="probabilityNote">Probabilities appear only where a validated research score is attached to the historical scan.</div>
+        </div>
+        <div class="prob-components" id="probComponents"></div>
+      </div>
+      <div class="chart-box"><svg class="mini-chart" id="probChart" viewBox="0 0 420 142" role="img" aria-label="Snow squall probability evolution"></svg><div class="chart-legend-row"><span class="chart-key"><i style="background:#ff5648"></i>15m</span><span class="chart-key"><i style="background:#1f90e9"></i>30m</span><span class="chart-key"><i style="background:#f0c54c"></i>45m</span><span class="chart-key"><i style="background:#62ce73"></i>60m</span></div></div>
+    </div>
+
+    <div class="section-block" id="motionSection">
+      <div class="section-header"><h2>KEY TRENDS</h2><span>Selected object</span></div>
+      <div class="trend-grid" id="keyTrends"></div>
+    </div>
+
+    <div class="section-block" id="environmentSection">
+      <div class="section-header"><h2>ENVIRONMENT AT OBJECT</h2><span id="envSource">—</span></div>
+      <table class="environment-table" id="environmentTable"></table>
+    </div>
+
+    <div class="section-block" id="evidenceSection">
+      <div class="section-header"><h2>EVIDENCE &amp; CONTEXT</h2><span>Case/research package</span></div>
+      <div class="evidence-grid" id="evidenceGrid"></div>
+    </div>
+
+    <div class="section-block" id="historySection">
+      <div class="section-header"><h2>RECENT HISTORY</h2><span id="historyCount">—</span></div>
+      <div class="history-chart-wrap"><svg class="history-chart" id="historyChart" viewBox="0 0 520 145" role="img" aria-label="Selected object recent history"></svg></div>
+      <div class="history-table-wrap"><table class="history-table" id="historyTable"></table></div>
+    </div>
+
+    <div class="section-block">
+      <div class="section-header"><h2>MODEL / DATA STATUS</h2><span id="modelStatus">—</span></div>
+      <div class="status-card" id="modelStatusCard"></div>
+      <div class="note-banner" style="margin-top:6px">Historical object labels and probabilities remain research evidence. Future outcome context is displayed separately from model predictors; no operational warning recommendation is produced by this page.</div>
+    </div>
+  </aside>
+</main>
+
+<div id="modal" class="modal hidden"><div class="modal-card"><button id="closeModal" class="modal-close">×</button><h2>Viewer Data Status</h2><p id="statusText">—</p><div class="status-list" id="statusList"></div></div></div>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="archive.js?v=20261005-object-monitor"></script>
+</body>
+</html>
