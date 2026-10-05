@@ -56,7 +56,7 @@ jobs:
           fi
 
           if [ -z "$run_id" ] || [ -z "$artifact_name" ]; then
-            refresh_run="$(gh run list --workflow "Snow Squall Candidate Model Refresh" --branch snow-squall-model-foundation --status success --limit 1 --json databaseId --jq '.[0].databaseId' || true)"
+            refresh_run="$(gh run list --workflow "snow-squall-candidate-model-refresh.yml" --branch snow-squall-model-foundation --status success --limit 1 --json databaseId --jq '.[0].databaseId' || true)"
             if [ -n "$refresh_run" ] && [ "$refresh_run" != "null" ]; then
               run_id="$refresh_run"
               artifact_name="snow-squall-refreshed-model-bundles"
@@ -167,9 +167,8 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
-          if gh workflow run "Modern Independent Validation" \
-            --repo "$GITHUB_REPOSITORY" \
-            --ref snow-squall-model-foundation; then
+          if gh api --method POST "/repos/$GITHUB_REPOSITORY/actions/workflows/snow-squall-modern-validation.yml/dispatches" \
+            -f ref="snow-squall-model-foundation"; then
             echo "Dispatched modern validation from candidate gate."
           else
             echo "Modern validation dispatch is unavailable in this runner context; candidate gate remains valid."
