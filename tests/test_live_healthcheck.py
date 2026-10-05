@@ -136,3 +136,5 @@ def test_live_healthcheck_accepts_research_scored_product(tmp_path):
     report = healthcheck(sp, gp, max_age_minutes=15)
     assert report["status"] == "healthy"
     assert report["checks"]["probability_disabled"] is True
+
+# CI trigger: live health contract fix.
