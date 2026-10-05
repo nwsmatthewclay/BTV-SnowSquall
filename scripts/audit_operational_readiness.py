@@ -30,9 +30,8 @@ def validate(
     assert geo.get("type") == "FeatureCollection", "GeoJSON must be a FeatureCollection"
 
     metadata = geo.get("metadata", {})
-    assert (
-        metadata.get("probability_status") == "not_scored"
-    ), "Probability status must remain not_scored"
+    assert metadata.get("probability_status") in ("not_scored", "scored", "research_scored"), \
+        "Invalid probability status"
     assert state.get("last_source"), "Worker state is missing last_source"
     assert state.get("last_scan_time_utc"), "Worker state is missing last_scan_time_utc"
     assert "last_object_count" in state, "Worker state is missing last_object_count"
@@ -89,6 +88,22 @@ def validate(
             if value is not None and not (0.0 <= float(value) <= 1.0):
                 invalid_probability += 1
 
+        component_scores = props.get("probability_components") or {}
+        for horizon in ("15", "30", "45", "60"):
+            comp = component_scores.get(horizon) or {}
+            for name in ("radar", "environment", "analog"):
+                value = comp.get(name)
+                if value is not None and not (0.0 <= float(value) <= 100.0):
+                    invalid_probability += 1
+            weights = comp.get("weights") or {}
+            if weights:
+                if (
+                    abs(float(weights.get("radar", 0)) - 0.50) > 1e-6
+                    or abs(float(weights.get("environment", 0)) - 0.35) > 1e-6
+                    or abs(float(weights.get("analog", 0)) - 0.15) > 1e-6
+                ):
+                    invalid_probability += 1
+
         raw_ts = props.get("timestamp")
         if not str(raw_ts).endswith("Z"):
             invalid_timestamp += 1
@@ -112,8 +127,9 @@ def validate(
     assert out_of_domain == 0, f"{out_of_domain} object centroids outside the BTV-domain guard"
 
     return {
-        "status": "ready_for_unscored_live_object_delivery",
+        "status": "ready_for_research_weighted_live_object_delivery",
         "probability_status": metadata["probability_status"],
+        "probability_mode": metadata.get("probability_mode"),
         "scan_time_utc": output_time.isoformat(),
         "age_minutes": round(age_minutes, 2),
         "max_age_minutes": max_age_minutes,
