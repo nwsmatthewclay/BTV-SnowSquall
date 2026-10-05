@@ -190,8 +190,9 @@ jobs:
         run: |
           set -euo pipefail
           for h in 15 30 45 60; do
-            test -f "model_bundle/candidate_ensemble_expansion_${h}m/metrics.json"
-            test -f "model_bundle/candidate_ensemble_expansion_${h}m/baseline_model.joblib"
+            test -f "${{ steps.runs.outputs.model_root }}/candidate_ensemble_refresh_${h}m/metrics.json"
+            test -f "${{ steps.runs.outputs.model_root }}/candidate_ensemble_refresh_${h}m/baseline_model.joblib"
+            test -f "${{ steps.runs.outputs.model_root }}/candidate_ensemble_refresh_${h}m/probability_calibrator.joblib"
           done
 
       - name: Replay four candidate horizons through live processor
@@ -203,7 +204,7 @@ jobs:
               --case-id "${{steps.inputs.outputs.case_id }}" \
               --input-dir "${{steps.inputs.outputs.level2_root }}" \
               --output-dir "replay/${h}m" \
-              --model-dir "model_bundle/candidate_ensemble_expansion_${h}m" \
+              --model-dir "${{ steps.runs.outputs.model_root }}/candidate_ensemble_refresh_${h}m" \
               --continue-on-error
           done
 
@@ -222,7 +223,7 @@ jobs:
           python - <<'PY'
           import json
           from pathlib import Path
-          metrics = json.loads(Path("model_bundle/candidate_ensemble_expansion_15m/metrics.json").read_text())
+          metrics = json.loads(Path("${{ steps.runs.outputs.model_root }}/candidate_ensemble_refresh_15m/metrics.json").read_text())
           schema = {
               "schema_version": "replay_model_bundle_compatibility_v1",
               "future_information_policy": "one_scan_at_a_time",
