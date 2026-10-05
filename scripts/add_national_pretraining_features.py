@@ -58,11 +58,13 @@ def update_schema(schema_path: Path, summary: dict):
         operational = list(schema.get("operational_predictor_columns") or [])
         if column not in predictors:
             predictors.append(column)
-        if column not in operational:
-            operational.append(column)
+        # National weak-pretraining probabilities are intentionally NOT added
+        # to operational_predictor_columns: the live adapter does not yet
+        # reproduce this national model, so allowing them into the operational
+        # contract would silently replace a missing live feature with imputation.
         schema["predictor_columns"] = predictors
         schema["operational_predictor_columns"] = operational
-    schema["national_pretraining_policy"] = "BTV-excluded weak radar prior; research-only feature"
+    schema["national_pretraining_policy"] = "BTV-excluded weak radar prior; research-only, not live-compatible"
     schema_path.write_text(json.dumps(schema, indent=2) + "\n", encoding="utf-8")
 
 
