@@ -15,6 +15,7 @@ from sklearn.model_selection import LeaveOneGroupOut
 from sklearn.pipeline import Pipeline
 
 from scripts.train_baseline_model import load_schema, prepare_dataset, grouped_bootstrap_intervals
+from src.snow_squall.training import case_scan_balanced_weights
 BOOTSTRAP_INSTANTANEOUS_PREDICTORS = {
     "area_km2", "length_km", "width_km", "aspect_ratio", "bbox_aspect_ratio", "is_band",
     "reflectivity_gradient_p90_dbkm", "gradient_fraction_above_5dbkm",
@@ -87,7 +88,15 @@ def evaluate(data, predictors, target):
         if len(np.unique(train_y)) < 2:
             folds.append({"fold":fold,"held_out_group":groups[test_idx][0],"status":"skipped_single_class_training"})
             continue
-        weights = class_balanced_weights(train_y) * pd.to_numeric(data.iloc[train_idx].get("evidence_weight", pd.Series(1.0, index=data.iloc[train_idx].index)), errors="coerce").fillna(1.0).to_numpy()
+        evidence = pd.to_numeric(
+            data.iloc[train_idx].get(
+                "evidence_weight",
+                pd.Series(1.0, index=data.iloc[train_idx].index),
+            ),
+            errors="coerce",
+        ).fillna(1.0).to_numpy()
+        group_balanced = case_scan_balanced_weights(data.iloc[train_idx])
+        weights = group_balanced * class_balanced_weights(train_y) * evidence
         model.fit(X.iloc[train_idx], train_y, model__sample_weight=weights)
         oof[test_idx] = model.predict_proba(X.iloc[test_idx])[:, 1]
         folds.append({"fold":fold,"held_out_group":groups[test_idx][0],"test_rows":int(len(test_idx)),"test_positives":int(y[test_idx].sum()),"status":"ok"})
@@ -140,8 +149,20 @@ def main():
     pred.to_csv(out/"oof_predictions.csv",index=False)
 
     final=estimator()
-    final_evidence = pd.to_numeric(data.get("evidence_weight", pd.Series(1.0, index=data.index)), errors="coerce").fillna(1.0).to_numpy()
-    final.fit(data[predictors],data[args.target].astype(int),model__sample_weight=class_balanced_weights(data[args.target].astype(int)) * final_evidence)
+    final_evidence = pd.to_numeric(
+        data.get("evidence_weight", pd.Series(1.0, index=data.index)),
+        errors="coerce",
+    ).fillna(1.0).to_numpy()
+    final_weights = (
+        case_scan_balanced_weights(data)
+        * class_balanced_weights(data[args.target].astype(int))
+        * final_evidence
+    )
+    final.fit(
+        data[predictors],
+        data[args.target].astype(int),
+        model__sample_weight=final_weights,
+    )
     joblib.dump(final,out/"baseline_model.joblib")
     positive_groups=sorted(data.loc[data[args.target].eq(1),"split_group"].astype(str).unique())
     report={
@@ -162,7 +183,7 @@ def main():
         "training_contract_status":("limited_data_bootstrap" if args.allow_limited_data else "full_radar_environment_contract"),
         "operational_release_note":"Research candidate only; independent modern verification and calibration are required before operational release.",
         "estimator_family":["HistGradientBoostingClassifier","RandomForestClassifier","ExtraTreesClassifier"],
-        "training_weight_policy":"inverse_class_frequency_with_equal_class_total_multiplied_by_evidence_weight",
+        "training_weight_policy":"case_scan_balanced_with_equal_class_total_multiplied_by_evidence_weight",
         "metrics":metrics,
         "folds":folds,
         "null_activity_policy":"clean_quiet_light",
