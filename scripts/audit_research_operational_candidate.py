@@ -21,7 +21,7 @@ def evaluate(model_root: Path, audit_path: Path, gate_path: Path, summary_path: 
     audit = load_json(audit_path)
     gate = load_json(gate_path)
     summary = load_json(summary_path) if summary_path and summary_path.exists() else {}
-    candidate_mode = str(summary.get("candidate_mode") or "strict_refresh")
+    candidate_mode = str(summary.get("candidate_mode") or "unknown")
     bootstrap_mode = candidate_mode.startswith("bootstrap")
 
     horizon = {}
@@ -73,7 +73,7 @@ def evaluate(model_root: Path, audit_path: Path, gate_path: Path, summary_path: 
         and gate[str(h)].get("status") == "ok"
     ]
 
-    if (not bootstrap_mode and all_bundle_ok and all_calibrated and minimum_support_ok
+    if (candidate_mode == "strict_refresh" and not bootstrap_mode and all_bundle_ok and all_calibrated and minimum_support_ok
             and len(gate_ok_horizons) >= 3 and skill_evidence >= 2):
         status = "research_operational_candidate"
     elif all_bundle_ok and all_calibrated:
