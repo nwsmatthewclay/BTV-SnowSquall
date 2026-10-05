@@ -96,6 +96,30 @@ def archive_prefix(radar: str, when: datetime) -> str:
     )
 
 
+def find_recent_volumes(s3, radar: str, *, since: datetime | None = None, lookback_hours: int | None = None) -> list[tuple[str, datetime]]:
+    """Return available volumes in chronological order, optionally newer than since."""
+    now = utc_now()
+    hours = LOOKBACK_HOURS if lookback_hours is None else max(1, int(lookback_hours))
+    candidates: list[tuple[str, datetime]] = []
+
+    for hour_offset in range(hours):
+        hour_dt = now.replace(minute=0, second=0, microsecond=0) - timedelta(hours=hour_offset)
+        response = s3.list_objects_v2(
+            Bucket=BUCKET,
+            Prefix=archive_prefix(radar, hour_dt),
+        )
+        for item in response.get("Contents", []):
+            volume_time = parse_volume_time(item["Key"], radar)
+            if volume_time is None:
+                continue
+            if since is not None and volume_time <= since.astimezone(timezone.utc):
+                continue
+            candidates.append((item["Key"], volume_time))
+
+    # Deduplicate keys in case archive listing boundaries overlap.
+    return sorted({key: dt for key, dt in candidates}.items(), key=lambda item: item[1])
+
+
 def find_newest_volume(s3, radar: str) -> tuple[str, datetime] | None:
     now = utc_now()
     candidates: list[tuple[str, datetime]] = []
