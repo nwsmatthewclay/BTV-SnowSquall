@@ -256,19 +256,39 @@ def _nearest_profile(ds, latitude, longitude):
 def _extract_snsq(path: Path, latitude, longitude, values):
     try:
         profiles = {}
-        for name in ("r", "gh", "t", "dpt", "u", "v"):
+        for name in ("gh", "t", "dpt", "u", "v"):
             result = _nearest_profile(_open_profile(path, name), latitude, longitude)
             if result is None:
                 return {"snsq": None, "snsq_status": "profile_missing"}
             profiles[name] = result
-        level, rh = profiles["r"]
-        gh_level, gh = profiles["gh"]
         t_level, temp = profiles["t"]
-        dpt_level, dpt = profiles["dpt"]
-        u_level, u = profiles["u"]
-        v_level, v = profiles["v"]
-        if not all(np.array_equal(level, other) for other in (gh_level, t_level, dpt_level, u_level, v_level)):
-            return {"snsq": None, "snsq_status": "profile_level_mismatch"}
+        base_level = np.asarray(t_level, dtype=float)
+        def _align(pair):
+            levels, vals = np.asarray(pair[0], dtype=float), np.asarray(pair[1], dtype=float)
+            if len(levels) == len(base_level) and np.allclose(levels, base_level):
+                return np.asarray(vals, dtype=float)
+            order = np.argsort(levels)
+            return np.interp(base_level, levels[order], np.asarray(vals, dtype=float)[order])
+        gh = _align(profiles["gh"])
+        dpt = _align(profiles["dpt"])
+        u = _align(profiles["u"])
+        v = _align(profiles["v"])
+        rh_profile = _nearest_profile(_open_profile(path, "r"), latitude, longitude)
+        if rh_profile is not None:
+            rh = _align(rh_profile)
+        else:
+            try:
+                from metpy.calc import relative_humidity_from_dewpoint
+                from metpy.units import units
+                rh = (
+                    relative_humidity_from_dewpoint(
+                        np.asarray(temp, dtype=float) * units.kelvin,
+                        np.asarray(dpt, dtype=float) * units.kelvin,
+                    ).to("dimensionless").magnitude * 100.0
+                )
+            except Exception:
+                return {"snsq": None, "snsq_status": "profile_rh_unavailable"}
+        level = base_level
         orog = _nearest(_open_field(path, "surface", "orog", None), latitude, longitude)
         if orog is None:
             return {"snsq": None, "snsq_status": "terrain_missing"}
