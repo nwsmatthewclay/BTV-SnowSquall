@@ -190,7 +190,13 @@ def _metpy_derived_fields(path: Path, latitude, longitude, values):
             finite = np.isfinite(levels) & np.isfinite(vals)
             levels, vals = levels[finite], vals[finite]
             order = np.argsort(levels)
-            return np.interp(pressure, levels[order], vals[order])
+            levels_sorted, vals_sorted = levels[order], vals[order]
+            target_order = np.argsort(pressure)
+            target_sorted = pressure[target_order]
+            interp_sorted = np.interp(target_sorted, levels_sorted, vals_sorted)
+            aligned = np.empty_like(target_sorted, dtype=float)
+            aligned[target_order] = interp_sorted
+            return aligned
 
         gh = align(profile["gh"])
         u = align(profile["u"])
