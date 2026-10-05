@@ -11,6 +11,7 @@ var radarLayer=L.layerGroup().addTo(map),radarMosaic=null,radarMode="reflectivit
 var radarLocations={KCXX:[44.511,-73.166],KTYX:[43.756,-75.680],KBTV:[44.472,-73.154]};
 var BTV=[44.472,-73.154];
 var datasets={},allObjects=[],selected=null,objectNumbers=true,refreshTimer=null,cursorGrid=null,cursorBound=false,lastObjectClickAt=0;
+var radarHistory={frames:[]},radarHistoryIndex=-1,radarAnimationTimer=null;
 
 var LIVE_BASE="https://raw.githubusercontent.com/nwsmatthewclay/BTV-SnowSquall/snow-squall-live-data/viewer/data/live/";
 var SHADOW_BASE="https://raw.githubusercontent.com/nwsmatthewclay/BTV-SnowSquall/snow-squall-shadow-data/viewer/data/shadow/";
@@ -93,6 +94,47 @@ function currentHistoryRow(p){var rows=trackHistory(p);return rows.at(-1)||p}
 function addStations(){
   Object.entries(radarLocations).forEach(function(entry){var site=entry[0],loc=entry[1];L.marker(loc,{icon:L.divIcon({className:"radar-station",iconSize:[12,12],iconAnchor:[6,6],html:""}),interactive:false,title:site}).addTo(map)});
 }
+function radarHistoryFrame(){return radarHistory.frames&&radarHistory.frames.length&&radarHistoryIndex>=0?radarHistory.frames[radarHistoryIndex]:null}
+function updateRadarTimelineUI(){
+  var slider=q("radarTimelineSlider"),label=q("radarTimelineLabel"),play=q("radarPlayBtn");
+  if(!slider)return;
+  slider.max=Math.max(0,(radarHistory.frames||[]).length-1);
+  slider.value=Math.max(0,radarHistoryIndex<0?slider.max:radarHistoryIndex);
+  var f=radarHistoryFrame();
+  setText("radarTimelineLabel",f?fmtTime(f.timestamp):"Live");
+  if(play)play.textContent=radarAnimationTimer?"❚❚ PAUSE":"▶ PLAY";
+}
+function stopRadarAnimation(){if(radarAnimationTimer){clearInterval(radarAnimationTimer);radarAnimationTimer=null}updateRadarTimelineUI()}
+function setRadarHistoryIndex(index){
+  var frames=radarHistory.frames||[];
+  if(!frames.length){radarHistoryIndex=-1;updateRadarTimelineUI();return}
+  radarHistoryIndex=Math.max(0,Math.min(frames.length-1,Number(index)||0));
+  stopRadarAnimation();
+  updateRadarTimelineUI();
+  renderRadarMosaic();
+}
+function playRadarAnimation(){
+  var frames=radarHistory.frames||[];
+  if(frames.length<2)return;
+  if(radarAnimationTimer){stopRadarAnimation();return}
+  if(radarHistoryIndex<0||radarHistoryIndex>=frames.length-1)radarHistoryIndex=0;
+  updateRadarTimelineUI();
+  radarAnimationTimer=setInterval(function(){
+    radarHistoryIndex++;
+    if(radarHistoryIndex>=frames.length){radarHistoryIndex=0}
+    updateRadarTimelineUI();
+    renderRadarMosaic();
+  },900);
+}
+async function loadRadarHistory(){
+  radarHistory=await fetchOptional(LIVE_BASE+"radar_history/manifest.json?cb="+Date.now(),{frames:[]});
+  if(!Array.isArray(radarHistory.frames))radarHistory={frames:[]};
+  if(radarHistory.frames.length){
+    radarHistory.frames.sort(function(a,b){return String(a.timestamp).localeCompare(String(b.timestamp))});
+    radarHistoryIndex=radarHistory.frames.length-1;
+  }else radarHistoryIndex=-1;
+  updateRadarTimelineUI();
+}
 function mosaicMetaUrl(){return LIVE_BASE+"radar_mosaic.json?cb="+Date.now()}
 function mosaicImageUrl(mode){var product=radarMosaic?.display_products||{};var name=(mode==="clean"?product.clean_image:product.raw_image)||(mode==="clean"?"radar_mosaic_clean.png":"radar_mosaic_raw.png");return LIVE_BASE+name+"?cb="+Date.now()}
 function addNoaaFallback(){
@@ -120,7 +162,10 @@ async function renderRadarMosaic(){
     setText("legendTitle","RADIAL VELOCITY • kt");
     setText("legendNote","Lowest-valid-sweep KCXX + KTYX velocity. Signed inbound/outbound flow is shown for cell analysis.");
   }else{
-    var ov=L.imageOverlay(mosaicImageUrl("reflectivity"),radarMosaic.bounds,{pane:"liveRadarPane",opacity:.96,interactive:false,crossOrigin:true});
+    var frame=radarHistoryFrame();
+    var imageName=frame?frame.image.split("/").pop():"";
+    var imageUrl=frame?(LIVE_BASE+"radar_history/"+imageName+"?cb="+Date.now()):mosaicImageUrl("reflectivity");
+    var ov=L.imageOverlay(imageUrl,radarMosaic.bounds,{pane:"liveRadarPane",opacity:.96,interactive:false,crossOrigin:true});
     ov.addTo(radarLayer);
     setText("radarStatus","Reflectivity mosaic "+(radarMosaic.status==="stale"?"RETAINED":"READY")+" • KCXX + KTYX");
     setText("legendTitle","REFLECTIVITY • dBZ");
@@ -385,6 +430,9 @@ async function refresh(){
 document.querySelectorAll(".display-btn").forEach(function(b){b.onclick=function(){setRadarMode(b.dataset.radarMode)}});
 document.querySelectorAll("[data-jump]").forEach(function(btn){btn.onclick=function(){var el=q(btn.dataset.jump);if(el)el.scrollIntoView({behavior:"smooth",block:"start"});document.querySelectorAll("[data-jump]").forEach(function(b){b.classList.toggle("active",b===btn)})}});
 q("refreshBtn").onclick=refresh;q("refreshBtn2").onclick=refresh;
+q("radarPlayBtn").onclick=playRadarAnimation;
+q("radarLiveBtn").onclick=function(){stopRadarAnimation();radarHistoryIndex=(radarHistory.frames||[]).length-1;updateRadarTimelineUI();renderRadarMosaic()};
+q("radarTimelineSlider").oninput=function(){setRadarHistoryIndex(this.value)};
 q("objectNumbersBtn").onclick=function(){objectNumbers=!objectNumbers;q("objectNumbersBtn").classList.toggle("active",objectNumbers);renderMap()};
 map.on("click",function(e){
   if(Date.now()-lastObjectClickAt<300)return;
@@ -406,4 +454,4 @@ map.on("click",function(e){
     selectObject(matches[0]);
   }
 });
-bindCursorReadout();refresh();refreshTimer=setInterval(refresh,60000);
+bindCursorReadout();loadRadarHistory();refresh();refreshTimer=setInterval(refresh,60000);
