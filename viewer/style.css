@@ -643,3 +643,21 @@ body.live-dashboard-page header{
 .radar-timeline-controls button:hover{background:#233944}
 .radar-timeline-controls input{width:100%}
 .radar-timeline-note{margin-top:4px;font:9px/1.2 monospace;color:#748b98}
+
+
+/* Observed vs. projected probability chart */
+.probability-evolution-box{padding:7px 8px 8px}
+.probability-chart-head{display:flex;justify-content:space-between;align-items:flex-end;gap:8px;margin-bottom:3px}
+.probability-chart-head strong{display:block;color:#dce9f0;font-size:9px;letter-spacing:.08em}
+.probability-chart-head span{display:block;color:#748b9a;font-size:8px;margin-top:2px}
+.probability-chart-state{color:#a8bdca!important;font:700 8px/1 monospace!important;letter-spacing:.05em!important;white-space:nowrap}
+.probability-legend{gap:10px;margin-top:4px}
+.probability-legend .chart-key{font-size:8px}
+.probability-legend .chart-key i{width:16px;height:3px;border-radius:0}
+.observed-key i{background:#eaf4f8;position:relative}
+.forecast-key i{background:repeating-linear-gradient(90deg,#6fb8e5 0 5px,transparent 5px 8px)}
+.now-key i{width:1px!important;height:10px!important;background:#fff;opacity:.8}
+.probability-chart-note{margin-top:5px;color:#718797;font-size:8px;line-height:1.3}
+.mini-chart .prob-observed{fill:none;stroke:#eaf4f8;stroke-width:2.6;stroke-linecap:round;stroke-linejoin:round}
+.mini-chart .prob-forecast{fill:none;stroke:#6fb8e5;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:5 5}
+.mini-chart .prob-now{stroke:#fff;stroke-width:1;stroke-dasharray:3 3;opacity:.72}
