@@ -674,3 +674,13 @@ body.live-dashboard-page header{
 .live-dashboard-main #environmentTable .env-risk-red{background:#5c201d !important;color:#ffd0ca !important;border-left:3px solid #ef5b52;}
 .live-dashboard-main #environmentTable .env-risk-na,.live-dashboard-main #environmentTable .env-risk-neutral{background:#1a2831 !important;color:#aebfc9 !important;border-left:3px solid #526772;}
 @media(max-width:900px){.live-dashboard-main #environmentTable .env-grid-row{grid-template-columns:minmax(125px,1.35fr) repeat(3,minmax(78px,.8fr)) !important}.live-dashboard-main #environmentTable .env-grid-row>div{padding:6px 5px !important;font-size:10px !important}}
+
+/* Keep cursor telemetry clear of the full-width radar timelapse bar and map legend. */
+.live-dashboard-main #cursorReadout{
+  left:auto !important;
+  right:295px !important;
+  bottom:12px !important;
+  z-index:920 !important;
+  white-space:nowrap;
+}
+@media(max-width:900px){.live-dashboard-main #cursorReadout{right:285px !important;}}
