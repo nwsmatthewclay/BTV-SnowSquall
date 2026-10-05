@@ -92,3 +92,23 @@ def test_trainer_accepts_explicit_supervised_provenance():
 
     assert "CASE_GOOD" in set(usable["case_id"].astype(str))
     assert usable["squall_onset_within_15m"].sum() == 1
+
+
+def test_case_heldout_folds_keep_positive_and_null_groups_separate():
+    import pandas as pd
+    from scripts.train_case_heldout_models import event_folds
+
+    groups = pd.Series([
+        "case:A", "case:A",
+        "case:B", "case:B",
+        "case:C", "case:C",
+        "null:N1", "null:N1",
+        "null:N2", "null:N2",
+        "null:N3", "null:N3",
+    ])
+    y = pd.Series([1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0])
+    folds = event_folds(groups, y, n_splits=3)
+    assert folds
+    flattened = [item for fold in folds for item in fold]
+    assert sorted(flattened) == sorted(groups.unique())
+    assert not set(groups[ y.eq(1) ]) & set(groups[ y.eq(0) ])
