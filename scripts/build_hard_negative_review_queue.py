@@ -50,24 +50,32 @@ def surface_summary(surface: pd.DataFrame) -> pd.DataFrame:
     d["visibility_m"] = numeric(d, "visibility_m")
     d["wind_gust_kt"] = numeric(d, "wind_gust_kt")
     wx = d.get("wxcodes", pd.Series("", index=d.index)).fillna("").astype(str).str.upper()
+    mixed = wx.str.contains(r"PL|IP|RASN|SNRA", regex=True)
+    freezing = wx.str.contains(r"FZRA|FZDZ", regex=True)
+    snow_any = wx.str.contains(r"SN|SG|SHSN|BLSN", regex=True)
+    pure_snow = snow_any & ~mixed & ~freezing
+    station = d.get("station", pd.Series("", index=d.index)).fillna("").astype(str).str.strip()
     return (
         pd.DataFrame({
             "null_id": d["null_id"],
             "surface_report_count": 1,
+            "surface_station": station,
             "surface_visibility_m": d["visibility_m"],
             "surface_gust_kt": d["wind_gust_kt"],
-            "surface_snow_report": wx.str.contains(r"SN|SG|SHSN|BLSN", regex=True),
-            "surface_mixed_report": wx.str.contains(r"PL|IP|RASN|SNRA", regex=True),
-            "surface_freezing_rain_report": wx.str.contains(r"FZRA|FZDZ", regex=True),
+            "surface_snow_report": pure_snow,
+            "surface_mixed_report": mixed,
+            "surface_freezing_rain_report": freezing,
         })
         .groupby("null_id", dropna=False)
         .agg(
             surface_report_count=("surface_report_count", "sum"),
+            surface_station_count=("surface_station", lambda s: s[s.ne("")].nunique()),
             surface_min_visibility_m=("surface_visibility_m", "min"),
-            surface_max_gust_kt=("surface_gust", "max"),
+            surface_max_gust_kt=("surface_gust_kt", "max"),
             surface_snow_reports=("surface_snow_report", "sum"),
             surface_mixed_reports=("surface_mixed_report", "sum"),
             surface_freezing_rain_reports=("surface_freezing_rain_report", "sum"),
+            surface_snow_station_count=("surface_station", lambda s: s[s.ne("")].nunique()),
         )
         .reset_index()
     )
@@ -166,6 +174,8 @@ def build(
                     "surface_snow_reports",
                     "surface_mixed_reports",
                     "surface_freezing_rain_reports",
+                    "surface_station_count",
+                    "surface_snow_station_count",
                 ]
             ]
             .drop_duplicates()
@@ -181,6 +191,14 @@ def build(
         ).max()) if surface_unique["surface_max_gust_kt"].notna().any() else float("nan")
         surface_report_count = int(pd.to_numeric(
             surface_unique["surface_report_count"], errors="coerce"
+        ).fillna(0).max())
+        surface_station_count = int(pd.to_numeric(
+            surface_unique.get("surface_station_count", pd.Series(0, index=surface_unique.index)),
+            errors="coerce"
+        ).fillna(0).max())
+        surface_snow_station_count = int(pd.to_numeric(
+            surface_unique.get("surface_snow_station_count", pd.Series(0, index=surface_unique.index)),
+            errors="coerce"
         ).fillna(0).max())
 
         if surface_snow > 0:
@@ -213,6 +231,8 @@ def build(
             "peak_radar_site": str(peak_row.get("radar_site")) if pd.notna(peak_row.get("radar_site")) else None,
             "environment_contract_fraction": float(g["environment_contract_ok"].mean()),
             "surface_report_count": surface_report_count,
+            "surface_station_count": surface_station_count,
+            "surface_snow_station_count": surface_snow_station_count,
             "surface_min_visibility_m": surface_vis if pd.notna(surface_vis) else None,
             "surface_max_gust_kt": surface_gust if pd.notna(surface_gust) else None,
             "surface_snow_reports": int(surface_snow),
