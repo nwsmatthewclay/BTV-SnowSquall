@@ -2,6 +2,13 @@ name: Snow Squall Operational Release Review
 
 on:
   workflow_dispatch:
+  workflow_run:
+    workflows:
+      - Snow Squall Research-Operational Candidate Gate
+      - Modern Independent Validation
+      - Snow Squall Archived Replay Smoke
+    types:
+      - completed
 
 permissions:
   actions: read
@@ -30,20 +37,18 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          candidate="$(gh run list --workflow "Snow Squall Research-Operational Candidate Gate" --branch snow-squall-model-foundation --status success --limit 1 --json databaseId,headSha,createdAt --jq '.[0]')"
-          modern="$(gh run list --workflow "Modern Independent Validation" --branch snow-squall-model-foundation --status success --limit 1 --json databaseId,headSha,createdAt --jq '.[0]')"
-          replay="$(gh run list --workflow "Snow Squall Archived Replay Smoke" --branch snow-squall-model-foundation --status success --limit 1 --json databaseId,headSha,createdAt --jq '.[0]')"
-          test "$candidate" != "null"
-          test "$modern" != "null"
-          test "$replay" != "null"
+          candidate="$(gh run list --workflow "Snow Squall Research-Operational Candidate Gate" --branch snow-squall-model-foundation --status success --limit 1 --json databaseId,headSha,createdAt --jq '.[0] // {}')"
+          modern="$(gh run list --workflow "Modern Independent Validation" --branch snow-squall-model-foundation --status success --limit 1 --json databaseId,headSha,createdAt --jq '.[0] // {}')"
+          replay="$(gh run list --workflow "Snow Squall Archived Replay Smoke" --branch snow-squall-model-foundation --status success --limit 1 --json databaseId,headSha,createdAt --jq '.[0] // {}')"
           printf "%s\n" "$candidate" > candidate_run.json
           printf "%s\n" "$modern" > modern_run.json
           printf "%s\n" "$replay" > replay_run.json
-          echo "candidate_run=$(jq -r .databaseId candidate_run.json)" >> "$GITHUB_OUTPUT"
-          echo "modern_run=$(jq -r .databaseId modern_run.json)" >> "$GITHUB_OUTPUT"
-          echo "replay_run=$(jq -r .databaseId replay_run.json)" >> "$GITHUB_OUTPUT"
+          echo "candidate_run=$(jq -r '.databaseId // empty' candidate_run.json)" >> "$GITHUB_OUTPUT"
+          echo "modern_run=$(jq -r '.databaseId // empty' modern_run.json)" >> "$GITHUB_OUTPUT"
+          echo "replay_run=$(jq -r '.databaseId // empty' replay_run.json)" >> "$GITHUB_OUTPUT"
 
       - name: Download research-operational candidate package
+        if: steps.resolve.outputs.candidate_run != ''
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -53,15 +58,17 @@ jobs:
             --repo "$GITHUB_REPOSITORY" \
             --name snow-squall-research-operational-candidate \
             --dir candidate_gate
-          test -n "$(find candidate_gate -name research_operational_candidate_status.json -type f -print -quit)"
 
       - name: Read candidate status
         id: status
         run: |
           set -euo pipefail
-          status_file="$(find candidate_gate -name research_operational_candidate_status.json -type f -print -quit)"
-          test -n "$status_file"
-          status="$(jq -r .status "$status_file")"
+          status_file="$(find candidate_gate -name research_operational_candidate_status.json -type f -print -quit 2>/dev/null || true)"
+          if [ -z "$status_file" ]; then
+            status="candidate_gate_not_available"
+          else
+            status="$(jq -r .status "$status_file")"
+          fi
           echo "status=$status" >> "$GITHUB_OUTPUT"
           echo "Candidate status: $status"
 
@@ -78,8 +85,8 @@ jobs:
           candidate = json.loads(Path(candidate_path).read_text())
           modern = json.loads(Path(modern_path).read_text())
           replay = json.loads(Path(replay_path).read_text())
-          status_file = next(Path(gate_root).rglob("research_operational_candidate_status.json"))
-          candidate_evidence = json.loads(status_file.read_text())
+          status_files = list(Path(gate_root).rglob("research_operational_candidate_status.json"))
+          candidate_evidence = json.loads(status_files[0].read_text()) if status_files else {}
 
           checks = {
               "candidate_status": candidate_status in {"research_operational_candidate", "limited_data_candidate"},
