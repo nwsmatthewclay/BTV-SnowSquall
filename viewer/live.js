@@ -16,6 +16,7 @@ var radarHistory={frames:[]},radarHistoryIndex=-1,radarAnimationTimer=null;
 var LIVE_BASE="https://raw.githubusercontent.com/nwsmatthewclay/BTV-SnowSquall/snow-squall-live-data/viewer/data/live/";
 var SHADOW_BASE="https://raw.githubusercontent.com/nwsmatthewclay/BTV-SnowSquall/snow-squall-shadow-data/viewer/data/shadow/";
 var SHADOW_MIN_COVERAGE=0.40;
+var MAX_LIVE_OBJECT_AGE_MIN=15;
 var DISPLAY_MIN_SCORE=35;
 
 function q(id){return document.getElementById(id)}
@@ -150,13 +151,14 @@ async function renderRadarMosaic(){
   if(!radarMosaic||!radarMosaic.bounds){
     if(radarMode==="reflectivity"){
       var histFrameForWms=radarHistoryFrame();
-      var wmsTime=histFrameForWms?histFrameForWms.timestamp:new Date().toISOString();
+      var useHistorical=radarHistoryIndex>=0 && radarHistoryIndex<(radarHistory.frames||[]).length-1;
+      var wmsTime=useHistorical&&histFrameForWms?histFrameForWms.timestamp:new Date().toISOString();
       var iem=L.tileLayer.wms("https://mesonet.agron.iastate.edu/cgi-bin/wms/nexrad/n0r-t.cgi",{
         layers:"nexrad-n0r-wmst",format:"image/png",transparent:true,version:"1.1.1",
         opacity:.72,time:wmsTime
       });
       iem.addTo(radarLayer);
-      setText("radarStatus",histFrameForWms?"IEM radar fallback • "+fmtTime(histFrameForWms.timestamp):"IEM live radar fallback • 5-minute NEXRAD mosaic");
+      setText("radarStatus",useHistorical&&histFrameForWms?"IEM radar fallback • "+fmtTime(histFrameForWms.timestamp):"IEM live radar fallback • current NEXRAD mosaic");
       setText("legendTitle","REFLECTIVITY • dBZ");
       setText("legendNote","External fallback: IEM NEXRAD mosaic. Local KCXX/KTYX products resume automatically when published.");
       return;
@@ -452,7 +454,7 @@ async function refresh(){
     datasets=Object.fromEntries(got.map(function(x){return [x.site,x]}));
     cursorGrid=await fetchOptional(LIVE_BASE+"radar_cursor.json?cb="+Date.now(),null);
     await loadRadarHistory();
-    var detectedObjects=got.flatMap(function(x){return (x.geo.features||[]).map(function(f){return Object.assign({},f.properties,{radar_site:x.site,radar_geometry:f.geometry})})});
+    var detectedObjects=got.flatMap(function(x){var scan=x.state?.last_scan_time_utc||x.geo?.metadata?.scan_time_utc; var fresh=ageMinutes(scan)<=MAX_LIVE_OBJECT_AGE_MIN; return fresh?(x.geo.features||[]).map(function(f){return Object.assign({},f.properties,{radar_site:x.site,radar_geometry:f.geometry})}):[]});
     allObjects=detectedObjects.filter(function(p){
       var score=Number(p.candidate_rank_score);
       var z=Number(p.max_reflectivity_dbz);
