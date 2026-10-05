@@ -300,6 +300,16 @@ jobs:
           print('Radar frames:', len(case['radar_frames']))
           PY
 
+      - name: Launch operational release review snapshot
+        if: success()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          gh workflow run "Snow Squall Operational Release Review" \
+            --repo "$GITHUB_REPOSITORY" \
+            --ref snow-squall-model-foundation
+          echo "Dispatched operational release review snapshot."
       - name: Upload replay viewer package
         uses: actions/upload-artifact@v4
         with:
