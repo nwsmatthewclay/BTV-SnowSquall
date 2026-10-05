@@ -5,7 +5,7 @@ on:
   workflow_run:
     workflows:
       - Snow Squall Research-Operational Candidate Gate
-      - Modern Independent Validation
+      - Snow Squall Modern Independent Validation
       - Snow Squall Archived Replay Smoke
     types:
       - completed
@@ -38,7 +38,7 @@ jobs:
         run: |
           set -euo pipefail
           candidate="$(gh run list --workflow "Snow Squall Research-Operational Candidate Gate" --branch snow-squall-model-foundation --status success --limit 1 --json databaseId,headSha,createdAt --jq '.[0] // {}')"
-          modern="$(gh run list --workflow "Modern Independent Validation" --branch snow-squall-model-foundation --status success --limit 1 --json databaseId,headSha,createdAt --jq '.[0] // {}')"
+          modern="$(gh run list --workflow "Snow Squall Modern Independent Validation" --branch snow-squall-model-foundation --status success --limit 1 --json databaseId,headSha,createdAt --jq '.[0] // {}')"
           replay="$(gh run list --workflow "Snow Squall Archived Replay Smoke" --branch snow-squall-model-foundation --status success --limit 1 --json databaseId,headSha,createdAt --jq '.[0] // {}')"
           printf "%s\n" "$candidate" > candidate_run.json
           printf "%s\n" "$modern" > modern_run.json
@@ -91,13 +91,13 @@ jobs:
           checks = {
               "candidate_status": candidate_status in {"research_operational_candidate", "limited_data_candidate"},
               "strong_candidate_status": candidate_status == "research_operational_candidate",
-              "modern_validation_success": bool(modern.get("databaseId")),
+              "scored_modern_validation_success": bool(modern.get("databaseId")),
               "archived_replay_success": bool(replay.get("databaseId")),
               "operational_probability_enabled": False,
               "human_review_required": True,
           }
 
-          if checks["strong_candidate_status"] and checks["modern_validation_success"] and checks["archived_replay_success"]:
+          if checks[checks["strong_candidate_status"] and checks["scored_modern_validation_success"] and checks["archived_replay_success"]:
               review_status = "ready_for_human_operational_review"
           elif checks["candidate_status"]:
               review_status = "research_candidate_not_yet_operational_ready"
