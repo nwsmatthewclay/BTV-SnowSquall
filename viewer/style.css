@@ -330,8 +330,18 @@ body.live-dashboard-page header{
 .comp-dot{width:6px;height:6px;border-radius:50%;display:inline-block;margin-right:4px}
 .chart-box{margin-top:8px;background:#0b151d;border:1px solid #223743;border-radius:6px;padding:6px}
 .mini-chart{width:100%;height:142px;display:block}
+ .track-probability-box{margin-top:6px}
+ .track-probability-chart{height:190px}
+ .track-evolution-summary{margin-top:5px;padding:6px 8px;border-left:3px solid #4fb3ee;background:#111f29;color:#bdced8;font-size:9px;line-height:1.3}
+ .env-outlook-label{font-size:8px;color:#7f96a7;letter-spacing:.08em;font-weight:800;margin-top:9px;margin-bottom:4px}
+ .environment-outlook{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:5px}
+ .env-outlook-tile{background:#111e27;border:1px solid #273e4b;border-radius:5px;padding:6px 7px;min-width:0}
+ .env-outlook-tile span{display:block;color:#8198a8;font-size:7px;text-transform:uppercase;letter-spacing:.06em}
+ .env-outlook-tile b{display:block;color:#edf5f8;font-size:12px;margin-top:2px}
+ .env-outlook-tile i{display:block;color:#8fa6b4;font-size:8px;font-style:normal;margin-top:2px}
 .chart-axis{stroke:#344b5a;stroke-width:1}.chart-gridline{stroke:#20323e;stroke-width:1;stroke-dasharray:2 3}.chart-text{fill:#768c9e;font-size:8px}.chart-line-15{stroke:#ff5648}.chart-line-30{stroke:#1f90e9}.chart-line-45{stroke:#f0c54c}.chart-line-60{stroke:#62ce73}.chart-path{fill:none;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
-.chart-legend-row{display:flex;gap:9px;flex-wrap:wrap;margin-top:3px;font-size:8px;color:#93a7b5}.chart-key{display:inline-flex;align-items:center;gap:4px}.chart-key i{width:14px;height:3px;border-radius:2px;display:inline-block}
+.prob-point{fill:#0b151d;stroke-width:1.4;cursor:default}.chart-key-muted{color:#6f8493}
+ .chart-legend-row{display:flex;gap:9px;flex-wrap:wrap;margin-top:3px;font-size:8px;color:#93a7b5}.chart-key{display:inline-flex;align-items:center;gap:4px}.chart-key i{width:14px;height:3px;border-radius:2px;display:inline-block}
 .environment-table{width:100%;border-collapse:separate;border-spacing:2px;font-size:9px}
 .environment-table th{color:#afc0ca;background:#13212b;padding:6px 5px;font-weight:700}
 .environment-table th:not(:first-child){text-align:center}
