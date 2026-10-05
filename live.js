@@ -296,7 +296,7 @@ function renderEnvironment(){
   var html="<div class='environment-row env-head' role='row'><div class='env-name' role='columnheader'>Parameter</div><div role='columnheader'>−30 min</div><div role='columnheader'>Current</div><div role='columnheader'>Expected +30 min</div></div>";
   html+=fields.map(function(x){
     var pv=prev?envField(prev,x[1]):null,cv=envField(current,x[1]),nv=forecastFields[x[1]];
-    return "<div class='environment-row' role='row'><div class='env-name' role='rowheader'>"+x[0]+"</div><div class='ctx-prev' role='cell'>"+format(pv,x[1])+"</div><div class='ctx-current' role='cell'>"+format(cv,x[1])+"</div><div class='ctx-next "+(forecastReady?"":"ctx-na")+"" role='cell'>"+format(nv,x[1])+"</div></div>";
+    return "<div class='environment-row' role='row'><div class='env-name' role='rowheader'>"+x[0]+"</div><div class='ctx-prev' role='cell'>"+format(pv,x[1])+"</div><div class='ctx-current' role='cell'>"+format(cv,x[1])+"</div><div class='ctx-next "+(forecastReady?"":"ctx-na")+"' role='cell'>"+format(nv,x[1])+"</div></div>";
   }).join("");
   q("environmentTable").innerHTML=html;
   var e=p.environment||{},forecastLabel=forecast.valid_time_utc||forecast.forecast_valid_time_utc,derivedCount=(e.metpy_derived_fields||[]).length;
