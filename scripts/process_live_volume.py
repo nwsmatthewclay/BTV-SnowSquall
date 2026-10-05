@@ -27,6 +27,7 @@ from processing.radar_sites import apply_radar_origin, radar_origin_for_site
 from scripts.live_model_features import build_live_feature_frame
 from scripts.model_runtime import ModelRuntime
 from snow_squall.environment_contract import assess_environment
+from snow_squall.environment_risk import environment_risk_features
 
 
 def object_geometry(mask, lat, lon, spacing_km=1.0):
@@ -645,6 +646,7 @@ def process_volume(
             "environment_forecast_30min_run_time_utc": environment_forecast_30.get("forecast_run_time_utc"),
             "environment_forecast_30min_lead_hours": environment_forecast_30.get("forecast_lead_hours"),
             **environment_fields,
+            **environment_risk_features(environment_fields),
             **{f"expected_30min_{key}": value for key, value in environment_forecast_30_fields.items()},
             "data_quality": "degraded" if obj.get("touches_grid_edge", False) else "good",
             "model_version": "live-object-foundation-v2",
