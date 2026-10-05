@@ -3,144 +3,129 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>BTV Snow Squall • Live Object Workbench</title>
+<title>BTV Snow Squall • Live Object Monitor</title>
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
-<link rel="stylesheet" href="style.css?v=20261001-01">
-<style>
-.live-main{display:grid;grid-template-rows:minmax(0,1fr) minmax(240px,27vh);height:calc(100vh - 68px);min-height:0}
-.live-top{display:grid;grid-template-columns:minmax(0,1fr) 330px;min-height:0}
-#liveMap{min-width:0;min-height:0;height:100%;background:#14202a}
-.live-sidebar{padding:12px;background:var(--panel);border-left:1px solid var(--line);overflow:auto;min-height:0}
-.live-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:9px}
-.live-card{background:#121e29;border:1px solid #2b4051;border-radius:7px;padding:9px}
-.live-card h3{margin:0 0 6px;font-size:13px}
-.live-stat{display:flex;justify-content:space-between;gap:12px;padding:4px 0;color:#b9c7d4}
-.live-stat b{color:#fff;text-align:right}
-.live-status{padding:9px 10px;background:#141f28;border-left:3px solid var(--green);border-radius:5px;margin-top:8px}
-.live-status.degraded{border-left-color:var(--amber)}
-.live-status strong{display:block;color:#fff}
-.live-object-list{display:grid;gap:7px;margin-top:8px}
-.live-object{background:#16212b;border:1px solid #243847;border-radius:7px;padding:8px;cursor:pointer}
-.live-object:hover{border-color:#4f7591}
-.live-object.selected{border-color:#fff;box-shadow:inset 3px 0 0 var(--accent)}
-.live-object .title{font-weight:750;color:#9dd4ff}
-.live-object .sub{font-size:11px;color:var(--muted);margin-top:2px}
-.live-object .chips{display:flex;gap:5px;flex-wrap:wrap;margin-top:6px}
-.chip{padding:3px 6px;border-radius:4px;background:#243746;color:#c8d7e5;font-size:10px}
-.nav-link{color:#9dd4ff;text-decoration:none;border:1px solid #405468;border-radius:6px;padding:6px 9px}
-.detail-drawer{background:var(--panel);border-top:1px solid var(--line);display:grid;grid-template-columns:330px minmax(0,1fr);min-height:0}
-.detail-summary{padding:11px 13px;border-right:1px solid var(--line);overflow:auto}
-.detail-history{padding:11px 13px;min-width:0;overflow:hidden}
-.detail-title{font-size:18px;font-weight:800;color:#dcecff}
-.detail-sub{font-size:11px;color:var(--muted);margin-top:2px}
-.detail-placeholder{height:100%;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:12px}
-.detail-metrics{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:9px}
-.detail-model{margin-top:9px}
-.detail-model .live-status{margin-top:0}
-.history-scroll{max-height:225px;overflow:auto}
-.history-table{border-collapse:collapse;width:100%;min-width:760px;font-size:10px}
-.history-table th,.history-table td{padding:6px 7px;border-bottom:1px solid #263847;text-align:left;white-space:nowrap}
-.history-table th{position:sticky;top:0;background:#162431;color:#8ea1b4;font-size:9px;text-transform:uppercase;letter-spacing:.04em;z-index:1}
-.history-table tbody tr{cursor:pointer}
-.history-table tbody tr:hover{background:#192a38}
-.history-table tbody tr.current{background:#21394a;box-shadow:inset 3px 0 0 var(--accent)}
-.history-table td:nth-child(2){font-weight:700;color:#fff}
-.history-empty{padding:9px 10px;color:var(--muted);font-size:10px}
-.live-env-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:8px}
-.live-env-grid .env-item{background:#16212b;padding:7px 8px;border-radius:5px;border:1px solid #223342}
-.live-env-grid .env-item span{display:block;color:var(--muted);font-size:10px}
-.live-env-grid .env-item b{display:block;font-size:12px;margin-top:2px}
-.shadow-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-top:8px}.shadow-cell{background:#172633;border:1px solid #2a4558;border-radius:5px;padding:7px 5px;text-align:center}.shadow-cell span{display:block;color:#8ea1b4;font-size:9px}.shadow-cell b{display:block;color:#fff;font-size:14px;margin-top:2px}.shadow-note{margin-top:7px;color:#8ea1b4;font-size:10px;line-height:1.35}
-@media(max-width:900px){
-  .live-main{grid-template-rows:minmax(0,1fr) 380px}
-  .live-top{grid-template-columns:1fr}
-  .live-sidebar{position:absolute;right:0;top:68px;bottom:380px;width:min(360px,92vw);z-index:1000;box-shadow:-8px 0 25px rgba(0,0,0,.35)}
-  .detail-drawer{grid-template-columns:1fr}
-  .detail-history{border-top:1px solid var(--line)}
-}
-</style>
+<link rel="stylesheet" href="style.css?v=20261005-object-monitor">
 </head>
-<body>
+<body class="live-dashboard-page">
 <header>
-  <div>
-    <div class="eyebrow">BTV SNOW SQUALL PROJECT</div>
-    <h1>Live Snow Squall Object Workbench</h1>
-    <div id="subtitle">Loading real-time KCXX + KTYX radar objects…</div>
+  <div class="dashboard-header-left">
+    <div class="dashboard-title-row"><span class="header-dot"></span><h1>Snow Squall Object Monitor <span style="font-weight:500;color:#8da1b1">(Live)</span></h1></div>
+    <div class="dashboard-subtitle" id="subtitle">KCXX + KTYX • real-time radar object analysis • research candidate scoring</div>
   </div>
-  <div class="header-actions">
-    <span class="badge research">LIVE • RESEARCH</span><span class="live-feed-badge" id="feedBadge">INITIALIZING</span>
-    <a class="nav-link" href="index.html">Historical Explorer</a><a class="nav-link" href="training.html">Training Replay</a>
-    <button id="refreshBtn">Refresh</button>
+  <div class="dashboard-header-center">
+    <div class="dashboard-header-context"><b id="liveSite">KCXX + KTYX • BTV CWA</b><span id="liveTime">Waiting for live feed…</span></div>
+  </div>
+  <div class="dashboard-nav">
+    <button class="active" data-jump="objectSection">Objects</button>
+    <button data-jump="historySection">Tracks</button>
+    <button data-jump="motionSection">Motion</button>
+    <button data-jump="environmentSection">Environment</button>
+    <button data-jump="evidenceSection">Reports</button>
+    <a href="index.html">Archive</a>
+    <button id="refreshBtn">↻</button>
+    <span class="dashboard-pill" id="liveBadge"><span style="width:6px;height:6px;border-radius:50%;background:#56d07b"></span>LIVE</span>
   </div>
 </header>
-<main class="live-main">
-  <div class="live-top">
-    <section id="liveMap" aria-label="Live radar object map">
-      <div class="map-hud">
-        <div class="map-hud-title"><span>RADAR OBJECT ANALYSIS</span><b id="hudScan">—</b></div>
-        <div class="map-hud-sub"><span id="hudMode">CLEAN DISPLAY</span><span>•</span><span id="hudSources">KCXX + KTYX</span><span>•</span><span id="hudObjects">0 objects</span></div>
-      </div>
-      <div class="map-display-controls" aria-label="Radar display controls">
-        <span class="control-label">DISPLAY</span>
-        <button class="display-btn active" data-radar-mode="clean">Clean</button>
-        <button class="display-btn" data-radar-mode="raw">Raw</button>
-        <button class="display-btn" data-radar-mode="qcd">NOAA QC</button>
-      </div>
-      <div class="map-legend">
-        <div class="legend-caption">REFLECTIVITY • dBZ</div>
-        <div class="legend-bar">
-          <span>12</span><i class="l12"></i><i class="l18"></i><i class="l24"></i><i class="l30"></i><i class="l35"></i><i class="l40"></i><i class="l45"></i><i class="l55"></i><i class="l65"></i><span>75+</span>
-        </div>
-        <div class="legend-note">Clean mode suppresses weak speckle and conservative low-CC non-meteorological echoes for display only.</div>
-      </div>
-      <div class="map-empty-state" id="mapEmptyState"><strong>No significant echoes</strong><span>Radar feed is healthy. Weak returns below the display threshold are intentionally muted.</span></div>
-    </section>
-    <aside class="live-sidebar">
-      <div class="live-status" id="overallStatus">
-        <strong id="overallTitle">Loading live feeds…</strong>
-        <span id="overallText">Checking KCXX and KTYX.</span>
-      </div>
-      <div class="live-grid" id="radarCards"></div>
-      <div class="live-card live-mosaic-card" id="mosaicCard">
-        <h3>Radar display</h3>
-        <div class="live-stat"><span>Status</span><b id="mosaicStatus">Waiting for mosaic…</b></div>
-        <div class="live-stat"><span>Sources</span><b id="mosaicSources">—</b></div>
-        <div class="live-stat"><span>Radar time</span><b id="mosaicTime">—</b></div>
-        <div class="mosaic-note">Clean mode is a human-display product. Raw Level-II remains the scientific source for object detection and model features.</div>
-      </div>
 
-      <div class="section-head"><h2>Current objects</h2><span id="objectCount">0</span></div><div class="live-track-toggle"><label><input type="checkbox" id="showAllLiveTracks"> Show all tracks (research/QC)</label><span>Default: active-object tails only</span></div>
-      <div class="live-object-list" id="objectList"></div>
-
-      <div class="section-head compact"><h3>Model status</h3></div>
-      <div class="live-status degraded">
-        <strong>Operational probability: gated</strong>
-        <span>Operational probability is gated. Probability scoring disabled for the operational feed; candidate scoring is displayed only in the isolated research shadow feed while the model remains under validation.</span>
-      </div>
-      <div class="live-card" id="shadowCard">
-        <h3>Operational-candidate shadow</h3>
-        <div id="shadowCardBody">Waiting for the expanded candidate model bundle.</div>
-        <div class="shadow-note">Research-only candidate scoring. This feed is isolated from operational products and does not control warnings. RAP freshness is shown separately.</div>
-      </div>
-    </aside>
-  </div>
-
-  <section class="detail-drawer" aria-label="Selected object details">
-    <div class="detail-summary" id="selectedSummary">
-      <div class="detail-placeholder">Select a live storm object to load its evolving diagnostics and live research shadow score below the map.</div>
+<main class="dashboard-main live-dashboard-main">
+  <section id="liveMap" class="dashboard-map" aria-label="Live snow squall radar object map">
+    <div class="map-hud-main">
+      <b id="mapRadarLabel">KCXX + KTYX • LIVE</b>
+      <strong id="mapScanLabel">Loading radar…</strong>
+      <span id="radarStatus">Checking current mosaic and object feeds</span>
     </div>
-    <div class="detail-history">
-      <div class="section-head compact"><h3>Scan-to-scan object evolution</h3><span id="selectionState">None</span><span id="liveTrackCount">—</span></div>
-      <div id="liveHistory" class="track-history">
-        <div class="history-empty">Select a current object to see its scan-by-scan history.</div>
-      </div>
-      <div id="liveTrend" class="track-trend">
-        <div class="history-empty">Select a live object to see intensity, size, motion, and probability evolution.</div>
-      </div>
+    <div class="map-controls">
+      <span class="label">DISPLAY</span>
+      <button class="active display-btn" data-radar-mode="clean">Clean</button>
+      <button class="display-btn" data-radar-mode="raw">Raw</button>
+      <button class="display-btn" data-radar-mode="qcd">NOAA QC</button>
+      <button id="objectNumbersBtn" class="active">Object IDs</button>
+    </div>
+    <div class="map-legend">
+      <div class="map-legend-title">REFLECTIVITY • dBZ</div>
+      <div class="map-legend-bar"><span>0</span><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><span>70+</span></div>
+      <div class="map-legend-note">Local KCXX/KTYX mosaic when available; NOAA QC fallback remains available. White outline marks the selected object.</div>
     </div>
   </section>
+
+  <aside class="dashboard-panel" id="panel">
+    <div class="section-block">
+      <div class="live-refresh-row"><div><span class="case-select-label">LIVE FEED</span><div id="feedSummary" style="font-size:11px;color:#dbe8ef;margin-top:3px">Initializing…</div></div><button id="refreshBtn2">Refresh</button></div>
+    </div>
+
+    <div class="section-block" id="objectSection">
+      <div class="section-header"><h2>OBJECT INVENTORY</h2><span id="objectCount">0 active</span></div>
+      <div class="object-picker" id="objectPicker"><button class="object-pick">Loading live objects…</button></div>
+    </div>
+
+    <div class="section-block object-card">
+      <div class="object-title-row">
+        <div class="object-accent" id="objectAccent"></div>
+        <div>
+          <div class="object-title" id="objectTitle">OBJECT —</div>
+          <div class="object-subtitle" id="objectSubtitle">Select a live object on the map or from the inventory.</div>
+          <div class="object-time" id="objectTime">—</div>
+        </div>
+        <div class="object-badge" id="objectBadge">NO SELECTION</div>
+      </div>
+      <div class="object-facts">
+        <div class="object-fact"><span>Radar / Track</span><b id="objectTrack">—</b></div>
+        <div class="object-fact"><span>Lat/Lon</span><b id="objectLatLon">—</b></div>
+        <div class="object-fact"><span>Motion</span><b id="objectMotion">—</b></div>
+        <div class="object-fact"><span>Distance to BTV</span><b id="objectDistance">—</b></div>
+        <div class="object-fact"><span>Track age</span><b id="objectAge">—</b></div>
+        <div class="object-fact"><span>Duration</span><b id="objectDuration">—</b></div>
+        <div class="object-fact"><span>Track quality</span><b id="objectQuality">—</b></div>
+        <div class="object-fact"><span>Data quality</span><b id="objectDataQuality">—</b></div>
+      </div>
+    </div>
+
+    <div class="section-block" id="probabilitySection">
+      <div class="section-header"><h2>SNOW SQUALL PROBABILITY (15 MIN)</h2><span class="dashboard-pill gated" id="probBadge">GATED</span></div>
+      <div class="prob-wrap">
+        <div class="prob-main">
+          <div class="prob-label">Live research candidate</div>
+          <div class="prob-value na" id="probabilityValue">—</div>
+          <div class="prob-delta flat" id="probabilityDelta">Awaiting score</div>
+          <div class="prob-status" id="probabilityNote">Candidate probability is shown only from the isolated research shadow feed. The operational object feed itself stays probability-free.</div>
+        </div>
+        <div class="prob-components" id="probComponents"></div>
+      </div>
+      <div class="chart-box"><svg class="mini-chart" id="probChart" viewBox="0 0 420 142" role="img" aria-label="Live research probability evolution"></svg><div class="chart-legend-row"><span class="chart-key"><i style="background:#ff5648"></i>15m</span><span class="chart-key"><i style="background:#1f90e9"></i>30m</span><span class="chart-key"><i style="background:#f0c54c"></i>45m</span><span class="chart-key"><i style="background:#62ce73"></i>60m</span></div></div>
+    </div>
+
+    <div class="section-block" id="motionSection">
+      <div class="section-header"><h2>KEY TRENDS</h2><span>Latest retained object history</span></div>
+      <div class="trend-grid" id="keyTrends"></div>
+    </div>
+
+    <div class="section-block" id="environmentSection">
+      <div class="section-header"><h2>ENVIRONMENT AT OBJECT</h2><span id="envSource">—</span></div>
+      <table class="environment-table" id="environmentTable"></table>
+    </div>
+
+    <div class="section-block" id="evidenceSection">
+      <div class="section-header"><h2>EVIDENCE &amp; CONTEXT</h2><span>Live sensor support</span></div>
+      <div class="evidence-grid" id="evidenceGrid"></div>
+    </div>
+
+    <div class="section-block" id="historySection">
+      <div class="section-header"><h2>RECENT HISTORY</h2><span id="historyCount">—</span></div>
+      <div class="history-chart-wrap"><svg class="history-chart" id="historyChart" viewBox="0 0 520 145" role="img" aria-label="Selected live object recent history"></svg></div>
+      <div class="history-table-wrap"><table class="history-table" id="historyTable"></table></div>
+    </div>
+
+    <div class="section-block">
+      <div class="section-header"><h2>MODEL / LIVE STATUS</h2><span id="modelStatus">—</span></div>
+      <div id="liveGate" class="live-model-gate"><strong>Probability gated.</strong><span id="liveGateText">Waiting for current feature coverage.</span></div>
+      <div class="status-card" id="modelStatusCard" style="margin-top:6px"></div>
+    </div>
+  </aside>
 </main>
+
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<script src="live.js?v=20261002-02"></script>
+<script src="live.js?v=20261005-object-monitor"></script>
 </body>
 </html>
