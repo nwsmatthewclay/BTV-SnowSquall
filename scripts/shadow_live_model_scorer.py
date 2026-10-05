@@ -15,6 +15,7 @@ from scripts.probability_postprocess import monotone_cumulative_probabilities
 HORIZONS = (15, 30, 45, 60)
 SITES = ("KCXX", "KTYX")
 MIN_FEATURE_COVERAGE = 0.80
+LIMITED_DATA_MIN_FEATURE_COVERAGE = 0.40
 MAX_ENVIRONMENT_AGE_MINUTES = 180.0
 ENVIRONMENT_PREDICTORS = {
     "cape_jkg", "cin_jkg", "snsq", "mean_rh_0_2km_pct", "thetae_delta_0_2km_k",
@@ -77,6 +78,8 @@ def score_site(site: str, live_root: Path, model_root: Path) -> tuple[dict, list
             "model_present": runtime.model is not None,
             "model_version": runtime.metadata.get("model_version"),
             "operational_release_status": runtime.metadata.get("operational_release_status"),
+            "training_contract_status": runtime.metadata.get("training_contract_status"),
+            "candidate_mode": runtime.metadata.get("candidate_mode"),
             "predictor_count": len(runtime.feature_columns),
             "model_family": runtime.metadata.get("estimator_family") or runtime.metadata.get("model_version"),
             "selected_artifact": directory.name if directory is not None else None,
@@ -159,6 +162,18 @@ def score_site(site: str, live_root: Path, model_root: Path) -> tuple[dict, list
             runtime = runtimes[horizon]
             coverage = feature_coverage(frame.tail(1), runtime.feature_columns)
             record["feature_coverage"][str(horizon)] = coverage
+            limited_candidate = (
+                str(runtime.metadata.get("training_contract_status") or "").strip()
+                == "limited_data_bootstrap"
+                or str(runtime.metadata.get("candidate_mode") or "").startswith("bootstrap")
+            )
+            coverage_floor = (
+                LIMITED_DATA_MIN_FEATURE_COVERAGE if limited_candidate else MIN_FEATURE_COVERAGE
+            )
+            record.setdefault("coverage_policy", {})[str(horizon)] = {
+                "minimum_fraction": coverage_floor,
+                "mode": "limited_data_bootstrap" if limited_candidate else "full_candidate",
+            }
             environment_required = bool(set(runtime.feature_columns) & ENVIRONMENT_PREDICTORS)
             record.setdefault("environment_requirement", {})[str(horizon)] = (
                 "required" if environment_required else "not_used_by_model"
@@ -168,7 +183,7 @@ def score_site(site: str, live_root: Path, model_root: Path) -> tuple[dict, list
                 if c in frame.columns and frame.tail(1)[c].notna().any()
             ]
             if (
-                coverage["fraction"] < MIN_FEATURE_COVERAGE
+                coverage["fraction"] < coverage_floor
                 or len(available_instantaneous) < 6
             ):
                 reason = (
