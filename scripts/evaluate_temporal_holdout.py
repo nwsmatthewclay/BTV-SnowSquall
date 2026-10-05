@@ -55,7 +55,9 @@ def filter_evaluation_population(df: pd.DataFrame, reviewed_negative_ids: set[st
     if {"scan_time_utc", "case_event_start_utc"}.issubset(d.columns):
         scan = pd.to_datetime(d["scan_time_utc"], utc=True, errors="coerce")
         onset = pd.to_datetime(d["case_event_start_utc"], utc=True, errors="coerce")
-        pre_onset &= ~positive_population | onset.isna() | (scan < onset)
+        pre_onset &= (
+            ~positive_population | onset.isna() | (scan < onset)
+        )
 
     positive_rows = (
         positive_population & supervised & pre_onset
