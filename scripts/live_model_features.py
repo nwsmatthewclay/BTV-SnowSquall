@@ -17,6 +17,7 @@ import pandas as pd
 
 from snow_squall.evolution import add_environment_evolution_features, add_motion_evolution_features
 from snow_squall.environment_contract import flatten_environment
+from snow_squall.environment_risk import environment_risk_features
 
 
 LIVE_TO_MODEL = {
@@ -203,6 +204,10 @@ def build_live_feature_row(
     ):
         if key in current:
             row[key] = _number(current.get(key))
+
+    # Literature-informed snow-squall environmental ingredients are exposed
+    # as model features. They are diagnostics, not hand-built probabilities.
+    row.update(environment_risk_features(current))
 
     # Preserve explicit +30-minute RAP forecast predictors alongside the
     # current-environment predictors. Existing trained bundles keep their
