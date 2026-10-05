@@ -15,7 +15,7 @@ on:
 
 permissions:
   actions: read
-  contents: write
+  contents: read
 
 concurrency:
   group: snow-squall-modern-validation
@@ -95,6 +95,22 @@ jobs:
             --output data/derived/modern_validation_environment.csv \
             --rap-dir data/raw/RAP_modern_validation \
             --ruc-dir data/raw/RUC_modern_validation
+
+      - name: Audit validation environment attachment
+        run: |
+          set -euo pipefail
+          python scripts/audit_environment_attachment.py             data/derived/modern_validation_environment.csv             --report data/derived/modern_validation_environment_audit.json             --max-age-minutes 180
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          report=json.loads(Path("data/derived/modern_validation_environment_audit.json").read_text())
+          print(json.dumps(report, indent=2))
+          if report.get("attachment_fraction", 0.0) < 0.80:
+              raise SystemExit(
+                  f"Modern validation environment attachment is only "
+                  f"{report.get('attachment_fraction', 0.0):.1%}"
+              )
+          PY
 
       - name: Build leakage-safe validation features
         run: |
