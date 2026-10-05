@@ -194,8 +194,7 @@ jobs:
           }
           JSON
 
-          printf '%s
-' '{"status":"bootstrap_legacy_feature_contract"}'             > data/derived/snow_squall_national_pretraining_feature_summary_refresh.json
+          printf '%s\\n' '{"status":"bootstrap_legacy_feature_contract"}'             > data/derived/snow_squall_national_pretraining_feature_summary_refresh.json
 
       - name: Stage optional national pretraining models
         if: steps.contract.outcome == 'success'
