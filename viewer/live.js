@@ -148,6 +148,19 @@ async function renderRadarMosaic(){
     radarMosaic=await response.json();
   }catch(_){radarMosaic=null}
   if(!radarMosaic||!radarMosaic.bounds){
+    if(radarMode==="reflectivity"){
+      var histFrameForWms=radarHistoryFrame();
+      var wmsTime=histFrameForWms?histFrameForWms.timestamp:new Date().toISOString();
+      var iem=L.tileLayer.wms("https://mesonet.agron.iastate.edu/cgi-bin/wms/nexrad/n0r-t.cgi",{
+        layers:"nexrad-n0r-wmst",format:"image/png",transparent:true,version:"1.1.1",
+        opacity:.72,time:wmsTime
+      });
+      iem.addTo(radarLayer);
+      setText("radarStatus",histFrameForWms?"IEM radar fallback • "+fmtTime(histFrameForWms.timestamp):"IEM live radar fallback • 5-minute NEXRAD mosaic");
+      setText("legendTitle","REFLECTIVITY • dBZ");
+      setText("legendNote","External fallback: IEM NEXRAD mosaic. Local KCXX/KTYX products resume automatically when published.");
+      return;
+    }
     var histFrame=radarHistoryFrame();
     if(histFrame&&radarMode==="reflectivity"){
       var histBounds=histFrame.bounds||[[41.90,-76.78],[46.40,-70.52]];
