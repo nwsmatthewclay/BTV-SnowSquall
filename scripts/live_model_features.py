@@ -204,6 +204,12 @@ def build_live_feature_row(
         if key in current:
             row[key] = _number(current.get(key))
 
+    # Preserve explicit +30-minute RAP forecast predictors alongside the
+    # current-environment predictors. Existing trained bundles keep their
+    # original analysis-time semantics until retrained with these fields.
+    for key, value in current.items():
+        if str(key).startswith("expected_30min_"):
+            row[key] = _number(value)
     # Preserve detector qualitative diagnostics separately from numeric
     # model fields. They are useful to explain candidate generation but are not
     # predictors.
