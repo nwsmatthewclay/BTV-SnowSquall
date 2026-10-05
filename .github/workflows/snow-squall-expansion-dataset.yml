@@ -391,48 +391,82 @@ jobs:
 
       - name: Persist successful historical acquisition state
         if: success()
+        env:
+          GH_TOKEN: \${{ secrets.GITHUB_TOKEN }}
+          STATE_BRANCH: snow-squall-model-foundation
         run: |
           set -euo pipefail
-          python - <<'PY'
-          import json
-          from datetime import datetime, timezone
-          from pathlib import Path
-          import pandas as pd
 
-          state_path = Path(".github/historical-downloader-state.json")
-          selected_path = Path("data/manifests/snow_squall_expansion/snow_squall_expansion_cases.csv")
-          selected = pd.read_csv(selected_path)
-          selected_ids = sorted({
-              str(x) for x in selected.get("candidate_id", pd.Series(dtype="string")).dropna().astype(str)
+          selected_path="data/manifests/snow_squall_expansion/snow_squall_expansion_cases.csv"
+          local_ids="$(mktemp)"
+          merged_state="$(mktemp)"
+
+          python - "$selected_path" > "$local_ids" <<'PY'
+          import sys
+          import pandas as pd
+          selected = pd.read_csv(sys.argv[1])
+          ids = sorted({
+              str(x).strip()
+              for x in selected.get("candidate_id", pd.Series(dtype="string")).dropna().astype(str)
               if str(x).strip()
           })
+          for candidate_id in ids:
+              print(candidate_id)
+          print(f"Selected candidate IDs: {len(ids)}", file=sys.stderr)
+          PY
 
-          state = json.loads(state_path.read_text(encoding="utf-8")) if state_path.exists() else {}
-          prior = set(str(x) for x in state.get("processed_candidate_ids", []) if str(x).strip())
-          new_ids = sorted(set(selected_ids) - prior)
-          prior.update(selected_ids)
+          for attempt in 1 2 3 4 5; do
+            echo "Persisting historical acquisition state (attempt $attempt/5)."
+
+            remote="$(gh api \
+              "/repos/$GITHUB_REPOSITORY/contents/.github/historical-downloader-state.json?ref=$STATE_BRANCH")"
+            remote_sha="$(printf '%s' "$remote" | jq -r '.sha')"
+            remote_content="$(printf '%s' "$remote" | jq -r '.content' | tr -d '\n' | base64 --decode)"
+
+            python - "$remote_content" "$local_ids" "$merged_state" "\${{ github.run_id }}" <<'PY'
+          import json
+          import sys
+          from datetime import datetime, timezone
+          from pathlib import Path
+
+          remote_text, ids_path, output_path, run_id = sys.argv[1:]
+          state = json.loads(remote_text) if remote_text.strip() else {}
+          prior = {str(x).strip() for x in state.get("processed_candidate_ids", []) if str(x).strip()}
+          selected = {line.strip() for line in Path(ids_path).read_text(encoding="utf-8").splitlines() if line.strip()}
+          prior.update(selected)
           state.update({
               "version": 2,
+              "source": state.get("source", "historical_expansion"),
               "processed_candidate_ids": sorted(prior),
-              "last_successful_radar_qc_run_id": int("${{ github.run_id }}"),
+              "last_successful_radar_qc_run_id": int(run_id),
               "last_successful_radar_qc_utc": datetime.now(timezone.utc).isoformat(),
           })
-          state_path.write_text(json.dumps(state, indent=2) + "\n", encoding="utf-8")
-
-          print(f"Selected candidate IDs: {len(selected_ids)}")
-          print(f"Newly recorded candidate IDs: {len(new_ids)}")
+          Path(output_path).write_text(json.dumps(state, indent=2) + "\n", encoding="utf-8")
           print(f"Total processed candidate IDs: {len(prior)}")
           PY
 
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add .github/historical-downloader-state.json
-          if git diff --cached --quiet; then
-            echo "Historical acquisition state unchanged."
-          else
-            git commit -m "Record historical radar acquisition state"
-            git push origin HEAD:snow-squall-model-foundation
-          fi
+            encoded="$(base64 -w0 "$merged_state")"
+            if gh api --method PUT \
+              "/repos/$GITHUB_REPOSITORY/contents/.github/historical-downloader-state.json" \
+              -f message="Record historical radar acquisition state" \
+              -f content="$encoded" \
+              -f sha="$remote_sha" \
+              -f branch="$STATE_BRANCH" \
+              >/tmp/state_update_response.json 2>/tmp/state_update_error.txt; then
+              echo "Historical acquisition state persisted successfully."
+              jq -r '.commit.sha // "unknown"' /tmp/state_update_response.json | sed 's/^/State commit: /'
+              rm -f "$local_ids" "$merged_state"
+              exit 0
+            fi
+
+            echo "State update conflicted; another branch writer moved the ref. Retrying with fresh remote state."
+            cat /tmp/state_update_error.txt || true
+            sleep 2
+          done
+
+          rm -f "$local_ids" "$merged_state"
+          echo "ERROR: unable to persist historical acquisition state after 5 attempts."
+          exit 1
 
       - name: Dispatch next historical acquisition batch
         if: success()
