@@ -17,6 +17,8 @@ import xarray as xr
 
 _FIELD_CACHE_MAX = 32
 _FIELD_CACHE = OrderedDict()
+_NEAREST_INDEX_CACHE_MAX = 256
+_NEAREST_INDEX_CACHE = OrderedDict()
 
 FIELD_SPECS = {
     "visibility_m": ("surface", "vis", None),
@@ -103,6 +105,9 @@ def _nearest_index(ds, latitude: float, longitude: float):
     ) ** 2
     idx = np.unravel_index(np.nanargmin(distance), distance.shape)
     _NEAREST_INDEX_CACHE[key]=idx
+    _NEAREST_INDEX_CACHE.move_to_end(key)
+    while len(_NEAREST_INDEX_CACHE) > _NEAREST_INDEX_CACHE_MAX:
+        _NEAREST_INDEX_CACHE.popitem(last=False)
     return idx
 
 
