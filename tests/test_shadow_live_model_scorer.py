@@ -231,3 +231,60 @@ def test_radar_only_bootstrap_does_not_require_complete_environment(tmp_path, mo
     assert payload["scored_object_count"] == 1
     assert rows[0]["environment_requirement"]["15"] == "not_used_by_model"
     assert rows[0]["research_probabilities"]
+
+
+def test_limited_data_bundle_uses_reduced_shadow_coverage_floor(tmp_path, monkeypatch):
+    live = tmp_path / "live"
+    models = tmp_path / "models"
+    live.mkdir()
+    models.mkdir()
+    make_model_dirs(models)
+
+    summary = {
+        "candidate_mode": "limited_data_bootstrap",
+        "training_contract_status": "limited_data_bootstrap",
+    }
+    (models / "snow_squall_candidate_refresh_summary.json").write_text(
+        json.dumps(summary), encoding="utf-8"
+    )
+
+    current = rich_props()
+    (live / "KCXX_objects.geojson").write_text(json.dumps({
+        "metadata": {"scan_time_utc": current["timestamp"]},
+        "features": [{"type": "Feature", "geometry": None, "properties": current}],
+    }), encoding="utf-8")
+    (live / "KCXX_history.json").write_text("[]", encoding="utf-8")
+    write_empty_site(live, "KTYX")
+
+    class StubRuntime:
+        def __init__(self, horizon):
+            self.model = object()
+            self.metadata = {
+                "model_version": "limited-test",
+                "operational_release_status": "candidate_only",
+            }
+            self.feature_columns = ["max_reflectivity_dbz"]
+
+        def score_candidate(self, frame):
+            return [0.25]
+
+    monkeypatch.setattr(
+        "scripts.shadow_live_model_scorer.ModelRuntime.load",
+        lambda directory: StubRuntime(15),
+    )
+    monkeypatch.setattr(
+        "scripts.shadow_live_model_scorer.feature_coverage",
+        lambda frame, columns: {
+            "predictors": 72,
+            "available": 31,
+            "fraction": 31 / 72,
+            "missing": [],
+        },
+    )
+
+    payload, rows = score_site("KCXX", live, models)
+
+    assert payload["scored_object_count"] == 1
+    assert rows[0]["coverage_policy"]["15"]["mode"] == "limited_data_bootstrap"
+    assert rows[0]["coverage_policy"]["15"]["minimum_fraction"] == 0.40
+    assert rows[0]["research_probabilities"]
