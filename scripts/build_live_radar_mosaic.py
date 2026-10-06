@@ -182,10 +182,18 @@ def build_mosaic(raw_root: Path, states: dict[str, Path]):
 
 
 def _clean_field(mosaic, rhohv=None):
+    """QC the display field without blurring or averaging the radar data.
+
+    The tracker/model never uses this display product.  Weak echoes are
+    retained when they have local neighborhood support, while isolated
+    low-level pixels and low-CC clutter are suppressed.  No Gaussian,
+    median, or boxcar smoothing is applied.
+    """
     data = np.asarray(mosaic, dtype=float).copy()
 
-    # Keep weak snow visible but remove the lowest-level display noise.
-    data[data < 12.0] = np.nan
+    # Keep weak winter precipitation visible while removing only the
+    # lowest-level display noise.
+    data[data < 8.0] = np.nan
 
     if rhohv is not None:
         # Conservative dual-pol clutter screen. It only removes low-CC echoes
@@ -193,10 +201,16 @@ def _clean_field(mosaic, rhohv=None):
         low_cc = np.isfinite(rhohv) & (rhohv < 0.65) & (data < 30.0)
         data[low_cc] = np.nan
 
-    # Remove isolated weak speckles while preserving coherent bands.
+    # Edge-preserving neighborhood support filter. This removes isolated
+    # speckles but does not change the value or blur the surviving pixels.
     present = np.isfinite(data)
-    cleaned = ndimage.binary_opening(present, structure=np.ones((2, 2)))
-    data[present & ~cleaned & (data < 24.0)] = np.nan
+    neighbors = ndimage.convolve(
+        present.astype(np.uint8),
+        np.ones((3, 3), dtype=np.uint8),
+        mode="nearest",
+    )
+    isolated_weak = present & (neighbors <= 2) & (data < 18.0)
+    data[isolated_weak] = np.nan
 
     return data
 
@@ -213,19 +227,24 @@ def _render(mosaic, latlon, output_path: Path, *, mode="clean", rhohv=None):
     ax.set_ylim(float(np.nanmin(lat)), float(np.nanmax(lat)))
 
     if mode == "clean":
-        bounds = [12, 18, 24, 30, 35, 40, 45, 55, 65, 75]
+        # Winter display palette: extra discrimination in the 8–35 dBZ
+        # range where shallow snow bands/squalls often live, while preserving
+        # conventional warm colors for stronger echoes.
+        bounds = [8, 12, 16, 20, 24, 28, 32, 36, 42, 50, 60, 75]
         colors = [
-            (0.18, 0.28, 0.36, 0.12),  # weak echo
-            (0.25, 0.45, 0.58, 0.25),
-            (0.25, 0.65, 0.86, 0.42),
-            (0.10, 0.72, 0.50, 0.58),
-            (0.52, 0.82, 0.24, 0.72),
-            (0.95, 0.84, 0.18, 0.82),
-            (0.96, 0.55, 0.10, 0.90),
-            (0.86, 0.18, 0.12, 0.96),
-            (0.92, 0.25, 0.72, 1.0),
+            (0.68, 0.78, 0.84, 0.28),  # 8–12: very weak snow
+            (0.38, 0.68, 0.86, 0.52),  # 12–16
+            (0.18, 0.58, 0.88, 0.68),  # 16–20
+            (0.12, 0.38, 0.86, 0.82),  # 20–24
+            (0.24, 0.20, 0.78, 0.92),  # 24–28
+            (0.48, 0.18, 0.76, 0.96),  # 28–32
+            (0.76, 0.18, 0.68, 0.98),  # 32–36
+            (0.94, 0.25, 0.55, 1.0),   # 36–42
+            (0.96, 0.34, 0.18, 1.0),   # 42–50
+            (0.98, 0.66, 0.08, 1.0),   # 50–60
+            (1.00, 0.92, 0.28, 1.0),   # 60–75
         ]
-        cmap = ListedColormap(colors, name="BTV_SNOWSQUALL_CLEAN")
+        cmap = ListedColormap(colors, name="BTV_WINTER_REFLECTIVITY")
         norm = BoundaryNorm(bounds, cmap.N)
         ax.pcolormesh(lon, lat, masked, cmap=cmap, norm=norm, shading="auto")
     else:
@@ -255,15 +274,36 @@ def _render_velocity(velocity, latlon, output_path: Path, *, raw=False):
     lat, lon = latlon
     data = np.asarray(velocity, dtype=float) * 1.94384449244
     masked = np.ma.masked_invalid(data)
-    cmap = plt.get_cmap("RdBu_r").copy()
-    cmap.set_bad((0, 0, 0, 0))
-    limit = 80.0 if raw else 60.0
+
+    if raw:
+        cmap = plt.get_cmap("NWSVel").copy()
+        cmap.set_bad((0, 0, 0, 0))
+        limit = 80.0
+        norm = None
+    else:
+        # Signed radial velocity palette. Green = inbound/toward, red =
+        # outbound/away, with deliberately dense bins near 0–20 kt so subtle
+        # low-level convergence/divergence is easier to interrogate.
+        velocity_bounds = [-60, -40, -30, -20, -15, -10, -5, -2, 0, 2, 5, 10, 15, 20, 30, 40, 60]
+        velocity_colors = [
+            "#003b24", "#006b3c", "#15945a", "#55bd7a", "#8bd7a0",
+            "#c4ebcf", "#e9f6ec", "#ffffff",
+            "#fff0ef", "#f7c9c6", "#ef9993", "#e85f59", "#cf302c",
+            "#a81822", "#7d1019", "#4f0710"
+        ]
+        cmap = ListedColormap(velocity_colors, name="BTV_WINTER_VELOCITY")
+        cmap.set_bad((0, 0, 0, 0))
+        limit = 60.0
+        norm = BoundaryNorm(velocity_bounds, cmap.N)
     fig = plt.figure(figsize=(12.0, 9.0), dpi=180)
     ax = fig.add_axes([0, 0, 1, 1])
     ax.set_axis_off()
     ax.set_xlim(float(np.nanmin(lon)), float(np.nanmax(lon)))
     ax.set_ylim(float(np.nanmin(lat)), float(np.nanmax(lat)))
-    ax.pcolormesh(lon, lat, masked, cmap=cmap, vmin=-limit, vmax=limit, shading="auto")
+    if norm is None:
+        ax.pcolormesh(lon, lat, masked, cmap=cmap, vmin=-limit, vmax=limit, shading="auto")
+    else:
+        ax.pcolormesh(lon, lat, masked, cmap=cmap, norm=norm, shading="auto")
     output_path.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(output_path, format="png", transparent=True, dpi=120, pad_inches=0)
     plt.close(fig)
@@ -373,15 +413,16 @@ def _direct_render(sweep_products, output_dir: Path, *, product_name: str, clean
     ax.set_xlim(-76.78, -70.52)
     ax.set_ylim(41.90, 46.40)
     if clean:
-        bounds = [12, 18, 24, 30, 35, 40, 45, 55, 65, 75]
+        bounds = [8, 12, 16, 20, 24, 28, 32, 36, 42, 50, 60, 75]
         colors = [
-            (0.18, 0.28, 0.36, 0.12), (0.25, 0.45, 0.58, 0.25),
-            (0.25, 0.65, 0.86, 0.42), (0.10, 0.72, 0.50, 0.58),
-            (0.52, 0.82, 0.24, 0.72), (0.95, 0.84, 0.18, 0.82),
-            (0.96, 0.55, 0.10, 0.90), (0.86, 0.18, 0.12, 0.96),
-            (0.92, 0.25, 0.72, 1.0),
+            (0.68, 0.78, 0.84, 0.28), (0.38, 0.68, 0.86, 0.52),
+            (0.18, 0.58, 0.88, 0.68), (0.12, 0.38, 0.86, 0.82),
+            (0.24, 0.20, 0.78, 0.92), (0.48, 0.18, 0.76, 0.96),
+            (0.76, 0.18, 0.68, 0.98), (0.94, 0.25, 0.55, 1.0),
+            (0.96, 0.34, 0.18, 1.0), (0.98, 0.66, 0.08, 1.0),
+            (1.00, 0.92, 0.28, 1.0),
         ]
-        cmap = ListedColormap(colors, name="BTV_SNOWSQUALL_CLEAN")
+        cmap = ListedColormap(colors, name="BTV_WINTER_REFLECTIVITY")
         norm = BoundaryNorm(bounds, cmap.N)
     else:
         cmap = plt.get_cmap("NWSRef").copy()
@@ -396,8 +437,12 @@ def _direct_render(sweep_products, output_dir: Path, *, product_name: str, clean
                 low_cc = np.isfinite(rho) & (rho < 0.65) & (data < 30.0)
                 data[low_cc] = np.nan
             present = np.isfinite(data)
-            cleaned = ndimage.binary_opening(present, structure=np.ones((2, 2)))
-            data[present & ~cleaned & (data < 24.0)] = np.nan
+            neighbors = ndimage.convolve(
+                present.astype(np.uint8),
+                np.ones((3, 3), dtype=np.uint8),
+                mode="nearest",
+            )
+            data[present & (neighbors <= 2) & (data < 18.0)] = np.nan
         masked = np.ma.masked_invalid(data)
         if masked.count():
             kwargs = {"cmap": cmap, "shading": "auto"}
@@ -423,9 +468,17 @@ def _direct_velocity_render(item, output_dir: Path, site: str):
     ax.set_axis_off()
     ax.set_xlim(-76.78, -70.52)
     ax.set_ylim(41.90, 46.40)
-    cmap = plt.get_cmap("RdBu_r").copy()
+    velocity_bounds = [-60, -40, -30, -20, -15, -10, -5, -2, 0, 2, 5, 10, 15, 20, 30, 40, 60]
+    velocity_colors = [
+        "#003b24", "#006b3c", "#15945a", "#55bd7a", "#8bd7a0",
+        "#c4ebcf", "#e9f6ec", "#ffffff",
+        "#fff0ef", "#f7c9c6", "#ef9993", "#e85f59", "#cf302c",
+        "#a81822", "#7d1019", "#4f0710"
+    ]
+    cmap = ListedColormap(velocity_colors, name="BTV_WINTER_VELOCITY")
     cmap.set_bad((0, 0, 0, 0))
-    ax.pcolormesh(item["lon"], item["lat"], masked, cmap=cmap, vmin=-60, vmax=60, shading="auto")
+    norm = BoundaryNorm(velocity_bounds, cmap.N)
+    ax.pcolormesh(item["lon"], item["lat"], masked, cmap=cmap, norm=norm, shading="auto")
     output_dir.mkdir(parents=True, exist_ok=True)
     path = output_dir / f"{site}_base_velocity_clean.png"
     fig.savefig(path, format="png", transparent=True, dpi=120, pad_inches=0)
@@ -498,14 +551,15 @@ def main():
             "spacing_km": SPACING_KM,
             "combine_method": "maximum valid reflectivity",
             "field": "reflectivity_dbz",
-            "color_table": "BTV_SNOWSQUALL_CLEAN + NWSRef_RAW",
+            "color_table": "BTV_WINTER_REFLECTIVITY + NWSRef_RAW",
             "vmin_dbz": 12,
             "vmax_dbz": 75,
             "display_qc": {
-                "low_dbz_cutoff": 12,
+                "low_dbz_cutoff": 8,
                 "low_cc_threshold": 0.65,
                 "low_cc_max_dbz": 30,
                 "isolated_weak_echo_cleanup": True,
+                "cleanup_method": "3x3 neighborhood support; no smoothing",
             },
         },
         "display_products": {
@@ -522,7 +576,7 @@ def main():
                     "raw_image": "KTYX_base_reflectivity_raw.png",
                 },
             },
-            "clean_description": "Clutter-suppressed KCXX/KTYX reflectivity mosaic. This does not alter model input.",
+            "clean_description": "Winter display palette with edge-preserving neighborhood QC. No smoothing; does not alter model input.",
             "raw_description": "Unfiltered gridded KCXX/KTYX reflectivity mosaic.",
             "base_reflectivity_description": "Individual lowest-valid-sweep base-reflectivity displays from the downloaded KCXX and KTYX Level-II volumes.",
         },
