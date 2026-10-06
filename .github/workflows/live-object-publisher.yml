@@ -159,6 +159,27 @@ jobs:
         run: |
           python scripts/normalize_live_products.py --root viewer/data/live
 
+      - name: Repair and validate persisted object history
+        run: |
+          set -euo pipefail
+          # Explicitly run the append-only writer after both radar workers.
+          # This makes the browser history resilient to branch/orphan transitions.
+          python - <<'PY'
+          from pathlib import Path
+          from scripts.append_live_object_history import append_history
+          for site in ("KCXX", "KTYX"):
+              geo = Path(f"viewer/data/live/{site}_objects.geojson")
+              if not geo.exists():
+                  continue
+              count = append_history(
+                  geo,
+                  Path(f"viewer/data/live/{site}_history.jsonl"),
+                  Path(f"data/derived/{site}_history.csv"),
+              )
+              history = Path(f"viewer/data/live/{site}_history.jsonl")
+              print(site, "repaired rows:", count, "history bytes:", history.stat().st_size if history.exists() else 0)
+          PY
+
       - name: Build bounded browser history payloads
         run: |
           python - <<'PY'
