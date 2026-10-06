@@ -383,6 +383,27 @@ def process_volume(
             rows[valid], cols[valid], lat, lon
         )
 
+        # Publish the consecutive-scan track in geographic coordinates so the
+        # viewer can draw the actual object motion rather than pinning every
+        # scan to the current footprint.
+        track_position_history = []
+        for position in obj.get("track_position_history", []) or []:
+            try:
+                py = int(round(float(position["row"])))
+                px = int(round(float(position["column"])))
+                if 0 <= py < lat.shape[0] and 0 <= px < lat.shape[1]:
+                    plat = float(lat[py, px])
+                    plon = float(lon[py, px])
+                    if np.isfinite(plat) and np.isfinite(plon):
+                        track_position_history.append({
+                            "timestamp": position.get("timestamp"),
+                            "lat": plat,
+                            "lon": plon,
+                            "age_scans": int(position.get("age_scans", 0)),
+                        })
+            except (KeyError, TypeError, ValueError, OverflowError):
+                continue
+
         cy = int(round(obj["row_centroid"]))
         cx = int(round(obj["column_centroid"]))
         centroid_lat = float(lat[cy, cx]) if 0 <= cy < lat.shape[0] and 0 <= cx < lat.shape[1] else None
@@ -596,6 +617,7 @@ def process_volume(
             "track_age_min": obj.get("track_age_min"),
             "track_status": obj.get("track_status", "active"),
             "track_missed_scans": obj.get("track_missed_scans"),
+            "track_position_history": track_position_history,
             "track_competing_track_count": obj.get("track_competing_track_count"),
             "track_competing_object_count": obj.get("track_competing_object_count"),
             "track_merge_candidate": obj.get("track_merge_candidate"),
