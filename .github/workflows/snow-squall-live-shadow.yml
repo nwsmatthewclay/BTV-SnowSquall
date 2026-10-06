@@ -120,6 +120,29 @@ jobs:
             --model-root "${{ steps.download.outputs.model_root }}" \
             --output-root shadow_data
 
+      - name: Validate shadow history persistence
+        if: steps.model.outputs.skip != 'true'
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          for site in ("KCXX", "KTYX"):
+              history = Path(f"shadow_data/{site}_shadow_history.json")
+              current = Path(f"shadow_data/{site}_shadow.json")
+              rows = []
+              if history.exists():
+                  try:
+                      rows = json.loads(history.read_text(encoding="utf-8"))
+                  except Exception:
+                      rows = []
+              if not rows and current.exists():
+                  payload = json.loads(current.read_text(encoding="utf-8"))
+                  rows = payload.get("records") or []
+                  history.write_text(json.dumps(rows, separators=(",", ":")) + "\n", encoding="utf-8")
+              print(site, "shadow history rows:", len(rows))
+          PY
+
       - name: Publish isolated shadow branch
         if: steps.model.outputs.skip != 'true'
         run: |
