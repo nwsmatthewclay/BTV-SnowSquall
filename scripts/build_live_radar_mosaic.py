@@ -552,7 +552,7 @@ def main():
             "combine_method": "maximum valid reflectivity",
             "field": "reflectivity_dbz",
             "color_table": "BTV_WINTER_REFLECTIVITY + NWSRef_RAW",
-            "vmin_dbz": 12,
+            "vmin_dbz": 8,
             "vmax_dbz": 75,
             "display_qc": {
                 "low_dbz_cutoff": 8,
