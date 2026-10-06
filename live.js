@@ -121,6 +121,7 @@ function setRadarHistoryIndex(index){
   stopRadarAnimation();
   updateRadarTimelineUI();
   renderRadarMosaic();
+  renderMap();
 }
 function playRadarAnimation(){
   var frames=radarHistory.frames||[];
@@ -234,14 +235,41 @@ function selectObject(p){
   renderHistory();
   renderModelStatus();
 }
+function trackPositionAt(p, targetTimestamp){
+  var hist=Array.isArray(p.track_position_history)?p.track_position_history:[];
+  if(!hist.length || !targetTimestamp) return {lat:Number(p.centroid_lat),lon:Number(p.centroid_lon),timestamp:p.timestamp};
+  var target=new Date(targetTimestamp).getTime();
+  var best=null,bestDelta=Infinity;
+  hist.forEach(function(h){
+    var lat=Number(h.lat),lon=Number(h.lon),t=new Date(h.timestamp).getTime();
+    if(!Number.isFinite(lat)||!Number.isFinite(lon)||!Number.isFinite(t))return;
+    var d=Math.abs(t-target);
+    if(d<bestDelta){best=h;bestDelta=d}
+  });
+  if(!best)return {lat:Number(p.centroid_lat),lon:Number(p.centroid_lon),timestamp:p.timestamp};
+  return {lat:Number(best.lat),lon:Number(best.lon),timestamp:best.timestamp};
+}
+function renderTrackTrail(p,sel){
+  var hist=Array.isArray(p.track_position_history)?p.track_position_history:[];
+  var pts=hist.map(function(h){return [Number(h.lat),Number(h.lon)]}).filter(function(x){return Number.isFinite(x[0])&&Number.isFinite(x[1])});
+  if(pts.length>=2){
+    L.polyline(pts,{color:sel?"#fff":"#8fd0e8",weight:sel?3:1.4,opacity:sel?.75:.38,dashArray:sel?"":"3 5",interactive:false}).addTo(layers.motion);
+  }
+}
 function renderMap(){
   Object.values(layers).forEach(function(l){l.clearLayers()});
   if(!allObjects.length)return;
+  var historicalFrame=radarHistoryFrame();
+  var targetTimestamp=historicalFrame?historicalFrame.timestamp:null;
   allObjects.forEach(function(p){
     var c=objectRisk(p),sel=selected&&selected.radar_site===p.radar_site&&String(selected.track_id)===String(p.track_id);
-    var feature=p.radar_geometry?{type:"Feature",geometry:p.radar_geometry,properties:{}}:null;
-    var pts=cellPoints(p);
-    if(!feature&&!pts.length)return;
+    var position=trackPositionAt(p,targetTimestamp);
+    var lat=Number(position.lat),lon=Number(position.lon);
+    var isHistorical=!!historicalFrame && position.timestamp!==p.timestamp;
+    var feature=isHistorical?null:(p.radar_geometry?{type:"Feature",geometry:p.radar_geometry,properties:{}}:null);
+    var pts=isHistorical?[]:cellPoints(p);
+    renderTrackTrail(p,sel);
+    if(!feature&&!pts.length&&!Number.isFinite(lat))return;
     var tooltip="<b>OBJECT "+objectOrdinal(p)+"</b><br>"+p.radar_site+" • Track "+p.track_id+"<br>"+num(p.max_reflectivity_dbz,0)+" dBZ • "+num(p.area_km2,0)+" km²<br>Click for attributes";
 
     // Display the meteorological cell shape, colored by Snow Squall probability.
@@ -266,11 +294,16 @@ function renderMap(){
     visual.bindTooltip(tooltip,{sticky:true});
     visual.on("click",function(e){if(e&&e.originalEvent)L.DomEvent.stopPropagation(e.originalEvent);selectObject(p)});
 
-    var hitLat=Number(p.centroid_lat),hitLon=Number(p.centroid_lon);
+    var hitLat=lat,hitLon=lon;
     if(Number.isFinite(hitLat)&&Number.isFinite(hitLon)){var hit=L.circleMarker([hitLat,hitLon],{pane:"liveHitPane",radius:18,color:"#fff",weight:1,opacity:0.01,fillColor:"#fff",fillOpacity:0.01,interactive:true}).addTo(layers[p.radar_site]);hit.on("click",function(e){if(e&&e.originalEvent)L.DomEvent.stopPropagation(e.originalEvent);selectObject(p)});}
 
 
-    var lat=Number(p.centroid_lat),lon=Number(p.centroid_lon);
+    if(isHistorical && Number.isFinite(lat) && Number.isFinite(lon)){
+      L.circleMarker([lat,lon],{
+        radius:sel?7:5,color:sel?"#fff":c,weight:sel?2.5:1.5,
+        fillColor:c,fillOpacity:sel?.85:.62,interactive:false
+      }).addTo(layers[p.radar_site]);
+    }
     if(objectNumbers&&Number.isFinite(lat)&&Number.isFinite(lon)){
       var lab=L.marker([lat,lon],{
         icon:L.divIcon({
