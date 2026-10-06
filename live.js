@@ -134,6 +134,7 @@ function playRadarAnimation(){
     if(radarHistoryIndex>=frames.length){radarHistoryIndex=0}
     updateRadarTimelineUI();
     renderRadarMosaic();
+    renderMap();
   },900);
 }
 async function loadRadarHistory(){
@@ -276,7 +277,12 @@ function renderMap(){
     // Keep the published radar footprint as the larger click target so selection
     // remains easy even when the rendered cell shape is small.
     var visual;
-    if(pts.length){
+    if(isHistorical){
+      visual=L.circleMarker([lat,lon],{
+        radius:sel?7:5,color:sel?"#fff":c,weight:sel?2.5:1.5,
+        fillColor:c,fillOpacity:sel?.85:.62,interactive:true
+      }).addTo(layers[p.radar_site]);
+    }else if(pts.length){
       visual=L.polygon(pts,{
         color:sel?"#fff":c,
         weight:sel?3.5:2,
@@ -298,12 +304,6 @@ function renderMap(){
     if(Number.isFinite(hitLat)&&Number.isFinite(hitLon)){var hit=L.circleMarker([hitLat,hitLon],{pane:"liveHitPane",radius:18,color:"#fff",weight:1,opacity:0.01,fillColor:"#fff",fillOpacity:0.01,interactive:true}).addTo(layers[p.radar_site]);hit.on("click",function(e){if(e&&e.originalEvent)L.DomEvent.stopPropagation(e.originalEvent);selectObject(p)});}
 
 
-    if(isHistorical && Number.isFinite(lat) && Number.isFinite(lon)){
-      L.circleMarker([lat,lon],{
-        radius:sel?7:5,color:sel?"#fff":c,weight:sel?2.5:1.5,
-        fillColor:c,fillOpacity:sel?.85:.62,interactive:false
-      }).addTo(layers[p.radar_site]);
-    }
     if(objectNumbers&&Number.isFinite(lat)&&Number.isFinite(lon)){
       var lab=L.marker([lat,lon],{
         icon:L.divIcon({
@@ -551,7 +551,7 @@ function stepRadar(delta){var frames=radarHistory.frames||[];if(!frames.length)r
 q("radarPrevBtn").onclick=function(){stepRadar(-1)};
 q("radarNextBtn").onclick=function(){stepRadar(1)};
 document.addEventListener("keydown",function(e){if(e.target&&(/input|textarea|select/i.test(e.target.tagName)))return;if(e.key==="ArrowLeft"){e.preventDefault();stepRadar(-1)}else if(e.key==="ArrowRight"){e.preventDefault();stepRadar(1)}});
-q("radarLiveBtn").onclick=function(){stopRadarAnimation();radarHistoryIndex=(radarHistory.frames||[]).length-1;updateRadarTimelineUI();renderRadarMosaic()};
+q("radarLiveBtn").onclick=function(){stopRadarAnimation();radarHistoryIndex=(radarHistory.frames||[]).length-1;updateRadarTimelineUI();renderRadarMosaic();renderMap()};
 q("radarTimelineSlider").oninput=function(){setRadarHistoryIndex(this.value)};
 q("objectNumbersBtn").onclick=function(){objectNumbers=!objectNumbers;q("objectNumbersBtn").classList.toggle("active",objectNumbers);renderMap()};
 map.on("click",function(e){
