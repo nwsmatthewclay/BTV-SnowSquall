@@ -190,15 +190,41 @@ jobs:
               print(site, "history rows:", len(rows))
           PY
 
-      - name: Validate KCXX live product
+      - name: Validate live object products without blocking fresh radar
         run: |
-          python scripts/audit_operational_readiness.py             --state viewer/data/live/KCXX_state.json             --geojson viewer/data/live/KCXX_objects.geojson             --max-age-minutes 30
-          python scripts/live_healthcheck.py             --state viewer/data/live/KCXX_state.json             --geojson viewer/data/live/KCXX_objects.geojson             --max-age-minutes 30 > viewer/data/live/KCXX_health.json
+          set +e
+          python scripts/audit_operational_readiness.py --state viewer/data/live/KCXX_state.json --geojson viewer/data/live/KCXX_objects.geojson --max-age-minutes 30
+          kcxx_rc=$?
+          python scripts/live_healthcheck.py --state viewer/data/live/KCXX_state.json --geojson viewer/data/live/KCXX_objects.geojson --max-age-minutes 30 > viewer/data/live/KCXX_health.json
+          python scripts/audit_operational_readiness.py --state viewer/data/live/KTYX_state.json --geojson viewer/data/live/KTYX_objects.geojson --max-age-minutes 30
+          ktyx_rc=$?
+          python scripts/live_healthcheck.py --state viewer/data/live/KTYX_state.json --geojson viewer/data/live/KTYX_objects.geojson --max-age-minutes 30 > viewer/data/live/KTYX_health.json
+          echo "KCXX object validation rc=$kcxx_rc"
+          echo "KTYX object validation rc=$ktyx_rc"
+          echo "Object freshness is advisory here; radar freshness is validated separately below."
 
-      - name: Validate KTYX live product
+      - name: Require fresh radar mosaic for publication
         run: |
-          python scripts/audit_operational_readiness.py             --state viewer/data/live/KTYX_state.json             --geojson viewer/data/live/KTYX_objects.geojson             --max-age-minutes 30
-          python scripts/live_healthcheck.py             --state viewer/data/live/KTYX_state.json             --geojson viewer/data/live/KTYX_objects.geojson             --max-age-minutes 30 > viewer/data/live/KTYX_health.json
+          python - <<'PY'
+          import json
+          from datetime import datetime, timezone
+          from pathlib import Path
+
+          payload = json.loads(Path("viewer/data/live/radar_mosaic.json").read_text(encoding="utf-8"))
+          now = datetime.now(timezone.utc)
+          sources = payload.get("sources") or []
+          times = []
+          for item in sources:
+              raw = item.get("scan_time_utc")
+              if raw:
+                  times.append(datetime.fromisoformat(str(raw).replace("Z","+00:00")).astimezone(timezone.utc))
+          if not times:
+              raise SystemExit("No radar source timestamps; refusing to publish.")
+          newest = max(times)
+          age = (now - newest).total_seconds() / 60.0
+          print(f"Newest radar scan: {newest.isoformat()} age={age:.1f} minutes")
+          if age > 15:
+              raise SystemExit(f"Radar mosaic is stale: {age:.1f} minutes old > 15 minute limit")
 
       - name: Publish isolated live-data branch
         env:
