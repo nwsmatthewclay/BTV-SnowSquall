@@ -20,6 +20,7 @@ class Track:
     area_km2:float|None=None
     max_reflectivity_dbz:float|None=None
     missed_scans:int=0
+    history:list|None=None
 
 
 @dataclass(frozen=True)
@@ -176,6 +177,15 @@ class CentroidTracker:
                 obj["track_motion_radar_weight"]=0.0
             track.last_time=timestamp; track.row=measured_row; track.column=measured_col
             track.age_scans+=1; track.missed_scans=0; track.area_km2=self._area(obj); track.max_reflectivity_dbz=self._z(obj)
+            if track.history is None:
+                track.history = []
+            track.history.append({
+                "timestamp": self._as_datetime(timestamp).isoformat().replace("+00:00", "Z"),
+                "row": measured_row,
+                "column": measured_col,
+                "age_scans": int(track.age_scans),
+            })
+            track.history = track.history[-24:]
             obj["track_association_status"]="matched"
             obj["track_competing_track_count"] = int(candidate_counts[object_index])
             obj["track_competing_object_count"] = int(candidate_track_counts[track_ids.index(tid)]) if track_ids else 0
@@ -211,7 +221,18 @@ class CentroidTracker:
             else:
                 motion_source="object_only"
                 radar_weight=0.0
-            self.tracks[tid]=Track(tid,timestamp,timestamp,float(obj["row_centroid"]),float(obj["column_centroid"]),velocity_row=initial_vr,velocity_column=initial_vc,area_km2=self._area(obj),max_reflectivity_dbz=self._z(obj))
+            self.tracks[tid]=Track(
+                tid,timestamp,timestamp,
+                float(obj["row_centroid"]),float(obj["column_centroid"]),
+                velocity_row=initial_vr,velocity_column=initial_vc,
+                area_km2=self._area(obj),max_reflectivity_dbz=self._z(obj),
+                history=[{
+                    "timestamp": self._as_datetime(timestamp).isoformat().replace("+00:00", "Z"),
+                    "row": float(obj["row_centroid"]),
+                    "column": float(obj["column_centroid"]),
+                    "age_scans": 1,
+                }],
+            )
             obj["track_association_status"]="new"; obj["track_association_distance_px"]=float("nan"); obj["track_association_gate_px"]=float("nan"); obj["track_association_cost"]=float("nan"); obj["track_age_scans"]=1; obj["track_missed_scans"]=0
             obj["track_first_scan_utc"]=self._as_datetime(timestamp).isoformat()
             obj["track_age_min"]=0.0
@@ -236,11 +257,17 @@ class CentroidTracker:
             row["detector_object_id"]=detector_id
             row["object_id"]=assignments[i]
             row["track_id"]=assignments[i]
+            track = self.tracks.get(assignments[i])
+            row["track_position_history"] = list(track.history or []) if track is not None else []
+            row["track_current_row"] = float(track.row) if track is not None else row.get("row_centroid")
+            row["track_current_column"] = float(track.column) if track is not None else row.get("column_centroid")
+            row["track_velocity_row_per_min"] = float(track.velocity_row) if track is not None else row.get("track_velocity_row_per_min")
+            row["track_velocity_column_per_min"] = float(track.velocity_column) if track is not None else row.get("track_velocity_column_per_min")
             output.append(row)
         return output
 
     def to_state(self):
-        return {"next_id":self.next_id,"tracks":{str(tid):{"object_id":track.object_id,"first_time":self._as_datetime(track.first_time).isoformat(),"last_time":self._as_datetime(track.last_time).isoformat(),"row":track.row,"column":track.column,"age_scans":track.age_scans,"velocity_row":track.velocity_row,"velocity_column":track.velocity_column,"area_km2":track.area_km2,"max_reflectivity_dbz":track.max_reflectivity_dbz,"missed_scans":track.missed_scans} for tid,track in self.tracks.items()}}
+        return {"next_id":self.next_id,"tracks":{str(tid):{"object_id":track.object_id,"first_time":self._as_datetime(track.first_time).isoformat(),"last_time":self._as_datetime(track.last_time).isoformat(),"row":track.row,"column":track.column,"age_scans":track.age_scans,"velocity_row":track.velocity_row,"velocity_column":track.velocity_column,"area_km2":track.area_km2,"max_reflectivity_dbz":track.max_reflectivity_dbz,"missed_scans":track.missed_scans,"history":track.history or []} for tid,track in self.tracks.items()}}
 
     @classmethod
     def from_state(cls,state,config=TrackerConfig()):
@@ -248,5 +275,5 @@ class CentroidTracker:
         if not state:return tracker
         tracker.next_id=int(state.get("next_id",1))
         for tid_text,raw in state.get("tracks",{}).items():
-            tid=int(tid_text); tracker.tracks[tid]=Track(object_id=int(raw["object_id"]),first_time=raw.get("first_time",raw["last_time"]),last_time=raw["last_time"],row=float(raw["row"]),column=float(raw["column"]),age_scans=int(raw.get("age_scans",1)),velocity_row=float(raw.get("velocity_row",0.0)),velocity_column=float(raw.get("velocity_column",0.0)),area_km2=raw.get("area_km2"),max_reflectivity_dbz=raw.get("max_reflectivity_dbz"),missed_scans=int(raw.get("missed_scans",0)))
+            tid=int(tid_text); tracker.tracks[tid]=Track(object_id=int(raw["object_id"]),first_time=raw.get("first_time",raw["last_time"]),last_time=raw["last_time"],row=float(raw["row"]),column=float(raw["column"]),age_scans=int(raw.get("age_scans",1)),velocity_row=float(raw.get("velocity_row",0.0)),velocity_column=float(raw.get("velocity_column",0.0)),area_km2=raw.get("area_km2"),max_reflectivity_dbz=raw.get("max_reflectivity_dbz"),missed_scans=int(raw.get("missed_scans",0)),history=list(raw.get("history",[]))[-24:])
         return tracker
