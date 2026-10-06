@@ -585,7 +585,11 @@ def main():
     }
 
     if mosaic is not None:
-        # Keep the 1-km Cartesian mosaic for model/cursor work, but use the native Level-II gate display for the browser whenever it is available.\n        # This preserves actual radar sampling instead of enlarging a coarse grid.\n        bounds = render_clean(mosaic, latlon, args.output_image, rhohv=rhohv)\n        if direct_fallback is not None and (args.output_image.parent / "radar_mosaic_clean.png").exists():\n            bounds = direct_fallback["bounds"]
+        # Keep the 1-km Cartesian mosaic for model/cursor work, but use the native Level-II gate display for the browser whenever it is available.
+        # This preserves actual radar sampling instead of enlarging a coarse grid.
+        bounds = render_clean(mosaic, latlon, args.output_image, rhohv=rhohv)
+        if direct_fallback is not None and (args.output_image.parent / "radar_mosaic_clean.png").exists():
+            bounds = direct_fallback["bounds"]
         clean_output = args.output_image.with_name("radar_mosaic_clean.png")
         raw_output = args.output_image.with_name("radar_mosaic_raw.png")
         render_clean(mosaic, latlon, clean_output, rhohv=rhohv)
