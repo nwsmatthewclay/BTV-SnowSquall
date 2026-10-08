@@ -1,8 +1,5 @@
 """Process one newly acquired Level-II volume into live object state.
 
-# RAP is hourly in live mode; allow one late/missing cycle without dropping the environmental score.
-LIVE_ENV_MAX_AGE_MINUTES = 120.0
-
 Publishes transparent research-weighted 15/30/45/60 guidance while keeping
 learned operational release models separately gated. All time-evolving
 diagnostics use only the current scan and prior retained state.
@@ -31,6 +28,9 @@ from scripts.live_model_features import build_live_feature_frame
 from scripts.model_runtime import ModelRuntime
 from snow_squall.environment_contract import assess_environment
 from snow_squall.environment_risk import environment_risk_features
+
+# RAP is hourly in live mode; allow one late/missing cycle without dropping the environmental score.
+LIVE_ENV_MAX_AGE_MINUTES = 120.0
 
 
 def object_geometry(mask, lat, lon, spacing_km=1.0):
