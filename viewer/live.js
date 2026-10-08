@@ -153,10 +153,14 @@ function playRadarAnimation(){
 async function loadRadarHistory(){
   radarHistory=await fetchOptional(LIVE_BASE+"radar_history/manifest.json?cb="+Date.now(),{frames:[]});
   if(!Array.isArray(radarHistory.frames))radarHistory={frames:[]};
-  if(radarHistory.frames.length){
-    radarHistory.frames=radarHistory.frames.filter(function(f){return parseUtcDate(f.timestamp)});radarHistory.frames.sort(function(a,b){return parseUtcDate(a.timestamp).getTime()-parseUtcDate(b.timestamp).getTime()});
-    radarHistoryIndex=radarHistory.frames.length-1;
-  }else radarHistoryIndex=-1;
+  // Only accept explicitly versioned standard-NWS reflectivity frames. This
+  // prevents legacy winter-palette images from reappearing after the palette
+  // migration and keeps the timelapse visually consistent with the live image.
+  radarHistory.frames=radarHistory.frames.filter(function(f){
+    return f && f.palette==="NWSRef" && parseUtcDate(f.timestamp) && f.image;
+  });
+  radarHistory.frames.sort(function(a,b){return parseUtcDate(a.timestamp).getTime()-parseUtcDate(b.timestamp).getTime()});
+  radarHistoryIndex=radarHistory.frames.length?radarHistory.frames.length-1:-1;
   updateRadarTimelineUI();
 }
 function mosaicMetaUrl(){return LIVE_BASE+"radar_mosaic.json?cb="+Date.now()}
@@ -167,60 +171,70 @@ function addNoaaFallback(){
 }
 async function renderRadarMosaic(){
   radarLayer.clearLayers();
+
   try{
-    var response=await fetch(mosaicMetaUrl(),{cache:"no-store"});if(!response.ok)throw new Error(response.status);
+    var response=await fetch(mosaicMetaUrl(),{cache:"no-store"});
+    if(!response.ok)throw new Error(response.status);
     radarMosaic=await response.json();
-  }catch(_){radarMosaic=null}
-  if(!radarMosaic||!radarMosaic.bounds){
+  }catch(_){
+    radarMosaic=null;
+  }
+
+  // One reflectivity renderer, one palette. Do not swap to IEM/NOAA tiles or
+  // legacy archived PNGs when the local product is temporarily unavailable.
+  var mosaicIsNwsRef=!!(
+    radarMosaic &&
+    radarMosaic.bounds &&
+    radarMosaic.grid &&
+    radarMosaic.grid.color_table==="NWSRef"
+  );
+
+  if(!mosaicIsNwsRef){
     if(radarMode==="reflectivity"){
-      var histFrameForWms=radarHistoryFrame();
-      var useHistorical=radarHistoryIndex>=0 && radarHistoryIndex<(radarHistory.frames||[]).length-1;
-      var wmsTime=useHistorical&&histFrameForWms?histFrameForWms.timestamp:new Date().toISOString();
-      var iem=L.tileLayer.wms("https://mesonet.agron.iastate.edu/cgi-bin/wms/nexrad/n0r-t.cgi",{
-        layers:"nexrad-n0r-wmst",format:"image/png",transparent:true,version:"1.1.1",
-        opacity:.72,time:wmsTime
-      });
-      iem.addTo(radarLayer);
-      setText("radarStatus",useHistorical&&histFrameForWms?"IEM radar fallback • "+fmtTime(histFrameForWms.timestamp):"IEM live radar fallback • current NEXRAD mosaic");
-      setText("legendTitle","NWS REFLECTIVITY • dBZ");
-      setText("legendNote","External fallback: IEM NEXRAD mosaic. Local KCXX/KTYX products resume automatically when published.");
+      var histFrame=radarHistoryFrame();
+      if(histFrame && histFrame.palette==="NWSRef"){
+        var histBounds=histFrame.bounds||[[41.90,-76.78],[46.40,-70.52]];
+        var histName=histFrame.image.split("/").pop();
+        L.imageOverlay(
+          LIVE_BASE+"radar_history/"+histName+"?cb="+Date.now(),
+          histBounds,
+          {pane:"liveRadarPane",opacity:.96,interactive:false,crossOrigin:true}
+        ).addTo(radarLayer);
+        setText("radarStatus","Historical NWSRef reflectivity • "+fmtTime(histFrame.timestamp));
+        setText("legendTitle","NWS REFLECTIVITY • dBZ");
+        setText("legendNote","Standard NWSRef palette. Local live mosaic is temporarily unavailable; showing the last retained matching frame.");
+        if(!map._sqExtent)map.fitBounds(histBounds,{padding:[25,25],maxZoom:8});
+      }else{
+        setText("radarStatus","Waiting for local NWSRef radar feed");
+        setText("legendTitle","NWS REFLECTIVITY • dBZ");
+        setText("legendNote","Radar acquisition is recovering. The viewer will not substitute a different reflectivity color scale.");
+      }
       return;
     }
-    var histFrame=radarHistoryFrame();
-    if(histFrame&&radarMode==="reflectivity"){
-      var histBounds=histFrame.bounds||[[41.90,-76.78],[46.40,-70.52]];
-      var histName=histFrame.image.split("/").pop();
-      L.imageOverlay(LIVE_BASE+"radar_history/"+histName+"?cb="+Date.now(),histBounds,{pane:"liveRadarPane",opacity:.96,interactive:false,crossOrigin:true}).addTo(radarLayer);
-      setText("radarStatus","Historical radar frame • "+fmtTime(histFrame.timestamp)+" • live acquisition unavailable");
-      setText("legendTitle","NWS REFLECTIVITY • dBZ");
-      setText("legendNote","Historical frame retained locally while the live radar publisher recovers.");
-      if(!map._sqExtent){map.fitBounds(histBounds,{padding:[25,25],maxZoom:8});map._sqExtent=true}
-      return;
-    }
+
     if(radarMode==="velocity"){
-      // Display-only emergency fallback: IEM serves current single-site
-      // NEXRAD Level-III base velocity (N0U). This keeps the velocity control
-      // useful when our local Level-II mosaic publisher is delayed.
+      // Velocity may use the separate IEM fallback because it is not a
+      // reflectivity color-scale path.
       var ridgeUrl="https://mesonet.agron.iastate.edu/cgi-bin/wms/nexrad/ridge.cgi";
-      var ridgeSites=[["CXX","KCXX"],["KTYX","KTYX"]];
-      ridgeSites.forEach(function(pair){
-        var sector=pair[0],site=pair[1];
+      [["CXX","KCXX"],["KTYX","KTYX"]].forEach(function(pair){
         L.tileLayer.wms(ridgeUrl,{
           layers:"single",format:"image/png",transparent:true,version:"1.1.1",
-          sector:sector,prod:"N0U",opacity:.62
+          sector:pair[0],prod:"N0U",opacity:.62
         }).addTo(radarLayer);
       });
       setText("radarStatus","IEM velocity fallback • KCXX + KTYX • current");
       setText("legendTitle","RADIAL VELOCITY • kt");
-      setText("legendNote","Display fallback: current single-site NEXRAD base velocity. Local Level-II velocity resumes automatically when published.");
-    }else{
-      setText("radarStatus","Local mosaic unavailable • NOAA QC fallback");
-      setText("legendTitle","NWS REFLECTIVITY • dBZ");
-      setText("legendNote","NOAA fallback is display-only; local object analysis remains independent.");
-      addNoaaFallback();
+      setText("legendNote","Display fallback only; local Level-II velocity resumes automatically when published.");
+      return;
     }
-    return}
-  var src=(radarMosaic.sources||[]).map(function(x){return x.radar}).filter(Boolean);var freshness=radarMosaic.status==="stale"?"RETAINED":"READY";setText("radarStatus","Mosaic "+freshness+" • "+(src.join(" + ")||"KCXX + KTYX"));
+    return;
+  }
+
+  var src=(radarMosaic.sources||[]).map(function(x){return x.radar}).filter(Boolean);
+  var freshness=radarMosaic.status==="stale"?"RETAINED":"READY";
+  var radarRefText=objectReferenceTime()?fmtTime(new Date(objectReferenceTime()).toISOString()):"";
+  setText("radarStatus","Mosaic "+freshness+" • "+(src.join(" + ")||"KCXX + KTYX")+(radarRefText?" • objects "+radarRefText:""));
+
   if(radarMode==="velocity"){
     var vp=radarMosaic.display_products?.base_velocity||{};
     ["KCXX","KTYX"].forEach(function(site){
@@ -236,25 +250,29 @@ async function renderRadarMosaic(){
   }else{
     var frame=radarHistoryFrame();
     var syncFrame=synchronizedRadarFrame();
-    // A manual slider selection must control the displayed radar image.  The
-    // synchronized frame is only the automatic/default selection; otherwise
-    // the timeline can move while the map remains visually stuck on one image.
+    // A manual slider selection controls the displayed radar image. The
+    // synchronized frame is only the automatic/default selection.
     var selectedFrame=(!radarInitialRender&&radarHistoryIndex>=0&&frame)?frame:syncFrame;
-    var useStoredFrame=!!(selectedFrame&&selectedFrame.image&&selectedFrame.image!=="iem-wms");
+    var useStoredFrame=!!(
+      selectedFrame &&
+      selectedFrame.palette==="NWSRef" &&
+      selectedFrame.image &&
+      selectedFrame.image!=="iem-wms"
+    );
     var imageName=useStoredFrame?selectedFrame.image.split("/").pop():"";
-    var imageUrl=useStoredFrame?(LIVE_BASE+"radar_history/"+imageName+"?cb="+Date.now()):mosaicImageUrl("reflectivity");
+    var imageUrl=useStoredFrame?
+      (LIVE_BASE+"radar_history/"+imageName+"?cb="+Date.now()):
+      mosaicImageUrl("reflectivity");
     var imageBounds=useStoredFrame&&selectedFrame.bounds?selectedFrame.bounds:radarMosaic.bounds;
     var ov=L.imageOverlay(imageUrl,imageBounds,{pane:"liveRadarPane",opacity:.96,interactive:false,crossOrigin:true});
     ov.addTo(radarLayer);
-    var ref=objectReferenceTime();
-    var refText=ref?fmtTime(new Date(ref).toISOString()):"";
     var syncText=useStoredFrame&&selectedFrame.timestamp?" • "+(radarHistoryIndex>=0?"timeline ":"synced ")+fmtTime(selectedFrame.timestamp):"";
-    setText("radarStatus","Reflectivity mosaic "+(radarMosaic.status==="stale"?"RETAINED":"READY")+" • KCXX + KTYX"+syncText+(refText?" • objects "+refText:""));
+    setText("radarStatus","Reflectivity mosaic "+freshness+" • KCXX + KTYX"+syncText+(radarRefText?" • objects "+radarRefText:""));
     setText("legendTitle","NWS REFLECTIVITY • dBZ");
-    setText("legendNote","KCXX + KTYX reflectivity mosaic. Object footprints are clickable and expose full attributes.");
+    setText("legendNote","Standard NWSRef palette • local KCXX + KTYX reflectivity mosaic.");
     radarInitialRender=false;
   }
-  if(!map._sqExtent){map.fitBounds(radarMosaic.bounds,{padding:[25,25],maxZoom:8});map._sqExtent=true}
+  if(!map._sqExtent)map.fitBounds(radarMosaic.bounds,{padding:[25,25],maxZoom:8});
 }
 function setRadarMode(mode){if(mode!=="reflectivity"&&mode!=="velocity")mode="reflectivity";radarMode=mode;document.querySelectorAll(".display-btn").forEach(function(b){b.classList.toggle("active",b.dataset.radarMode===mode)});renderRadarMosaic()}
 function objectReferenceTime(){
