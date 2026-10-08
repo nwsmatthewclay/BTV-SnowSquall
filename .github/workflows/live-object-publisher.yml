@@ -28,7 +28,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: snow-squall-live-object-publisher-v2
+  group: snow-squall-live-object-publisher-v3
   # Share the same lock as the event/public archive publisher so two live
   # publication paths can never rewrite the durable tracker state concurrently.
   cancel-in-progress: false
