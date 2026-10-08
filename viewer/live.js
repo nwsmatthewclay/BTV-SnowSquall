@@ -212,18 +212,43 @@ async function renderRadarMosaic(){
     setText("legendNote","Lowest-valid-sweep KCXX + KTYX velocity. Signed inbound/outbound flow is shown for cell analysis.");
   }else{
     var frame=radarHistoryFrame();
-    var useStoredFrame=!!(frame&&frame.image&&frame.image!=="iem-wms");
-    var imageName=useStoredFrame?frame.image.split("/").pop():"";
+    var syncFrame=synchronizedRadarFrame();
+    var useStoredFrame=!!(syncFrame&&syncFrame.image&&syncFrame.image!=="iem-wms");
+    var imageName=useStoredFrame?syncFrame.image.split("/").pop():"";
     var imageUrl=useStoredFrame?(LIVE_BASE+"radar_history/"+imageName+"?cb="+Date.now()):mosaicImageUrl("reflectivity");
-    var ov=L.imageOverlay(imageUrl,radarMosaic.bounds,{pane:"liveRadarPane",opacity:.96,interactive:false,crossOrigin:true});
+    var imageBounds=useStoredFrame&&syncFrame.bounds?syncFrame.bounds:radarMosaic.bounds;
+    var ov=L.imageOverlay(imageUrl,imageBounds,{pane:"liveRadarPane",opacity:.96,interactive:false,crossOrigin:true});
     ov.addTo(radarLayer);
-    setText("radarStatus","Reflectivity mosaic "+(radarMosaic.status==="stale"?"RETAINED":"READY")+" • KCXX + KTYX");
+    var ref=objectReferenceTime();
+    var refText=ref?fmtTime(new Date(ref).toISOString()):"";
+    var syncText=useStoredFrame&&syncFrame.timestamp?" • synced "+fmtTime(syncFrame.timestamp):"";
+    setText("radarStatus","Reflectivity mosaic "+(radarMosaic.status==="stale"?"RETAINED":"READY")+" • KCXX + KTYX"+syncText+(refText?" • objects "+refText:""));
     setText("legendTitle","REFLECTIVITY • dBZ");
     setText("legendNote","KCXX + KTYX reflectivity mosaic. Object footprints are clickable and expose full attributes.");
   }
   if(!map._sqExtent){map.fitBounds(radarMosaic.bounds,{padding:[25,25],maxZoom:8});map._sqExtent=true}
 }
 function setRadarMode(mode){if(mode!=="reflectivity"&&mode!=="velocity")mode="reflectivity";radarMode=mode;document.querySelectorAll(".display-btn").forEach(function(b){b.classList.toggle("active",b.dataset.radarMode===mode)});renderRadarMosaic()}
+function objectReferenceTime(){
+  var times=allObjects.map(function(p){return p&&p.timestamp?new Date(p.timestamp).getTime():NaN}).filter(Number.isFinite);
+  return times.length?Math.max.apply(null,times):null;
+}
+function synchronizedRadarFrame(){
+  var ref=objectReferenceTime();
+  var frames=radarHistory&&Array.isArray(radarHistory.frames)?radarHistory.frames:[];
+  if(ref==null||!frames.length)return null;
+  var usable=frames.map(function(f){
+    var t=new Date(f.timestamp||"").getTime();
+    return Number.isFinite(t)?{f:f,t:t,diff:t-ref}:null;
+  }).filter(Boolean);
+  if(!usable.length)return null;
+  // Prefer the latest frame at or before the object scan. If the archive does
+  // not contain one, use the nearest frame only when it is reasonably close.
+  var prior=usable.filter(function(x){return x.t<=ref}).sort(function(a,b){return b.t-a.t})[0];
+  if(prior&&ref-prior.t<=12*60000)return prior.f;
+  usable.sort(function(a,b){return Math.abs(a.diff)-Math.abs(b.diff)});
+  return usable[0]&&Math.abs(usable[0].diff)<=8*60000?usable[0].f:null;
+}
 function geometryPoints(p){
   var g=p&&p.radar_geometry;
   if(!g||!g.type||!g.coordinates)return [];
