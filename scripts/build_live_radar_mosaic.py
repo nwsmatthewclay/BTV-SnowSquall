@@ -194,8 +194,7 @@ def _clean_field(mosaic, rhohv=None):
     """
     data = np.asarray(mosaic, dtype=float).copy()
 
-    # Keep weak winter precipitation visible while removing only the
-    # lowest-level display noise.
+    # Keep weak echoes visible while removing only the lowest-level display noise.
     data[data < -10.0] = np.nan
 
     if rhohv is not None:
@@ -468,7 +467,7 @@ def _direct_render(sweep_products, output_dir: Path, *, product_name: str, clean
     for item in sweep_products:
         data = np.asarray(item["data"], dtype=float).copy()
         if clean:
-            data[data < -5.0] = np.nan
+            data[data < -10.0] = np.nan
             rho = item.get("rho")
             if rho is not None:
                 low_cc = np.isfinite(rho) & (rho < 0.65) & (data < 30.0)
@@ -613,7 +612,7 @@ def main():
                     "raw_image": "KTYX_base_reflectivity_raw.png",
                 },
             },
-            "clean_description": "Winter display palette with edge-preserving neighborhood QC. No smoothing; does not alter model input.",
+            "clean_description": "Standard NWSRef reflectivity palette with edge-preserving neighborhood QC. No smoothing; does not alter model input.",
             "raw_description": "Unfiltered gridded KCXX/KTYX reflectivity mosaic.",
             "base_reflectivity_description": "Native-gate lowest-valid-sweep base reflectivity from the downloaded KCXX and KTYX Level-II volumes; not a multi-sweep composite.",
         },
@@ -622,35 +621,17 @@ def main():
     }
 
     if mosaic is not None:
-        # Keep the 1-km Cartesian mosaic for model/cursor work, but use the native Level-II gate display for the browser whenever it is available.
-        # This preserves actual radar sampling instead of enlarging a coarse grid.
-        bounds = render_clean(mosaic, latlon, args.output_image, rhohv=rhohv)
-        if direct_fallback is not None and (args.output_image.parent / "radar_mosaic_clean.png").exists():
-            bounds = direct_fallback["bounds"]
-        clean_output = args.output_image.with_name("radar_mosaic_clean.png")
-        raw_output = args.output_image.with_name("radar_mosaic_raw.png")
-        render_clean(mosaic, latlon, clean_output, rhohv=rhohv)
+        # One canonical browser reflectivity path: the Cartesian KCXX/KTYX
+        # mosaic rendered once with the standard NWSRef palette. Native-gate
+        # products remain available as separate per-radar diagnostics, but do
+        # not replace or mutate the browser-facing mosaic image.
+        clean_output = args.output_image.parent / "radar_mosaic_clean.png"
+        raw_output = args.output_image.parent / "radar_mosaic_raw.png"
+        bounds = render_clean(mosaic, latlon, clean_output, rhohv=rhohv)
         render_raw(mosaic, latlon, raw_output)
-        # Replace the browser-facing display with the native-gate product after
-        # the gridded products are generated. The model/cursor still use the
-        # 1-km Cartesian mosaic above.
-        native_clean = args.output_image.parent / "radar_mosaic_native_clean.png"
-        native_raw = args.output_image.parent / "radar_mosaic_native_raw.png"
-        if native_clean.exists():
-            shutil.copyfile(native_clean, clean_output)
-        if native_raw.exists():
-            shutil.copyfile(native_raw, raw_output)
-        if args.output_image.name != "radar_mosaic_clean.png":
-            args.output_image.unlink(missing_ok=True)
-            # Preserve the existing viewer contract name as the clean product.
-            clean_output.replace(args.output_image)
-            # Re-create the clean product at its explicit canonical name.
-            render_clean(mosaic, latlon, clean_output, rhohv=rhohv)
-            # The final browser contract remains the clean filename, but its
-            # pixels should come from the native Level-II gate rendering.
-            if native_clean.exists():
-                shutil.copyfile(native_clean, clean_output)
-                shutil.copyfile(native_clean, args.output_image)
+        # radar_mosaic.png is a compatibility alias and must contain the exact
+        # same pixels as the canonical clean product.
+        shutil.copyfile(clean_output, args.output_image)
         payload["bounds"] = bounds
         # Individual radar displays must be true base reflectivity: the
         # lowest valid native Level-II sweep. Do not expose the multi-sweep
