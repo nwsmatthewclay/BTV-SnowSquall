@@ -119,27 +119,35 @@ def find_latest_analysis(
 
     historical_cutoff = datetime.now(timezone.utc) - timedelta(days=NOMADS_PREFERRED_AGE_DAYS)
 
-    for offset in range(0, max_age_minutes + 60, 60):
-        valid = (radar_time - timedelta(minutes=offset)).replace(minute=0)
+    # RAP files can be temporarily unavailable while NOMADS/NCEI are
+    # updating or rate-limiting a request. A single negative probe must not
+    # turn an otherwise good radar scan into an environment-free object feed.
+    for retry in range(3):
+        if retry:
+            _url_exists.cache_clear()
+            time.sleep(4 * retry)
 
-        if valid >= historical_cutoff:
-            url = rap_analysis_url(valid)
-            if _url_exists(url):
-                age = (radar_time - valid).total_seconds() / 60.0
-                return RapMatch(valid, url, Path(url.rsplit("/", 1)[-1]), age)
+        for offset in range(0, max_age_minutes + 60, 60):
+            valid = (radar_time - timedelta(minutes=offset)).replace(minute=0)
 
-            match = _ncei_match(valid, radar_time, max_age_minutes)
-            if match is not None:
-                return match
-        else:
-            match = _ncei_match(valid, radar_time, max_age_minutes)
-            if match is not None:
-                return match
+            if valid >= historical_cutoff:
+                url = rap_analysis_url(valid)
+                if _url_exists(url):
+                    age = (radar_time - valid).total_seconds() / 60.0
+                    return RapMatch(valid, url, Path(url.rsplit("/", 1)[-1]), age)
 
-            url = rap_analysis_url(valid)
-            if _url_exists(url):
-                age = (radar_time - valid).total_seconds() / 60.0
-                return RapMatch(valid, url, Path(url.rsplit("/", 1)[-1]), age)
+                match = _ncei_match(valid, radar_time, max_age_minutes)
+                if match is not None:
+                    return match
+            else:
+                match = _ncei_match(valid, radar_time, max_age_minutes)
+                if match is not None:
+                    return match
+
+                url = rap_analysis_url(valid)
+                if _url_exists(url):
+                    age = (radar_time - valid).total_seconds() / 60.0
+                    return RapMatch(valid, url, Path(url.rsplit("/", 1)[-1]), age)
 
     return None
 
