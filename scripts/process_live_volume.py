@@ -850,7 +850,10 @@ def process_volume(
     # column from disappearing if the standalone JSONL history is interrupted.
     env_history = state.setdefault("environment_history", {})
     for feature in features:
-        props = feature.get("properties", {})
+        # features is the internal list of property dictionaries. The
+        # GeoJSON wrapper is created later when result is built, so reading
+        # feature["properties"] here silently produced an empty history.
+        props = feature.get("properties") if isinstance(feature.get("properties"), dict) else feature
         track_id = str(props.get("track_id"))
         env = props.get("environment") or {}
         fields = env.get("fields") or {}
