@@ -39,6 +39,7 @@ class ObjectDetectionConfig:
     watershed_max_dbz: float = 57.0
     watershed_min_distance_px: int = 6
     watershed_min_saliency_pixels: int = 8
+    retain_coherent_objects: bool = False
     watershed_min_prominence_db: float = 3.0
 
 
@@ -468,6 +469,8 @@ def detect_reflectivity_objects(reflectivity, config=ObjectDetectionConfig(), ve
                 detection_evidence.append("velocity_rescue")
             elif velocity_structure_good:
                 detection_evidence.append("velocity_structure")
+            if not detection_evidence and not config.retain_coherent_objects:
+                continue
             if not detection_evidence:
                 detection_evidence.append("reflectivity_object")
 
