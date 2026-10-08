@@ -104,8 +104,44 @@ def main() -> int:
 
     previous = published_time(args.live_root)
     s3 = make_s3_client()
-    candidates = find_recent_volumes(
-        s3, "KCXX", since=previous, lookback_hours=args.lookback_hours
+
+    # Do not use only the newest published timestamp as the backfill watermark.
+    # The live publisher can legitimately process the newest volume while
+    # missing one or more intermediate scans.  In that situation the newest
+    # timestamp looks healthy even though the track history has a hole.
+    #
+    # Instead, inspect the durable processed_sources ledger and recover every
+    # recent KCXX volume that is not actually recorded there.  process_live_event
+    # then processes those scans chronologically, preserving tracker continuity
+    # and filling the radar-history archive at the same time.
+    state_path = args.live_root / "KCXX_state.json"
+    processed_sources = set()
+    if state_path.exists():
+        try:
+            state = json.loads(state_path.read_text(encoding="utf-8"))
+            processed_sources = {
+                Path(str(value)).name
+                for value in (state.get("processed_sources") or [])
+                if value
+            }
+        except (OSError, json.JSONDecodeError, TypeError):
+            processed_sources = set()
+
+    all_recent = find_recent_volumes(
+        s3, "KCXX", since=None, lookback_hours=args.lookback_hours
+    )
+    candidates = [
+        item for item in all_recent
+        if Path(item[0]).name not in processed_sources
+    ]
+
+    print(
+        "Backfill watermark:",
+        previous.isoformat() if previous else "none",
+        "| recent KCXX volumes:",
+        len(all_recent),
+        "| unprocessed:",
+        len(candidates),
     )
 
     if not candidates:
