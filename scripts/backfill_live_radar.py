@@ -127,12 +127,19 @@ def main() -> int:
         except (OSError, json.JSONDecodeError, TypeError):
             processed_sources = set()
 
+    # Only select scans that the event processor can still resolve from the
+    # same near-real-time archive window. Older entries can remain in the
+    # discovery list after their processing window has expired; feeding one
+    # of those to process_live_event can fail the entire cycle before newer
+    # scans are reached. Let old gaps age out instead of blocking the feed.
     all_recent = find_recent_volumes(
         s3, "KCXX", since=None, lookback_hours=args.lookback_hours
     )
+    processing_cutoff = datetime.now(timezone.utc) - timedelta(hours=2)
     candidates = [
         item for item in all_recent
         if Path(item[0]).name not in processed_sources
+        and item[1] >= processing_cutoff
     ]
 
     print(
