@@ -55,6 +55,8 @@ jobs:
 
       - name: Check public KCXX archive for a new scan
         id: archive
+        env:
+          PYTHONPATH: .
         run: |
           echo "new_scan=false" >> "$GITHUB_OUTPUT"
           python scripts/public_archive_trigger.py
