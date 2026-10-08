@@ -235,15 +235,19 @@ async function renderRadarMosaic(){
   }else{
     var frame=radarHistoryFrame();
     var syncFrame=synchronizedRadarFrame();
-    var useStoredFrame=!!(syncFrame&&syncFrame.image&&syncFrame.image!=="iem-wms");
-    var imageName=useStoredFrame?syncFrame.image.split("/").pop():"";
+    // A manual slider selection must control the displayed radar image.  The
+    // synchronized frame is only the automatic/default selection; otherwise
+    // the timeline can move while the map remains visually stuck on one image.
+    var selectedFrame=(radarHistoryIndex>=0&&frame)?frame:syncFrame;
+    var useStoredFrame=!!(selectedFrame&&selectedFrame.image&&selectedFrame.image!=="iem-wms");
+    var imageName=useStoredFrame?selectedFrame.image.split("/").pop():"";
     var imageUrl=useStoredFrame?(LIVE_BASE+"radar_history/"+imageName+"?cb="+Date.now()):mosaicImageUrl("reflectivity");
-    var imageBounds=useStoredFrame&&syncFrame.bounds?syncFrame.bounds:radarMosaic.bounds;
+    var imageBounds=useStoredFrame&&selectedFrame.bounds?selectedFrame.bounds:radarMosaic.bounds;
     var ov=L.imageOverlay(imageUrl,imageBounds,{pane:"liveRadarPane",opacity:.96,interactive:false,crossOrigin:true});
     ov.addTo(radarLayer);
     var ref=objectReferenceTime();
     var refText=ref?fmtTime(new Date(ref).toISOString()):"";
-    var syncText=useStoredFrame&&syncFrame.timestamp?" • synced "+fmtTime(syncFrame.timestamp):"";
+    var syncText=useStoredFrame&&selectedFrame.timestamp?" • "+(radarHistoryIndex>=0?"timeline ":"synced ")+fmtTime(selectedFrame.timestamp):"";
     setText("radarStatus","Reflectivity mosaic "+(radarMosaic.status==="stale"?"RETAINED":"READY")+" • KCXX + KTYX"+syncText+(refText?" • objects "+refText:""));
     setText("legendTitle","REFLECTIVITY • dBZ");
     setText("legendNote","KCXX + KTYX reflectivity mosaic. Object footprints are clickable and expose full attributes.");
