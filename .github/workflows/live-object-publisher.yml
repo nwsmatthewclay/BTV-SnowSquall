@@ -9,6 +9,8 @@ on:
     branches:
       - snow-squall-model-foundation
     paths:
+      - scripts/backfill_live_radar.py
+      - scripts/process_live_event.py
       - scripts/live_object_worker.py
       - scripts/process_live_volume.py
       - processing/rap_features.py
@@ -26,8 +28,9 @@ permissions:
   contents: write
 
 concurrency:
-  group: snow-squall-live-object-publisher
-  # Never cancel a radar acquisition mid-volume; scheduled runs may queue instead.
+  group: snow-squall-live-object-publisher-v2
+  # Share the same lock as the event/public archive publisher so two live
+  # publication paths can never rewrite the durable tracker state concurrently.
   cancel-in-progress: false
 
 jobs:
