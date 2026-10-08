@@ -192,7 +192,7 @@ async function renderRadarMosaic(){
       var histName=histFrame.image.split("/").pop();
       L.imageOverlay(LIVE_BASE+"radar_history/"+histName+"?cb="+Date.now(),histBounds,{pane:"liveRadarPane",opacity:.96,interactive:false,crossOrigin:true}).addTo(radarLayer);
       setText("radarStatus","Historical radar frame • "+fmtTime(histFrame.timestamp)+" • live acquisition unavailable");
-      setText("legendTitle","REFLECTIVITY • dBZ");
+      setText("legendTitle","WINTER REFLECTIVITY • dBZ");
       setText("legendNote","Historical frame retained locally while the live radar publisher recovers.");
       if(!map._sqExtent){map.fitBounds(histBounds,{padding:[25,25],maxZoom:8});map._sqExtent=true}
       return;
@@ -215,7 +215,7 @@ async function renderRadarMosaic(){
       setText("legendNote","Display fallback: current single-site NEXRAD base velocity. Local Level-II velocity resumes automatically when published.");
     }else{
       setText("radarStatus","Local mosaic unavailable • NOAA QC fallback");
-      setText("legendTitle","REFLECTIVITY • dBZ");
+      setText("legendTitle","WINTER REFLECTIVITY • dBZ");
       setText("legendNote","NOAA fallback is display-only; local object analysis remains independent.");
       addNoaaFallback();
     }
@@ -250,7 +250,7 @@ async function renderRadarMosaic(){
     var refText=ref?fmtTime(new Date(ref).toISOString()):"";
     var syncText=useStoredFrame&&selectedFrame.timestamp?" • "+(radarHistoryIndex>=0?"timeline ":"synced ")+fmtTime(selectedFrame.timestamp):"";
     setText("radarStatus","Reflectivity mosaic "+(radarMosaic.status==="stale"?"RETAINED":"READY")+" • KCXX + KTYX"+syncText+(refText?" • objects "+refText:""));
-    setText("legendTitle","REFLECTIVITY • dBZ");
+    setText("legendTitle","WINTER REFLECTIVITY • dBZ");
     setText("legendNote","KCXX + KTYX reflectivity mosaic. Object footprints are clickable and expose full attributes.");
   }
   if(!map._sqExtent){map.fitBounds(radarMosaic.bounds,{padding:[25,25],maxZoom:8});map._sqExtent=true}
