@@ -16,7 +16,7 @@ permissions:
 
 concurrency:
   group: snow-squall-live-object-publisher-v2
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   publish:
