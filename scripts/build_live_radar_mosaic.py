@@ -24,6 +24,7 @@ from matplotlib.colors import BoundaryNorm, ListedColormap
 from scipy import ndimage
 
 from acquisition.level2_reader import read_level2, resolve_fields, volume_metadata
+from acquisition.radar_watcher import parse_volume_time
 from processing.radar_grid import grid_field_2d, grid_latlon, grid_lowest_available_sweep, grid_reflectivity_composite, lowest_valid_sweep
 from processing.radar_sites import apply_radar_origin, radar_origin_for_site
 
@@ -54,12 +55,14 @@ def latest_source(raw_root: Path, state_path: Path, radar: str) -> Path | None:
     radar_dir = raw_root / radar
     if not radar_dir.exists():
         return None
-    candidates = sorted(
-        (p for p in radar_dir.glob("*") if p.is_file() and p.stat().st_size),
-        key=lambda p: p.stat().st_mtime,
-        reverse=True,
-    )
-    return candidates[0] if candidates else None
+    candidates = []
+    for p in radar_dir.glob("*"):
+        if not p.is_file() or not p.stat().st_size:
+            continue
+        scan_time = parse_volume_time(p.name, radar)
+        candidates.append((scan_time or datetime.fromtimestamp(p.stat().st_mtime, tz=timezone.utc), p))
+    candidates.sort(key=lambda item: item[0], reverse=True)
+    return candidates[0][1] if candidates else None
 
 
 def grid_radar(path: Path, radar: str):
