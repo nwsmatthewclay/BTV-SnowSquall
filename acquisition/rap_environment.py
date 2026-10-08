@@ -163,21 +163,27 @@ def find_forecast(
     radar_time = radar_time.astimezone(timezone.utc).replace(second=0, microsecond=0)
     target = radar_time + timedelta(minutes=int(target_minutes))
     base_cycle = radar_time.replace(minute=0)
-    candidates = []
-    for cycle_back in range(0, max_cycle_age_hours + 1):
-        cycle = base_cycle - timedelta(hours=cycle_back)
-        lead = int(round((target - cycle).total_seconds() / 3600.0))
-        if lead < 0 or lead > max_forecast_lead_hours:
-            continue
-        valid = cycle + timedelta(hours=lead)
-        if valid <= radar_time:
-            continue
-        url = rap_forecast_url(cycle, lead)
-        if not _url_exists(url):
-            continue
-        candidates.append(RapForecastMatch(cycle, valid, lead, url, Path(url.rsplit("/", 1)[-1]), (valid - radar_time).total_seconds() / 60.0))
-    if not candidates:
-        return None
+    for retry in range(3):
+        if retry:
+            _url_exists.cache_clear()
+            time.sleep(4 * retry)
+        candidates = []
+        for cycle_back in range(0, max_cycle_age_hours + 1):
+            cycle = base_cycle - timedelta(hours=cycle_back)
+            lead = int(round((target - cycle).total_seconds() / 3600.0))
+            if lead < 0 or lead > max_forecast_lead_hours:
+                continue
+            valid = cycle + timedelta(hours=lead)
+            if valid <= radar_time:
+                continue
+            url = rap_forecast_url(cycle, lead)
+            if not _url_exists(url):
+                continue
+            candidates.append(RapForecastMatch(cycle, valid, lead, url, Path(url.rsplit("/", 1)[-1]), (valid - radar_time).total_seconds() / 60.0))
+        if candidates:
+            candidates.sort(key=lambda m: (abs((m.valid_time - target).total_seconds()), -m.cycle_time.timestamp()))
+            return candidates[0]
+    return None
     candidates.sort(key=lambda m: (abs((m.valid_time - target).total_seconds()), -m.cycle_time.timestamp()))
     return candidates[0]
 
