@@ -669,10 +669,10 @@ body.live-dashboard-page header{
 .live-dashboard-main #environmentTable .env-grid-row .env-grid-name{justify-content:flex-start;font-size:10px !important;letter-spacing:.035em;text-transform:uppercase;}
 .live-dashboard-main #environmentTable .env-grid-head>div{min-height:26px;font-size:9px !important;letter-spacing:.08em;text-transform:uppercase;color:#d7e5ec !important;background:#172832 !important;}
 /* Risk colors follow the same operational green/yellow/red language used elsewhere. */
-.live-dashboard-main #environmentTable .env-risk-green{background:#173d29 !important;color:#b9f0c8 !important;border-left:3px solid #42b86a;}
-.live-dashboard-main #environmentTable .env-risk-yellow{background:#574b12 !important;color:#ffe98a !important;border-left:3px solid #e0bd38;}
-.live-dashboard-main #environmentTable .env-risk-red{background:#5c201d !important;color:#ffd0ca !important;border-left:3px solid #ef5b52;}
-.live-dashboard-main #environmentTable .env-risk-na,.live-dashboard-main #environmentTable .env-risk-neutral{background:#1a2831 !important;color:#aebfc9 !important;border-left:3px solid #526772;}
+.live-dashboard-main #environmentTable .env-risk-green{background:#173d29 !important;color:#b9f0c8 !important;border-left:0 !important;}
+.live-dashboard-main #environmentTable .env-risk-yellow{background:#574b12 !important;color:#ffe98a !important;border-left:0 !important;}
+.live-dashboard-main #environmentTable .env-risk-red{background:#5c201d !important;color:#ffd0ca !important;border-left:0 !important;}
+.live-dashboard-main #environmentTable .env-risk-na,.live-dashboard-main #environmentTable .env-risk-neutral{background:#1a2831 !important;color:#aebfc9 !important;border-left:0 !important;}
 @media(max-width:900px){.live-dashboard-main #environmentTable .env-grid-row{grid-template-columns:minmax(125px,1.35fr) repeat(3,minmax(78px,.8fr)) !important}.live-dashboard-main #environmentTable .env-grid-row>div{padding:6px 5px !important;font-size:10px !important}}
 
 /* Keep cursor telemetry clear of the full-width radar timelapse bar and map legend. */
