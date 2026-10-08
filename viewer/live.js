@@ -461,17 +461,16 @@ function renderProbability(){
     var d=prevNow==null?null:Number(nowScore)-Number(prevNow);
     setText("probabilityDelta",d==null?"Current weighted score":(d>=0?"▲ +":"▼ ")+(Math.abs(d)*100).toFixed(1)+" pp");
     q("probabilityDelta").className="prob-delta "+(d==null?"flat":d>=0?"up":"down");
-    setText("probabilityNote","NOW = current object-state score • +15/+30/+45/+60 = forward guidance. Research only; Radar 50% + Environment 35% + Analog 15%.");
+    setText("probabilityNote","NOW = current object-state score • +15/+30/+45/+60 = forward guidance. Research only; Radar 50% + Environment 50%.");
   }
-  var radar=p.radar_component_score,env=p.environment_component_score,analog=p.analog_component_score;
+  var radar=p.radar_component_score,env=p.environment_component_score;
   var cards=[
     ["RADAR","50%",radar,"#ff5648"],
-    ["ENVIRONMENT","35%",env,"#62ce73"],
-    ["ANALOG","15%",analog,"#f0c54c"]
+    ["ENVIRONMENT","50%",env,"#62ce73"]
   ];
   var cardHtml=cards.map(function(x){return "<div class='prob-component'><span><i class='comp-dot' style='background:"+x[3]+"'></i>"+x[0]+" <small style='color:#748a9b'>("+x[1]+")</small></span><b>"+(x[2]==null?"—":Number(x[2]).toFixed(1)+"%")+"</b></div>"}).join("");
   var horizonHtml="<div style='display:grid;grid-template-columns:repeat(4,1fr);gap:4px;margin-top:7px'>"+horizons.map(function(h){var v=probs[h+"min"]??probs[String(h)];return "<div style='border:1px solid rgba(190,210,220,.14);padding:5px;text-align:center'><span style='display:block;font-size:8px;color:#748a9b'>+"+h+" MIN</span><b style='font-size:13px'>"+(v==null?"—":(Number(v)*100).toFixed(1)+"%")+"</b></div>"}).join("")+"</div>";
-  q("probComponents").innerHTML=cardHtml+horizonHtml+"<div style='margin-top:6px;font-size:8px;color:#748a9b'>NOW = current weighted state. Forward horizons use the transparent radar/environment/analog projection. Analog status: "+esc(p.probability_component_detail?.analog?.status||"provisional")+".</div>";
+  q("probComponents").innerHTML=cardHtml+horizonHtml+"<div style='margin-top:6px;font-size:8px;color:#748a9b'>NOW = current weighted state. Forward horizons use the transparent radar/environment projection.</div>";
   renderProbabilityChart(trackHistory(p));
 }
 function renderProbabilityChart(hist){
