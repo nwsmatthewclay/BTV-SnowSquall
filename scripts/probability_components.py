@@ -4,8 +4,8 @@ This module deliberately separates three component scores from the final weighte
 probability. Each component is always expressed on a 0-100 scale:
 
     radar        50%
-    environment  35%
-    analog       15%
+    environment  50%
+    analog       0%
 
 The resulting weighted value is still 0-100. These are research guidance
 scores, not calibrated operational probabilities.
@@ -18,7 +18,7 @@ from pathlib import Path
 from typing import Mapping
 
 
-WEIGHTS = {"radar": 0.50, "environment": 0.35, "analog": 0.15}
+WEIGHTS = {"radar": 0.50, "environment": 0.50, "analog": 0.00}
 HORIZONS = (15, 30, 45, 60)
 
 
@@ -246,6 +246,8 @@ def analog_component(record: Mapping) -> tuple[float, dict]:
 def horizon_component_scores(record: Mapping) -> dict:
     radar, radar_detail = radar_component(record)
     env, env_detail = environment_component(record)
+    # Analogs are retained only as an optional diagnostic for future research;
+    # they have zero weight in the snow-squall probability equation.
     analog, analog_detail = analog_component(record)
 
     radar_growth = _num(record.get("reflectivity_trend_dbz_per_hr"))
@@ -281,11 +283,11 @@ def horizon_component_scores(record: Mapping) -> dict:
         rs = radar_horizon[horizon]
         es = env_horizon[horizon]
         a = analog_horizon[horizon]
-        final[horizon] = round(rs * WEIGHTS["radar"] + es * WEIGHTS["environment"] + a * WEIGHTS["analog"], 2)
+        final[horizon] = round(rs * WEIGHTS["radar"] + es * WEIGHTS["environment"], 2)
         components[horizon] = {
             "radar": rs,
             "environment": es,
-            "analog": a,
+            "analog": 0.0,
             "weights": dict(WEIGHTS),
         }
 
@@ -294,6 +296,6 @@ def horizon_component_scores(record: Mapping) -> dict:
         "components": components,
         "radar": {"score": radar, "detail": radar_detail},
         "environment": {"score": env, "detail": env_detail},
-        "analog": {"score": analog, "detail": analog_detail},
+        "analog": {"score": 0.0, "detail": {"status": "excluded", "message": "Analog cases are not included in the probability equation."}},
         "status": "research_weighted_components",
     }
