@@ -196,7 +196,7 @@ def _clean_field(mosaic, rhohv=None):
 
     # Keep weak winter precipitation visible while removing only the
     # lowest-level display noise.
-    data[data < 5.0] = np.nan
+    data[data < -5.0] = np.nan
 
     if rhohv is not None:
         # Conservative dual-pol clutter screen. It only removes low-CC echoes
@@ -233,23 +233,25 @@ def _render(mosaic, latlon, output_path: Path, *, mode="clean", rhohv=None):
         # Winter display palette: extra discrimination in the 8–35 dBZ
         # range where shallow snow bands/squalls often live, while preserving
         # conventional warm colors for stronger echoes.
-        bounds = [5, 8, 12, 16, 20, 24, 28, 32, 36, 42, 50, 60, 75]
+        # Explicit winter/snow-squall display scale requested for the BTV
+        # CWA: -5 to 40 dBZ, with strong discrimination through the
+        # 0–35 dBZ range. Values above 40 dBZ use the over color.
+        bounds = [-5, 0, 5, 10, 15, 20, 25, 30, 35, 40]
         colors = [
-            (0.82, 0.88, 0.92, 0.20),  # 5–8: trace/very weak echo
-            (0.68, 0.78, 0.84, 0.28),  # 8–12: very weak snow
-            (0.38, 0.68, 0.86, 0.52),  # 12–16
-            (0.18, 0.58, 0.88, 0.68),  # 16–20
-            (0.12, 0.38, 0.86, 0.82),  # 20–24
-            (0.24, 0.20, 0.78, 0.92),  # 24–28
-            (0.48, 0.18, 0.76, 0.96),  # 28–32
-            (0.76, 0.18, 0.68, 0.98),  # 32–36
-            (0.94, 0.25, 0.55, 1.0),   # 36–42
-            (0.96, 0.34, 0.18, 1.0),   # 42–50
-            (0.98, 0.66, 0.08, 1.0),   # 50–60
-            (1.00, 0.92, 0.28, 1.0),   # 60–75
+            "#e9f2f7",  # -5–0: trace / near-background
+            "#b7ddf2",  # 0–5: very weak snow
+            "#5fa9df",  # 5–10
+            "#1f6fd1",  # 10–15
+            "#22a88a",  # 15–20
+            "#f0d84b",  # 20–25
+            "#f28a2e",  # 25–30
+            "#d93b32",  # 30–35
+            "#d52f9d",  # 35–40
         ]
         cmap = ListedColormap(colors, name="BTV_WINTER_REFLECTIVITY")
-        norm = BoundaryNorm(bounds, cmap.N)
+        cmap.set_under((0, 0, 0, 0))
+        cmap.set_over("#8b1e61")
+        norm = BoundaryNorm(bounds, cmap.N, extend="both")
         ax.pcolormesh(lon, lat, masked, cmap=cmap, norm=norm, shading="auto")
     else:
         cmap = plt.get_cmap("NWSRef").copy()
