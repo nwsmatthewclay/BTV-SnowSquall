@@ -4,6 +4,9 @@ on:
   schedule:
     - cron: "*/5 * * * *"
   workflow_dispatch:
+  push:
+    paths:
+      - ".github/radar-refresh-trigger"
 
 permissions:
   contents: write
