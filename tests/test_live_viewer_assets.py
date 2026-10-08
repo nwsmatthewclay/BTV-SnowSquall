@@ -14,8 +14,8 @@ def test_live_viewer_references_operational_feed_assets():
     assert 'fetchOptional(base+site+"_history.json?cb="+Date.now(),[])' in js
     # Probability remains visibly research-only rather than operationally released.
     assert "research candidate scoring" in html.lower()
-    assert "detail-drawer" in html
-    assert "selectedSummary" in html
+    assert "objectPicker" in html
+    assert "objectTitle" in html
     assert "raw.githubusercontent.com/nwsmatthewclay/BTV-SnowSquall/" in js
     assert "snow-squall-live-data/viewer/data/live/" in js
 
