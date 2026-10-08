@@ -87,7 +87,7 @@ jobs:
           cp viewer/*.html viewer/*.js viewer/*.css _site/
           cp -R viewer_artifact/. _site/
 
-          # Publish the live shell from the current model-foundation viewer source.
+          # Publish the live shell from the current model-foundation viewer source (live display fixes 2026-10-08).
           # Do not overwrite it with an older copy from gh-pages; that made the
           # public live page lag behind current live.js/live.html fixes.
           test -f _site/live.html
