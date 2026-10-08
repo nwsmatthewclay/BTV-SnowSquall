@@ -151,7 +151,7 @@ def archive_live_radar_frame(live_root: Path, *, cycle_time: datetime) -> None:
     # One-time migration: old history images were rendered with earlier display
     # palettes. Remove those reflectivity PNGs from the active archive so the
     # timeline cannot jump between color tables.
-    if manifest.get("reflectivity_palette") != "NWSRef":
+    if manifest.get("reflectivity_palette") != "NWSRef" or manifest.get("reflectivity_palette_version") != "NWSRef_V2":
         for old in history.glob("mosaic_*.png"):
             try:
                 old.unlink()
@@ -162,7 +162,7 @@ def archive_live_radar_frame(live_root: Path, *, cycle_time: datetime) -> None:
             "retention_frames": 18,
             "interval_hint_minutes": 5,
             "reflectivity_palette": "NWSRef",
-            "reflectivity_palette_version": "NWSRef_V1",
+            "reflectivity_palette_version": "NWSRef_V2",
             "frames": [],
         }
 
