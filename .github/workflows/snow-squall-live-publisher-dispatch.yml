@@ -1,0 +1,28 @@
+name: Snow Squall Live Publisher Dispatch
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "*/5 * * * *"
+
+permissions:
+  actions: write
+  contents: read
+
+concurrency:
+  group: snow-squall-live-publisher-dispatch
+  cancel-in-progress: false
+
+jobs:
+  dispatch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Dispatch canonical foundation publisher
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          echo "Dispatching Publish Live Snow Squall Objects on snow-squall-model-foundation"
+          gh workflow run "Publish Live Snow Squall Objects"             --repo "${{ github.repository }}"             --ref snow-squall-model-foundation
+          echo "Canonical live publisher dispatched."
