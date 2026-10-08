@@ -16,7 +16,7 @@ var radarHistory={frames:[]},radarHistoryIndex=-1,radarAnimationTimer=null;
 var LIVE_BASE="https://raw.githubusercontent.com/nwsmatthewclay/BTV-SnowSquall/snow-squall-live-data/viewer/data/live/";
 var SHADOW_BASE="https://raw.githubusercontent.com/nwsmatthewclay/BTV-SnowSquall/snow-squall-shadow-data/viewer/data/shadow/";
 var SHADOW_MIN_COVERAGE=0.40;
-var MAX_LIVE_OBJECT_AGE_MIN=45;
+var MAX_LIVE_OBJECT_AGE_MIN=75;
 var DISPLAY_MIN_SCORE=35;
 
 function q(id){return document.getElementById(id)}
