@@ -16,7 +16,7 @@ var radarHistory={frames:[]},radarHistoryIndex=-1,radarAnimationTimer=null;
 var LIVE_BASE="https://raw.githubusercontent.com/nwsmatthewclay/BTV-SnowSquall/snow-squall-live-data/viewer/data/live/";
 var SHADOW_BASE="https://raw.githubusercontent.com/nwsmatthewclay/BTV-SnowSquall/snow-squall-shadow-data/viewer/data/shadow/";
 var SHADOW_MIN_COVERAGE=0.40;
-var MAX_LIVE_OBJECT_AGE_MIN=15;
+var MAX_LIVE_OBJECT_AGE_MIN=45;
 var DISPLAY_MIN_SCORE=35;
 
 function q(id){return document.getElementById(id)}
@@ -549,10 +549,12 @@ async function refresh(){
     cursorGrid=await fetchOptional(LIVE_BASE+"radar_cursor.json?cb="+Date.now(),null);
     await loadRadarHistory();
     var detectedObjects=got.flatMap(function(x){var scan=x.state?.last_scan_time_utc||x.geo?.metadata?.scan_time_utc; var fresh=ageMinutes(scan)<=MAX_LIVE_OBJECT_AGE_MIN; return fresh?(x.geo.features||[]).map(function(f){return Object.assign({},f.properties,{radar_site:x.site,radar_geometry:f.geometry})}):[]});
+    // Keep every valid detected radar object visible. Detection/tracking and
+    // hazard ranking are separate concepts: a cell can be trackable before it
+    // reaches the research probability/rank threshold.
     allObjects=detectedObjects.filter(function(p){
-      var score=Number(p.candidate_rank_score);
-      var z=Number(p.max_reflectivity_dbz);
-      return (Number.isFinite(score)&&score>=DISPLAY_MIN_SCORE) || (Number.isFinite(z)&&z>=40);
+      var lat=Number(p.centroid_lat),lon=Number(p.centroid_lon),area=Number(p.area_km2);
+      return Number.isFinite(lat)&&Number.isFinite(lon)&&Number.isFinite(area)&&area>0;
     });
     allObjects.sort(function(a,b){var d=riskScore(b)-riskScore(a);return d||Number(b.max_reflectivity_dbz||0)-Number(a.max_reflectivity_dbz||0)});
     selectDefault();
@@ -561,7 +563,7 @@ async function refresh(){
     var latest=got.map(function(x){return x.state?.last_scan_time_utc||x.geo?.metadata?.scan_time_utc}).filter(Boolean).sort().at(-1);
     setText("liveTime",latest?fmtTime(latest):"No scan time available");
     setText("mapScanLabel",latest?fmtTime(latest):"No live radar");
-    setText("feedSummary",(allObjects.length)+" focused objects • "+detectedObjects.length+" radar detections • "+got.map(function(x){return x.site+" "+(x.error?"OFFLINE":(ageMinutes(x.state?.last_scan_time_utc)<=30?"LIVE":"STALE"))}).join(" • "));
+    setText("feedSummary",(allObjects.length)+" tracked objects • "+detectedObjects.length+" radar detections • "+got.map(function(x){return x.site+" "+(x.error?"OFFLINE":(ageMinutes(x.state?.last_scan_time_utc)<=15?"LIVE":(ageMinutes(x.state?.last_scan_time_utc)<=45?"AGING":"STALE")))}).join(" • "));
     var degraded=got.filter(function(x){return x.error||ageMinutes(x.state?.last_scan_time_utc)>30}).length>0;
     q("liveBadge").classList.toggle("gated",degraded);if(degraded)setText("liveBadge","DEGRADED");
   }catch(e){setText("feedSummary","Live feed error: "+e.message);q("liveBadge").classList.add("gated");setText("liveBadge","DEGRADED")}
