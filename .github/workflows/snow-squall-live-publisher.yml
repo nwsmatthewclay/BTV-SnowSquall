@@ -59,13 +59,45 @@ jobs:
         run: |
           mkdir -p viewer/data/live data/derived
 
-      - name: Process latest KCXX volume
+      - name: Process latest KCXX and KTYX volumes in parallel
         run: |
-          python scripts/live_object_worker.py             --radar KCXX             --poll-seconds 2             --max-polls 1             --state viewer/data/live/KCXX_state.json             --output viewer/data/live/KCXX_objects.geojson             --history-jsonl viewer/data/live/KCXX_history.jsonl             --history-csv data/derived/KCXX_history.csv
+          set +e
 
-      - name: Process latest KTYX volume
-        run: |
-          python scripts/live_object_worker.py             --radar KTYX             --poll-seconds 2             --max-polls 1             --state viewer/data/live/KTYX_state.json             --output viewer/data/live/KTYX_objects.geojson             --history-jsonl viewer/data/live/KTYX_history.jsonl             --history-csv data/derived/KTYX_history.csv
+          python scripts/live_object_worker.py \
+            --radar KCXX \
+            --poll-seconds 2 \
+            --max-polls 1 \
+            --max-volumes-per-run 1 \
+            --state viewer/data/live/KCXX_state.json \
+            --output viewer/data/live/KCXX_objects.geojson \
+            --history-jsonl viewer/data/live/KCXX_history.jsonl \
+            --history-csv data/derived/KCXX_history.csv > /tmp/kcxx-object-worker.log 2>&1 &
+          KCXX_PID=$!
+
+          python scripts/live_object_worker.py \
+            --radar KTYX \
+            --poll-seconds 2 \
+            --max-polls 1 \
+            --max-volumes-per-run 1 \
+            --state viewer/data/live/KTYX_state.json \
+            --output viewer/data/live/KTYX_objects.geojson \
+            --history-jsonl viewer/data/live/KTYX_history.jsonl \
+            --history-csv data/derived/KTYX_history.csv > /tmp/ktyx-object-worker.log 2>&1 &
+          KTYX_PID=$!
+
+          wait $KCXX_PID
+          KCXX_RC=$?
+          wait $KTYX_PID
+          KTYX_RC=$?
+
+          cat /tmp/kcxx-object-worker.log
+          cat /tmp/ktyx-object-worker.log
+
+          echo "KCXX object worker rc=$KCXX_RC"
+          echo "KTYX object worker rc=$KTYX_RC"
+          if [ "$KCXX_RC" -ne 0 ] || [ "$KTYX_RC" -ne 0 ]; then
+            exit 1
+          fi
 
       - name: Normalize persisted live timestamps
         run: |
