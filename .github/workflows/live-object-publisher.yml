@@ -65,13 +65,14 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt -r requirements-science.txt
 
-      - name: Process latest KCXX volume
+      - name: Backfill missed radar scans chronologically
         run: |
-          python scripts/live_object_worker.py             --radar KCXX             --poll-seconds 2             --max-polls 1             --max-volumes-per-run 2             --state viewer/data/live/KCXX_state.json             --output viewer/data/live/KCXX_objects.geojson             --history-jsonl viewer/data/live/KCXX_history.jsonl             --history-csv data/derived/KCXX_history.csv
-
-      - name: Process latest KTYX volume
-        run: |
-          python scripts/live_object_worker.py             --radar KTYX             --poll-seconds 2             --max-polls 1             --max-volumes-per-run 2             --state viewer/data/live/KTYX_state.json             --output viewer/data/live/KTYX_objects.geojson             --history-jsonl viewer/data/live/KTYX_history.jsonl             --history-csv data/derived/KTYX_history.csv
+          set -euo pipefail
+          # Never jump directly to the newest scan when an intermediate volume
+          # was missed.  The backfill routine uses the durable processed-source
+          # ledger and processes KCXX cycles oldest -> newest, with the best
+          # synchronized KTYX companion for each cycle.
+          python scripts/backfill_live_radar.py             --live-root viewer/data/live             --raw-root data/raw             --max-cycles 18             --lookback-hours 4             --kcxx-tolerance-minutes 4             --ktyx-max-age-minutes 8             --archive-attempts 6             --archive-delay-seconds 15
 
       - name: Ensure exact processed Level-II volumes are available for radar display
         run: |
