@@ -92,6 +92,7 @@ def published_time(live_root: Path) -> datetime | None:
 
 def main() -> int:
     parser = argparse.ArgumentParser()
+    parser.add_argument("--radar", default="KCXX", choices=("KCXX", "KTYX"))
     parser.add_argument("--live-root", type=Path, default=Path("viewer/data/live"))
     parser.add_argument("--raw-root", type=Path, default=Path("data/raw"))
     parser.add_argument("--max-cycles", type=int, default=12)
