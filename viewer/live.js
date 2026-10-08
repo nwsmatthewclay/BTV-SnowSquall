@@ -587,6 +587,10 @@ function envRiskClass(key,val){
   else if(key==="visibility_m"){y=4000;r=800;hi=false}
   else if(key==="gust_ms"){y=10;r=18}
   else if(key==="wetbulb_2m_c"){y=1;r=-1;hi=false}
+  else if(key==="rh_2m_pct"){y=60;r=75}
+  else if(key==="temperature_2m_k"){y=275.15;r=273.15;hi=false}
+  else if(key==="dewpoint_2m_k"){y=273.15;r=270.15;hi=false}
+  else if(key==="el_m"){y=3000;r=1500;hi=false}
   else return "env-risk-neutral";
   var s=hi?(v<=y?0:v>=r?1:(v-y)/(r-y)):(v>=y?0:v<=r?1:(y-v)/(y-r));
   return s>=1?"env-risk-red":s>0?"env-risk-yellow":"env-risk-green";
