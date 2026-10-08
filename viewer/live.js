@@ -161,7 +161,7 @@ async function loadRadarHistory(){
   // than reducing the viewer to the single current mosaic.
   radarHistory.frames=radarHistory.frames.filter(function(f){
     return f && parseUtcDate(f.timestamp) && f.image &&
-      (!f.palette || f.palette==="NWSRef" || f.palette==="BTV_WINTER_REFLECTIVITY_V1");
+      (!f.palette || f.palette==="NWSRef");
   });
   radarHistory.frames.sort(function(a,b){return parseUtcDate(a.timestamp).getTime()-parseUtcDate(b.timestamp).getTime()});
   radarHistoryIndex=radarHistory.frames.length?radarHistory.frames.length-1:-1;
@@ -190,7 +190,7 @@ async function renderRadarMosaic(){
     radarMosaic &&
     radarMosaic.bounds &&
     radarMosaic.grid &&
-    (radarMosaic.grid.color_table==="NWSRef" || radarMosaic.grid.color_table==="BTV_WINTER_REFLECTIVITY + NWSRef_RAW")
+    radarMosaic.grid.color_table==="NWSRef"
   );
 
   if(!mosaicIsNwsRef){
