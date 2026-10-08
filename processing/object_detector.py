@@ -498,6 +498,8 @@ def detect_reflectivity_objects(reflectivity, config=ObjectDetectionConfig(), ve
                 "detection_evidence":detection_evidence,
                 "candidate_rank_score":rank_score,
                 "candidate_rank_tier":candidate_rank_tier(rank_score),
+                "detection_method":"probsevere_style_enhanced_watershed" if config.use_watershed else "connected_component",
+                "watershed_seed_dbz":float(config.watershed_seed_dbz),
                 "touches_grid_edge":bool(yy.min()==0 or xx.min()==0 or yy.max()==arr.shape[0]-1 or xx.max()==arr.shape[1]-1),
                 "row_indices":yy.tolist(),
                 "column_indices":xx.tolist(),
