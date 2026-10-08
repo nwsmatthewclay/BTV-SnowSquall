@@ -275,14 +275,13 @@ def horizon_component_scores(record: Mapping) -> dict:
             f = env_detail.get("forecast_30")
             env_h = env if f is None else 0.25 * env + 0.75 * f
         env_horizon[horizon] = round(_clamp(env_h / 100.0) * 100.0, 2)
-        analog_horizon[horizon] = round(analog, 2)
+        analog_horizon[horizon] = 50.0
 
     final = {}
     components = {}
     for horizon in HORIZONS:
         rs = radar_horizon[horizon]
         es = env_horizon[horizon]
-        a = analog_horizon[horizon]
         final[horizon] = round(rs * WEIGHTS["radar"] + es * WEIGHTS["environment"], 2)
         components[horizon] = {
             "radar": rs,
