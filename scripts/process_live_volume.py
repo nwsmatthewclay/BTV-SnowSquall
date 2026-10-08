@@ -311,6 +311,7 @@ def process_volume(
         watershed_max_dbz=57.0,
         watershed_min_distance_px=6,
         watershed_min_saliency_pixels=8,
+        retain_coherent_objects=True,
     )
     detections = detect_reflectivity_objects(
         data,
