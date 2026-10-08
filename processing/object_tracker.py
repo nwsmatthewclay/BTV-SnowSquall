@@ -28,7 +28,7 @@ class Track:
 class TrackerConfig:
     max_pixel_distance:float=18.0
     grid_spacing_km:float=1.0
-    max_motion_kt:float=90.0
+    max_motion_kt:float=75.0
     min_gate_distance_km:float=4.0
     max_time_gap_minutes:float=30.0
     max_missed_scans:int=2
