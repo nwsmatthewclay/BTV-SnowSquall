@@ -14,6 +14,9 @@ on:
       - "scripts/audit_operational_readiness.py"
       - "scripts/live_healthcheck.py"
       - "scripts/build_live_radar_mosaic.py"
+      - "processing/object_detector.py"
+      - "processing/object_tracker.py"
+      - "requirements-science.txt"
   schedule:
     - cron: "2-59/5 * * * *"
   workflow_dispatch:
