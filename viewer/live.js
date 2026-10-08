@@ -277,6 +277,25 @@ function renderMap(){
     visual.bindTooltip(tooltip,{sticky:true});
     visual.on("click",function(e){if(e&&e.originalEvent)L.DomEvent.stopPropagation(e.originalEvent);selectObject(p)});
 
+    // Show the persisted track path for the selected object. This is the
+    // observed path, not a projected future track, and makes stable identity
+    // visible across successive radar scans.
+    var trackTrail=Array.isArray(p.track_position_history)?p.track_position_history.map(function(h){
+      var tlat=Number(h&&h.lat),tlon=Number(h&&h.lon);
+      return Number.isFinite(tlat)&&Number.isFinite(tlon)?[tlat,tlon]:null;
+    }).filter(Boolean):[];
+    if(sel&&trackTrail.length>1){
+      L.polyline(trackTrail,{
+        color:"#fff",
+        weight:2.4,
+        opacity:.9,
+        dashArray:"5 4",
+        interactive:false,
+        lineCap:"round",
+        lineJoin:"round"
+      }).addTo(layers.motion);
+    }
+
     var hitLat=Number(p.centroid_lat),hitLon=Number(p.centroid_lon);
     if(Number.isFinite(hitLat)&&Number.isFinite(hitLon)){var hit=L.circleMarker([hitLat,hitLon],{pane:"liveHitPane",radius:18,color:"#fff",weight:1,opacity:0.01,fillColor:"#fff",fillOpacity:0.01,interactive:true}).addTo(layers[p.radar_site]);hit.on("click",function(e){if(e&&e.originalEvent)L.DomEvent.stopPropagation(e.originalEvent);selectObject(p)});}
 
