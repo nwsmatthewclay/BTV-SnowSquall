@@ -17,7 +17,7 @@ import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-from acquisition.radar_watcher import find_recent_volumes, make_s3_client
+from acquisition.radar_watcher import download_volume, find_recent_volumes, make_s3_client
 
 
 def parse_time(value: str | None) -> datetime | None:
@@ -140,8 +140,15 @@ def main() -> int:
     # discovery list after their processing window has expired; feeding one
     # of those to process_live_event can fail the entire cycle before newer
     # scans are reached. Let old gaps age out instead of blocking the feed.
+    # Do one archive discovery pass for each radar, then reuse those
+    # results throughout this run. Re-querying S3 for every candidate was the
+    # main source of publisher stalls: a six-scan backfill could perform a
+    # dozen+ archive listings before it ever reached the processing step.
     all_recent = find_recent_volumes(
         s3, "KCXX", since=None, lookback_hours=args.lookback_hours
+    )
+    ktyx_recent = find_recent_volumes(
+        s3, "KTYX", since=None, lookback_hours=args.lookback_hours
     )
     processing_cutoff = datetime.now(timezone.utc) - timedelta(hours=2)
     candidates = [
@@ -178,22 +185,33 @@ def main() -> int:
 
     processed = 0
     skipped = 0
-    for index, (_, scan_time) in enumerate(candidates, start=1):
+    for index, (kcxx_key, scan_time) in enumerate(candidates, start=1):
         stamp = scan_time.isoformat().replace("+00:00", "Z")
-        source_available = any(
-            abs((when - scan_time).total_seconds()) <= args.kcxx_tolerance_minutes * 60
-            for _, when in find_recent_volumes(
-                s3, "KCXX", since=scan_time - timedelta(minutes=args.kcxx_tolerance_minutes),
-                lookback_hours=max(2, args.lookback_hours)
-            )
-        )
-        raw_matches = list((args.raw_root / "KCXX").glob(f"*{scan_time.strftime('%Y%m%d_%H%M')}*"))
-        if not source_available and not raw_matches:
-            skipped += 1
-            print(f"=== BACKFILL {index}/{len(candidates)}: KCXX {stamp} ===")
-            print("KCXX archive source is not currently resolvable; skipping this scan so one archive gap cannot block newer scans.")
-            continue
         print(f"=== BACKFILL {index}/{len(candidates)}: KCXX {stamp} ===")
+
+        # Resolve and cache the exact KCXX source now. This turns the expensive
+        # archive lookup into a bounded operation and lets process_live_event
+        # operate entirely from local files.
+        try:
+            kcxx_local = download_volume(s3, "KCXX", kcxx_key, scan_time)
+            # Select the newest KTYX volume at/before KCXX within the sync window
+            # from the already-discovered archive list; never issue another S3
+            # listing just to pair the companion radar.
+            eligible_ktyx = [
+                item for item in ktyx_recent
+                if item[1] <= scan_time
+                and (scan_time - item[1]).total_seconds() / 60.0 <= args.ktyx_max_age_minutes
+            ]
+            if eligible_ktyx:
+                ktyx_key, ktyx_time = max(eligible_ktyx, key=lambda item: item[1])
+                download_volume(s3, "KTYX", ktyx_key, ktyx_time)
+                print(f"Cached KTYX companion: {ktyx_key} {ktyx_time.isoformat()}")
+            else:
+                print("No synchronized KTYX companion in cached archive window; KCXX-only cycle.")
+        except Exception as exc:
+            skipped += 1
+            print(f"Could not cache radar sources for {stamp}: {exc}; continuing.")
+            continue
         cmd = [
             sys.executable,
             "scripts/process_live_event.py",
