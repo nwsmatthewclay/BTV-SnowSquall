@@ -61,7 +61,7 @@ function bindCursorReadout(){
 function setText(id,v){var e=q(id);if(e)e.textContent=v==null?"—":v}
 function num(v,d){if(d===undefined)d=1;var n=Number(v);return v==null||!Number.isFinite(n)?"—":n.toFixed(d)}
 function esc(v){return String(v==null?"—":v).replace(/[&<>"']/g,function(m){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}})}
-function fmtTime(t){return t?new Date(t).toLocaleString(undefined,{month:"short",day:"numeric",hour:"numeric",minute:"2-digit"}):"—"}
+function fmtTime(t){if(!t)return "—";try{return new Intl.DateTimeFormat("en-US",{timeZone:"America/New_York",month:"short",day:"numeric",hour:"numeric",minute:"2-digit",timeZoneName:"short"}).format(new Date(t))}catch(_){return new Date(t).toLocaleString(undefined,{month:"short",day:"numeric",hour:"numeric",minute:"2-digit"})}}
 function fmtUTC(t){return t?new Date(t).toISOString().replace("T"," ").replace(/\.\d{3}Z$/,"Z"):"—"}
 function ageMinutes(t){return t?Math.max(0,(Date.now()-new Date(t).getTime())/60000):Infinity}
 function msToKt(v){return v==null||!Number.isFinite(Number(v))?"—":Number(v)*1.943844492}
@@ -76,7 +76,7 @@ function shadowRows(site,trackId){return (datasets[site]?.shadowHistory||[]).fil
 function probValue(r,h){var v=r?.research_probabilities;if(!v)return null;return v[h]??v[String(h).replace("min","")]??null}
 function riskScore(p){var v=p?.research_probabilities?.["15min"]??p?.research_probabilities?.["15"]??p?.probability_15min; if(Number.isFinite(Number(v)))return Number(v); var s=shadowRecord(p.radar_site,p.track_id),sv=probValue(s,"15"); if(Number.isFinite(Number(sv)))return Number(sv); var rank=Number(p.candidate_rank_score);if(Number.isFinite(rank))return rank/100;var z=Number(p.max_reflectivity_dbz);if(z>=45)return .85;if(z>=35)return .62;if(z>=25)return .38;return .16}
 function objectRisk(p){var s=riskScore(p);return s>=.70?"#ff4d3d":s>=.45?"#ff9a3c":s>=.25?"#efcd48":"#54b6ee"}
-function objectOrdinal(p){var idx=allObjects.findIndex(function(x){return x.radar_site===p.radar_site&&String(x.track_id)===String(p.track_id)});return String(idx+1).padStart(2,"0")}
+function objectOrdinal(p){var site=String(p?.radar_site||"RADAR").toUpperCase();var track=String(p?.track_id??p?.object_id??"—");return site+"-"+track}
 function latestForSelected(){
   if(!selected)return null;
   var x=allObjects.find(function(p){return p.radar_site===selected.radar_site&&String(p.track_id)===String(selected.track_id)});
@@ -324,7 +324,7 @@ function renderObjectCard(){
   q("objectAccent").style.background=objectRisk(p);
   setText("objectTitle","OBJECT "+objectOrdinal(p));
   setText("objectSubtitle",p.radar_site+" • Track "+p.track_id);
-  setText("objectTime",fmtTime(p.timestamp)+" • "+fmtUTC(p.timestamp));
+  setText("objectTime",fmtTime(p.timestamp));
   var z=Number(p.max_reflectivity_dbz);setText("objectBadge",riskScore(p)>=.70?"ELEVATED":riskScore(p)>=.45?"WATCH":"CANDIDATE");
   setText("objectTrack",p.radar_site+" • "+p.track_id);
   setText("objectLatLon",num(p.centroid_lat,2)+"°N / "+num(Math.abs(Number(p.centroid_lon)),2)+"°W");
@@ -477,7 +477,7 @@ function renderEnvironment(){
   }).join("");
   q("environmentTable").innerHTML=html;
   var e=p.environment||{},forecastLabel=forecast.valid_time_utc||forecast.forecast_valid_time_utc,derivedCount=(e.metpy_derived_fields||[]).length;
-  setText("envSource",(e.source||p.environment_source||"RAP")+(e.age_minutes==null?"":" • analysis "+num(e.age_minutes,0)+" min old")+(derivedCount?" • MetPy "+derivedCount+" derived":"")+" • forecast "+(forecastLabel?fmtUTC(forecastLabel):"unavailable")+(forecast.actual_valid_offset_minutes==null?"":" (+"+num(forecast.actual_valid_offset_minutes,0)+" min)"));
+  setText("envSource",(e.source||p.environment_source||"RAP")+(e.age_minutes==null?"":" • analysis "+num(e.age_minutes,0)+" min old")+(derivedCount?" • MetPy "+derivedCount+" derived":"")+" • forecast "+(forecastLabel?fmtTime(forecastLabel):"unavailable")+(forecast.actual_valid_offset_minutes==null?"":" (+"+num(forecast.actual_valid_offset_minutes,0)+" min)"));
 }
 function evidenceItem(icon,cls,title,body){return "<div class='evidence-card'><div class='evidence-icon "+(cls||"")+"'>"+icon+"</div><div><b>"+title+"</b><span>"+body+"</span></div></div>"}
 function renderEvidence(){
@@ -540,7 +540,7 @@ async function refresh(){
     await renderRadarMosaic();
     renderMap();renderInventory();renderObjectCard();renderProbability();renderKeyTrends();renderEnvironment();renderEvidence();renderHistory();renderModelStatus();
     var latest=got.map(function(x){return x.state?.last_scan_time_utc||x.geo?.metadata?.scan_time_utc}).filter(Boolean).sort().at(-1);
-    setText("liveTime",latest?fmtTime(latest)+" • "+fmtUTC(latest):"No scan time available");
+    setText("liveTime",latest?fmtTime(latest):"No scan time available");
     setText("mapScanLabel",latest?fmtTime(latest):"No live radar");
     setText("feedSummary",(allObjects.length)+" focused objects • "+detectedObjects.length+" radar detections • "+got.map(function(x){return x.site+" "+(x.error?"OFFLINE":(ageMinutes(x.state?.last_scan_time_utc)<=30?"LIVE":"STALE"))}).join(" • "));
     var degraded=got.filter(function(x){return x.error||ageMinutes(x.state?.last_scan_time_utc)>30}).length>0;
