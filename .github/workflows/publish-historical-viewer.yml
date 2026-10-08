@@ -1,21 +1,8 @@
 name: Publish Snow Squall Historical Viewer
 
 on:
-  push:
-    branches:
-      - main
-    paths:
-      - viewer/*.html
-      - viewer/*.js
-      - viewer/*.css
-      - scripts/build_static_viewer.py
-      - .github/workflows/publish-historical-viewer.yml
-      - .github/archived-viewer-publish-trigger
-  workflow_run:
-    workflows:
-      - Archived Snow Squall Viewer Smoke Test
-    types:
-      - completed
+  # Historical publication is intentionally manual while the archived smoke
+  # artifact pipeline is retired. The live viewer has its own publication path.
   workflow_dispatch:
 
 permissions:
