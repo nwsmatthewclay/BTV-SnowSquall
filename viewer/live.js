@@ -1,6 +1,7 @@
 // Snow Squall live viewer v15: probability cells + robust click + canonical MetPy environment
 
-var map=L.map("liveMap",{zoomControl:true,keyboard:false,preferCanvas:true}).setView([44.15,-73.65],8);
+var map=L.map("liveMap",{zoomControl:false,keyboard:false,preferCanvas:true}).setView([44.15,-73.65],8);
+L.control.zoom({position:"topright"}).addTo(map);
 var radarPane=map.createPane("liveRadarPane");radarPane.style.zIndex=240;
 var hitPane=map.createPane("liveHitPane");hitPane.style.zIndex=650;hitPane.style.pointerEvents="auto";
 L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",{maxZoom:12,attribution:"Tiles © Esri — Source: Esri, Maxar, Earthstar Geographics, and the GIS User Community"}).addTo(map);
@@ -181,7 +182,7 @@ async function renderRadarMosaic(){
       });
       iem.addTo(radarLayer);
       setText("radarStatus",useHistorical&&histFrameForWms?"IEM radar fallback • "+fmtTime(histFrameForWms.timestamp):"IEM live radar fallback • current NEXRAD mosaic");
-      setText("legendTitle","REFLECTIVITY • dBZ");
+      setText("legendTitle","WINTER REFLECTIVITY • dBZ");
       setText("legendNote","External fallback: IEM NEXRAD mosaic. Local KCXX/KTYX products resume automatically when published.");
       return;
     }
