@@ -296,6 +296,6 @@ def horizon_component_scores(record: Mapping) -> dict:
         "components": components,
         "radar": {"score": radar, "detail": radar_detail},
         "environment": {"score": env, "detail": env_detail},
-        "analog": {"score": 0.0, "detail": {"status": "excluded", "message": "Analog cases are not included in the probability equation."}},
+        "analog": {"score": 50.0, "detail": {"status": "excluded", "message": "Analog cases are not included in the probability equation."}},
         "status": "research_weighted_components",
     }
