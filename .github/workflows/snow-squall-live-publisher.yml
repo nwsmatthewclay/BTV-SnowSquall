@@ -3,20 +3,8 @@ name: Snow Squall Live Object Publisher
 # RAP cache downloads are process-isolated for parallel radar workers.
 
 on:
-  push:
-    paths:
-      - ".github/workflows/snow-squall-live-publisher.yml"
-      - "scripts/live_object_worker.py"
-      - "scripts/process_live_volume.py"
-      - "acquisition/rap_environment.py"
-      - "processing/rap_features.py"
-      - "scripts/append_live_object_history.py"
-      - "scripts/audit_operational_readiness.py"
-      - "scripts/live_healthcheck.py"
-      - "scripts/build_live_radar_mosaic.py"
-      - "processing/object_detector.py"
-      - "processing/object_tracker.py"
-      - "requirements-science.txt"
+  # Manual recovery/replay only. The synchronized public archive publisher
+  # owns scheduled live publication now, preventing duplicate object cycles.
   workflow_dispatch:
 
 # The public archive watcher is now the scheduled live publisher. This workflow
