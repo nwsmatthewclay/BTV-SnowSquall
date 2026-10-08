@@ -63,6 +63,8 @@ jobs:
 
       - name: Backfill all missed KCXX/KTYX cycles
         if: steps.archive.outputs.new_scan == 'true'
+        env:
+          PYTHONPATH: .
         run: |
           python scripts/backfill_live_radar.py \
             --live-root viewer/data/live \
