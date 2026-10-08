@@ -28,7 +28,7 @@ function q(id){return document.getElementById(id)}
 function setText(id,v){var e=q(id);if(e)e.textContent=v==null?"—":v}
 function num(v,d){if(d===undefined)d=1;var n=Number(v);return v==null||!Number.isFinite(n)?"—":n.toFixed(d)}
 function esc(v){return String(v==null?"—":v).replace(/[&<>"']/g,function(m){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[m]})}
-function fmtTime(t){return t?new Date(t).toLocaleString(undefined,{month:"short",day:"numeric",hour:"numeric",minute:"2-digit"}):"—"}
+function fmtTime(t){if(!t)return "—";try{return new Intl.DateTimeFormat("en-US",{timeZone:"America/New_York",month:"short",day:"numeric",hour:"numeric",minute:"2-digit",timeZoneName:"short"}).format(new Date(t))}catch(_){return new Date(t).toLocaleString(undefined,{month:"short",day:"numeric",hour:"numeric",minute:"2-digit"})}}
 function fmtUTC(t){return t?new Date(t).toISOString().replace("T"," ").replace(/\.\d{3}Z$/,"Z"):"—"}
 function kmToMi(k){return Number.isFinite(Number(k))?Number(k)*.621371:"—"}
 function msToKt(v){return v==null||!Number.isFinite(Number(v))?"—":Number(v)*1.943844492}
@@ -68,7 +68,7 @@ function renderRadar(ts){
   var frames=current&&current.radar_frames||[],bounds=current&&current.radar_bounds;if(!frames.length||!bounds){setText("radarStatus","No reconstructed radar frame loaded");return}
   var exact=frames.find(function(f){return f.timestamp===ts});var frame=exact||frames.slice().reverse().find(function(f){return f.timestamp<ts});if(!frame){setText("radarStatus","No frame at or before current time");return}
   var op=.82;var overlay=L.imageOverlay("data/"+frame.file,bounds,{pane:"archiveRadarPane",opacity:op,interactive:false,attribution:"Historical Level-II reflectivity reconstruction"});overlay.addTo(radarLayer);
-  setText("radarStatus","Frame "+fmtUTC(frame.timestamp)+(exact?"":" • prior available scan"));
+  setText("radarStatus","Frame "+fmtTime(frame.timestamp)+(exact?"":" • prior available scan"));
 }
 function renderMapObjects(ts){
   objectsLayer.clearLayers();motionLayer.clearLayers();labelLayer.clearLayers();
@@ -93,10 +93,7 @@ function renderMapObjects(ts){
     }
   });
 }
-function objectOrdinal(f){
-  var rows=features.filter(function(x){return x.properties.timestamp===f.properties.timestamp&&!x.properties.context_only}).slice().sort(function(a,b){var ar=rankValue(a.properties),br=rankValue(b.properties);if(ar!=null||br!=null)return (br??-1)-(ar??-1);return Number(b.properties.max_reflectivity_dbz||0)-Number(a.properties.max_reflectivity_dbz||0)});
-  var i=rows.findIndex(function(x){return x.properties.track_key===f.properties.track_key});return String(i+1).padStart(2,"0");
-}
+function objectOrdinal(f){var p=f&&f.properties||{};return String(p.track_key||((p.radar_site||"RADAR")+"-"+(p.track_id??p.object_id??"—")));}
 function renderObjectPicker(){
   var box=q("objectPicker"),rows=features.filter(function(f){return f.properties.timestamp===times[currentIndex]&&!f.properties.context_only}).slice().sort(function(a,b){var ar=rankValue(a.properties),br=rankValue(b.properties);if(ar!=null||br!=null)return (br??-1)-(ar??-1);return Number(b.properties.max_reflectivity_dbz||0)-Number(a.properties.max_reflectivity_dbz||0)});
   setText("objectCount",rows.length+" objects");
@@ -129,7 +126,7 @@ function renderObjectCard(f){
   q("objectAccent").style.background=objectRisk(p);
   setText("objectTitle","OBJECT "+objectOrdinal(f));
   setText("objectSubtitle",p.radar_site+" • Track "+p.track_key+" • Cell "+(p.object_id??"—"));
-  setText("objectTime",fmtTime(p.timestamp)+" • "+fmtUTC(p.timestamp));
+  setText("objectTime",fmtTime(p.timestamp));
   var z=Number(p.max_reflectivity_dbz);setText("objectBadge",Number.isFinite(z)?(z>=45?"HIGH Z":z>=35?"MODERATE":"CANDIDATE"):"OBJECT");
   setText("objectLatLon",num(p.centroid_lat,2)+"°N / "+num(Math.abs(Number(p.centroid_lon)),2)+"°W");
   setText("objectMotion",Number.isFinite(speed)?Math.round(speed)+" kt • "+num(dir,0)+"° ("+compass(dir)+")":"Motion —");
