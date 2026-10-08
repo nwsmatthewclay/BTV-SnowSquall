@@ -322,6 +322,26 @@ def detect_reflectivity_objects(reflectivity, config=ObjectDetectionConfig(), ve
                     watershed_line=False,
                 )
                 count = int(labels.max())
+
+                # Do not let watershed fragment a clearly elongated snow-squall
+                # band merely because it contains multiple embedded reflectivity
+                # maxima. ProbSevere-style local maxima are useful for compact
+                # cells, but an extensive narrow band should remain one trackable
+                # object so the tracker follows the band instead of inventing
+                # multiple pseudo-storms. Compact echoes retain the watershed
+                # separation above.
+                base_labels, base_count = ndimage.label(mask, structure=structure)
+                for base_id in range(1, base_count + 1):
+                    base_component = base_labels == base_id
+                    by, bx = np.where(base_component)
+                    if len(bx) < 3:
+                        continue
+                    base_h = float(np.max(by) - np.min(by) + 1)
+                    base_w = float(np.max(bx) - np.min(bx) + 1)
+                    base_aspect = max(base_h, base_w) / max(1.0, min(base_h, base_w))
+                    if max(base_h, base_w) >= 12.0 and base_aspect >= 5.0:
+                        labels[base_component] = int(np.min(labels[base_component]))
+                count = int(labels.max())
             else:
                 labels, count = ndimage.label(mask, structure=structure)
         else:
