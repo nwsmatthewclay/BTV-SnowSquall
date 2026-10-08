@@ -175,7 +175,7 @@ def archive_live_radar_frame(live_root: Path, *, cycle_time: datetime) -> None:
         "image": f"radar_history/{image_name}",
         "bounds": mosaic.get("bounds"),
         "palette": "NWSRef",
-        "palette_version": "NWSRef_V1",
+        "palette_version": "NWSRef_V2",
     }
 
     frames = [
