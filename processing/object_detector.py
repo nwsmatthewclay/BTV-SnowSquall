@@ -339,7 +339,7 @@ def detect_reflectivity_objects(reflectivity, config=ObjectDetectionConfig(), ve
                     base_h = float(np.max(by) - np.min(by) + 1)
                     base_w = float(np.max(bx) - np.min(bx) + 1)
                     base_aspect = max(base_h, base_w) / max(1.0, min(base_h, base_w))
-                    if max(base_h, base_w) >= 12.0 and base_aspect >= 5.0:
+                    if min(base_h, base_w) <= 8.0 and max(base_h, base_w) >= 12.0 and base_aspect >= 5.0:
                         labels[base_component] = int(np.min(labels[base_component]))
                 count = int(labels.max())
             else:
