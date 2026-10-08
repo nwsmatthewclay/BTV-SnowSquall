@@ -357,6 +357,60 @@ def render_site_products(
 
 
 
+
+def render_native_site_products(raw_root: Path, states: dict[str, Path], output_dir: Path):
+    """Render true per-radar base reflectivity from the lowest valid Level-II sweep.
+
+    These products intentionally bypass the Cartesian multi-sweep composite used
+    by the model/mosaic path.  They are the browser's radar-like KCXX/KTYX
+    displays and therefore correspond to the lowest valid native radar sweep.
+    """
+    products = {}
+    output_dir.mkdir(parents=True, exist_ok=True)
+    for site in RADARS:
+        source = latest_source(raw_root, states[site], site)
+        if source is None:
+            continue
+        try:
+            radar_obj = read_level2(source)
+            fields = resolve_fields(radar_obj)
+            refl = fields.get("reflectivity")
+            if not refl:
+                continue
+            sweep = lowest_valid_sweep(radar_obj, refl)
+            if sweep is None:
+                continue
+            data, lat, lon = _direct_sweep(radar_obj, refl, sweep)
+            rho = None
+            rho_name = fields.get("rhohv")
+            if rho_name:
+                try:
+                    rho, _, _ = _direct_sweep(radar_obj, rho_name, sweep)
+                except Exception as exc:
+                    print(f"{site}: native rhoHV unavailable: {type(exc).__name__}: {exc}")
+
+            item = {"data": data, "lat": lat, "lon": lon, "rho": rho}
+            clean_name = f"{site}_base_reflectivity_clean.png"
+            raw_name = f"{site}_base_reflectivity_raw.png"
+            bounds, _ = _direct_render([item], output_dir, product_name=clean_name, clean=True)
+            _direct_render([item], output_dir, product_name=raw_name, clean=False)
+            meta = volume_metadata(radar_obj, source)
+            products[site] = {
+                "clean_image": clean_name,
+                "raw_image": raw_name,
+                "bounds": bounds,
+                "field": "base_reflectivity_dbz",
+                "source_file": source.name,
+                "scan_time_utc": meta.get("scan_time_utc"),
+                "sweep": int(sweep),
+                "native_gates": True,
+                "composite": False,
+            }
+        except Exception as exc:
+            print(f"{site}: native base-reflectivity display unavailable: {type(exc).__name__}: {exc}")
+    return products
+
+
 def write_cursor_grid(output_dir: Path, mosaic, site_velocity_fields):
     """Publish compact 1-km cursor-sampling arrays for the browser viewer."""
     if mosaic is None:
@@ -582,7 +636,7 @@ def main():
             },
             "clean_description": "Winter display palette with edge-preserving neighborhood QC. No smoothing; does not alter model input.",
             "raw_description": "Unfiltered gridded KCXX/KTYX reflectivity mosaic.",
-            "base_reflectivity_description": "Individual lowest-valid-sweep base-reflectivity displays from the downloaded KCXX and KTYX Level-II volumes.",
+            "base_reflectivity_description": "Native-gate lowest-valid-sweep base reflectivity from the downloaded KCXX and KTYX Level-II volumes; not a multi-sweep composite.",
         },
         "sources": contributors,
         "image": "radar_mosaic_clean.png" if mosaic is not None else None,
@@ -619,11 +673,14 @@ def main():
                 shutil.copyfile(native_clean, clean_output)
                 shutil.copyfile(native_clean, args.output_image)
         payload["bounds"] = bounds
-        site_products = render_site_products(
-            site_fields,
-            latlon,
+        # Individual radar displays must be true base reflectivity: the
+        # lowest valid native Level-II sweep. Do not expose the multi-sweep
+        # Cartesian composite here; that product remains available only to the
+        # mosaic/model path.
+        site_products = render_native_site_products(
+            args.raw_root,
+            states,
             args.output_image.parent,
-            rhohv_by_site=site_rho_fields,
         )
         payload["display_products"]["base_reflectivity"] = site_products
         velocity_products = {}
