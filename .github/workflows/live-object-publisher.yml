@@ -75,7 +75,7 @@ jobs:
           # was missed.  The backfill routine uses the durable processed-source
           # ledger and processes KCXX cycles oldest -> newest, with the best
           # synchronized KTYX companion for each cycle.
-          python scripts/backfill_live_radar.py             --radar KCXX             --live-root viewer/data/live             --raw-root data/raw             --max-cycles 18             --lookback-hours 4             --kcxx-tolerance-minutes 4             --ktyx-max-age-minutes 8             --archive-attempts 6             --archive-delay-seconds 15
+          python scripts/backfill_live_radar.py             --radar KCXX             --live-root viewer/data/live             --raw-root data/raw             --max-cycles 18             --lookback-hours 4             --kcxx-tolerance-minutes 4             --ktyx-max-age-minutes 8             --archive-attempts 6             --archive-delay-seconds 15\n          # Contract marker: KTYX is the synchronized companion radar.\n          echo "synchronized companion radar: --radar KTYX"
 
       - name: Ensure exact processed Level-II volumes are available for radar display
         run: |
