@@ -86,6 +86,44 @@ def wait_for_kcxx(s3, target: datetime, tolerance_minutes: float, attempts: int,
     raise RuntimeError(str(last_error))
 
 
+
+def archive_live_radar_frame(live_root: Path, *, cycle_time: datetime) -> None:
+    """Archive the exact radar mosaic produced for this synchronized cycle."""
+    mosaic_path = live_root / "radar_mosaic.json"
+    image = live_root / "radar_mosaic.png"
+    if not mosaic_path.exists() or not image.exists():
+        return
+    try:
+        mosaic = json.loads(mosaic_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return
+    history = live_root / "radar_history"
+    history.mkdir(parents=True, exist_ok=True)
+    stamp = cycle_time.astimezone(timezone.utc).strftime("%Y%m%d%H%M%S")
+    image_name = f"mosaic_{stamp}.png"
+    shutil.copyfile(image, history / image_name)
+    frame = {
+        "timestamp": cycle_time.astimezone(timezone.utc).isoformat().replace("+00:00", "Z"),
+        "image": f"radar_history/{image_name}",
+        "bounds": mosaic.get("bounds"),
+    }
+    manifest_path = history / "manifest.json"
+    try:
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8")) if manifest_path.exists() else {"frames": []}
+    except (OSError, json.JSONDecodeError):
+        manifest = {"frames": []}
+    frames = [f for f in manifest.get("frames", []) if isinstance(f, dict) and str(f.get("timestamp")) != frame["timestamp"]]
+    frames.append(frame)
+    def ts(item):
+        try:
+            return parse_time(item.get("timestamp")).timestamp()
+        except Exception:
+            return 0.0
+    frames.sort(key=ts)
+    cutoff = cycle_time.astimezone(timezone.utc).timestamp() - 100 * 60
+    frames = [f for f in frames if ts(f) >= cutoff]
+    manifest_path.write_text(json.dumps({"frames": frames}, indent=2) + "\n", encoding="utf-8")
+
 def write_event_metadata(live_root: Path, *, requested: datetime, kcxx: tuple[str, datetime], ktyx: tuple[str, datetime] | None):
     payload = {
         "mode": "event_driven",
@@ -185,6 +223,8 @@ def main() -> int:
         print("Building synchronized radar mosaic:", " ".join(cmd))
         subprocess.run(cmd, check=True)
 
+    cycle_time = max(kcxx[1], ktyx[1] if ktyx else kcxx[1])
+    archive_live_radar_frame(args.live_root, cycle_time=cycle_time)
     write_event_metadata(args.live_root, requested=requested, kcxx=kcxx, ktyx=ktyx)
 
     print("EVENT CYCLE COMPLETE")
