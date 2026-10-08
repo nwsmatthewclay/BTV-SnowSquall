@@ -248,7 +248,7 @@ def horizon_component_scores(record: Mapping) -> dict:
     env, env_detail = environment_component(record)
     # Analogs are retained only as an optional diagnostic for future research;
     # they have zero weight in the snow-squall probability equation.
-    analog, analog_detail = analog_component(record)
+    # Analog matching is diagnostic research only and is deliberately excluded\n    # from all Snow Squall probabilities. Keep it available for research audits.\n    analog, analog_detail = analog_component(record)
 
     radar_growth = _num(record.get("reflectivity_trend_dbz_per_hr"))
     radar_horizon = {}
