@@ -193,12 +193,12 @@ def _clean_field(mosaic, rhohv=None):
 
     # Keep weak winter precipitation visible while removing only the
     # lowest-level display noise.
-    data[data < 8.0] = np.nan
+    data[data < 5.0] = np.nan
 
     if rhohv is not None:
         # Conservative dual-pol clutter screen. It only removes low-CC echoes
         # below 30 dBZ, where non-meteorological returns are most common.
-        low_cc = np.isfinite(rhohv) & (rhohv < 0.65) & (data < 30.0)
+        low_cc = np.isfinite(rhohv) & (rhohv < 0.55) & (data < 25.0)
         data[low_cc] = np.nan
 
     # Edge-preserving neighborhood support filter. This removes isolated
@@ -209,7 +209,7 @@ def _clean_field(mosaic, rhohv=None):
         np.ones((3, 3), dtype=np.uint8),
         mode="nearest",
     )
-    isolated_weak = present & (neighbors <= 2) & (data < 18.0)
+    isolated_weak = present & (neighbors <= 2) & (data < 12.0)
     data[isolated_weak] = np.nan
 
     return data
@@ -431,7 +431,7 @@ def _direct_render(sweep_products, output_dir: Path, *, product_name: str, clean
     for item in sweep_products:
         data = np.asarray(item["data"], dtype=float).copy()
         if clean:
-            data[data < 12.0] = np.nan
+            data[data < 5.0] = np.nan
             rho = item.get("rho")
             if rho is not None:
                 low_cc = np.isfinite(rho) & (rho < 0.65) & (data < 30.0)
@@ -442,7 +442,7 @@ def _direct_render(sweep_products, output_dir: Path, *, product_name: str, clean
                 np.ones((3, 3), dtype=np.uint8),
                 mode="nearest",
             )
-            data[present & (neighbors <= 2) & (data < 18.0)] = np.nan
+            data[present & (neighbors <= 2) & (data < 12.0)] = np.nan
         masked = np.ma.masked_invalid(data)
         if masked.count():
             kwargs = {"cmap": cmap, "shading": "auto"}
