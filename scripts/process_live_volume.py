@@ -702,7 +702,7 @@ def process_volume(
     learned_probability_by_feature = {}
 
     # Optional learned-model scoring is retained for comparison/replay. It no
-    # longer replaces the transparent 50/35/15 component probability.
+    # longer replaces the transparent 50/50 radar/environment component probability.
     if features and model_runtimes:
         prior_rows_by_track = {}
         prior_path = history_jsonl_path or Path("data/derived/live_object_history.jsonl")
@@ -767,8 +767,7 @@ def process_volume(
         # object state (NOW). Horizon scores remain forward guidance at +15/+30/+45/+60.
         now_score = (
             component_result["radar"]["score"] * 0.50
-            + component_result["environment"]["score"] * 0.35
-            + component_result["analog"]["score"] * 0.15
+            + component_result["environment"]["score"] * 0.50
         )
         feature["research_probability_now"] = round(float(now_score) / 100.0, 4)
         feature["probability_now"] = feature["research_probability_now"]
