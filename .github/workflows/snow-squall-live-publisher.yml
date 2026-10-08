@@ -1,5 +1,6 @@
 name: Snow Squall Live Object Publisher
 # Native-gate radar fallback enabled
+# RAP cache downloads are process-isolated for parallel radar workers.
 
 on:
   push:
