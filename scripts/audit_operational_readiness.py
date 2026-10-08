@@ -99,8 +99,8 @@ def validate(
             if weights:
                 if (
                     abs(float(weights.get("radar", 0)) - 0.50) > 1e-6
-                    or abs(float(weights.get("environment", 0)) - 0.35) > 1e-6
-                    or abs(float(weights.get("analog", 0)) - 0.15) > 1e-6
+                    or abs(float(weights.get("environment", 0)) - 0.50) > 1e-6
+                    or abs(float(weights.get("analog", 0)) - 0.00) > 1e-6
                 ):
                     invalid_probability += 1
 
