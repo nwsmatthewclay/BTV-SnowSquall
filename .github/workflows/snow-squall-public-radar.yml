@@ -108,6 +108,16 @@ jobs:
           # The object feeds must describe the exact same radar volumes as the
           # mosaic. This prevents the historical failure mode where fresh
           # objects were published alongside an older radar image.
+          required_environment_fields = (
+              "cape_jkg",
+              "pwat_mm",
+              "temperature_2m_k",
+              "dewpoint_2m_k",
+              "rh_2m_pct",
+              "u10_ms",
+              "v10_ms",
+          )
+
           for site in ("KCXX", "KTYX"):
               geo = live / f"{site}_objects.geojson"
               if not geo.exists():
@@ -127,7 +137,32 @@ jobs:
               bad = [f for f in features if f.get("properties", {}).get("timestamp") != expected_time]
               if bad:
                   raise SystemExit(f"{site} contains objects from a different scan")
-              print(f"{site}: {len(features)} objects synchronized to {expected_source}")
+
+              # Environment is part of the live publication contract. Never
+              # replace a good public object feed with a fresh radar cycle
+              # whose environmental package is empty or malformed.
+              env_failures = []
+              for feature in features:
+                  props = feature.get("properties") or {}
+                  env = props.get("environment") or {}
+                  fields = env.get("fields") or {}
+                  missing = [name for name in required_environment_fields if fields.get(name) is None]
+                  status = str(env.get("status") or props.get("environment_status") or "").lower()
+                  if missing or status not in {"complete", "ready"}:
+                      env_failures.append({
+                          "track_id": props.get("track_id"),
+                          "status": status,
+                          "missing_fields": missing,
+                      })
+              if env_failures:
+                  raise SystemExit(
+                      f"{site} environment contract failed for {len(env_failures)}/{len(features)} "
+                      f"objects; first failures={env_failures[:3]}"
+                  )
+              print(
+                  f"{site}: {len(features)} objects synchronized to {expected_source}; "
+                  f"environment complete on all objects"
+              )
 
       - name: Publish synchronized live feed
         if: steps.archive.outputs.new_scan == 'true'
