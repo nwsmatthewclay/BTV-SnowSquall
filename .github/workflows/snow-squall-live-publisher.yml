@@ -224,6 +224,35 @@ jobs:
               print(site, "history rows:", len(rows))
           PY
 
+      - name: Restore newest standalone radar products before publication
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin snow-squall-live-data
+
+          # The standalone radar publisher owns these files. The object
+          # publisher must carry its newest radar forward rather than rebuild
+          # an older local mosaic and then fail the freshness gate.
+          git checkout origin/snow-squall-live-data -- \
+            viewer/data/live/radar_mosaic.json \
+            viewer/data/live/radar_mosaic.png \
+            viewer/data/live/radar_mosaic_clean.png \
+            viewer/data/live/radar_mosaic_raw.png \
+            viewer/data/live/radar_cursor.json \
+            viewer/data/live/KCXX_base_reflectivity_clean.png \
+            viewer/data/live/KCXX_base_reflectivity_raw.png \
+            viewer/data/live/KCXX_base_velocity_clean.png \
+            viewer/data/live/KCXX_base_velocity_raw.png \
+            viewer/data/live/KTYX_base_reflectivity_clean.png \
+            viewer/data/live/KTYX_base_reflectivity_raw.png \
+            viewer/data/live/KTYX_base_velocity_clean.png \
+            viewer/data/live/KTYX_base_velocity_raw.png
+
+          rm -rf viewer/data/live/radar_history
+          mkdir -p viewer/data/live/radar_history
+          git archive origin/snow-squall-live-data viewer/data/live/radar_history | tar -x -C /tmp
+          cp -R /tmp/viewer/data/live/radar_history/. viewer/data/live/radar_history/
+          rm -rf /tmp/viewer
+
       - name: Validate live object products without blocking fresh radar
         run: |
           set +e
