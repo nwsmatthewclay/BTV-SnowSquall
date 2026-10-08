@@ -83,10 +83,11 @@ jobs:
           rm -rf _site
           mkdir -p _site
 
-          # The smoke test has already validated the data package. Keep the
-          # version-controlled shell separate from the archived data payload.
-          cp viewer/*.html viewer/*.js viewer/*.css _site/
+          # The smoke test has already validated the data package. Start with
+          # the validated archived payload, then overlay the current
+          # version-controlled viewer shell so live.html/live.js are authoritative.
           cp -R viewer_artifact/. _site/
+          cp viewer/*.html viewer/*.js viewer/*.css _site/
 
           # Preserve the newest modern-validation review page when republishing
           # the historical explorer so either viewer lane can update independently.
