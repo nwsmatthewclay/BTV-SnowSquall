@@ -33,6 +33,7 @@ def run(
     history_jsonl: Path | None,
     history_csv: Path | None,
     max_volumes_per_run: int = 2,
+    prefer_latest: bool = False,
 ):
     setup_logging(radar)
     logging.info("=" * 72)
@@ -68,10 +69,10 @@ def run(
                 except (TypeError, ValueError):
                     since = None
 
-            # After the first live scan, catch up chronologically instead of
-            # jumping directly to the newest volume. This preserves the
-            # scan-to-scan sequence required for stable object identities and
-            # temporal evolution features.
+            # Research replay can catch up chronologically, but operational live
+            # mode should prioritize latency. When explicitly requested, use the
+            # newest unprocessed volume so a slow science pass does not leave the
+            # viewer permanently behind the radar feed.
             recent = find_recent_volumes(s3, radar, since=since, lookback_hours=2)
             if not recent:
                 newest = find_newest_volume(s3, radar)
@@ -82,18 +83,12 @@ def run(
                     if key not in persisted_processed and key != last_key:
                         recent = [(key, volume_time)]
 
-            # Keep each scheduled publisher run bounded. Process the oldest
-            # unprocessed volumes first so track history remains chronological;
-            # any remaining backlog is picked up by the next cycle.
-            # Keep the scheduled live publisher bounded. Two volumes per
-            # radar is enough to preserve normal scan-to-scan continuity while
-            # preventing a temporary archive gap from turning one run into a
-            # multi-volume backlog processor that starves the live feed.
             limit = max(1, int(max_volumes_per_run))
-            if len(recent) > limit:
+            if prefer_latest and recent:
+                recent = [recent[-1]]
+            elif len(recent) > limit:
                 recent = recent[:limit]
-            # A brand-new state starts from the newest available volume; an
-            # existing state catches up all unprocessed volumes in order.
+            # A brand-new state always starts from the newest available volume.
             if since is None and recent:
                 recent = [recent[-1]]
 
@@ -150,6 +145,11 @@ def main():
         default=2,
         help="Maximum unprocessed Level-II volumes to process per scheduled run.",
     )
+    parser.add_argument(
+        "--prefer-latest",
+        action="store_true",
+        help="Operational mode: process the newest unprocessed volume instead of catching up the oldest backlog first.",
+    )
     args = parser.parse_args()
     run(
         args.radar,
@@ -160,6 +160,7 @@ def main():
         Path(args.history_jsonl) if args.history_jsonl else None,
         Path(args.history_csv) if args.history_csv else None,
         max_volumes_per_run=max(1, args.max_volumes_per_run),
+        prefer_latest=args.prefer_latest,
     )
 
 
