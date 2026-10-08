@@ -58,7 +58,13 @@ def object_scan_time(live_root: Path, site: str) -> datetime | None:
 
 
 def published_time(live_root: Path) -> datetime | None:
-    """Return the oldest live watermark so any lagging object feed is caught up."""
+    """Return the durable KCXX publication watermark for KCXX backfill.
+
+    KTYX is a synchronized companion selected for each KCXX event. Using the
+    older KTYX timestamp as the KCXX watermark causes the backfill to revisit
+    scans that are no longer present in the near-real-time archive. The KCXX
+    feed is therefore the authoritative watermark here.
+    """
     candidates: list[datetime] = []
 
     event = live_root / "event_cycle.json"
@@ -68,7 +74,7 @@ def published_time(live_root: Path) -> datetime | None:
             parsed = parse_time((payload.get("kcxx") or {}).get("scan_time_utc"))
             if parsed:
                 candidates.append(parsed)
-        except Exception:
+        except (OSError, json.JSONDecodeError, TypeError):
             pass
 
     radar = live_root / "radar_mosaic.json"
@@ -80,15 +86,14 @@ def published_time(live_root: Path) -> datetime | None:
                     parsed = parse_time(source.get("scan_time_utc"))
                     if parsed:
                         candidates.append(parsed)
-        except Exception:
+        except (OSError, json.JSONDecodeError, TypeError):
             pass
 
-    object_times = [
-        object_scan_time(live_root, "KCXX"),
-        object_scan_time(live_root, "KTYX"),
-    ]
-    candidates.extend(value for value in object_times if value is not None)
-    return min(candidates) if candidates else None
+    kcxx_time = object_scan_time(live_root, "KCXX")
+    if kcxx_time:
+        candidates.append(kcxx_time)
+
+    return max(candidates) if candidates else None
 
 def main() -> int:
     parser = argparse.ArgumentParser()
@@ -142,6 +147,7 @@ def main() -> int:
     candidates = [
         item for item in all_recent
         if Path(item[0]).name not in processed_sources
+        and item[1] > (previous or datetime.min.replace(tzinfo=timezone.utc))
         and item[1] >= processing_cutoff
     ]
 
