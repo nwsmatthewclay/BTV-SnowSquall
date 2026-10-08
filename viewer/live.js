@@ -61,7 +61,29 @@ function bindCursorReadout(){
 function setText(id,v){var e=q(id);if(e)e.textContent=v==null?"—":v}
 function num(v,d){if(d===undefined)d=1;var n=Number(v);return v==null||!Number.isFinite(n)?"—":n.toFixed(d)}
 function esc(v){return String(v==null?"—":v).replace(/[&<>"']/g,function(m){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}})}
-function fmtTime(t){if(!t)return "—";try{return new Intl.DateTimeFormat("en-US",{timeZone:"America/New_York",month:"short",day:"numeric",hour:"numeric",minute:"2-digit",timeZoneName:"short"}).format(new Date(t))}catch(_){return new Date(t).toLocaleString(undefined,{month:"short",day:"numeric",hour:"numeric",minute:"2-digit"})}}
+function parseUtcDate(t){
+  if(t==null||t==="")return null;
+  if(t instanceof Date)return isNaN(t.getTime())?null:t;
+  var s=String(t).trim();
+  // Live radar timestamps are UTC. If an ISO timestamp has no explicit
+  // timezone, treat it as UTC rather than browser-local time.
+  if(/^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}(?::\\d{2}(?:\\.\\d+)?)?$/.test(s))s+="Z";
+  var d=new Date(s);
+  return isNaN(d.getTime())?null:d;
+}
+function fmtTime(t){
+  var d=parseUtcDate(t);
+  if(!d)return "—";
+  try{
+    return new Intl.DateTimeFormat("en-US",{
+      timeZone:"America/New_York",
+      month:"short",day:"numeric",hour:"numeric",minute:"2-digit",
+      timeZoneName:"short"
+    }).format(d);
+  }catch(_){
+    return d.toLocaleString("en-US",{timeZone:"America/New_York",month:"short",day:"numeric",hour:"numeric",minute:"2-digit"});
+  }
+}
 function fmtUTC(t){return fmtTime(t)}
 function ageMinutes(t){return t?Math.max(0,(Date.now()-new Date(t).getTime())/60000):Infinity}
 function msToKt(v){return v==null||!Number.isFinite(Number(v))?"—":Number(v)*1.943844492}
@@ -525,12 +547,28 @@ function fmtLiveEnv(v,key){if(v==null)return "—";if(key.indexOf("cape")>=0||ke
 function envRiskClass(key,val){
   if(val==null||!Number.isFinite(Number(val)))return "env-risk-na";
   var v=Number(val),y=null,r=null,hi=true;
-  if(key==="cape_jkg"){y=10;r=50}
+  // Snow-squall-oriented traffic-light guidance. These are diagnostic
+  // context thresholds, not independent probability triggers.
+  if(key==="cape_jkg"||key==="mlcape_jkg"||key==="mucape_jkg"){y=25;r=75}
+  else if(key==="mlcin_jkg"){y=-100;r=-25;hi=false}
+  else if(key==="dcape_jkg"){y=300;r=600}
+  else if(key==="pwat_mm"){y=8;r=15}
+  else if(key==="lcl_m"){y=1500;r=1000;hi=false}
+  else if(key==="lfc_m"){y=2000;r=1500;hi=false}
+  else if(key==="srh01_m2s2"){y=25;r=75}
+  else if(key==="shear_0_1km_kt"){y=15;r=25}
+  else if(key==="shear_0_3km_kt"){y=20;r=30}
+  else if(key==="shear_0_6km_kt"){y=25;r=40}
+  else if(key==="lapse_rate_0_3km_c_km"){y=6;r=7}
+  else if(key==="lapse_rate_0_7_5km_c_km"){y=5.5;r=7}
   else if(key==="mean_rh_0_2km_pct"){y=60;r=75}
   else if(key==="thetae_delta_0_2km_k"){y=4;r=0;hi=false}
   else if(key==="mean_wind_0_2km_ms"){y=9;r=13.1}
-  else if(key==="lapse_rate_0_3km_c_km"){y=6;r=7}
   else if(key==="snsq"){y=.5;r=1}
+  else if(key==="freezing_level_m"){y=1000;r=500;hi=false}
+  else if(key==="visibility_m"){y=4000;r=800;hi=false}
+  else if(key==="gust_ms"){y=10;r=18}
+  else if(key==="wetbulb_2m_c"){y=1;r=-1;hi=false}
   else return "env-risk-neutral";
   var s=hi?(v<=y?0:v>=r?1:(v-y)/(r-y)):(v>=y?0:v<=r?1:(y-v)/(y-r));
   return s>=1?"env-risk-red":s>0?"env-risk-yellow":"env-risk-green";
