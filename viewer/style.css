@@ -806,3 +806,21 @@ body.live-dashboard-page #environmentTable .env-risk-na{
   body.live-dashboard-page .live-map-column #liveMap{height:58vh;min-height:420px}
   body.live-dashboard-page #liveMap .map-legend{bottom:10px !important;left:8px !important;width:250px}
 }
+
+
+/* 2026-10-08: standard operational NWS reflectivity palette. */
+body.live-dashboard-page .map-legend-bar{
+  grid-template-columns:28px repeat(12,minmax(0,1fr)) 30px !important;
+}
+body.live-dashboard-page .map-legend-bar i:nth-child(2){background:rgba(210,225,235,.35) !important}
+body.live-dashboard-page .map-legend-bar i:nth-child(3){background:rgba(174,199,214,.48) !important}
+body.live-dashboard-page .map-legend-bar i:nth-child(4){background:rgba(97,173,219,.70) !important}
+body.live-dashboard-page .map-legend-bar i:nth-child(5){background:rgba(46,148,224,.82) !important}
+body.live-dashboard-page .map-legend-bar i:nth-child(6){background:rgba(31,97,219,.92) !important}
+body.live-dashboard-page .map-legend-bar i:nth-child(7){background:rgba(61,51,199,.96) !important}
+body.live-dashboard-page .map-legend-bar i:nth-child(8){background:rgba(122,46,194,.98) !important}
+body.live-dashboard-page .map-legend-bar i:nth-child(9){background:rgba(194,46,173,1) !important}
+body.live-dashboard-page .map-legend-bar i:nth-child(10){background:rgba(240,64,141,1) !important}
+body.live-dashboard-page .map-legend-bar i:nth-child(11){background:rgba(245,87,46,1) !important}
+body.live-dashboard-page .map-legend-bar i:nth-child(12){background:rgba(250,168,20,1) !important}
+body.live-dashboard-page .map-legend-bar i:nth-child(13){background:rgba(255,235,71,1) !important}
