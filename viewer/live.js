@@ -701,7 +701,6 @@ document.querySelectorAll(".display-btn").forEach(function(b){b.onclick=function
 document.querySelectorAll("[data-jump]").forEach(function(btn){btn.onclick=function(){var el=q(btn.dataset.jump);if(el)el.scrollIntoView({behavior:"smooth",block:"start"});document.querySelectorAll("[data-jump]").forEach(function(b){b.classList.toggle("active",b===btn)})}});
 q("refreshBtn").onclick=refresh;q("refreshBtn2").onclick=refresh;
 q("radarPlayBtn").onclick=playRadarAnimation;
-q("radarLiveBtn").onclick=function(){stopRadarAnimation();radarHistoryIndex=(radarHistory.frames||[]).length-1;updateRadarTimelineUI();renderRadarMosaic()};
 q("radarTimelineSlider").oninput=function(){setRadarHistoryIndex(this.value)};
 q("objectNumbersBtn").onclick=function(){objectNumbers=!objectNumbers;q("objectNumbersBtn").classList.toggle("active",objectNumbers);renderMap()};
 document.addEventListener("keydown",function(e){
