@@ -298,11 +298,19 @@ def process_volume(
     # high-gradient pixels. Keep the general detector unchanged for training
     # while using a more spatially coherent configuration for the live view.
     live_detection_config = ObjectDetectionConfig(
-        min_pixels=10,
-        close_iterations=2,
+        # ProbSevere-style detection is intentionally permissive: identify the
+        # coherent radar object first, then let the snow-squall probability
+        # model decide whether the object is meteorologically threatening.
+        min_pixels=8,
+        close_iterations=1,
         open_iterations=0,
         split_merged=False,
-        min_candidate_rank_score=35.0,
+        min_candidate_rank_score=0.0,
+        use_watershed=True,
+        watershed_seed_dbz=25.0,
+        watershed_max_dbz=57.0,
+        watershed_min_distance_px=6,
+        watershed_min_saliency_pixels=8,
     )
     detections = detect_reflectivity_objects(
         data,
