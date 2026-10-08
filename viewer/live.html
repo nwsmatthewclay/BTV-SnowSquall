@@ -44,7 +44,14 @@
       <button id="objectNumbersBtn" class="active">Object IDs</button>
     </div>
     <div id="cursorReadout" style="position:absolute;left:12px;bottom:12px;z-index:800;background:rgba(10,18,24,.86);border:1px solid rgba(190,210,220,.28);border-radius:4px;padding:6px 9px;font:12px/1.25 monospace;color:#eaf2f5;pointer-events:none">CURSOR — | Z — dBZ | V —</div>
-    <div class="radar-timeline" id="radarTimeline">
+    <div class="map-legend">
+      <div class="map-legend-title" id="legendTitle">REFLECTIVITY • dBZ</div>
+      <div class="map-legend-bar"><span>-5</span><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><span>40+</span></div>
+      <div class="map-legend-note" id="legendNote">Clean KCXX/KTYX reflectivity mosaic. Object outlines remain clickable above the radar.</div>
+    </div>
+  </section>
+
+      <div class="radar-timeline" id="radarTimeline">
       <div class="radar-timeline-head"><span>RADAR TIMELAPSE</span><b id="radarTimelineLabel">Live</b></div>
       <div class="radar-timeline-controls">
         <button id="radarPlayBtn" type="button">▶ PLAY</button>
@@ -53,12 +60,6 @@
       </div>
       <div class="radar-timeline-note">Rolling 90-minute reflectivity archive • 5-minute cadence when scans are available</div>
     </div>
-    <div class="map-legend">
-      <div class="map-legend-title" id="legendTitle">REFLECTIVITY • dBZ</div>
-      <div class="map-legend-bar"><span>5</span><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><span>75</span></div>
-      <div class="map-legend-note" id="legendNote">Clean KCXX/KTYX reflectivity mosaic. Object outlines remain clickable above the radar.</div>
-    </div>
-  </section>
   </div>
 
   <aside class="dashboard-panel" id="panel">
