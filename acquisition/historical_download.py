@@ -18,7 +18,7 @@ BUCKET = "unidata-nexrad-level2"
 REGION = "us-east-1"
 RADARS = ("KCXX", "KTYX")
 VOL_RE = re.compile(
-    r"(?P<radar>[A-Z0-9]{4})(?P<date>d{8})[_-]?(?P<time>d{6})",
+    r"(?P<radar>[A-Z0-9]{4})(?P<date>\\d{8})[_-]?(?P<time>\\d{6})",
     re.IGNORECASE,
 )
 ROOT = Path(__file__).resolve().parents[1]
