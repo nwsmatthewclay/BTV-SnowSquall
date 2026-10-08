@@ -251,7 +251,7 @@ def _render(mosaic, latlon, output_path: Path, *, mode="clean", rhohv=None):
         cmap = ListedColormap(colors, name="BTV_WINTER_REFLECTIVITY")
         cmap.set_under((0, 0, 0, 0))
         cmap.set_over("#8b1e61")
-        norm = BoundaryNorm(bounds, cmap.N, extend="both")
+        norm = BoundaryNorm(bounds, cmap.N)
         ax.pcolormesh(lon, lat, masked, cmap=cmap, norm=norm, shading="auto")
     else:
         cmap = plt.get_cmap("NWSRef").copy()
@@ -485,7 +485,7 @@ def _direct_render(sweep_products, output_dir: Path, *, product_name: str, clean
         cmap = ListedColormap(colors, name="BTV_WINTER_REFLECTIVITY")
         cmap.set_under((0, 0, 0, 0))
         cmap.set_over("#8b1e61")
-        norm = BoundaryNorm(bounds, cmap.N, extend="both")
+        norm = BoundaryNorm(bounds, cmap.N)
     else:
         cmap = plt.get_cmap("NWSRef").copy()
         cmap.set_bad((0, 0, 0, 0))
