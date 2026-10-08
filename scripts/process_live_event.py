@@ -88,41 +88,93 @@ def wait_for_kcxx(s3, target: datetime, tolerance_minutes: float, attempts: int,
 
 
 def archive_live_radar_frame(live_root: Path, *, cycle_time: datetime) -> None:
-    """Archive the exact radar mosaic produced for this synchronized cycle."""
+    """Archive the exact radar mosaic produced for this synchronized cycle.
+
+    Reflectivity history is versioned with the standard NWSRef palette. Any
+    pre-NWSRef frames are discarded from the active manifest during the one-time
+    palette migration so the viewer never mixes old and new color scales.
+    """
     mosaic_path = live_root / "radar_mosaic.json"
-    image = live_root / "radar_mosaic.png"
+    image = live_root / "radar_mosaic_clean.png"
     if not mosaic_path.exists() or not image.exists():
         return
     try:
         mosaic = json.loads(mosaic_path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError):
         return
+
+    grid = mosaic.get("grid") or {}
+    if str(grid.get("color_table") or "") != "NWSRef":
+        print("Skipping radar-history archive: mosaic is not marked NWSRef.")
+        return
+
     history = live_root / "radar_history"
     history.mkdir(parents=True, exist_ok=True)
+    manifest_path = history / "manifest.json"
+
+    try:
+        manifest = (
+            json.loads(manifest_path.read_text(encoding="utf-8"))
+            if manifest_path.exists() else {}
+        )
+    except (OSError, json.JSONDecodeError):
+        manifest = {}
+
+    # One-time migration: old history images were rendered with earlier display
+    # palettes. Remove those reflectivity PNGs from the active archive so the
+    # timeline cannot jump between color tables.
+    if manifest.get("reflectivity_palette") != "NWSRef":
+        for old in history.glob("mosaic_*.png"):
+            try:
+                old.unlink()
+            except OSError:
+                pass
+        manifest = {
+            "version": 2,
+            "retention_frames": 18,
+            "interval_hint_minutes": 5,
+            "reflectivity_palette": "NWSRef",
+            "reflectivity_palette_version": "NWSRef_V1",
+            "frames": [],
+        }
+
     stamp = cycle_time.astimezone(timezone.utc).strftime("%Y%m%d%H%M%S")
     image_name = f"mosaic_{stamp}.png"
     shutil.copyfile(image, history / image_name)
+
     frame = {
         "timestamp": cycle_time.astimezone(timezone.utc).isoformat().replace("+00:00", "Z"),
         "image": f"radar_history/{image_name}",
         "bounds": mosaic.get("bounds"),
+        "palette": "NWSRef",
+        "palette_version": "NWSRef_V1",
     }
-    manifest_path = history / "manifest.json"
-    try:
-        manifest = json.loads(manifest_path.read_text(encoding="utf-8")) if manifest_path.exists() else {"frames": []}
-    except (OSError, json.JSONDecodeError):
-        manifest = {"frames": []}
-    frames = [f for f in manifest.get("frames", []) if isinstance(f, dict) and str(f.get("timestamp")) != frame["timestamp"]]
+
+    frames = [
+        f for f in (manifest.get("frames") or [])
+        if isinstance(f, dict) and str(f.get("timestamp")) != frame["timestamp"]
+        and str(f.get("palette") or "") == "NWSRef"
+    ]
     frames.append(frame)
+
     def ts(item):
         try:
             return parse_time(item.get("timestamp")).timestamp()
         except Exception:
             return 0.0
+
     frames.sort(key=ts)
     cutoff = cycle_time.astimezone(timezone.utc).timestamp() - 100 * 60
     frames = [f for f in frames if ts(f) >= cutoff]
-    manifest_path.write_text(json.dumps({"frames": frames}, indent=2) + "\n", encoding="utf-8")
+    manifest.update({
+        "version": 2,
+        "retention_frames": 18,
+        "interval_hint_minutes": 5,
+        "reflectivity_palette": "NWSRef",
+        "reflectivity_palette_version": "NWSRef_V1",
+        "frames": frames,
+    })
+    manifest_path.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
 
 def write_event_metadata(live_root: Path, *, requested: datetime, kcxx: tuple[str, datetime], ktyx: tuple[str, datetime] | None):
     payload = {
