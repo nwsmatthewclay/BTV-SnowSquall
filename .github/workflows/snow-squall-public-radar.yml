@@ -97,6 +97,30 @@ jobs:
           print("Synchronized cycle validation passed.")
           print(json.dumps(event, indent=2))
 
+          # The object feeds must describe the exact same radar volumes as the
+          # mosaic. This prevents the historical failure mode where fresh
+          # objects were published alongside an older radar image.
+          for site in ("KCXX", "KTYX"):
+              geo = live / f"{site}_objects.geojson"
+              if not geo.exists():
+                  raise SystemExit(f"Missing {site} object feed")
+              payload = json.loads(geo.read_text())
+              features = payload.get("features") or []
+              expected = event.get(site.lower())
+              if expected is None:
+                  continue
+              expected_time = expected["scan_time_utc"]
+              expected_source = Path(expected["source_file"]).name
+              meta = payload.get("metadata") or {}
+              if meta.get("scan_time_utc") != expected_time:
+                  raise SystemExit(f"{site} object metadata timestamp does not match event cycle")
+              if Path(str(meta.get("source_file", ""))).name != expected_source:
+                  raise SystemExit(f"{site} object source does not match event cycle")
+              bad = [f for f in features if f.get("properties", {}).get("timestamp") != expected_time]
+              if bad:
+                  raise SystemExit(f"{site} contains objects from a different scan")
+              print(f"{site}: {len(features)} objects synchronized to {expected_source}")
+
       - name: Publish synchronized live feed
         if: steps.archive.outputs.new_scan == 'true'
         env:
