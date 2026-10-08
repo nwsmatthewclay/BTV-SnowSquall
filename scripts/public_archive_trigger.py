@@ -32,7 +32,53 @@ def parse_time(value: str | None) -> datetime | None:
     return dt.astimezone(timezone.utc)
 
 
+
+def object_scan_time(live_root: Path, site: str) -> datetime | None:
+    """Return the newest durable object-feed timestamp for one radar."""
+    candidates: list[datetime] = []
+    state_path = live_root / f"{site}_state.json"
+    if state_path.exists():
+        try:
+            state = json.loads(state_path.read_text(encoding="utf-8"))
+            parsed = parse_time(state.get("last_scan_time_utc"))
+            if parsed:
+                candidates.append(parsed)
+        except Exception:
+            pass
+
+    geo_path = live_root / f"{site}_objects.geojson"
+    if geo_path.exists():
+        try:
+            payload = json.loads(geo_path.read_text(encoding="utf-8"))
+            parsed = parse_time((payload.get("metadata") or {}).get("scan_time_utc"))
+            if parsed:
+                candidates.append(parsed)
+        except Exception:
+            pass
+
+    return max(candidates) if candidates else None
+
+
+def object_feed_watermark(live_root: Path) -> datetime | None:
+    """Return the oldest live object timestamp so lagging feeds are recovered."""
+    values = [
+        object_scan_time(live_root, "KCXX"),
+        object_scan_time(live_root, "KTYX"),
+    ]
+    values = [value for value in values if value is not None]
+    return min(values) if values else None
+
+
 def last_published_time(live_root: Path) -> datetime | None:
+    """Return the oldest durable watermark across event, radar, and object feeds.
+
+    The standalone radar publisher can legitimately advance the radar mosaic
+    ahead of the object publisher.  Using only radar/event time would then make
+    the archive watcher incorrectly conclude that nothing needs processing.
+    The oldest object feed is therefore part of the watermark.
+    """
+    candidates: list[datetime] = []
+
     event_path = live_root / "event_cycle.json"
     if event_path.exists():
         try:
@@ -40,12 +86,10 @@ def last_published_time(live_root: Path) -> datetime | None:
             value = data.get("kcxx", {}).get("scan_time_utc")
             parsed = parse_time(value)
             if parsed:
-                return parsed
+                candidates.append(parsed)
         except Exception:
             pass
 
-    # Backward-compatible fallback while the event-cycle watermark is first
-    # established.
     radar_path = live_root / "radar_mosaic.json"
     if radar_path.exists():
         try:
@@ -54,11 +98,15 @@ def last_published_time(live_root: Path) -> datetime | None:
                 if source.get("radar") == "KCXX":
                     parsed = parse_time(source.get("scan_time_utc"))
                     if parsed:
-                        return parsed
+                        candidates.append(parsed)
         except Exception:
             pass
 
-    return None
+    object_watermark = object_feed_watermark(live_root)
+    if object_watermark is not None:
+        candidates.append(object_watermark)
+
+    return min(candidates) if candidates else None
 
 
 def main() -> int:
