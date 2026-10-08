@@ -84,7 +84,21 @@ def run(
                         recent = [(key, volume_time)]
 
             limit = max(1, int(max_volumes_per_run))
-            if prefer_latest and recent:
+            backlog_minutes = None
+            if since is not None and recent:
+                try:
+                    backlog_minutes = max(
+                        0.0,
+                        (recent[-1][1] - since).total_seconds() / 60.0,
+                    )
+                except (AttributeError, TypeError):
+                    backlog_minutes = None
+
+            # Normal operation stays chronological for track continuity.
+            # Recovery mode prevents the live feed from remaining an hour
+            # behind when a backlog builds up or Actions temporarily stalls:
+            # jump to the newest unprocessed volume once lag exceeds 15 min.
+            if prefer_latest or (backlog_minutes is not None and backlog_minutes > 15.0):
                 recent = [recent[-1]]
             elif len(recent) > limit:
                 recent = recent[:limit]
