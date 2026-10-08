@@ -20,7 +20,7 @@ permissions:
 
 concurrency:
   group: snow-squall-live-publisher
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   publish:
@@ -225,6 +225,72 @@ jobs:
           print(f"Newest radar scan: {newest.isoformat()} age={age:.1f} minutes")
           if age > 15:
               raise SystemExit(f"Radar mosaic is stale: {age:.1f} minutes old > 15 minute limit")
+
+      - name: Preserve newer standalone radar publication
+        run: |
+          set -euo pipefail
+          if ! git ls-remote --exit-code --heads origin snow-squall-live-data >/dev/null 2>&1; then
+            exit 0
+          fi
+
+          git fetch --no-tags origin snow-squall-live-data
+          use_remote="$(python - <<'PY'
+          import json
+          from datetime import datetime, timezone
+          from pathlib import Path
+
+          def newest(path):
+              try:
+                  payload=json.loads(Path(path).read_text(encoding="utf-8"))
+                  values=[]
+                  for item in payload.get("sources",[]):
+                      raw=item.get("scan_time_utc")
+                      if raw:
+                          values.append(datetime.fromisoformat(str(raw).replace("Z","+00:00")).astimezone(timezone.utc))
+                  return max(values) if values else None
+              except Exception:
+                  return None
+
+          local=newest("viewer/data/live/radar_mosaic.json")
+          remote_raw=__import__("subprocess").check_output([
+              "git","show","origin/snow-squall-live-data:viewer/data/live/radar_mosaic.json"
+          ],text=True)
+          remote_path=Path("/tmp/remote_radar_mosaic.json")
+          remote_path.write_text(remote_raw,encoding="utf-8")
+          remote=newest(remote_path)
+          print("yes" if remote and (not local or remote > local) else "no")
+          if local:
+              print("local radar:",local.isoformat())
+          if remote:
+              print("remote radar:",remote.isoformat())
+          PY
+          )"
+
+          if [ "$use_remote" != "yes" ]; then
+            echo "Local radar is at least as new as the standalone publication."
+            exit 0
+          fi
+
+          echo "Standalone radar publication is newer; restoring its radar products before final object publish."
+          git archive origin/snow-squall-live-data \\
+            viewer/data/live/radar_history \\
+            viewer/data/live/radar_mosaic.json \\
+            viewer/data/live/radar_mosaic.png \\
+            viewer/data/live/radar_mosaic_clean.png \\
+            viewer/data/live/radar_mosaic_raw.png \\
+            viewer/data/live/radar_mosaic_native_clean.png \\
+            viewer/data/live/radar_mosaic_native_raw.png \\
+            viewer/data/live/radar_cursor.json \\
+            viewer/data/live/KCXX_base_reflectivity_clean.png \\
+            viewer/data/live/KCXX_base_reflectivity_raw.png \\
+            viewer/data/live/KCXX_base_velocity_clean.png \\
+            viewer/data/live/KCXX_base_velocity_raw.png \\
+            viewer/data/live/KTYX_base_reflectivity_clean.png \\
+            viewer/data/live/KTYX_base_reflectivity_raw.png \\
+            viewer/data/live/KTYX_base_velocity_clean.png \\
+            viewer/data/live/KTYX_base_velocity_raw.png \\
+            > /tmp/standalone-radar.tar
+          tar -xf /tmp/standalone-radar.tar -C .
 
       - name: Publish isolated live-data branch
         env:
