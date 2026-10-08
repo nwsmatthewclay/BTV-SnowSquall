@@ -494,30 +494,50 @@ function renderProbability(){
 }
 function renderProbabilityChart(hist){
   var svg=q("probChart");svg.innerHTML="";
-  var rows=(hist||[]).filter(function(r){
+  var p=latestForSelected();
+  var shadow=p?shadowRows(p.radar_site,p.track_id):[];
+  var source=(hist||[]).concat(shadow||[]).sort(function(a,b){return String(a.timestamp||"").localeCompare(String(b.timestamp||""))});
+  var seen={};
+  var rows=source.filter(function(r){
+    var ts=String(r.timestamp||"");
+    if(!ts||seen[ts])return false;
+    seen[ts]=true;
     var v=r.research_probability_now??r.probability_now??r.research_probabilities?.now;
     if(v==null)v=r.research_probabilities?.["15min"]??r.research_probabilities?.["15"];
+    if(v==null&&r.candidate_rank_score!=null)v=Number(r.candidate_rank_score)/100;
     return Number.isFinite(Number(v));
   });
-  if(!rows.length){
-    svg.innerHTML="<text x='210' y='70' text-anchor='middle' class='chart-text'>Observed probability history is warming up</text>";
+  var currentNow=p?(p.research_probability_now??p.probability_now??p.research_probabilities?.now):null;
+  if(currentNow==null&&p)currentNow=p.research_probabilities?.["15min"]??p.research_probabilities?.["15"]??p.probability_15min;
+  if(currentNow==null&&p&&p.candidate_rank_score!=null)currentNow=Number(p.candidate_rank_score)/100;
+  if(currentNow==null&&p)currentNow=riskScore(p);
+
+  if(!rows.length && !Number.isFinite(Number(currentNow))){
+    svg.innerHTML="<text x='210' y='70' text-anchor='middle' class='chart-text'>Awaiting object score history</text>";
     setText("probabilityChartState","WAITING FOR OBSERVATIONS");
     return;
   }
 
   var W=420,H=142,P=24,TOP=16,BOTTOM=24;
-  var latest=rows.at(-1);
-  var latestTime=new Date(latest.timestamp||Date.now()).getTime();
+  var latestTime=rows.length?new Date(rows.at(-1).timestamp).getTime():Date.now();
   var observed=rows.map(function(r){
-    var t=new Date(r.timestamp||latest.timestamp).getTime();
+    var t=new Date(r.timestamp).getTime();
     var v=r.research_probability_now??r.probability_now??r.research_probabilities?.now;
     if(v==null)v=r.research_probabilities?.["15min"]??r.research_probabilities?.["15"];
+    if(v==null&&r.candidate_rank_score!=null)v=Number(r.candidate_rank_score)/100;
     return {x:(t-latestTime)/60000,v:Number(v)};
   }).filter(function(pt){return Number.isFinite(pt.x)&&Number.isFinite(pt.v)});
 
+  // Always anchor the current object state at NOW so the chart remains useful
+  // even when the historical tracker rows do not carry the shadow score fields.
+  if(Number.isFinite(Number(currentNow))){
+    var hasNow=observed.some(function(pt){return Math.abs(pt.x)<0.01});
+    if(!hasNow)observed.push({x:0,v:Number(currentNow)});
+    observed.sort(function(a,b){return a.x-b.x});
+  }
+
+  var latest=p||rows.at(-1)||{};
   var latestProbs=latest.research_probabilities||{};
-  var currentNow=latest.research_probability_now??latest.probability_now??latestProbs.now;
-  if(currentNow==null)currentNow=latestProbs["15min"]??latestProbs["15"]??latest.probability_15min;
   var forecast=[
     [0,Number(currentNow)],
     [15,Number(latestProbs["15"]??latestProbs["15min"])],
@@ -546,14 +566,14 @@ function renderProbabilityChart(hist){
     observed.forEach(function(pt){svg.innerHTML+="<circle cx='"+x(pt.x).toFixed(1)+"' cy='"+y(pt.v).toFixed(1)+"' r='2.5' fill='#eaf4f8'/>"});
   }
 
-  if(forecast.length){
+  if(forecast.length>1){
     var forecastPath=forecast.map(function(pt,n){return (n?"L":"M")+x(pt[0]).toFixed(1)+" "+y(pt[1]).toFixed(1)}).join(" ");
     svg.innerHTML+="<path d='"+forecastPath+"' class='prob-forecast'/>";
-    forecast.forEach(function(pt){svg.innerHTML+="<circle cx='"+x(pt[0]).toFixed(1)+"' cy='"+y(pt[1]).toFixed(1)+"' r='2.5' fill='#6fb8e5'/>"});
+    forecast.slice(1).forEach(function(pt){svg.innerHTML+="<circle cx='"+x(pt[0]).toFixed(1)+"' cy='"+y(pt[1]).toFixed(1)+"' r='2.5' fill='#6fb8e5'/>"});
   }
 
   svg.innerHTML+="<line x1='"+x(0)+"' y1='"+TOP+"' x2='"+x(0)+"' y2='"+(H-BOTTOM)+"' class='prob-now'/>";
-  setText("probabilityChartState",forecast.length>1?"NOW / FORECAST":"NOW ONLY");
+  setText("probabilityChartState",forecast.length>1?"OBSERVED / FORECAST":"OBSERVED / NOW");
 }
 function renderKeyTrends(){
   var p=latestForSelected();if(!p){q("keyTrends").innerHTML="";return}var rows=trackHistory(p),first=rows[0]||p;
