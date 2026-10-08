@@ -31,54 +31,87 @@ from snow_squall.environment_risk import environment_risk_features
 
 
 def object_geometry(mask, lat, lon, spacing_km=1.0):
-    """Return the detected grid-cell footprint as GeoJSON geometry.
+    """Return a compact polygon tracing the detected radar-object mask.
 
-    Do not use a convex hull here: it bridges gaps and concavities and can
-    create the giant triangular shapes seen in the historical viewer.
+    ProbSevere-style object identification is based on spatially segmented
+    radar features, so the viewer should receive the feature footprint rather
+    than a generic ellipse. Marching-squares contours preserve the actual
+    watershed mask while avoiding hundreds of individual grid-cell polygons.
     """
-    from shapely.geometry import box
+    from shapely.geometry import Polygon, MultiPolygon
     from shapely.ops import unary_union
+    from skimage.measure import find_contours
 
-    yy, xx = np.where(mask)
-    if len(xx) == 0:
+    mask = np.asarray(mask, dtype=bool)
+    if mask.ndim != 2 or not np.any(mask):
         return None, 0.0
 
-    finite = np.isfinite(lat[yy, xx]) & np.isfinite(lon[yy, xx])
-    yy, xx = yy[finite], xx[finite]
-    if len(xx) == 0:
-        return None, 0.0
+    contours = find_contours(mask.astype(float), 0.5)
+    if not contours:
+        return None, float(np.sum(mask) * spacing_km**2)
 
-    dlat = np.nanmedian(np.abs(np.diff(lat, axis=0)))
-    dlon = np.nanmedian(np.abs(np.diff(lon, axis=1)))
-    fallback = float(spacing_km) / 111.0
-    mean_lat = np.nanmean(lat[yy, xx])
-    if not np.isfinite(dlat) or dlat <= 0:
-        dlat = fallback
-    if not np.isfinite(dlon) or dlon <= 0:
-        dlon = fallback / max(0.2, np.cos(np.deg2rad(mean_lat)))
-
-    cells = [
-        box(
-            float(lon[y, x] - dlon / 2.0),
-            float(lat[y, x] - dlat / 2.0),
-            float(lon[y, x] + dlon / 2.0),
-            float(lat[y, x] + dlat / 2.0),
+    def grid_to_geo(contour):
+        rows = np.asarray(contour[:, 0], dtype=float)
+        cols = np.asarray(contour[:, 1], dtype=float)
+        rows = np.clip(rows, 0, lat.shape[0] - 1.000001)
+        cols = np.clip(cols, 0, lat.shape[1] - 1.000001)
+        r0 = np.floor(rows).astype(int)
+        c0 = np.floor(cols).astype(int)
+        r1 = np.minimum(r0 + 1, lat.shape[0] - 1)
+        c1 = np.minimum(c0 + 1, lat.shape[1] - 1)
+        fr = rows - r0
+        fc = cols - c0
+        latv = (
+            lat[r0, c0] * (1-fr) * (1-fc)
+            + lat[r1, c0] * fr * (1-fc)
+            + lat[r0, c1] * (1-fr) * fc
+            + lat[r1, c1] * fr * fc
         )
-        for y, x in zip(yy, xx)
-    ]
-    geom = unary_union(cells).buffer(0)
-    if geom.is_empty:
-        return None, float(len(xx) * spacing_km**2)
-    if geom.geom_type != "Polygon":
-        polygons = [part for part in getattr(geom, "geoms", ()) if part.geom_type == "Polygon"]
-        if not polygons:
-            return None, float(len(xx) * spacing_km**2)
-        # The detector should have produced one connected component. If raster
-        # geometry still fragments, retain the dominant footprint instead of
-        # publishing an invalid MultiPolygon operational object.
-        geom = max(polygons, key=lambda part: part.area)
+        lonv = (
+            lon[r0, c0] * (1-fr) * (1-fc)
+            + lon[r1, c0] * fr * (1-fc)
+            + lon[r0, c1] * (1-fr) * fc
+            + lon[r1, c1] * fr * fc
+        )
+        finite = np.isfinite(latv) & np.isfinite(lonv)
+        return np.column_stack((lonv[finite], latv[finite]))
 
-    return geom.__geo_interface__, float(len(xx) * spacing_km**2)
+    polygons = []
+    for contour in contours:
+        if len(contour) < 4:
+            continue
+        coords = grid_to_geo(contour)
+        if len(coords) < 4:
+            continue
+        poly = Polygon(coords)
+        if poly.is_empty or not poly.is_valid or poly.area <= 0:
+            poly = poly.buffer(0)
+        if not poly.is_empty and poly.area > 0:
+            polygons.append(poly)
+
+    if not polygons:
+        return None, float(np.sum(mask) * spacing_km**2)
+
+    # The largest contour is the radar-object exterior. Preserve interior
+    # contours as holes only when they are genuinely contained by that exterior.
+    outer = max(polygons, key=lambda p: p.area)
+    holes = []
+    for poly in polygons:
+        if poly is outer:
+            continue
+        if outer.contains(poly.representative_point()):
+            holes.append(list(poly.exterior.coords))
+    if holes:
+        outer = Polygon(list(outer.exterior.coords), holes=holes).buffer(0)
+
+    # Remove pixel-scale staircase noise while preserving the meteorological
+    # footprint. At 1-km gridding this is roughly a 0.1-km tolerance.
+    tolerance = max(0.0005, float(spacing_km) / 111000.0 * 0.75)
+    outer = outer.simplify(tolerance, preserve_topology=True).buffer(0)
+    if outer.is_empty:
+        return None, float(np.sum(mask) * spacing_km**2)
+
+    return outer.__geo_interface__, float(np.sum(mask) * spacing_km**2)
 
 def object_shape_metrics(rows, cols, lat, lon, spacing_km=1.0):
     """Estimate object major/minor axes and orientation from the footprint.
