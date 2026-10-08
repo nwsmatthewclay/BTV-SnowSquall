@@ -224,7 +224,50 @@ async function renderRadarMosaic(){
   if(!map._sqExtent){map.fitBounds(radarMosaic.bounds,{padding:[25,25],maxZoom:8});map._sqExtent=true}
 }
 function setRadarMode(mode){if(mode!=="reflectivity"&&mode!=="velocity")mode="reflectivity";radarMode=mode;document.querySelectorAll(".display-btn").forEach(function(b){b.classList.toggle("active",b.dataset.radarMode===mode)});renderRadarMosaic()}
+function geometryPoints(p){
+  var g=p&&p.radar_geometry;
+  if(!g||!g.type||!g.coordinates)return [];
+  var rings=[];
+  if(g.type==="Polygon"){
+    rings=(g.coordinates||[]).filter(function(r){return Array.isArray(r)&&r.length>=3});
+  }else if(g.type==="MultiPolygon"){
+    (g.coordinates||[]).forEach(function(poly){
+      if(Array.isArray(poly))poly.forEach(function(r){if(Array.isArray(r)&&r.length>=3)rings.push(r)});
+    });
+  }
+  if(!rings.length)return [];
+  // Use the largest exterior ring. The detector footprint is the meteorological
+  // feature; do not replace it with an ellipse unless the footprint is absent.
+  rings.sort(function(a,b){return b.length-a.length});
+  var ring=rings[0].map(function(x){return [Number(x[1]),Number(x[0])]}).filter(function(x){return Number.isFinite(x[0])&&Number.isFinite(x[1])});
+  if(ring.length<3)return [];
+  var lat=Number(p.centroid_lat),lon=Number(p.centroid_lon);
+  if(!Number.isFinite(lat)||!Number.isFinite(lon))return ring;
+
+  // Very small connected components can be only one radar pixel wide. ProbSevere
+  // style polygons need enough screen area to be visually identifiable, so gently
+  // expand only genuinely tiny footprints while preserving their observed shape.
+  var minLat=Math.min.apply(null,ring.map(function(x){return x[0]}));
+  var maxLat=Math.max.apply(null,ring.map(function(x){return x[0]}));
+  var minLon=Math.min.apply(null,ring.map(function(x){return x[1]}));
+  var maxLon=Math.max.apply(null,ring.map(function(x){return x[1]}));
+  var northKm=(maxLat-minLat)*111;
+  var eastKm=(maxLon-minLon)*111*Math.max(.2,Math.cos(lat*Math.PI/180));
+  var spanKm=Math.max(northKm,eastKm);
+  var minDisplayKm=2.5;
+  if(Number.isFinite(spanKm)&&spanKm>0&&spanKm<minDisplayKm){
+    var scale=Math.min(3.5,minDisplayKm/spanKm);
+    ring=ring.map(function(x){
+      var east=(x[1]-lon)*111*Math.max(.2,Math.cos(lat*Math.PI/180));
+      var north=(x[0]-lat)*111;
+      return [lat+(north*scale)/111,lon+(east*scale)/(111*Math.max(.2,Math.cos(lat*Math.PI/180)))];
+    });
+  }
+  return ring;
+}
 function cellPoints(p){
+  var footprint=geometryPoints(p);
+  if(footprint.length>=3)return footprint;
   var lat=Number(p.centroid_lat),lon=Number(p.centroid_lon);if(!Number.isFinite(lat)||!Number.isFinite(lon))return [];
   var major=Number(p.length_km);if(!Number.isFinite(major)||major<=0)major=2;
   var minor=Number(p.width_km);if(!Number.isFinite(minor)||minor<=0)minor=Math.max(1,major*.45);
@@ -255,23 +298,23 @@ function renderMap(){
     if(!feature&&!pts.length)return;
     var tooltip="<b>OBJECT "+objectOrdinal(p)+"</b><br>"+p.radar_site+" • Track "+p.track_id+"<br>"+num(p.max_reflectivity_dbz,0)+" dBZ • "+num(p.area_km2,0)+" km²<br>Click for attributes";
 
-    // Display the meteorological cell shape, colored by Snow Squall probability.
-    // Keep the published radar footprint as the larger click target so selection
-    // remains easy even when the rendered cell shape is small.
+    // Display the actual radar-derived meteorological footprint, colored by Snow Squall probability.
+    // Only fall back to a dimension-based shape when no usable footprint was published.
     var visual;
     if(pts.length){
       visual=L.polygon(pts,{
         color:sel?"#fff":c,
-        weight:sel?3.5:2,
+        weight:sel?3.5:2.5,
         fillColor:c,
-        fillOpacity:sel?.52:.24,
+        fillOpacity:sel?.52:.30,
         opacity:sel?1:.96,
         interactive:true,
-        lineJoin:"round"
+        lineJoin:"round",
+        lineCap:"round"
       }).addTo(layers[p.radar_site]);
     }else{
       visual=L.geoJSON(feature,{
-        style:{color:sel?"#fff":c,weight:sel?3.5:2,fillColor:c,fillOpacity:sel?.52:.24,opacity:sel?1:.96,interactive:true}
+        style:{color:sel?"#fff":c,weight:sel?3.5:2.5,fillColor:c,fillOpacity:sel?.52:.30,opacity:sel?1:.96,interactive:true}
       }).addTo(layers[p.radar_site]);
     }
     visual.bindTooltip(tooltip,{sticky:true});
