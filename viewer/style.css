@@ -702,3 +702,107 @@ body.live-dashboard-page header{
   white-space:nowrap;
 }
 @media(max-width:900px){.live-dashboard-main #cursorReadout{right:285px !important;}}
+
+
+/* 2026-10-08 LIVE WORKSPACE FINAL LAYOUT / WINTER RADAR PALETTE */
+body.live-dashboard-page .live-map-column{
+  min-width:0;
+  min-height:0;
+  height:100%;
+  display:grid;
+  grid-template-rows:minmax(0,1fr) auto;
+  background:#071018;
+}
+body.live-dashboard-page .live-map-column #liveMap{
+  min-height:0;
+  height:auto;
+  border-right:1px solid #223440;
+}
+body.live-dashboard-page .radar-timeline{
+  position:relative !important;
+  left:auto !important;
+  right:auto !important;
+  bottom:auto !important;
+  z-index:820;
+  margin:0;
+  border-radius:0;
+  border-left:0;
+  border-right:0;
+  border-bottom:1px solid #263846;
+  background:rgba(10,18,24,.98);
+  padding:7px 10px 8px;
+  backdrop-filter:none;
+}
+body.live-dashboard-page .radar-timeline-head{font-size:9px}
+body.live-dashboard-page .radar-timeline-controls{margin-top:4px}
+body.live-dashboard-page .radar-timeline-note{margin-top:3px}
+body.live-dashboard-page #liveMap .map-legend{
+  left:12px !important;
+  right:auto !important;
+  bottom:12px !important;
+  width:285px;
+  z-index:900;
+}
+body.live-dashboard-page #liveMap .map-hud-main{
+  left:12px;
+  top:12px;
+  z-index:800;
+}
+body.live-dashboard-page #liveMap .map-controls{
+  left:12px;
+  top:94px;
+  z-index:800;
+}
+/* Leaflet zoom is deliberately moved away from the upper-left HUD. */
+body.live-dashboard-page .leaflet-top.leaflet-left{
+  left:auto !important;
+  right:12px !important;
+  top:12px !important;
+}
+body.live-dashboard-page .leaflet-control-zoom{
+  margin:0 !important;
+}
+/* Explicit BTV winter reflectivity palette: -5 to 40 dBZ. */
+body.live-dashboard-page .map-legend-bar{
+  grid-template-columns:30px repeat(9,minmax(0,1fr)) 30px !important;
+}
+body.live-dashboard-page .map-legend-bar i:nth-of-type(1){background:#e9f2f7 !important}
+body.live-dashboard-page .map-legend-bar i:nth-of-type(2){background:#b7ddf2 !important}
+body.live-dashboard-page .map-legend-bar i:nth-of-type(3){background:#5fa9df !important}
+body.live-dashboard-page .map-legend-bar i:nth-of-type(4){background:#1f6fd1 !important}
+body.live-dashboard-page .map-legend-bar i:nth-of-type(5){background:#22a88a !important}
+body.live-dashboard-page .map-legend-bar i:nth-of-type(6){background:#f0d84b !important}
+body.live-dashboard-page .map-legend-bar i:nth-of-type(7){background:#f28a2e !important}
+body.live-dashboard-page .map-legend-bar i:nth-of-type(8){background:#d93b32 !important}
+body.live-dashboard-page .map-legend-bar i:nth-of-type(9){background:#d52f9d !important}
+body.live-dashboard-page .map-legend-bar span:first-child,
+body.live-dashboard-page .map-legend-bar span:last-child{
+  color:#d7e5ec !important;
+  font-weight:800;
+}
+/* Force the environmental risk fills above all legacy table rules. */
+body.live-dashboard-page #environmentTable .env-risk-green{
+  background:#245f38 !important;
+  color:#e2f8e6 !important;
+  box-shadow:inset 0 0 0 1px rgba(126,230,151,.16) !important;
+}
+body.live-dashboard-page #environmentTable .env-risk-yellow{
+  background:#75631b !important;
+  color:#fff5b8 !important;
+  box-shadow:inset 0 0 0 1px rgba(255,226,91,.18) !important;
+}
+body.live-dashboard-page #environmentTable .env-risk-red{
+  background:#7c302b !important;
+  color:#ffe0dc !important;
+  box-shadow:inset 0 0 0 1px rgba(255,110,96,.18) !important;
+}
+body.live-dashboard-page #environmentTable .env-risk-neutral,
+body.live-dashboard-page #environmentTable .env-risk-na{
+  background:#1a2831 !important;
+  color:#b2c1ca !important;
+}
+@media(max-width:900px){
+  body.live-dashboard-page .live-map-column{height:auto;min-height:0}
+  body.live-dashboard-page .live-map-column #liveMap{height:58vh;min-height:420px}
+  body.live-dashboard-page #liveMap .map-legend{bottom:10px !important;left:8px !important;width:250px}
+}
