@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 import numpy as np
 from scipy import ndimage
+from skimage.segmentation import watershed
 
 
 @dataclass(frozen=True)
@@ -33,6 +34,11 @@ class ObjectDetectionConfig:
     velocity_rescue_contrast_kt: float = 8.0
     velocity_rescue_gradient_ktkm: float = 6.0
     min_candidate_rank_score: float = 0.0
+    use_watershed: bool = True
+    watershed_seed_dbz: float = 25.0
+    watershed_max_dbz: float = 57.0
+    watershed_min_distance_px: int = 6
+    watershed_min_saliency_pixels: int = 8
 
 
 def _core_seed_split(component, field, config):
@@ -225,6 +231,11 @@ def detect_reflectivity_objects(reflectivity, config=ObjectDetectionConfig(), ve
                 if fraction >= 0.10:
                     velocity_rescue_region |= rescue_component
 
+    # Candidate generation is intentionally separate from severity scoring.
+    # ProbSevere first identifies coherent radar objects, then extracts
+    # predictors from them. For snow squalls we therefore use a lower
+    # reflectivity floor than ProbSevere's 40-dBZ convective threshold while
+    # retaining its enhanced-watershed/local-maximum concept.
     if velocity_arr_kt is not None:
         mask = finite & (
             (work >= config.threshold_dbz)
@@ -233,19 +244,14 @@ def detect_reflectivity_objects(reflectivity, config=ObjectDetectionConfig(), ve
         )
     else:
         mask = finite & (work >= config.threshold_dbz)
-    structure=ndimage.generate_binary_structure(2,config.connectivity)
-    if config.close_iterations:
-        mask=ndimage.binary_closing(mask,structure=structure,iterations=config.close_iterations)
-    if config.open_iterations:
-        mask=ndimage.binary_opening(mask,structure=structure,iterations=config.open_iterations)
-    if config.fill_holes:
-        mask=ndimage.binary_fill_holes(mask)
 
-    # Velocity-rescued echoes are deliberately reintroduced after generic
-    # morphology. A narrow coherent velocity signature can be physically
-    # meaningful even when a pixel-scale opening operation would erase its
-    # reflectivity footprint. The rescue itself already requires >=15 dBZ,
-    # strong velocity contrast, and a strong velocity gradient.
+    structure = ndimage.generate_binary_structure(2, config.connectivity)
+    if config.close_iterations:
+        mask = ndimage.binary_closing(mask, structure=structure, iterations=config.close_iterations)
+    if config.open_iterations:
+        mask = ndimage.binary_opening(mask, structure=structure, iterations=config.open_iterations)
+    if config.fill_holes:
+        mask = ndimage.binary_fill_holes(mask)
     if velocity_arr_kt is not None:
         mask |= velocity_rescue
 
@@ -254,10 +260,8 @@ def detect_reflectivity_objects(reflectivity, config=ObjectDetectionConfig(), ve
         boundary = np.zeros_like(raw_mask, dtype=bool)
         if raw_count:
             edge_ids = set(np.unique(np.concatenate([
-                raw_labels[0, :],
-                raw_labels[-1, :],
-                raw_labels[:, 0],
-                raw_labels[:, -1],
+                raw_labels[0, :], raw_labels[-1, :],
+                raw_labels[:, 0], raw_labels[:, -1],
             ])).tolist())
             edge_ids.discard(0)
             for raw_id in edge_ids:
@@ -267,13 +271,55 @@ def detect_reflectivity_objects(reflectivity, config=ObjectDetectionConfig(), ve
                     continue
                 if pixels <= config.max_boundary_pixels:
                     boundary |= component
-                    continue
-                core_count = int(np.sum(arr[component] >= config.core_threshold_dbz))
-                if core_count >= 4:
+                elif int(np.sum(arr[component] >= config.core_threshold_dbz)) >= 4:
                     boundary |= component
         mask |= boundary
 
-    labels,count=ndimage.label(mask,structure=structure)
+    if config.use_watershed:
+        # Seed from separated local maxima, then let the reflectivity field
+        # determine the footprint. This is much closer to w2segmotionll than
+        # labeling one threshold-connected blob and then trying to split it.
+        seed_field = np.where(mask, np.minimum(work, config.watershed_max_dbz), -np.inf)
+        local_max = (
+            np.isfinite(seed_field)
+            & (seed_field >= float(config.watershed_seed_dbz))
+            & (
+                seed_field
+                == ndimage.maximum_filter(
+                    np.where(np.isfinite(seed_field), seed_field, -np.inf),
+                    size=max(3, 2 * int(config.watershed_min_distance_px) + 1),
+                    mode="nearest",
+                )
+            )
+        )
+        coords = np.argwhere(local_max)
+        if coords.size:
+            peaks = sorted(
+                [(float(seed_field[y, x]), int(y), int(x)) for y, x in coords],
+                key=lambda item: (-item[0], item[1], item[2]),
+            )
+            markers = np.zeros_like(arr, dtype=np.int32)
+            selected = []
+            min_sep = max(1, int(config.watershed_min_distance_px))
+            for peak, y, x in peaks:
+                if all(np.hypot(y - sy, x - sx) >= min_sep for _, sy, sx in selected):
+                    selected.append((peak, y, x))
+            for marker_id, (_, y, x) in enumerate(selected, start=1):
+                markers[y, x] = marker_id
+            if selected:
+                labels = watershed(
+                    -np.nan_to_num(work, nan=-999.0),
+                    markers,
+                    mask=mask,
+                    watershed_line=False,
+                )
+                count = int(labels.max())
+            else:
+                labels, count = ndimage.label(mask, structure=structure)
+        else:
+            labels, count = ndimage.label(mask, structure=structure)
+    else:
+        labels, count = ndimage.label(mask, structure=structure)
     objects=[]
     next_id=1
     for label_id in range(1,count+1):
@@ -400,8 +446,10 @@ def detect_reflectivity_objects(reflectivity, config=ObjectDetectionConfig(), ve
             )
 
             # Candidate generation only: event truth remains downstream.
-            # Velocity may rescue modest reflectivity, but cannot create an
-            # object without at least a precipitation signal (>=15 dBZ).
+            # Every coherent reflectivity object is retained; gradient,
+            # contrast, core and velocity are diagnostic evidence rather than
+            # hard gates. This prevents the detector from silently discarding
+            # real echoes simply because they are broad or slowly varying.
             detection_evidence = []
             if gradient_good:
                 detection_evidence.append("reflectivity_gradient")
@@ -414,7 +462,7 @@ def detect_reflectivity_objects(reflectivity, config=ObjectDetectionConfig(), ve
             elif velocity_structure_good:
                 detection_evidence.append("velocity_structure")
             if not detection_evidence:
-                continue
+                detection_evidence.append("reflectivity_object")
 
             core_fraction = float(np.sum(valid_values >= config.core_threshold_dbz)) / max(1, len(xx))
             rank_score = candidate_rank_score(
