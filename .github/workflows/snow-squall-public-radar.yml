@@ -70,6 +70,7 @@ jobs:
           PYTHONPATH: .
         run: |
           python scripts/backfill_live_radar.py \
+            --radar KCXX \
             --live-root viewer/data/live \
             --raw-root data/raw \
             --max-cycles 18 \
