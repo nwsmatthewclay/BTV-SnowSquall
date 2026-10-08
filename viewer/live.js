@@ -560,7 +560,7 @@ function renderKeyTrends(){
   var items=[["MAX REFLECTIVITY",num(p.max_reflectivity_dbz,0)+" dBZ",delta(p.max_reflectivity_dbz,first.max_reflectivity_dbz),"dBZ"],["OBJECT AREA",num(p.area_km2,0)+" km²",delta(p.area_km2,first.area_km2),"km²"],["MOTION SPEED",num(p.motion_speed_kt,0)+" kt",delta(p.motion_speed_kt,first.motion_speed_kt),"kt"],["FEATURE COVERAGE",shadowRecord(p.radar_site,p.track_id)?.feature_coverage?.["15"]?.fraction==null?"—":(Number(shadowRecord(p.radar_site,p.track_id).feature_coverage["15"].fraction)*100).toFixed(0)+"%",null,""]];
   q("keyTrends").innerHTML=items.map(function(x){var d=x[2];return "<div class='trend-tile'><div class='label'>"+x[0]+"</div><div class='value'>"+x[1]+"</div><div class='delta "+(d==null?"neutral":"")+"'>"+(d==null?"Live snapshot":(d>=0?"▲ +":"▼ ")+Math.abs(d).toFixed(0)+" "+x[3])+"</div></div>"}).join("");
 }
-function fmtLiveEnv(v,key){if(v==null)return "—";if(key.indexOf("cape")>=0||key.indexOf("cin")>=0||key==="dcape_jkg")return num(v,0);if(key==="srh01_m2s2"||key.indexOf("shear")>=0&&key!=="shear_0_6km_ms")return num(v,0);return num(v,1)}
+function fmtLiveEnv(v,key){if(v==null)return "—";if(key==="pwat_mm")return num(Number(v)/25.4,2)+" in";if(key.indexOf("cape")>=0||key.indexOf("cin")>=0||key==="dcape_jkg")return num(v,0);if(key==="srh01_m2s2"||key.indexOf("shear")>=0&&key!=="shear_0_6km_ms")return num(v,0);return num(v,1)}
 function envRiskClass(key,val){
   if(val==null||!Number.isFinite(Number(val)))return "env-risk-na";
   var v=Number(val),y=null,r=null,hi=true;
@@ -593,7 +593,7 @@ function envRiskClass(key,val){
 function renderEnvironment(){
   var p=latestForSelected();if(!p){q("environmentTable").innerHTML="";return}
   var fields=[
-    ["SBCAPE","cape_jkg"],["MLCAPE","mlcape_jkg"],["MUCAPE","mucape_jkg"],["MLCIN","mlcin_jkg"],["DCAPE","dcape_jkg"],["PWAT","pwat_mm"],["LCL","lcl_m"],["LFC","lfc_m"],["EL","el_m"],
+    ["SBCAPE","cape_jkg"],["MLCAPE","mlcape_jkg"],["MUCAPE","mucape_jkg"],["MLCIN","mlcin_jkg"],["DCAPE","dcape_jkg"],["PWAT (in)","pwat_mm"],["LCL","lcl_m"],["LFC","lfc_m"],["EL","el_m"],
     ["0–1 km SRH","srh01_m2s2"],["0–1 km shear","shear_0_1km_kt"],["0–3 km shear","shear_0_3km_kt"],["0–6 km shear","shear_0_6km_kt"],
     ["0–3 km lapse","lapse_rate_0_3km_c_km"],["0–7.5 km lapse","lapse_rate_0_7_5km_c_km"],["Freezing level","freezing_level_m"],
     ["2 m temperature","temperature_2m_k"],["2 m dewpoint","dewpoint_2m_k"],["2 m RH","rh_2m_pct"],["Surface gust","gust_ms"],
