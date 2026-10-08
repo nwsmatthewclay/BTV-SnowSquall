@@ -182,7 +182,7 @@ async function renderRadarMosaic(){
       });
       iem.addTo(radarLayer);
       setText("radarStatus",useHistorical&&histFrameForWms?"IEM radar fallback • "+fmtTime(histFrameForWms.timestamp):"IEM live radar fallback • current NEXRAD mosaic");
-      setText("legendTitle","WINTER REFLECTIVITY • dBZ");
+      setText("legendTitle","NWS REFLECTIVITY • dBZ");
       setText("legendNote","External fallback: IEM NEXRAD mosaic. Local KCXX/KTYX products resume automatically when published.");
       return;
     }
@@ -192,7 +192,7 @@ async function renderRadarMosaic(){
       var histName=histFrame.image.split("/").pop();
       L.imageOverlay(LIVE_BASE+"radar_history/"+histName+"?cb="+Date.now(),histBounds,{pane:"liveRadarPane",opacity:.96,interactive:false,crossOrigin:true}).addTo(radarLayer);
       setText("radarStatus","Historical radar frame • "+fmtTime(histFrame.timestamp)+" • live acquisition unavailable");
-      setText("legendTitle","WINTER REFLECTIVITY • dBZ");
+      setText("legendTitle","NWS REFLECTIVITY • dBZ");
       setText("legendNote","Historical frame retained locally while the live radar publisher recovers.");
       if(!map._sqExtent){map.fitBounds(histBounds,{padding:[25,25],maxZoom:8});map._sqExtent=true}
       return;
@@ -215,7 +215,7 @@ async function renderRadarMosaic(){
       setText("legendNote","Display fallback: current single-site NEXRAD base velocity. Local Level-II velocity resumes automatically when published.");
     }else{
       setText("radarStatus","Local mosaic unavailable • NOAA QC fallback");
-      setText("legendTitle","WINTER REFLECTIVITY • dBZ");
+      setText("legendTitle","NWS REFLECTIVITY • dBZ");
       setText("legendNote","NOAA fallback is display-only; local object analysis remains independent.");
       addNoaaFallback();
     }
@@ -250,7 +250,7 @@ async function renderRadarMosaic(){
     var refText=ref?fmtTime(new Date(ref).toISOString()):"";
     var syncText=useStoredFrame&&selectedFrame.timestamp?" • "+(radarHistoryIndex>=0?"timeline ":"synced ")+fmtTime(selectedFrame.timestamp):"";
     setText("radarStatus","Reflectivity mosaic "+(radarMosaic.status==="stale"?"RETAINED":"READY")+" • KCXX + KTYX"+syncText+(refText?" • objects "+refText:""));
-    setText("legendTitle","WINTER REFLECTIVITY • dBZ");
+    setText("legendTitle","NWS REFLECTIVITY • dBZ");
     setText("legendNote","KCXX + KTYX reflectivity mosaic. Object footprints are clickable and expose full attributes.");
     radarInitialRender=false;
   }
