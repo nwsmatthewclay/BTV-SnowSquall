@@ -1,0 +1,139 @@
+name: Snow Squall Event-Driven Live Cycle
+
+on:
+  repository_dispatch:
+    types: [kcxx_scan]
+  workflow_dispatch:
+    inputs:
+      scan_time:
+        description: "KCXX scan time in UTC, e.g. 2026-10-08T14:35:08Z"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: snow-squall-live-object-publisher-v2
+  cancel-in-progress: false
+
+jobs:
+  event-cycle:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      PYTHONUNBUFFERED: "1"
+      PYTHONPATH: ${{ github.workspace }}
+
+    steps:
+      - name: Check out model foundation
+        uses: actions/checkout@v4
+        with:
+          ref: snow-squall-model-foundation
+          fetch-depth: 2
+
+      - name: Restore current live feed
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin snow-squall-live-data
+          mkdir -p viewer/data/live
+          git archive origin/snow-squall-live-data viewer/data/live > /tmp/live.tar || true
+          if [ -s /tmp/live.tar ]; then
+            tar -xf /tmp/live.tar -C .
+          fi
+          mkdir -p data/derived
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install scientific dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt -r requirements-science.txt
+
+      - name: Resolve event timestamp
+        id: event
+        env:
+          DISPATCH_SCAN_TIME: ${{ github.event.client_payload.scan_time }}
+          MANUAL_SCAN_TIME: ${{ inputs.scan_time }}
+        run: |
+          set -euo pipefail
+          scan_time="$DISPATCH_SCAN_TIME"
+          if [ -z "$scan_time" ]; then
+            scan_time="$MANUAL_SCAN_TIME"
+          fi
+          if [ -z "$scan_time" ]; then
+            echo "No KCXX scan time supplied."
+            exit 1
+          fi
+          echo "scan_time=$scan_time" >> "$GITHUB_OUTPUT"
+          echo "Processing KCXX event time: $scan_time"
+
+      - name: Process synchronized KCXX/KTYX cycle
+        run: |
+          set -euo pipefail
+          python scripts/process_live_event.py \
+            --scan-time "${{ steps.event.outputs.scan_time }}" \
+            --raw-root data/raw \
+            --live-root viewer/data/live \
+            --kcxx-tolerance-minutes 3 \
+            --ktyx-max-age-minutes 8 \
+            --archive-attempts 8 \
+            --archive-delay-seconds 20
+
+      - name: Validate synchronized publication metadata
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          from datetime import datetime
+
+          root = Path("viewer/data/live")
+          cycle = json.loads((root / "event_cycle.json").read_text())
+          radar = json.loads((root / "radar_mosaic.json").read_text())
+
+          requested = datetime.fromisoformat(cycle["requested_scan_time_utc"].replace("Z","+00:00"))
+          kcxx = datetime.fromisoformat(cycle["kcxx"]["scan_time_utc"].replace("Z","+00:00"))
+          if abs((kcxx-requested).total_seconds()) > 180:
+              raise SystemExit("KCXX event/source synchronization exceeded 3 minutes.")
+
+          sources = {s.get("radar"): s.get("scan_time_utc") for s in radar.get("sources", [])}
+          if sources.get("KCXX") != cycle["kcxx"]["scan_time_utc"]:
+              raise SystemExit("Mosaic KCXX source does not match event KCXX source.")
+          if cycle.get("ktyx"):
+              if sources.get("KTYX") != cycle["ktyx"]["scan_time_utc"]:
+                  raise SystemExit("Mosaic KTYX source does not match event KTYX source.")
+              if datetime.fromisoformat(cycle["ktyx"]["scan_time_utc"].replace("Z","+00:00")) > kcxx:
+                  raise SystemExit("KTYX source is newer than KCXX reference.")
+          print("SYNCHRONIZED EVENT VALIDATION: PASS")
+          print(json.dumps(cycle, indent=2))
+          PY
+
+      - name: Publish synchronized live feed
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/live-publish
+          git clone --depth 1 --branch snow-squall-live-data \
+            "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" \
+            /tmp/live-publish
+
+          target=/tmp/live-publish/viewer/data/live
+          mkdir -p "$target"
+          rm -rf "$target"/*
+          cp -R viewer/data/live/. "$target/"
+
+          cd /tmp/live-publish
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add viewer/data/live
+          if git diff --cached --quiet; then
+            echo "No live-data changes to publish."
+            exit 0
+          fi
+          git commit -m "Publish synchronized KCXX live cycle ${{ steps.event.outputs.scan_time }}"
+          git push origin HEAD:snow-squall-live-data
