@@ -230,29 +230,12 @@ def _render(mosaic, latlon, output_path: Path, *, mode="clean", rhohv=None):
     ax.set_ylim(float(np.nanmin(lat)), float(np.nanmax(lat)))
 
     if mode == "clean":
-        # Winter display palette: extra discrimination in the 8–35 dBZ
-        # range where shallow snow bands/squalls often live, while preserving
-        # conventional warm colors for stronger echoes.
-        # Explicit winter/snow-squall display scale requested for the BTV
-        # CWA: -5 to 40 dBZ, with strong discrimination through the
-        # 0–35 dBZ range. Values above 40 dBZ use the over color.
-        bounds = [-5, 0, 5, 10, 15, 20, 25, 30, 35, 40]
-        colors = [
-            "#e9f2f7",  # -5–0: trace / near-background
-            "#b7ddf2",  # 0–5: very weak snow
-            "#5fa9df",  # 5–10
-            "#1f6fd1",  # 10–15
-            "#22a88a",  # 15–20
-            "#f0d84b",  # 20–25
-            "#f28a2e",  # 25–30
-            "#d93b32",  # 30–35
-            "#d52f9d",  # 35–40
-        ]
-        cmap = ListedColormap(colors, name="BTV_WINTER_REFLECTIVITY")
-        cmap.set_under((0, 0, 0, 0))
-        cmap.set_over("#8b1e61")
-        norm = BoundaryNorm(bounds, cmap.N)
-        ax.pcolormesh(lon, lat, masked, cmap=cmap, norm=norm, shading="auto")
+        # Standard NWS radar reflectivity palette. Keep the clean display
+        # identical to the raw/native reflectivity products so every frame
+        # uses the familiar operational color scale.
+        cmap = plt.get_cmap("NWSRef").copy()
+        cmap.set_bad((0, 0, 0, 0))
+        ax.pcolormesh(lon, lat, masked, cmap=cmap, vmin=-10, vmax=75, shading="auto")
     else:
         cmap = plt.get_cmap("NWSRef").copy()
         cmap.set_bad((0, 0, 0, 0))
@@ -473,19 +456,11 @@ def _direct_render(sweep_products, output_dir: Path, *, product_name: str, clean
     ax.set_xlim(-76.78, -70.52)
     ax.set_ylim(41.90, 46.40)
     if clean:
-        # Keep the native Level-II display on exactly the same winter palette
-        # as the Cartesian mosaic. Previously this direct/native path retained
-        # the older 5–75 dBZ palette, causing the first frame on page load to
-        # look substantially different from the timeline frames.
-        bounds = [-5, 0, 5, 10, 15, 20, 25, 30, 35, 40]
-        colors = [
-            "#e9f2f7", "#b7ddf2", "#5fa9df", "#1f6fd1", "#22a88a",
-            "#f0d84b", "#f28a2e", "#d93b32", "#d52f9d",
-        ]
-        cmap = ListedColormap(colors, name="BTV_WINTER_REFLECTIVITY")
-        cmap.set_under((0, 0, 0, 0))
-        cmap.set_over("#8b1e61")
-        norm = BoundaryNorm(bounds, cmap.N)
+        # Native Level-II reflectivity uses the same standard NWS palette as
+        # the Cartesian mosaic and raw product.
+        cmap = plt.get_cmap("NWSRef").copy()
+        cmap.set_bad((0, 0, 0, 0))
+        norm = None
     else:
         cmap = plt.get_cmap("NWSRef").copy()
         cmap.set_bad((0, 0, 0, 0))
@@ -613,11 +588,11 @@ def main():
             "spacing_km": SPACING_KM,
             "combine_method": "maximum valid reflectivity",
             "field": "reflectivity_dbz",
-            "color_table": "BTV_WINTER_REFLECTIVITY + NWSRef_RAW",
-            "vmin_dbz": -5,
-            "vmax_dbz": 40,
+            "color_table": "NWSRef",
+            "vmin_dbz": -10,
+            "vmax_dbz": 75,
             "display_qc": {
-                "low_dbz_cutoff": -5,
+                "low_dbz_cutoff": -10,
                 "low_cc_threshold": 0.65,
                 "low_cc_max_dbz": 30,
                 "isolated_weak_echo_cleanup": True,
