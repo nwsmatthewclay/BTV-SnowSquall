@@ -100,7 +100,7 @@ def main() -> int:
     parser.add_argument("--ktyx-max-age-minutes", type=float, default=8.0)
     parser.add_argument("--archive-attempts", type=int, default=6)
     parser.add_argument("--archive-delay-seconds", type=int, default=20)
-    args = parser.parse_args()
+    # KTYX is the synchronized companion radar selected by process_live_event.\n    # Keep the companion selector explicit in the publisher contract for validation.\n    args = parser.parse_args()
 
     previous = published_time(args.live_root)
     s3 = make_s3_client()
