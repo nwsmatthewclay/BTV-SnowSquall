@@ -1,5 +1,8 @@
 """Process one newly acquired Level-II volume into live object state.
 
+# RAP is hourly in live mode; allow one late/missing cycle without dropping the environmental score.
+LIVE_ENV_MAX_AGE_MINUTES = 120.0
+
 Publishes transparent research-weighted 15/30/45/60 guidance while keeping
 learned operational release models separately gated. All time-evolving
 diagnostics use only the current scan and prior retained state.
@@ -606,6 +609,7 @@ def process_volume(
         environment_readiness = assess_environment(
             {**environment.get("fields", {}), "environment": environment, "timestamp": timestamp},
             radar_time=timestamp,
+            max_age_minutes=LIVE_ENV_MAX_AGE_MINUTES,
         )
         forecast_reference_time = (
             forecast_30_valid_time.isoformat().replace("+00:00", "Z")
