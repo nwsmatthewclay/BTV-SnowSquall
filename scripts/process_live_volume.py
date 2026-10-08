@@ -844,6 +844,35 @@ def process_volume(
     state["last_source"] = source_name
     state["last_object_count"] = len(features)
     state["object_positions"] = current_positions
+
+    # Keep a compact environmental history in tracker state as a second,
+    # durable source for the browser viewer. This prevents the -30 min RAP
+    # column from disappearing if the standalone JSONL history is interrupted.
+    env_history = state.setdefault("environment_history", {})
+    for feature in features:
+        props = feature.get("properties", {})
+        track_id = str(props.get("track_id"))
+        env = props.get("environment") or {}
+        fields = env.get("fields") or {}
+        if not track_id or not fields:
+            continue
+        snapshot = {
+            "timestamp": props.get("timestamp"),
+            "track_id": track_id,
+            "environment": {
+                "source": env.get("source"),
+                "source_valid_time_utc": env.get("source_valid_time_utc"),
+                "age_minutes": env.get("age_minutes"),
+                "fields": _json_safe(fields),
+            },
+        }
+        history = env_history.setdefault(track_id, [])
+        stamp = snapshot.get("timestamp")
+        if stamp and not any(str(x.get("timestamp")) == str(stamp) for x in history):
+            history.append(snapshot)
+        history.sort(key=lambda x: str(x.get("timestamp", "")))
+        env_history[track_id] = history[-24:]
+
     state["updated_utc"] = datetime.now(timezone.utc).isoformat()
     save_state(state_path, state, tracker)
 
