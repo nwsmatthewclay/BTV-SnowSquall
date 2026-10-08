@@ -6,7 +6,7 @@
 <title>BTV Snow Squall • Live Object Monitor</title>
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
-<link rel="stylesheet" href="style.css?v=20261008-env-full-cell-12">
+<link rel="stylesheet" href="style.css?v=20261008-live-layout-winter-13">
 </head>
 <body class="live-dashboard-page">
 <header>
@@ -30,6 +30,7 @@
 </header>
 
 <main class="dashboard-main live-dashboard-main">
+  <div class="live-map-column">
   <section id="liveMap" class="dashboard-map" aria-label="Live snow squall radar object map">
     <div class="map-hud-main">
       <b id="mapRadarLabel">KCXX + KTYX • LIVE</b>
@@ -58,6 +59,7 @@
       <div class="map-legend-note" id="legendNote">Clean KCXX/KTYX reflectivity mosaic. Object outlines remain clickable above the radar.</div>
     </div>
   </section>
+  </div>
 
   <aside class="dashboard-panel" id="panel">
     <div class="section-block">
@@ -135,6 +137,6 @@
 </main>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<script src="live.js?v=20261008-env-object-recovery-12"></script>
+<script src="live.js?v=20261008-live-layout-winter-13"></script>
 </body>
 </html>
