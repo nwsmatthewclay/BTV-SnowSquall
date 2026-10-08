@@ -23,7 +23,7 @@ from matplotlib.colors import BoundaryNorm, ListedColormap
 from scipy import ndimage
 
 from acquisition.level2_reader import read_level2, resolve_fields, volume_metadata
-from processing.radar_grid import grid_field_2d, grid_latlon, grid_lowest_available_sweep, lowest_valid_sweep
+from processing.radar_grid import grid_field_2d, grid_latlon, grid_lowest_available_sweep, grid_reflectivity_composite, lowest_valid_sweep
 from processing.radar_sites import apply_radar_origin, radar_origin_for_site
 
 
@@ -72,13 +72,16 @@ def grid_radar(path: Path, radar: str):
         raise RuntimeError(f"{radar}: no reflectivity field found")
     rhohv = fields.get("rhohv")
 
-    refl_grid = grid_lowest_available_sweep(
+    # Display reflectivity uses a terrain-aware multi-sweep composite.
+    # Object detection continues to use its own low-level radar fields.
+    refl_grid = grid_reflectivity_composite(
         radar_obj,
         reflectivity,
         origin_lat=CENTER_LAT,
         origin_lon=CENTER_LON,
         grid_size_km=GRID_SIZE_KM,
         spacing_km=SPACING_KM,
+        max_sweeps=6,
     )
     if refl_grid is None:
         raise RuntimeError(f"{radar}: reflectivity field has no valid sweep")
