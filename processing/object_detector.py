@@ -35,7 +35,7 @@ class ObjectDetectionConfig:
     velocity_rescue_gradient_ktkm: float = 6.0
     min_candidate_rank_score: float = 0.0
     use_watershed: bool = True
-    watershed_seed_dbz: float = 25.0
+    watershed_seed_dbz: float = 30.0
     watershed_max_dbz: float = 57.0
     watershed_min_distance_px: int = 6
     watershed_min_saliency_pixels: int = 8
