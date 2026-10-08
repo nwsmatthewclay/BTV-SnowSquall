@@ -56,11 +56,14 @@ jobs:
           echo "new_scan=false" >> "$GITHUB_OUTPUT"
           python scripts/public_archive_trigger.py
 
-      - name: Process synchronized KCXX/KTYX cycle
+      - name: Backfill all missed KCXX/KTYX cycles
         if: steps.archive.outputs.new_scan == 'true'
         run: |
-          python scripts/process_live_event.py \
-            --scan-time "${{ steps.archive.outputs.scan_time }}" \
+          python scripts/backfill_live_radar.py \
+            --live-root viewer/data/live \
+            --raw-root data/raw \
+            --max-cycles 12 \
+            --lookback-hours 4 \
             --kcxx-tolerance-minutes 4 \
             --ktyx-max-age-minutes 8 \
             --archive-attempts 6 \
