@@ -233,8 +233,9 @@ def _render(mosaic, latlon, output_path: Path, *, mode="clean", rhohv=None):
         # Winter display palette: extra discrimination in the 8–35 dBZ
         # range where shallow snow bands/squalls often live, while preserving
         # conventional warm colors for stronger echoes.
-        bounds = [8, 12, 16, 20, 24, 28, 32, 36, 42, 50, 60, 75]
+        bounds = [5, 8, 12, 16, 20, 24, 28, 32, 36, 42, 50, 60, 75]
         colors = [
+            (0.82, 0.88, 0.92, 0.20),  # 5–8: trace/very weak echo
             (0.68, 0.78, 0.84, 0.28),  # 8–12: very weak snow
             (0.38, 0.68, 0.86, 0.52),  # 12–16
             (0.18, 0.58, 0.88, 0.68),  # 16–20
@@ -416,9 +417,9 @@ def _direct_render(sweep_products, output_dir: Path, *, product_name: str, clean
     ax.set_xlim(-76.78, -70.52)
     ax.set_ylim(41.90, 46.40)
     if clean:
-        bounds = [8, 12, 16, 20, 24, 28, 32, 36, 42, 50, 60, 75]
+        bounds = [5, 8, 12, 16, 20, 24, 28, 32, 36, 42, 50, 60, 75]
         colors = [
-            (0.68, 0.78, 0.84, 0.28), (0.38, 0.68, 0.86, 0.52),
+            (0.82, 0.88, 0.92, 0.20), (0.68, 0.78, 0.84, 0.28), (0.38, 0.68, 0.86, 0.52),
             (0.18, 0.58, 0.88, 0.68), (0.12, 0.38, 0.86, 0.82),
             (0.24, 0.20, 0.78, 0.92), (0.48, 0.18, 0.76, 0.96),
             (0.76, 0.18, 0.68, 0.98), (0.94, 0.25, 0.55, 1.0),
