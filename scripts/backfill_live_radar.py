@@ -33,16 +33,62 @@ def parse_time(value: str | None) -> datetime | None:
     return dt.astimezone(timezone.utc)
 
 
+def object_scan_time(live_root: Path, site: str) -> datetime | None:
+    """Return the newest durable object timestamp for one radar."""
+    candidates: list[datetime] = []
+    state_path = live_root / f"{site}_state.json"
+    if state_path.exists():
+        try:
+            payload = json.loads(state_path.read_text(encoding="utf-8"))
+            parsed = parse_time(payload.get("last_scan_time_utc"))
+            if parsed:
+                candidates.append(parsed)
+        except Exception:
+            pass
+    geo_path = live_root / f"{site}_objects.geojson"
+    if geo_path.exists():
+        try:
+            payload = json.loads(geo_path.read_text(encoding="utf-8"))
+            parsed = parse_time((payload.get("metadata") or {}).get("scan_time_utc"))
+            if parsed:
+                candidates.append(parsed)
+        except Exception:
+            pass
+    return max(candidates) if candidates else None
+
+
 def published_time(live_root: Path) -> datetime | None:
+    """Return the oldest live watermark so any lagging object feed is caught up."""
+    candidates: list[datetime] = []
+
     event = live_root / "event_cycle.json"
     if event.exists():
         try:
             payload = json.loads(event.read_text(encoding="utf-8"))
-            return parse_time((payload.get("kcxx") or {}).get("scan_time_utc"))
+            parsed = parse_time((payload.get("kcxx") or {}).get("scan_time_utc"))
+            if parsed:
+                candidates.append(parsed)
         except Exception:
             pass
-    return None
 
+    radar = live_root / "radar_mosaic.json"
+    if radar.exists():
+        try:
+            payload = json.loads(radar.read_text(encoding="utf-8"))
+            for source in payload.get("sources", []):
+                if source.get("radar") == "KCXX":
+                    parsed = parse_time(source.get("scan_time_utc"))
+                    if parsed:
+                        candidates.append(parsed)
+        except Exception:
+            pass
+
+    object_times = [
+        object_scan_time(live_root, "KCXX"),
+        object_scan_time(live_root, "KTYX"),
+    ]
+    candidates.extend(value for value in object_times if value is not None)
+    return min(candidates) if candidates else None
 
 def main() -> int:
     parser = argparse.ArgumentParser()
