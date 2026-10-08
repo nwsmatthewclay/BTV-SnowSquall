@@ -17,7 +17,7 @@ var radarHistory={frames:[]},radarHistoryIndex=-1,radarAnimationTimer=null,radar
 var LIVE_BASE="https://raw.githubusercontent.com/nwsmatthewclay/BTV-SnowSquall/snow-squall-live-data/viewer/data/live/";
 var SHADOW_BASE="https://raw.githubusercontent.com/nwsmatthewclay/BTV-SnowSquall/snow-squall-shadow-data/viewer/data/shadow/";
 var SHADOW_MIN_COVERAGE=0.40;
-var MAX_LIVE_OBJECT_AGE_MIN=75;
+var MAX_LIVE_OBJECT_AGE_MIN=180;
 var DISPLAY_MIN_SCORE=35;
 
 function q(id){return document.getElementById(id)}
@@ -186,13 +186,13 @@ async function renderRadarMosaic(){
     radarMosaic &&
     radarMosaic.bounds &&
     radarMosaic.grid &&
-    radarMosaic.grid.color_table==="NWSRef"
+    (radarMosaic.grid.color_table==="NWSRef" || radarMosaic.grid.color_table==="BTV_WINTER_REFLECTIVITY + NWSRef_RAW")
   );
 
   if(!mosaicIsNwsRef){
     if(radarMode==="reflectivity"){
       var histFrame=radarHistoryFrame();
-      if(histFrame && histFrame.palette==="NWSRef"){
+      if(histFrame && (histFrame.palette==="NWSRef" || histFrame.palette==="BTV_WINTER_REFLECTIVITY_V1")){
         var histBounds=histFrame.bounds||[[41.90,-76.78],[46.40,-70.52]];
         var histName=histFrame.image.split("/").pop();
         L.imageOverlay(
@@ -255,7 +255,7 @@ async function renderRadarMosaic(){
     var selectedFrame=(!radarInitialRender&&radarHistoryIndex>=0&&frame)?frame:syncFrame;
     var useStoredFrame=!!(
       selectedFrame &&
-      selectedFrame.palette==="NWSRef" &&
+      (selectedFrame.palette==="NWSRef" || selectedFrame.palette==="BTV_WINTER_REFLECTIVITY_V1") &&
       selectedFrame.image &&
       selectedFrame.image!=="iem-wms"
     );
