@@ -39,6 +39,7 @@ class ObjectDetectionConfig:
     watershed_max_dbz: float = 57.0
     watershed_min_distance_px: int = 6
     watershed_min_saliency_pixels: int = 8
+    watershed_min_prominence_db: float = 3.0
 
 
 def _core_seed_split(component, field, config):
@@ -280,17 +281,23 @@ def detect_reflectivity_objects(reflectivity, config=ObjectDetectionConfig(), ve
         # determine the footprint. This is much closer to w2segmotionll than
         # labeling one threshold-connected blob and then trying to split it.
         seed_field = np.where(mask, np.minimum(work, config.watershed_max_dbz), -np.inf)
+        neighborhood = max(3, 2 * int(config.watershed_min_distance_px) + 1)
+        local_high = ndimage.maximum_filter(
+            np.where(np.isfinite(seed_field), seed_field, -np.inf),
+            size=neighborhood, mode="nearest"
+        )
+        local_low = ndimage.minimum_filter(
+            np.where(np.isfinite(seed_field), seed_field, np.inf),
+            size=neighborhood, mode="nearest"
+        )
+        # Require local prominence so a flat 20–25 dBZ snow shield does not
+        # become dozens of watershed seeds. This is the key distinction
+        # between a coherent precipitation area and a trackable embedded cell.
         local_max = (
             np.isfinite(seed_field)
             & (seed_field >= float(config.watershed_seed_dbz))
-            & (
-                seed_field
-                == ndimage.maximum_filter(
-                    np.where(np.isfinite(seed_field), seed_field, -np.inf),
-                    size=max(3, 2 * int(config.watershed_min_distance_px) + 1),
-                    mode="nearest",
-                )
-            )
+            & (seed_field == local_high)
+            & ((seed_field - local_low) >= float(config.watershed_min_prominence_db))
         )
         coords = np.argwhere(local_max)
         if coords.size:
