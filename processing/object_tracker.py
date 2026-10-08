@@ -21,13 +21,14 @@ class Track:
     max_reflectivity_dbz:float|None=None
     missed_scans:int=0
     history:list|None=None
+    bbox:tuple|None=None
 
 
 @dataclass(frozen=True)
 class TrackerConfig:
     max_pixel_distance:float=18.0
     grid_spacing_km:float=1.0
-    max_motion_kt:float=75.0
+    max_motion_kt:float=90.0
     min_gate_distance_km:float=4.0
     max_time_gap_minutes:float=30.0
     max_missed_scans:int=2
@@ -67,6 +68,43 @@ class CentroidTracker:
         stale=[tid for tid,track in self.tracks.items() if self._minutes_since(timestamp,track.last_time)>self.config.max_time_gap_minutes]
         for tid in stale: del self.tracks[tid]
         return stale
+
+
+    @staticmethod
+    def _bbox(obj):
+        try:
+            rows=np.asarray(obj.get("row_indices",[]),dtype=float)
+            cols=np.asarray(obj.get("column_indices",[]),dtype=float)
+            if rows.size==0 or cols.size==0:
+                return None
+            return (float(np.min(rows)), float(np.min(cols)),
+                    float(np.max(rows)), float(np.max(cols)))
+        except (TypeError,ValueError):
+            return None
+
+    @staticmethod
+    def _bbox_iou(a,b):
+        if a is None or b is None:
+            return 0.0
+        ay0,ax0,ay1,ax1=a
+        by0,bx0,by1,bx1=b
+        iy0=max(ay0,by0); ix0=max(ax0,bx0)
+        iy1=min(ay1,by1); ix1=min(ax1,bx1)
+        if iy1<iy0 or ix1<ix0:
+            return 0.0
+        inter=(iy1-iy0+1.0)*(ix1-ix0+1.0)
+        area_a=max(1.0,(ay1-ay0+1.0)*(ax1-ax0+1.0))
+        area_b=max(1.0,(by1-by0+1.0)*(bx1-bx0+1.0))
+        return float(inter/max(1.0,area_a+area_b-inter))
+
+    def _projected_bbox(self,track,timestamp,radar_motion=None):
+        if track.bbox is None:
+            return None
+        pred_row,pred_col=self._predicted_position(track,timestamp,radar_motion)
+        dr=pred_row-track.row
+        dc=pred_col-track.column
+        y0,x0,y1,x1=track.bbox
+        return (y0+dr,x0+dc,y1+dr,x1+dc)
 
     @staticmethod
     def _area(obj):
@@ -117,7 +155,8 @@ class CentroidTracker:
         area_ratio=max(obj_area/track_area,track_area/obj_area)
         if area_ratio>self.config.max_area_ratio: return np.inf
         position_cost=distance/max(gate_pixels,1e-6)
-        return self.config.prediction_weight*position_cost+self.config.size_weight*size_cost+self.config.intensity_weight*intensity_cost
+        overlap_cost=1.0-self._bbox_iou(self._projected_bbox(track,timestamp,radar_motion),self._bbox(obj))
+        return 0.58*position_cost+0.18*overlap_cost+0.14*size_cost+0.10*intensity_cost
 
     def update(self,timestamp,objects,radar_motion=None):
         self._prune_stale(timestamp)
@@ -177,6 +216,7 @@ class CentroidTracker:
                 obj["track_motion_radar_weight"]=0.0
             track.last_time=timestamp; track.row=measured_row; track.column=measured_col
             track.age_scans+=1; track.missed_scans=0; track.area_km2=self._area(obj); track.max_reflectivity_dbz=self._z(obj)
+            track.bbox=self._bbox(obj)
             if track.history is None:
                 track.history = []
             track.history.append({
@@ -225,7 +265,7 @@ class CentroidTracker:
                 tid,timestamp,timestamp,
                 float(obj["row_centroid"]),float(obj["column_centroid"]),
                 velocity_row=initial_vr,velocity_column=initial_vc,
-                area_km2=self._area(obj),max_reflectivity_dbz=self._z(obj),
+                area_km2=self._area(obj),max_reflectivity_dbz=self._z(obj),bbox=self._bbox(obj),
                 history=[{
                     "timestamp": self._as_datetime(timestamp).isoformat().replace("+00:00", "Z"),
                     "row": float(obj["row_centroid"]),
@@ -267,7 +307,7 @@ class CentroidTracker:
         return output
 
     def to_state(self):
-        return {"next_id":self.next_id,"tracks":{str(tid):{"object_id":track.object_id,"first_time":self._as_datetime(track.first_time).isoformat(),"last_time":self._as_datetime(track.last_time).isoformat(),"row":track.row,"column":track.column,"age_scans":track.age_scans,"velocity_row":track.velocity_row,"velocity_column":track.velocity_column,"area_km2":track.area_km2,"max_reflectivity_dbz":track.max_reflectivity_dbz,"missed_scans":track.missed_scans,"history":track.history or []} for tid,track in self.tracks.items()}}
+        return {"next_id":self.next_id,"tracks":{str(tid):{"object_id":track.object_id,"first_time":self._as_datetime(track.first_time).isoformat(),"last_time":self._as_datetime(track.last_time).isoformat(),"row":track.row,"column":track.column,"age_scans":track.age_scans,"velocity_row":track.velocity_row,"velocity_column":track.velocity_column,"area_km2":track.area_km2,"max_reflectivity_dbz":track.max_reflectivity_dbz,"missed_scans":track.missed_scans,"history":track.history or [],"bbox":list(track.bbox) if track.bbox is not None else None} for tid,track in self.tracks.items()}}
 
     @classmethod
     def from_state(cls,state,config=TrackerConfig()):
@@ -275,5 +315,5 @@ class CentroidTracker:
         if not state:return tracker
         tracker.next_id=int(state.get("next_id",1))
         for tid_text,raw in state.get("tracks",{}).items():
-            tid=int(tid_text); tracker.tracks[tid]=Track(object_id=int(raw["object_id"]),first_time=raw.get("first_time",raw["last_time"]),last_time=raw["last_time"],row=float(raw["row"]),column=float(raw["column"]),age_scans=int(raw.get("age_scans",1)),velocity_row=float(raw.get("velocity_row",0.0)),velocity_column=float(raw.get("velocity_column",0.0)),area_km2=raw.get("area_km2"),max_reflectivity_dbz=raw.get("max_reflectivity_dbz"),missed_scans=int(raw.get("missed_scans",0)),history=list(raw.get("history",[]))[-24:])
+            tid=int(tid_text); tracker.tracks[tid]=Track(object_id=int(raw["object_id"]),first_time=raw.get("first_time",raw["last_time"]),last_time=raw["last_time"],row=float(raw["row"]),column=float(raw["column"]),age_scans=int(raw.get("age_scans",1)),velocity_row=float(raw.get("velocity_row",0.0)),velocity_column=float(raw.get("velocity_column",0.0)),area_km2=raw.get("area_km2"),max_reflectivity_dbz=raw.get("max_reflectivity_dbz"),missed_scans=int(raw.get("missed_scans",0)),history=list(raw.get("history",[]))[-24:],bbox=tuple(raw["bbox"]) if raw.get("bbox") is not None else None)
         return tracker
