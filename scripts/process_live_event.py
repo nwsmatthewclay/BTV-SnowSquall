@@ -38,7 +38,30 @@ def parse_time(raw: str) -> datetime:
     return dt.astimezone(timezone.utc)
 
 
-def choose_kcxx(s3, target: datetime, tolerance_minutes: float) -> tuple[str, datetime]:
+def _local_volume_candidates(raw_root: Path, radar: str, target: datetime, tolerance_minutes: float) -> list[tuple[str, datetime]]:
+    """Find already-cached Level-II volumes before touching the archive."""
+    result = []
+    for path in (raw_root / radar).glob(f"{radar}*."):
+        # Kept as a defensive placeholder; the precise filename parser below
+        # handles both underscore and non-underscore archive naming.
+        _ = path
+    from acquisition.radar_watcher import parse_volume_time
+    for path in (raw_root / radar).glob("*"):
+        if not path.is_file() or path.stat().st_size == 0:
+            continue
+        t = parse_volume_time(path.name, radar)
+        if t is None:
+            continue
+        if abs((t - target).total_seconds()) <= tolerance_minutes * 60:
+            result.append((str(path), t))
+    return sorted(result, key=lambda item: item[1])
+
+
+def choose_kcxx(s3, target: datetime, tolerance_minutes: float, raw_root: Path | None = None) -> tuple[str, datetime]:
+    local = _local_volume_candidates(raw_root, "KCXX", target, tolerance_minutes) if raw_root else []
+    if local:
+        return min(local, key=lambda item: abs((item[1] - target).total_seconds()))
+
     candidates = find_recent_volumes(
         s3, "KCXX",
         since=target - timedelta(minutes=max(5.0, tolerance_minutes + 2.0)),
@@ -61,7 +84,12 @@ def choose_kcxx(s3, target: datetime, tolerance_minutes: float) -> tuple[str, da
     return key, scan
 
 
-def choose_ktyx(s3, kcxx_time: datetime, max_age_minutes: float) -> tuple[str, datetime] | None:
+def choose_ktyx(s3, kcxx_time: datetime, max_age_minutes: float, raw_root: Path | None = None) -> tuple[str, datetime] | None:
+    local = _local_volume_candidates(raw_root, "KTYX", kcxx_time, max_age_minutes) if raw_root else []
+    if local:
+        eligible = [item for item in local if item[1] <= kcxx_time]
+        if eligible:
+            return max(eligible, key=lambda item: item[1])
     candidates = find_recent_volumes(s3, "KTYX", lookback_hours=2)
     eligible = [
         item for item in candidates
@@ -215,18 +243,14 @@ def main() -> int:
     args.live_root.mkdir(parents=True, exist_ok=True)
 
     s3 = make_s3_client()
-    kcxx = wait_for_kcxx(
-        s3,
-        requested,
-        args.kcxx_tolerance_minutes,
-        args.archive_attempts,
-        args.archive_delay_seconds,
-    )
+    kcxx = choose_kcxx(s3, requested, args.kcxx_tolerance_minutes, args.raw_root)
+    if not kcxx:
+        kcxx = wait_for_kcxx(s3, requested, args.kcxx_tolerance_minutes, args.archive_attempts, args.archive_delay_seconds)
     kcxx_path = download_volume(s3, "KCXX", *kcxx)
 
     # KTYX is intentionally constrained to <= the KCXX reference time.  This
     # prevents a newer KTYX scan from being paired with an older KCXX object.
-    ktyx = choose_ktyx(s3, kcxx[1], args.ktyx_max_age_minutes)
+    ktyx = choose_ktyx(s3, kcxx[1], args.ktyx_max_age_minutes, args.raw_root)
     ktyx_path = download_volume(s3, "KTYX", *ktyx) if ktyx else None
     if ktyx_path:
         print(f"KTYX companion: {ktyx[0]} {ktyx[1].isoformat()}")
