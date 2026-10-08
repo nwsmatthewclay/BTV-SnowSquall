@@ -19,6 +19,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pyart
 import cmweather
+from pyart.graph import cm as pyart_cm
 from matplotlib.colors import BoundaryNorm, ListedColormap
 from scipy import ndimage
 
@@ -232,7 +233,7 @@ def _render(mosaic, latlon, output_path: Path, *, mode="clean", rhohv=None):
         # Standard NWS radar reflectivity palette. Keep the clean display
         # identical to the raw/native reflectivity products so every frame
         # uses the familiar operational color scale.
-        cmap = plt.get_cmap("NWSRef").copy()
+        cmap = pyart_cm.NWSRef.copy()
         cmap.set_bad((0, 0, 0, 0))
         ax.pcolormesh(lon, lat, masked, cmap=cmap, vmin=-10, vmax=75, shading="auto")
     else:
