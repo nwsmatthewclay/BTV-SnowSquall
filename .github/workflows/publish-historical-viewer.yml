@@ -105,7 +105,7 @@ jobs:
           catalog = json.loads(Path("_site/data/catalog.json").read_text(encoding="utf-8"))
           assert catalog.get("cases"), "Published viewer catalog is empty"
           assert catalog.get("data_status") in {"research_pilot", "research_replay"}
-          assert catalog.get("probability_status") in {"not_scored", "research_replay"}
+          assert catalog.get("probability_status") in {"not_scored", "research_replay", "research_candidate_scored"}
           print("Publication cases:", len(catalog["cases"]))
           print("Data status:", catalog.get("data_status"))
           print("Probability status:", catalog.get("probability_status"))
