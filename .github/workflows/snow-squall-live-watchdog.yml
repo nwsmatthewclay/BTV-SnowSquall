@@ -75,7 +75,7 @@ jobs:
               }, handle)
           PY
 
-      - name: Re-arm live publisher when radar is stale
+      - name: Re-arm primary live object/environment publisher when feeds are stale
         run: |
           set -euo pipefail
           stale_sites="$(python - <<'PY'
@@ -88,14 +88,14 @@ jobs:
             exit 0
           fi
 
-          active="$(gh run list             --workflow "Snow Squall Live Object Publisher"             --branch main             --limit 20             --json databaseId,status             --jq '[.[] | select(.status == "queued" or .status == "in_progress")] | length')"
+          active="$(gh run list             --workflow "Snow Squall Public Radar Archive Watcher"             --branch main             --limit 20             --json databaseId,status             --jq '[.[] | select(.status == "queued" or .status == "in_progress")] | length')"
 
           if [ "$active" -gt 0 ]; then
             echo "Publisher already active ($active run); no duplicate dispatch."
             exit 0
           fi
 
-          last_start="$(gh run list             --workflow "Snow Squall Live Object Publisher"             --branch main             --limit 1             --json startedAt             --jq '.[0].startedAt // ""')"
+          last_start="$(gh run list             --workflow "Snow Squall Public Radar Archive Watcher"             --branch main             --limit 1             --json startedAt             --jq '.[0].startedAt // ""')"
 
           if [ -n "$last_start" ]; then
             retry_allowed="$(python - "$last_start" <<'PY'
@@ -115,8 +115,8 @@ jobs:
           fi
 
           echo "Stale live radar detected: $stale_sites"
-          echo "Dispatching a fresh publisher run."
-          gh workflow run "Snow Squall Live Object Publisher" --ref main
+          echo "Dispatching the primary public radar/object/environment publisher."
+          gh workflow run "Snow Squall Public Radar Archive Watcher" --ref main
 
       - name: Write watchdog summary
         if: always()
