@@ -1,0 +1,114 @@
+name: Historical Benchmark Acquisition
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - .github/historical-benchmark-trigger
+
+concurrency:
+  group: historical-benchmark-acquisition
+  cancel-in-progress: false
+
+jobs:
+  acquire:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    strategy:
+      fail-fast: false
+      matrix:
+        batch: [0, 1, 2]
+    env:
+      PYTHONUNBUFFERED: "1"
+      PYTHONPATH: ${{ github.workspace }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: snow-squall-model-foundation
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install -r requirements-science.txt
+      - name: Build historical batch manifest
+        env:
+          BATCH: ${{ matrix.batch }}
+        run: |
+          python - <<'PY'
+          import os,pandas as pd
+          batch=int(os.environ["BATCH"])
+          cases=pd.read_csv("data/manifests/banacos_2014_cases.csv").drop_duplicates("case_id").reset_index(drop=True)
+          selected=cases.iloc[batch*12:(batch+1)*12].copy()
+          selected.to_csv("data/manifests/historical_batch_cases.csv",index=False)
+          windows=pd.read_csv("data/manifests/banacos_radar_windows.csv")
+          windows=windows[windows.case_id.isin(selected.case_id)]
+          windows.to_csv("data/manifests/historical_batch_radar_windows.csv",index=False)
+          print("Batch",batch,"cases",len(selected),"windows",len(windows))
+          assert len(selected)==12 and len(windows)==24
+          PY
+      - name: Acquire ASOS METAR
+        run: |
+          python acquisition/asos_iem.py --cases data/manifests/historical_batch_cases.csv --output data/raw/ASOS_IEM --buffer-before 120 --buffer-after 150
+      - name: Download KCXX and KTYX Level-II
+        run: |
+          python acquisition/historical_level2.py --manifest data/manifests/historical_batch_radar_windows.csv --output data/raw/level2 --workers 10 --max-failure-rate 0.20
+      - name: Audit radar coverage
+        run: |
+          python scripts/audit_radar_window_coverage.py data/manifests/historical_batch_radar_windows.csv data/raw/level2 --report data/derived/historical_batch_radar_coverage.json --min-fraction 0.90 --required-priority primary
+      - name: Reconstruct KCXX objects
+        run: |
+          python scripts/reconstruct_pilot.py --input data/raw/level2/KCXX --output data/derived/positive_object_scans_KCXX.csv --error-log data/derived/positive_object_scans_KCXX_errors.csv
+      - name: Reconstruct KTYX objects
+        run: |
+          python scripts/reconstruct_pilot.py --input data/raw/level2/KTYX --output data/derived/positive_object_scans_KTYX.csv --error-log data/derived/positive_object_scans_KTYX_errors.csv
+      - name: Merge and annotate radar objects
+        run: |
+          python - <<'PY'
+          import pandas as pd
+          a=pd.read_csv("data/derived/positive_object_scans_KCXX.csv")
+          b=pd.read_csv("data/derived/positive_object_scans_KTYX.csv")
+          pd.concat([a,b],ignore_index=True).to_csv("data/derived/positive_object_scans.csv",index=False)
+          PY
+          python scripts/annotate_object_population.py data/derived/positive_object_scans.csv --manifest data/manifests/historical_batch_radar_windows.csv --output data/derived/positive_object_scans_annotated.csv
+      - name: Build historical environmental features
+        run: |
+          python scripts/build_historical_dataset.py data/derived/positive_object_scans_annotated.csv --output data/derived/positive_object_environment.csv --cases data/manifests/historical_batch_cases.csv --rap-dir data/raw/RAP --ruc-dir data/raw/RUC --narr-dir data/raw/NARR
+      - name: Audit training feature coverage
+        run: |
+          python scripts/audit_training_dataset.py data/derived/positive_object_environment.csv --output data/derived/historical_training_audit.json
+      - name: Write batch completion summary
+        env:
+          BATCH: ${{ matrix.batch }}
+        run: |
+          python - <<'PY'
+          import json,os,pandas as pd
+          from pathlib import Path
+          cases=pd.read_csv("data/manifests/historical_batch_cases.csv")
+          d=pd.read_csv("data/derived/positive_object_environment.csv")
+          env=d.get("environment_contract_ok",pd.Series(False,index=d.index)).fillna(False)
+          summary={"batch":int(os.environ["BATCH"]),"cases":int(len(cases)),"case_ids":sorted(cases.case_id.astype(str)),"object_rows":int(len(d)),"unique_cases_with_objects":int(d.case_id.dropna().nunique()) if "case_id" in d else 0,"environment_complete_rows":int(env.sum()),"environment_complete_cases":int(d.loc[env,"case_id"].dropna().nunique()) if "case_id" in d else 0,"training_readiness":"research_replay_candidate"}
+          Path("data/derived/historical_batch_summary.json").write_text(json.dumps(summary,indent=2)+"\n")
+          print(json.dumps(summary,indent=2))
+          PY
+      - name: Upload historical training batch
+        uses: actions/upload-artifact@v4
+        with:
+          name: historical-benchmark-batch-${{ matrix.batch }}
+          retention-days: 30
+          path: |
+            data/manifests/historical_batch_cases.csv
+            data/manifests/historical_batch_radar_windows.csv
+            data/raw/ASOS_IEM
+            data/raw/level2
+            data/raw/RAP
+            data/raw/RUC
+            data/raw/NARR
+            data/derived/positive_object_scans.csv
+            data/derived/positive_object_scans_annotated.csv
+            data/derived/positive_object_environment.csv
+            data/derived/historical_batch_radar_coverage.json
+            data/derived/historical_training_audit.json
+            data/derived/historical_batch_summary.json
