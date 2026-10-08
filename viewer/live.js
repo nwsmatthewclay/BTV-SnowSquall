@@ -1,6 +1,6 @@
 // Snow Squall live viewer v15: probability cells + robust click + canonical MetPy environment
 
-var map=L.map("liveMap",{zoomControl:true,preferCanvas:true}).setView([44.15,-73.65],8);
+var map=L.map("liveMap",{zoomControl:true,keyboard:false,preferCanvas:true}).setView([44.15,-73.65],8);
 var radarPane=map.createPane("liveRadarPane");radarPane.style.zIndex=240;
 var hitPane=map.createPane("liveHitPane");hitPane.style.zIndex=650;hitPane.style.pointerEvents="auto";
 L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",{maxZoom:12,attribution:"Tiles © Esri — Source: Esri, Maxar, Earthstar Geographics, and the GIS User Community"}).addTo(map);
@@ -62,7 +62,7 @@ function setText(id,v){var e=q(id);if(e)e.textContent=v==null?"—":v}
 function num(v,d){if(d===undefined)d=1;var n=Number(v);return v==null||!Number.isFinite(n)?"—":n.toFixed(d)}
 function esc(v){return String(v==null?"—":v).replace(/[&<>"']/g,function(m){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}})}
 function fmtTime(t){if(!t)return "—";try{return new Intl.DateTimeFormat("en-US",{timeZone:"America/New_York",month:"short",day:"numeric",hour:"numeric",minute:"2-digit",timeZoneName:"short"}).format(new Date(t))}catch(_){return new Date(t).toLocaleString(undefined,{month:"short",day:"numeric",hour:"numeric",minute:"2-digit"})}}
-function fmtUTC(t){return t?new Date(t).toISOString().replace("T"," ").replace(/\.\d{3}Z$/,"Z"):"—"}
+function fmtUTC(t){return fmtTime(t)}
 function ageMinutes(t){return t?Math.max(0,(Date.now()-new Date(t).getTime())/60000):Infinity}
 function msToKt(v){return v==null||!Number.isFinite(Number(v))?"—":Number(v)*1.943844492}
 function kToC(v){return v==null||!Number.isFinite(Number(v))?"—":Number(v)-273.15}
@@ -575,6 +575,22 @@ q("radarPlayBtn").onclick=playRadarAnimation;
 q("radarLiveBtn").onclick=function(){stopRadarAnimation();radarHistoryIndex=(radarHistory.frames||[]).length-1;updateRadarTimelineUI();renderRadarMosaic()};
 q("radarTimelineSlider").oninput=function(){setRadarHistoryIndex(this.value)};
 q("objectNumbersBtn").onclick=function(){objectNumbers=!objectNumbers;q("objectNumbersBtn").classList.toggle("active",objectNumbers);renderMap()};
+document.addEventListener("keydown",function(e){
+  if(e.defaultPrevented||e.ctrlKey||e.metaKey||e.altKey)return;
+  var target=e.target;
+  if(target&&(target.tagName==="INPUT"||target.tagName==="SELECT"||target.tagName==="TEXTAREA"||target.tagName==="BUTTON"||target.isContentEditable))return;
+  if(e.key==="ArrowLeft"||e.key==="ArrowRight"){
+    var frames=radarHistory.frames||[];
+    if(!frames.length)return;
+    e.preventDefault();
+    e.stopPropagation();
+    var step=e.key==="ArrowLeft"?-1:1;
+    var next=radarHistoryIndex<0?frames.length-1:radarHistoryIndex+step;
+    next=Math.max(0,Math.min(frames.length-1,next));
+    setRadarHistoryIndex(next);
+  }
+});
+
 map.on("click",function(e){
   if(Date.now()-lastObjectClickAt<300)return;
   var matches=[];
