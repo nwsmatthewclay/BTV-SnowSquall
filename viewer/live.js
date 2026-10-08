@@ -153,7 +153,7 @@ async function loadRadarHistory(){
   radarHistory=await fetchOptional(LIVE_BASE+"radar_history/manifest.json?cb="+Date.now(),{frames:[]});
   if(!Array.isArray(radarHistory.frames))radarHistory={frames:[]};
   if(radarHistory.frames.length){
-    radarHistory.frames.sort(function(a,b){return String(a.timestamp).localeCompare(String(b.timestamp))});
+    radarHistory.frames.sort(function(a,b){return parseUtcDate(a.timestamp).getTime()-parseUtcDate(b.timestamp).getTime()});
     radarHistoryIndex=radarHistory.frames.length-1;
   }else radarHistoryIndex=-1;
   updateRadarTimelineUI();
@@ -260,7 +260,7 @@ function synchronizedRadarFrame(){
   var frames=radarHistory&&Array.isArray(radarHistory.frames)?radarHistory.frames:[];
   if(ref==null||!frames.length)return null;
   var usable=frames.map(function(f){
-    var t=new Date(f.timestamp||"").getTime();
+    var t=parseUtcDate(f.timestamp||"").getTime();
     return Number.isFinite(t)?{f:f,t:t,diff:t-ref}:null;
   }).filter(Boolean);
   if(!usable.length)return null;
