@@ -156,8 +156,12 @@ async function loadRadarHistory(){
   // Only accept explicitly versioned standard-NWS reflectivity frames. This
   // prevents legacy winter-palette images from reappearing after the palette
   // migration and keeps the timelapse visually consistent with the live image.
+  // Older retained manifests did not carry a palette field. The images
+  // are valid archived BTV radar frames, so keep them in the timeline rather
+  // than reducing the viewer to the single current mosaic.
   radarHistory.frames=radarHistory.frames.filter(function(f){
-    return f && f.palette==="NWSRef" && parseUtcDate(f.timestamp) && f.image;
+    return f && parseUtcDate(f.timestamp) && f.image &&
+      (!f.palette || f.palette==="NWSRef" || f.palette==="BTV_WINTER_REFLECTIVITY_V1");
   });
   radarHistory.frames.sort(function(a,b){return parseUtcDate(a.timestamp).getTime()-parseUtcDate(b.timestamp).getTime()});
   radarHistoryIndex=radarHistory.frames.length?radarHistory.frames.length-1:-1;
@@ -192,7 +196,7 @@ async function renderRadarMosaic(){
   if(!mosaicIsNwsRef){
     if(radarMode==="reflectivity"){
       var histFrame=radarHistoryFrame();
-      if(histFrame && (histFrame.palette==="NWSRef" || histFrame.palette==="BTV_WINTER_REFLECTIVITY_V1")){
+      if(histFrame && (!histFrame.palette || histFrame.palette==="NWSRef" || histFrame.palette==="BTV_WINTER_REFLECTIVITY_V1")){
         var histBounds=histFrame.bounds||[[41.90,-76.78],[46.40,-70.52]];
         var histName=histFrame.image.split("/").pop();
         L.imageOverlay(
@@ -255,7 +259,7 @@ async function renderRadarMosaic(){
     var selectedFrame=(!radarInitialRender&&radarHistoryIndex>=0&&frame)?frame:syncFrame;
     var useStoredFrame=!!(
       selectedFrame &&
-      (selectedFrame.palette==="NWSRef" || selectedFrame.palette==="BTV_WINTER_REFLECTIVITY_V1") &&
+      (!selectedFrame.palette || selectedFrame.palette==="NWSRef" || selectedFrame.palette==="BTV_WINTER_REFLECTIVITY_V1") &&
       selectedFrame.image &&
       selectedFrame.image!=="iem-wms"
     );
