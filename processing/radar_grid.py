@@ -110,3 +110,64 @@ def grid_latlon(grid):
 def grid_site_origin(radar_site: str | None):
     """Return the canonical latitude/longitude origin used for a radar site."""
     return radar_origin_for_site(radar_site)
+
+
+def grid_reflectivity_composite(
+    radar,
+    field_name: str,
+    *,
+    origin_lat: float,
+    origin_lon: float,
+    grid_size_km: float = 180.0,
+    spacing_km: float = 1.0,
+    max_sweeps: int = 6,
+):
+    """Grid several low/mid-level sweeps and retain the maximum reflectivity.
+
+    This is a display/coverage product, not the tracker input. Multiple
+    elevation angles are important in terrain-blocked parts of the BTV CWA,
+    where the lowest sweep can undersample or miss precipitation.
+    """
+    n = int(round((2 * grid_size_km) / spacing_km)) + 1
+    half_m = grid_size_km * 1000.0
+    spacing_m = spacing_km * 1000.0
+    starts = np.asarray(radar.sweep_start_ray_index["data"], dtype=int)
+    ends = np.asarray(radar.sweep_end_ray_index["data"], dtype=int)
+    grids = []
+    for sweep, (start, end) in enumerate(zip(starts, ends)):
+        if sweep >= max_sweeps:
+            break
+        data = radar.fields[field_name]["data"][int(start):int(end) + 1]
+        finite = (
+            np.isfinite(np.ma.filled(data, np.nan))
+            if np.ma.isMaskedArray(data)
+            else np.isfinite(np.asarray(data, dtype=float))
+        )
+        if not bool(np.any(finite)):
+            continue
+        radar_sw = radar.extract_sweeps([sweep])
+        kwargs = {
+            "grid_shape": (1, n, n),
+            "grid_limits": ((0.0, 0.0), (-half_m, half_m), (-half_m, half_m)),
+            "fields": [field_name],
+            "gridding_algo": "map_gates_to_grid",
+            "roi_func": "dist_beam",
+            "min_radius": max(750.0, spacing_m * 1.5),
+            "grid_origin": (origin_lat, origin_lon),
+        }
+        grids.append(pyart.map.grid_from_radars((radar_sw,), **kwargs))
+    if not grids:
+        return None
+    out = grids[0]
+    composite = np.full_like(
+        grid_field_2d(grids[0], field_name), np.nan, dtype=float
+    )
+    for grid in grids:
+        field = grid_field_2d(grid, field_name)
+        valid = np.isfinite(field)
+        empty = valid & ~np.isfinite(composite)
+        overlap = valid & np.isfinite(composite)
+        composite[empty] = field[empty]
+        composite[overlap] = np.maximum(composite[overlap], field[overlap])
+    out.fields[field_name]["data"][0] = np.ma.masked_invalid(composite)
+    return out
