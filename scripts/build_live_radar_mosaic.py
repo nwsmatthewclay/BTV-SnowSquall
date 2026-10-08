@@ -196,7 +196,7 @@ def _clean_field(mosaic, rhohv=None):
 
     # Keep weak winter precipitation visible while removing only the
     # lowest-level display noise.
-    data[data < -5.0] = np.nan
+    data[data < -10.0] = np.nan
 
     if rhohv is not None:
         # Conservative dual-pol clutter screen. It only removes low-CC echoes
