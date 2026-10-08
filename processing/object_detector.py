@@ -339,7 +339,24 @@ def detect_reflectivity_objects(reflectivity, config=ObjectDetectionConfig(), ve
                     base_h = float(np.max(by) - np.min(by) + 1)
                     base_w = float(np.max(bx) - np.min(bx) + 1)
                     base_aspect = max(base_h, base_w) / max(1.0, min(base_h, base_w))
-                    if min(base_h, base_w) <= 8.0 and max(base_h, base_w) >= 12.0 and base_aspect >= 5.0:
+                    core_component = base_component & np.isfinite(work) & (work >= config.core_threshold_dbz)
+                    core_labels, core_count = ndimage.label(
+                        core_component, structure=structure
+                    )
+                    core_sizes = [
+                        int(np.sum(core_labels == core_id))
+                        for core_id in range(1, core_count + 1)
+                    ]
+                    has_substantial_embedded_cores = (
+                        len(core_sizes) >= 2
+                        and min(sorted(core_sizes, reverse=True)[:2]) >= 20
+                    )
+                    if (
+                        min(base_h, base_w) <= 8.0
+                        and max(base_h, base_w) >= 12.0
+                        and base_aspect >= 5.0
+                        and has_substantial_embedded_cores
+                    ):
                         labels[base_component] = int(np.min(labels[base_component]))
                 count = int(labels.max())
             else:
