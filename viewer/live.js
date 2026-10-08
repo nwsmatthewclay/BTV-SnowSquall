@@ -67,7 +67,7 @@ function parseUtcDate(t){
   var s=String(t).trim();
   // Live radar timestamps are UTC. If an ISO timestamp has no explicit
   // timezone, treat it as UTC rather than browser-local time.
-  if(/^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}(?::\\d{2}(?:\\.\\d+)?)?$/.test(s))s+="Z";
+  if(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?$/.test(s))s+="Z";
   var d=new Date(s);
   return isNaN(d.getTime())?null:d;
 }
@@ -153,7 +153,7 @@ async function loadRadarHistory(){
   radarHistory=await fetchOptional(LIVE_BASE+"radar_history/manifest.json?cb="+Date.now(),{frames:[]});
   if(!Array.isArray(radarHistory.frames))radarHistory={frames:[]};
   if(radarHistory.frames.length){
-    radarHistory.frames.sort(function(a,b){return parseUtcDate(a.timestamp).getTime()-parseUtcDate(b.timestamp).getTime()});
+    radarHistory.frames=radarHistory.frames.filter(function(f){return parseUtcDate(f.timestamp)});radarHistory.frames.sort(function(a,b){return parseUtcDate(a.timestamp).getTime()-parseUtcDate(b.timestamp).getTime()});
     radarHistoryIndex=radarHistory.frames.length-1;
   }else radarHistoryIndex=-1;
   updateRadarTimelineUI();
@@ -254,6 +254,20 @@ function setRadarMode(mode){if(mode!=="reflectivity"&&mode!=="velocity")mode="re
 function objectReferenceTime(){
   var times=allObjects.map(function(p){return p&&p.timestamp?new Date(p.timestamp).getTime():NaN}).filter(Number.isFinite);
   return times.length?Math.max.apply(null,times):null;
+}
+function alignRadarHistoryToObjects(){
+  var ref=objectReferenceTime(),frames=radarHistory&&Array.isArray(radarHistory.frames)?radarHistory.frames:[];
+  if(ref==null||!frames.length){radarHistoryIndex=-1;updateRadarTimelineUI();return}
+  var best=-1,bestDiff=Infinity;
+  frames.forEach(function(f,i){
+    var d=parseUtcDate(f.timestamp);if(!d)return;
+    var diff=Math.abs(d.getTime()-ref);if(diff<bestDiff){bestDiff=diff;best=i;}
+  });
+  // Never let an old archive frame masquerade as the current radar image.
+  // If there is no frame within 12 minutes of the object cycle, show the
+  // current synchronized mosaic instead and label the timeline LIVE.
+  if(best>=0&&bestDiff<=12*60000)radarHistoryIndex=best;else radarHistoryIndex=-1;
+  updateRadarTimelineUI();
 }
 function synchronizedRadarFrame(){
   var ref=objectReferenceTime();
@@ -663,6 +677,7 @@ async function refresh(){
     });
     allObjects.sort(function(a,b){var d=riskScore(b)-riskScore(a);return d||Number(b.max_reflectivity_dbz||0)-Number(a.max_reflectivity_dbz||0)});
     selectDefault();
+    alignRadarHistoryToObjects();
     await renderRadarMosaic();
     renderMap();renderInventory();renderObjectCard();renderProbability();renderKeyTrends();renderEnvironment();renderEvidence();renderHistory();renderModelStatus();
     var latest=got.map(function(x){return x.state?.last_scan_time_utc||x.geo?.metadata?.scan_time_utc}).filter(Boolean).sort().at(-1);
