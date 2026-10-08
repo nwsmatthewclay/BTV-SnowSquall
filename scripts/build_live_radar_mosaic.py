@@ -473,17 +473,19 @@ def _direct_render(sweep_products, output_dir: Path, *, product_name: str, clean
     ax.set_xlim(-76.78, -70.52)
     ax.set_ylim(41.90, 46.40)
     if clean:
-        bounds = [5, 8, 12, 16, 20, 24, 28, 32, 36, 42, 50, 60, 75]
+        # Keep the native Level-II display on exactly the same winter palette
+        # as the Cartesian mosaic. Previously this direct/native path retained
+        # the older 5–75 dBZ palette, causing the first frame on page load to
+        # look substantially different from the timeline frames.
+        bounds = [-5, 0, 5, 10, 15, 20, 25, 30, 35, 40]
         colors = [
-            (0.82, 0.88, 0.92, 0.20), (0.68, 0.78, 0.84, 0.28), (0.38, 0.68, 0.86, 0.52),
-            (0.18, 0.58, 0.88, 0.68), (0.12, 0.38, 0.86, 0.82),
-            (0.24, 0.20, 0.78, 0.92), (0.48, 0.18, 0.76, 0.96),
-            (0.76, 0.18, 0.68, 0.98), (0.94, 0.25, 0.55, 1.0),
-            (0.96, 0.34, 0.18, 1.0), (0.98, 0.66, 0.08, 1.0),
-            (1.00, 0.92, 0.28, 1.0),
+            "#e9f2f7", "#b7ddf2", "#5fa9df", "#1f6fd1", "#22a88a",
+            "#f0d84b", "#f28a2e", "#d93b32", "#d52f9d",
         ]
         cmap = ListedColormap(colors, name="BTV_WINTER_REFLECTIVITY")
-        norm = BoundaryNorm(bounds, cmap.N)
+        cmap.set_under((0, 0, 0, 0))
+        cmap.set_over("#8b1e61")
+        norm = BoundaryNorm(bounds, cmap.N, extend="both")
     else:
         cmap = plt.get_cmap("NWSRef").copy()
         cmap.set_bad((0, 0, 0, 0))
@@ -491,7 +493,7 @@ def _direct_render(sweep_products, output_dir: Path, *, product_name: str, clean
     for item in sweep_products:
         data = np.asarray(item["data"], dtype=float).copy()
         if clean:
-            data[data < 5.0] = np.nan
+            data[data < -5.0] = np.nan
             rho = item.get("rho")
             if rho is not None:
                 low_cc = np.isfinite(rho) & (rho < 0.65) & (data < 30.0)
