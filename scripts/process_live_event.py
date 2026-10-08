@@ -1,0 +1,197 @@
+#!/usr/bin/env python3
+"""Process one event-driven KCXX radar cycle.
+
+The KCXX scan time is the master timestamp for the processing cycle.  KCXX is
+selected at/near the requested event time; KTYX is selected as the newest
+available volume at or before that KCXX time.  Both exact source volumes are
+then fed through the existing object processor and the exact same source
+selection is handed to the live radar mosaic builder.
+
+This is intentionally additive: the existing polling workflows remain valid
+while this path is being proven operationally.
+"""
+from __future__ import annotations
+
+import argparse
+import json
+import subprocess
+import sys
+import tempfile
+import time
+from datetime import datetime, timedelta, timezone
+from pathlib import Path
+
+from acquisition.radar_watcher import (
+    download_volume,
+    find_recent_volumes,
+    make_s3_client,
+)
+from scripts.process_live_volume import process_volume
+
+
+def parse_time(raw: str) -> datetime:
+    value = str(raw).strip().replace("Z", "+00:00")
+    dt = datetime.fromisoformat(value)
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(timezone.utc)
+
+
+def choose_kcxx(s3, target: datetime, tolerance_minutes: float) -> tuple[str, datetime]:
+    candidates = find_recent_volumes(
+        s3, "KCXX",
+        since=target - timedelta(minutes=max(5.0, tolerance_minutes + 2.0)),
+        lookback_hours=2,
+    )
+    if not candidates:
+        # The archive can lag the real-time notification briefly.  Look across
+        # the full recent window and select the closest scan.
+        candidates = find_recent_volumes(s3, "KCXX", lookback_hours=2)
+    if not candidates:
+        raise RuntimeError("No recent KCXX archive volumes are available.")
+
+    key, scan = min(candidates, key=lambda item: abs((item[1] - target).total_seconds()))
+    delta = abs((scan - target).total_seconds()) / 60.0
+    if delta > tolerance_minutes:
+        raise RuntimeError(
+            f"No KCXX archive volume within {tolerance_minutes:.1f} min of "
+            f"{target.isoformat()}; nearest is {scan.isoformat()} ({delta:.1f} min)."
+        )
+    return key, scan
+
+
+def choose_ktyx(s3, kcxx_time: datetime, max_age_minutes: float) -> tuple[str, datetime] | None:
+    candidates = find_recent_volumes(s3, "KTYX", lookback_hours=2)
+    eligible = [
+        item for item in candidates
+        if item[1] <= kcxx_time
+        and (kcxx_time - item[1]).total_seconds() / 60.0 <= max_age_minutes
+    ]
+    return max(eligible, key=lambda item: item[1]) if eligible else None
+
+
+def wait_for_kcxx(s3, target: datetime, tolerance_minutes: float, attempts: int, delay_seconds: int):
+    last_error = None
+    for attempt in range(1, max(1, attempts) + 1):
+        try:
+            result = choose_kcxx(s3, target, tolerance_minutes)
+            print(f"KCXX archive match on attempt {attempt}: {result[0]} {result[1].isoformat()}")
+            return result
+        except Exception as exc:
+            last_error = exc
+            print(f"KCXX archive not ready on attempt {attempt}/{attempts}: {exc}")
+            if attempt < attempts:
+                time.sleep(max(5, delay_seconds))
+    raise RuntimeError(str(last_error))
+
+
+def write_event_metadata(live_root: Path, *, requested: datetime, kcxx: tuple[str, datetime], ktyx: tuple[str, datetime] | None):
+    payload = {
+        "mode": "event_driven",
+        "requested_scan_time_utc": requested.isoformat().replace("+00:00", "Z"),
+        "kcxx": {
+            "source_file": kcxx[0],
+            "scan_time_utc": kcxx[1].isoformat().replace("+00:00", "Z"),
+        },
+        "ktyx": (
+            {
+                "source_file": ktyx[0],
+                "scan_time_utc": ktyx[1].isoformat().replace("+00:00", "Z"),
+                "age_minutes": round((kcxx[1] - ktyx[1]).total_seconds() / 60.0, 2),
+            }
+            if ktyx else None
+        ),
+        "published_utc": datetime.now(timezone.utc).isoformat(),
+    }
+    path = live_root / "event_cycle.json"
+    path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--radar", default="KCXX", choices=("KCXX",))
+    parser.add_argument("--scan-time", required=True)
+    parser.add_argument("--raw-root", type=Path, default=Path("data/raw"))
+    parser.add_argument("--live-root", type=Path, default=Path("viewer/data/live"))
+    parser.add_argument("--kcxx-tolerance-minutes", type=float, default=3.0)
+    parser.add_argument("--ktyx-max-age-minutes", type=float, default=8.0)
+    parser.add_argument("--archive-attempts", type=int, default=6)
+    parser.add_argument("--archive-delay-seconds", type=int, default=20)
+    args = parser.parse_args()
+
+    requested = parse_time(args.scan_time)
+    args.raw_root.mkdir(parents=True, exist_ok=True)
+    args.live_root.mkdir(parents=True, exist_ok=True)
+
+    s3 = make_s3_client()
+    kcxx = wait_for_kcxx(
+        s3,
+        requested,
+        args.kcxx_tolerance_minutes,
+        args.archive_attempts,
+        args.archive_delay_seconds,
+    )
+    kcxx_path = download_volume(s3, "KCXX", *kcxx)
+
+    # KTYX is intentionally constrained to <= the KCXX reference time.  This
+    # prevents a newer KTYX scan from being paired with an older KCXX object.
+    ktyx = choose_ktyx(s3, kcxx[1], args.ktyx_max_age_minutes)
+    ktyx_path = download_volume(s3, "KTYX", *ktyx) if ktyx else None
+    if ktyx_path:
+        print(f"KTYX companion: {ktyx[0]} {ktyx[1].isoformat()}")
+    else:
+        print("KTYX companion: unavailable within synchronization window; KCXX-only cycle.")
+
+    process_volume(
+        kcxx_path,
+        args.live_root / "KCXX_state.json",
+        args.live_root / "KCXX_objects.geojson",
+        history_jsonl_path=args.live_root / "KCXX_history.jsonl",
+        history_csv_path=Path("data/derived/KCXX_history.csv"),
+    )
+
+    if ktyx_path:
+        process_volume(
+            ktyx_path,
+            args.live_root / "KTYX_state.json",
+            args.live_root / "KTYX_objects.geojson",
+            history_jsonl_path=args.live_root / "KTYX_history.jsonl",
+            history_csv_path=Path("data/derived/KTYX_history.csv"),
+        )
+
+    # Force the existing mosaic builder to use these exact source files by
+    # supplying temporary state files with last_source set to the selected
+    # archive objects. The browser-facing renderer remains unchanged.
+    with tempfile.TemporaryDirectory(prefix="btv-event-mosaic-") as tmp:
+        tmp_path = Path(tmp)
+        kcxx_state = tmp_path / "KCXX_state.json"
+        ktyx_state = tmp_path / "KTYX_state.json"
+        kcxx_state.write_text(json.dumps({"last_source": kcxx_path.name}) + "\n", encoding="utf-8")
+        ktyx_state.write_text(
+            json.dumps({"last_source": ktyx_path.name}) + "\n" if ktyx_path else "{}\n",
+            encoding="utf-8",
+        )
+
+        cmd = [
+            sys.executable,
+            "scripts/build_live_radar_mosaic.py",
+            "--raw-root", str(args.raw_root),
+            "--kcxx-state", str(kcxx_state),
+            "--ktyx-state", str(ktyx_state),
+            "--output-image", str(args.live_root / "radar_mosaic.png"),
+            "--output-json", str(args.live_root / "radar_mosaic.json"),
+        ]
+        print("Building synchronized radar mosaic:", " ".join(cmd))
+        subprocess.run(cmd, check=True)
+
+    write_event_metadata(args.live_root, requested=requested, kcxx=kcxx, ktyx=ktyx)
+
+    print("EVENT CYCLE COMPLETE")
+    print("Requested:", requested.isoformat())
+    print("KCXX:", kcxx[1].isoformat())
+    print("KTYX:", ktyx[1].isoformat() if ktyx else "unavailable")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
