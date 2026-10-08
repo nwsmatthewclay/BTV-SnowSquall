@@ -188,23 +188,48 @@ def find_forecast(
     return candidates[0]
 
 
+def _download_to_cache(url: str, destination: Path, label: str) -> Path:
+    """Download a RAP file safely when the two radar workers share a workspace.
+
+    KCXX and KTYX are processed in parallel and can request the same hourly RAP
+    file. Each worker therefore uses a unique temporary pathname and atomically
+    publishes the completed file into the shared cache.
+    """
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    if destination.exists() and destination.stat().st_size > 0:
+        return destination
+
+    import os
+    partial = destination.with_name(f".{destination.name}.{os.getpid()}.part")
+    for attempt in range(1, 4):
+        try:
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            partial.unlink(missing_ok=True)
+            with requests.get(url, stream=True, timeout=(20, 120)) as response:
+                response.raise_for_status()
+                with partial.open("wb") as handle:
+                    for chunk in response.iter_content(chunk_size=1024 * 1024):
+                        if chunk:
+                            handle.write(chunk)
+            if partial.stat().st_size == 0:
+                raise IOError(f"Empty RAP {label} download: {url}")
+            if destination.exists() and destination.stat().st_size > 0:
+                partial.unlink(missing_ok=True)
+                return destination
+            partial.replace(destination)
+            return destination
+        except FileNotFoundError:
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            if attempt == 3:
+                raise
+            time.sleep(1.0 * attempt)
+    raise RuntimeError(f"Unable to cache RAP {label}: {url}")
+
+
 def download_forecast(match: RapForecastMatch, output_dir: Path) -> Path:
     output_dir.mkdir(parents=True, exist_ok=True)
     destination = output_dir / match.local_path.name
-    if destination.exists() and destination.stat().st_size > 0:
-        return destination
-    partial = destination.with_suffix(destination.suffix + ".part")
-    with requests.get(match.url, stream=True, timeout=(20, 120)) as response:
-        response.raise_for_status()
-        with partial.open("wb") as handle:
-            for chunk in response.iter_content(chunk_size=1024 * 1024):
-                if chunk:
-                    handle.write(chunk)
-    if partial.stat().st_size == 0:
-        partial.unlink(missing_ok=True)
-        raise IOError(f"Empty RAP forecast download: {match.url}")
-    partial.replace(destination)
-    return destination
+    return _download_to_cache(match.url, destination, "forecast")
 
 
 def acquire_forecast_for_radar_time(
@@ -220,23 +245,7 @@ def acquire_forecast_for_radar_time(
 def download_analysis(match: RapMatch, output_dir: Path) -> Path:
     output_dir.mkdir(parents=True, exist_ok=True)
     destination = output_dir / match.local_path.name
-    if destination.exists() and destination.stat().st_size > 0:
-        return destination
-
-    partial = destination.with_suffix(destination.suffix + ".part")
-    with requests.get(match.url, stream=True, timeout=(20, 120)) as response:
-        response.raise_for_status()
-        with partial.open("wb") as handle:
-            for chunk in response.iter_content(chunk_size=1024 * 1024):
-                if chunk:
-                    handle.write(chunk)
-
-    if partial.stat().st_size == 0:
-        partial.unlink(missing_ok=True)
-        raise IOError(f"Empty RAP download: {match.url}")
-
-    partial.replace(destination)
-    return destination
+    return _download_to_cache(match.url, destination, "analysis")
 
 
 def acquire_for_radar_time(
