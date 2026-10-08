@@ -28,7 +28,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: snow-squall-live-object-publisher-v3
+  group: snow-squall-live-object-publisher-v4
   # Share the same lock as the event/public archive publisher so two live
   # publication paths can never rewrite the durable tracker state concurrently.
   cancel-in-progress: false
@@ -83,8 +83,8 @@ jobs:
             --lookback-hours 4 \
             --kcxx-tolerance-minutes 4 \
             --ktyx-max-age-minutes 8 \
-            --archive-attempts 6 \
-            --archive-delay-seconds 15
+            --archive-attempts 2 \
+            --archive-delay-seconds 5
           # Contract marker: KTYX is the synchronized companion radar.
           echo "synchronized companion radar: --radar KTYX"
 
