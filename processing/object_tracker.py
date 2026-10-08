@@ -179,16 +179,45 @@ class CentroidTracker:
                         candidate_track_counts[ti] += 1
 
         if track_ids:
-            cost=np.full((len(track_ids),len(objects)),np.inf,dtype=float)
-            for ti,tid in enumerate(track_ids):
-                for oi,obj in enumerate(objects):
-                    cost[ti,oi]=self._cost(self.tracks[tid],obj,timestamp,radar_motion)
-            finite=np.isfinite(cost)
-            if finite.any():
-                ri,ci=linear_sum_assignment(np.where(finite,cost,1e6))
-                for r,c in zip(ri,ci):
-                    if np.isfinite(cost[r,c]):
-                        assignments[int(c)]=track_ids[int(r)]; used.add(int(c)); matched_track_ids.add(track_ids[int(r)])
+            # First take unambiguous projected-centroid matches. This follows
+            # the Lakshmanan tracking strategy and protects isolated storms
+            # from unnecessary Hungarian reassignment.
+            unique_pairs=[]
+            for tid in track_ids:
+                track=self.tracks[tid]
+                pred_row,pred_col=self._predicted_position(track,timestamp,radar_motion)
+                gate=min(5.0,self._association_gate_pixels(timestamp,track.last_time))
+                candidates=[
+                    oi for oi,obj in enumerate(objects)
+                    if oi not in used
+                    and hypot(obj["row_centroid"]-pred_row,obj["column_centroid"]-pred_col)<=gate
+                    and np.isfinite(self._cost(track,obj,timestamp,radar_motion))
+                ]
+                if len(candidates)==1:
+                    unique_pairs.append((tid,candidates[0]))
+            for tid,oi in sorted(unique_pairs,key=lambda pair:(-self.tracks[pair[0]].age_scans,pair[0])):
+                if oi in used or tid in matched_track_ids:
+                    continue
+                assignments[oi]=tid
+                used.add(oi)
+                matched_track_ids.add(tid)
+
+            remaining_tracks=[tid for tid in track_ids if tid not in matched_track_ids]
+            remaining_objects=[oi for oi in range(len(objects)) if oi not in used]
+            if remaining_tracks and remaining_objects:
+                cost=np.full((len(remaining_tracks),len(remaining_objects)),np.inf,dtype=float)
+                for ti,tid in enumerate(remaining_tracks):
+                    for oj,oi in enumerate(remaining_objects):
+                        cost[ti,oj]=self._cost(self.tracks[tid],objects[oi],timestamp,radar_motion)
+                finite=np.isfinite(cost)
+                if finite.any():
+                    ri,ci=linear_sum_assignment(np.where(finite,cost,1e6))
+                    for r,cidx in zip(ri,ci):
+                        if np.isfinite(cost[r,cidx]):
+                            oi=remaining_objects[int(cidx)]
+                            assignments[oi]=remaining_tracks[int(r)]
+                            used.add(oi)
+                            matched_track_ids.add(remaining_tracks[int(r)])
         for object_index,tid in assignments.items():
             obj=objects[object_index]; track=self.tracks[tid]
             dt=self._dt_minutes(timestamp,track.last_time)
