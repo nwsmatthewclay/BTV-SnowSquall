@@ -615,7 +615,7 @@ def main():
             "vmin_dbz": -5,
             "vmax_dbz": 40,
             "display_qc": {
-                "low_dbz_cutoff": 8,
+                "low_dbz_cutoff": -5,
                 "low_cc_threshold": 0.65,
                 "low_cc_max_dbz": 30,
                 "isolated_weak_echo_cleanup": True,
