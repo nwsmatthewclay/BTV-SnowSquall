@@ -27,60 +27,55 @@ from processing.vertical_structure import summarize_vertical_structure
 
 
 def object_geometry(mask, lat, lon, spacing_km=1.0):
-    """Return the actual raster-cell footprint outline, not a convex hull.
+    """Return a compact polygon tracing the detected radar-object mask."""
+    from shapely.geometry import Polygon
+    from skimage.measure import find_contours
 
-    Convex-hulling the detected pixels can bridge concavities and turn a real
-    snow-squall cell/band into giant triangular or wedge-shaped polygons. The
-    replay geometry should follow the detected grid cells themselves.
-    """
-    yy, xx = np.where(mask)
-    if len(xx) == 0:
+    mask = np.asarray(mask, dtype=bool)
+    if mask.ndim != 2 or not np.any(mask):
         return None, np.nan, np.nan, np.nan
 
-    finite = (
-        np.isfinite(lat[yy, xx]) &
-        np.isfinite(lon[yy, xx])
-    )
-    yy, xx = yy[finite], xx[finite]
-    if len(xx) == 0:
+    contours = find_contours(mask.astype(float), 0.5)
+    if not contours:
         return None, np.nan, np.nan, np.nan
 
-    dlat = np.nanmedian(np.abs(np.diff(lat, axis=0)))
-    dlon = np.nanmedian(np.abs(np.diff(lon, axis=1)))
-    fallback = float(spacing_km) / 111.0
-    if not np.isfinite(dlat) or dlat <= 0:
-        dlat = fallback
-    if not np.isfinite(dlon) or dlon <= 0:
-        mean_lat = np.nanmean(lat[yy, xx])
-        dlon = fallback / max(0.2, np.cos(np.deg2rad(mean_lat)))
+    def grid_to_geo(contour):
+        rows = np.clip(contour[:, 0], 0, lat.shape[0] - 1.000001)
+        cols = np.clip(contour[:, 1], 0, lat.shape[1] - 1.000001)
+        r0 = np.floor(rows).astype(int); c0 = np.floor(cols).astype(int)
+        r1 = np.minimum(r0 + 1, lat.shape[0] - 1); c1 = np.minimum(c0 + 1, lat.shape[1] - 1)
+        fr = rows-r0; fc = cols-c0
+        latv = lat[r0,c0]*(1-fr)*(1-fc)+lat[r1,c0]*fr*(1-fc)+lat[r0,c1]*(1-fr)*fc+lat[r1,c1]*fr*fc
+        lonv = lon[r0,c0]*(1-fr)*(1-fc)+lon[r1,c0]*fr*(1-fc)+lon[r0,c1]*(1-fr)*fc+lon[r1,c1]*fr*fc
+        finite = np.isfinite(latv) & np.isfinite(lonv)
+        return np.column_stack((lonv[finite],latv[finite]))
 
-    cells = [
-        box(
-            float(lon[y, x] - dlon / 2.0),
-            float(lat[y, x] - dlat / 2.0),
-            float(lon[y, x] + dlon / 2.0),
-            float(lat[y, x] + dlat / 2.0),
-        )
-        for y, x in zip(yy, xx)
-    ]
-    geom = unary_union(cells).buffer(0)
+    polygons = []
+    for contour in contours:
+        if len(contour) < 4:
+            continue
+        coords = grid_to_geo(contour)
+        if len(coords) < 4:
+            continue
+        poly = Polygon(coords).buffer(0)
+        if not poly.is_empty and poly.area > 0:
+            polygons.append(poly)
+    if not polygons:
+        return None, np.nan, np.nan, np.nan
+
+    geom = max(polygons, key=lambda p: p.area).simplify(
+        max(0.0005, float(spacing_km)/111000.0*0.75),
+        preserve_topology=True,
+    ).buffer(0)
     if geom.is_empty:
         return None, np.nan, np.nan, np.nan
-    if geom.geom_type != "Polygon":
-        polygons = [part for part in getattr(geom, "geoms", ()) if part.geom_type == "Polygon"]
-        if not polygons:
-            return None, np.nan, np.nan, np.nan
-        geom = max(polygons, key=lambda part: part.area)
 
-    area_km2 = float(len(xx) * spacing_km * spacing_km)
-    minx, miny, maxx, maxy = geom.bounds
-    mean_lat = np.nanmean(lat[yy, xx])
-    dx = (maxx - minx) * 111.0 * np.cos(np.deg2rad(mean_lat))
-    dy = (maxy - miny) * 111.0
-    length_km = float(max(dx, dy))
-    width_km = float(min(dx, dy))
-    return geom.wkt, area_km2, length_km, width_km
-
+    area_km2 = float(np.sum(mask) * spacing_km * spacing_km)
+    minx,miny,maxx,maxy=geom.bounds
+    mean_lat=np.nanmean(lat[mask])
+    dx=(maxx-minx)*111.0*np.cos(np.deg2rad(mean_lat))
+    dy=(maxy-miny)*111.0
+    return geom.__geo_interface__, area_km2, float(max(dx,dy)), float(min(dx,dy))
 
 def object_shape_metrics(rows, cols, spacing_km=1.0):
     """Estimate major/minor axes and orientation from an object footprint."""
