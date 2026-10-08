@@ -21,7 +21,7 @@ jobs:
     timeout-minutes: 10
     env:
       PYTHONUNBUFFERED: "1"
-      PYTHONPATH: \${{ github.workspace }}
+      PYTHONPATH: ${{ github.workspace }}
 
     steps:
       - name: Check out model foundation
@@ -42,7 +42,7 @@ jobs:
 
       - name: Restore current live radar branch
         env:
-          GH_TOKEN: \${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
           git fetch --no-tags origin snow-squall-live-data
@@ -134,7 +134,7 @@ jobs:
               "frames": frames,
           }
           manifest_path.write_text(
-              json.dumps(manifest, indent=2) + "\\n",
+              json.dumps(manifest, indent=2) + "\n",
               encoding="utf-8",
           )
           print("Archived", len(frames), "radar frames; newest", timestamp)
@@ -166,7 +166,7 @@ jobs:
 
       - name: Publish radar files without replacing object feeds
         env:
-          GH_TOKEN: \${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
           rm -rf /tmp/live-publish
