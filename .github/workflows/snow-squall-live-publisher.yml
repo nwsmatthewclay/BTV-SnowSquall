@@ -23,12 +23,12 @@ permissions:
 
 concurrency:
   group: snow-squall-live-object-publisher-v2
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   publish:
     runs-on: ubuntu-latest
-    timeout-minutes: 12
+    timeout-minutes: 15
     env:
       PYTHONUNBUFFERED: "1"
       PYTHONPATH: ${{ github.workspace }}
@@ -70,7 +70,7 @@ jobs:
             --radar KCXX \
             --poll-seconds 2 \
             --max-polls 1 \
-            --max-volumes-per-run 1 \
+            --max-volumes-per-run 2 \
             --state viewer/data/live/KCXX_state.json \
             --output viewer/data/live/KCXX_objects.geojson \
             --history-jsonl viewer/data/live/KCXX_history.jsonl \
