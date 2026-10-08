@@ -37,7 +37,7 @@ class ObjectDetectionConfig:
     use_watershed: bool = True
     watershed_seed_dbz: float = 30.0
     watershed_max_dbz: float = 57.0
-    watershed_min_distance_px: int = 6
+    watershed_min_distance_px: int = 10
     watershed_min_saliency_pixels: int = 8
     retain_coherent_objects: bool = False
     watershed_min_prominence_db: float = 3.0
