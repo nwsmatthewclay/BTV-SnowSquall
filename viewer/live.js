@@ -12,7 +12,7 @@ var radarLayer=L.layerGroup().addTo(map),radarMosaic=null,radarMode="reflectivit
 var radarLocations={KCXX:[44.511,-73.166],KTYX:[43.756,-75.680],KBTV:[44.472,-73.154]};
 var BTV=[44.472,-73.154];
 var datasets={},allObjects=[],selected=null,objectNumbers=true,refreshTimer=null,cursorGrid=null,cursorBound=false,lastObjectClickAt=0;
-var radarHistory={frames:[]},radarHistoryIndex=-1,radarAnimationTimer=null;
+var radarHistory={frames:[]},radarHistoryIndex=-1,radarAnimationTimer=null,radarInitialRender=true;
 
 var LIVE_BASE="https://raw.githubusercontent.com/nwsmatthewclay/BTV-SnowSquall/snow-squall-live-data/viewer/data/live/";
 var SHADOW_BASE="https://raw.githubusercontent.com/nwsmatthewclay/BTV-SnowSquall/snow-squall-shadow-data/viewer/data/shadow/";
@@ -239,7 +239,7 @@ async function renderRadarMosaic(){
     // A manual slider selection must control the displayed radar image.  The
     // synchronized frame is only the automatic/default selection; otherwise
     // the timeline can move while the map remains visually stuck on one image.
-    var selectedFrame=(radarHistoryIndex>=0&&frame)?frame:syncFrame;
+    var selectedFrame=(!radarInitialRender&&radarHistoryIndex>=0&&frame)?frame:syncFrame;
     var useStoredFrame=!!(selectedFrame&&selectedFrame.image&&selectedFrame.image!=="iem-wms");
     var imageName=useStoredFrame?selectedFrame.image.split("/").pop():"";
     var imageUrl=useStoredFrame?(LIVE_BASE+"radar_history/"+imageName+"?cb="+Date.now()):mosaicImageUrl("reflectivity");
@@ -252,6 +252,7 @@ async function renderRadarMosaic(){
     setText("radarStatus","Reflectivity mosaic "+(radarMosaic.status==="stale"?"RETAINED":"READY")+" • KCXX + KTYX"+syncText+(refText?" • objects "+refText:""));
     setText("legendTitle","WINTER REFLECTIVITY • dBZ");
     setText("legendNote","KCXX + KTYX reflectivity mosaic. Object footprints are clickable and expose full attributes.");
+    radarInitialRender=false;
   }
   if(!map._sqExtent){map.fitBounds(radarMosaic.bounds,{padding:[25,25],maxZoom:8});map._sqExtent=true}
 }
