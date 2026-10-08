@@ -2,6 +2,9 @@ name: Snow Squall Live Publisher Dispatch
 
 on:
   workflow_dispatch:
+  push:
+    paths:
+      - ".github/workflows/snow-squall-live-publisher-dispatch.yml"
   schedule:
     - cron: "*/5 * * * *"
 
