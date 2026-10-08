@@ -29,13 +29,13 @@ def test_component_scores_are_0_to_100_and_weight_to_100():
         assert 0 <= components["analog"] <= 100
         assert components["weights"] == {
             "radar": 0.50,
-            "environment": 0.35,
-            "analog": 0.15,
+            "environment": 0.50,
+            "analog": 0.00,
         }
         expected = (
             components["radar"] * 0.50
-            + components["environment"] * 0.35
-            + components["analog"] * 0.15
+            + components["environment"] * 0.50
+            + components["analog"] * 0.00
         )
         assert abs(result["probabilities"][horizon] - round(expected, 2)) < 1e-9
         assert 0 <= result["probabilities"][horizon] <= 100
