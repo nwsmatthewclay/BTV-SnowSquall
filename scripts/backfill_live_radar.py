@@ -176,8 +176,23 @@ def main() -> int:
         f"{candidates[0][1].isoformat()} through {candidates[-1][1].isoformat()}."
     )
 
+    processed = 0
+    skipped = 0
     for index, (_, scan_time) in enumerate(candidates, start=1):
         stamp = scan_time.isoformat().replace("+00:00", "Z")
+        source_available = any(
+            abs((when - scan_time).total_seconds()) <= args.kcxx_tolerance_minutes * 60
+            for _, when in find_recent_volumes(
+                s3, "KCXX", since=scan_time - timedelta(minutes=args.kcxx_tolerance_minutes),
+                lookback_hours=max(2, args.lookback_hours)
+            )
+        )
+        raw_matches = list((args.raw_root / "KCXX").glob(f"*{scan_time.strftime('%Y%m%d_%H%M')}*"))
+        if not source_available and not raw_matches:
+            skipped += 1
+            print(f"=== BACKFILL {index}/{len(candidates)}: KCXX {stamp} ===")
+            print("KCXX archive source is not currently resolvable; skipping this scan so one archive gap cannot block newer scans.")
+            continue
         print(f"=== BACKFILL {index}/{len(candidates)}: KCXX {stamp} ===")
         cmd = [
             sys.executable,
@@ -190,9 +205,15 @@ def main() -> int:
             "--archive-attempts", str(args.archive_attempts),
             "--archive-delay-seconds", str(args.archive_delay_seconds),
         ]
-        subprocess.run(cmd, check=True)
+        try:
+            subprocess.run(cmd, check=True)
+            processed += 1
+        except subprocess.CalledProcessError as exc:
+            skipped += 1
+            print(f"KCXX {stamp} failed with exit code {exc.returncode}; continuing to the next scan.")
+            continue
 
-    print("LIVE RADAR BACKFILL COMPLETE")
+    print(f"LIVE RADAR BACKFILL COMPLETE: processed={processed} skipped={skipped}")
     return 0
 
 
