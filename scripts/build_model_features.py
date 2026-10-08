@@ -367,6 +367,15 @@ def build_features(frame: pd.DataFrame) -> pd.DataFrame:
                 [df[c] for c in group_cols], dropna=False
             ).cummax()
 
+    # Historical records can legitimately lack a provider-specific
+    # environmental field. Keep the historical/live schema identical by
+    # materializing absent operational predictors as explicit nullable columns
+    # rather than silently dropping them. This is schema alignment only; it
+    # does not manufacture environmental values.
+    for col in OPERATIONAL_LIVE_PREDICTORS:
+        if col not in df.columns:
+            df[col] = np.nan
+
     keep = [c for c in df.columns if c not in TARGET_COLUMNS and c != "scan_dt"]
     target_outputs = [c for c in df.columns if c in TARGET_COLUMNS]
     return df[keep + target_outputs]
