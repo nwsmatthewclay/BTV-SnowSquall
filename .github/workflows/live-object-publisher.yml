@@ -42,7 +42,7 @@ concurrency:
 jobs:
   publish-live-objects:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 35
     env:
       PYTHONPATH: ${{ github.workspace }}
       PYTHONUNBUFFERED: "1"
@@ -171,7 +171,7 @@ jobs:
         # unavailable. This step processes the current pair and updates state,
         # objects, RAP environment, and radar history when possible.
         continue-on-error: true
-        timeout-minutes: 6
+        timeout-minutes: 10
         run: |
           set -euo pipefail
           python - <<'PY'
