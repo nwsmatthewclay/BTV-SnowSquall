@@ -253,7 +253,7 @@ def _render(mosaic, latlon, output_path: Path, *, mode="clean", rhohv=None):
         cmap.set_bad((0, 0, 0, 0))
         ax.pcolormesh(lon, lat, masked, cmap=cmap, vmin=-10, vmax=75, shading="auto")
     else:
-        cmap = pyart_cm.NWSRef.copy()
+        cmap = nws_reflectivity_cmap()
         cmap.set_bad((0, 0, 0, 0))
         ax.pcolormesh(lon, lat, masked, cmap=cmap, vmin=-10, vmax=75, shading="auto")
 
@@ -474,11 +474,11 @@ def _direct_render(sweep_products, output_dir: Path, *, product_name: str, clean
     if clean:
         # Native Level-II reflectivity uses the same standard NWS palette as
         # the Cartesian mosaic and raw product.
-        cmap = pyart_cm.NWSRef.copy()
+        cmap = nws_reflectivity_cmap()
         cmap.set_bad((0, 0, 0, 0))
         norm = None
     else:
-        cmap = pyart_cm.NWSRef.copy()
+        cmap = nws_reflectivity_cmap()
         cmap.set_bad((0, 0, 0, 0))
         norm = None
     for item in sweep_products:
