@@ -184,9 +184,15 @@ def archive_live_radar_frame(live_root: Path, *, cycle_time: datetime) -> None:
         "palette_version": "NWSRef_V2",
     }
 
+    # The archive filename has second resolution. If this workflow is
+    # triggered twice during the same second, timestamps can differ by
+    # milliseconds while the image path is identical. Deduplicate by both
+    # timestamp and image path so one physical mosaic is one slider frame.
     frames = [
         f for f in (manifest.get("frames") or [])
-        if isinstance(f, dict) and str(f.get("timestamp")) != frame["timestamp"]
+        if isinstance(f, dict)
+        and str(f.get("timestamp")) != frame["timestamp"]
+        and str(f.get("image") or "").split("?")[0] != frame["image"]
         and str(f.get("palette") or "") == "NWSRef"
     ]
     frames.append(frame)
