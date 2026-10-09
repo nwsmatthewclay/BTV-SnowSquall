@@ -9,6 +9,9 @@ L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/Reference/Worl
 
 var layers={KCXX:L.layerGroup().addTo(map),KTYX:L.layerGroup().addTo(map),labels:L.layerGroup().addTo(map),motion:L.layerGroup().addTo(map)};
 var radarLayer=L.layerGroup().addTo(map),radarMosaic=null,radarMode="reflectivity";
+var clutterSuppression=true,forceCurrentMosaic=false,alertFeatures=[],alertsLastFetch=0;
+var alertLayers={warnings:L.layerGroup().addTo(map),sps:L.layerGroup().addTo(map)};
+var alertsEnabled={warnings:false,sps:false};
 var radarLocations={KCXX:[44.511,-73.166],KTYX:[43.756,-75.680],KBTV:[44.472,-73.154]};
 var BTV=[44.472,-73.154];
 var datasets={},allObjects=[],selected=null,objectNumbers=true,refreshTimer=null,cursorGrid=null,cursorBound=false,lastObjectClickAt=0;
@@ -289,7 +292,7 @@ async function loadRadarHistory(){
   updateRadarTimelineUI();
 }
 function mosaicMetaUrl(){return LIVE_BASE+"radar_mosaic.json?cb="+Date.now()}
-function mosaicImageUrl(mode){var product=radarMosaic?.display_products||{};var name=(mode==="clean"?product.clean_image:product.raw_image)||(mode==="clean"?"radar_mosaic_clean.png":"radar_mosaic_raw.png");return LIVE_BASE+name+"?cb="+Date.now()}
+function mosaicImageUrl(mode){var product=radarMosaic?.display_products||{};var clean=(mode==="clean"||mode==="velocity"||clutterSuppression);var name=(clean?product.clean_image:product.raw_image)||(clean?"radar_mosaic_clean.png":"radar_mosaic_raw.png");return LIVE_BASE+name+"?cb="+Date.now()}
 function addNoaaFallback(){
   var u="https://mapservices.weather.noaa.gov/eventdriven/rest/services/radar/radar_base_reflectivity/MapServer/export?bbox=-76.91,41.86,-70.39,46.40&bboxSR=4326&imageSR=4326&size=1400,900&format=png32&transparent=true&f=image";
   L.imageOverlay(u,[[41.86,-76.91],[46.40,-70.39]],{pane:"liveRadarPane",opacity:.56,interactive:false,crossOrigin:true}).addTo(radarLayer);
@@ -403,7 +406,7 @@ async function renderRadarMosaic(){
     // synchronized frame is only the automatic/default selection.
     var selectedFrame=(!radarInitialRender&&radarHistoryIndex>=0&&frame)?frame:syncFrame;
     var useStoredFrame=!!(
-      selectedFrame &&
+      !forceCurrentMosaic && selectedFrame &&
       (!selectedFrame.palette || selectedFrame.palette==="NWSRef" || selectedFrame.palette==="BTV_WINTER_REFLECTIVITY_V1" || selectedFrame.palette==="BTV_WINTER_REFLECTIVITY_V2") &&
       selectedFrame.image &&
       selectedFrame.image!=="iem-wms"
@@ -429,8 +432,9 @@ async function renderRadarMosaic(){
         var compositeSource=compositeSources.find(function(s){return String(s.radar||"").toUpperCase()===site});
         var productMs=parseUtcDate(product?.scan_time_utc)?.getTime();
         var compositeMs=parseUtcDate(compositeSource?.scan_time_utc)?.getTime();
-        if(product?.clean_image&&product?.bounds&&Number.isFinite(productMs)&&(!Number.isFinite(compositeMs)||productMs-compositeMs>8*60000)){
-          L.imageOverlay(LIVE_BASE+product.clean_image+"?cb="+Date.now(),product.bounds,{pane:"liveRadarPane",opacity:.90,interactive:false,crossOrigin:true}).addTo(radarLayer);
+        var radarImage=clutterSuppression?product?.clean_image:product?.raw_image;
+        if(radarImage&&product?.bounds&&Number.isFinite(productMs)&&(!Number.isFinite(compositeMs)||productMs-compositeMs>8*60000)){
+          L.imageOverlay(LIVE_BASE+radarImage+"?cb="+Date.now(),product.bounds,{pane:"liveRadarPane",opacity:.90,interactive:false,crossOrigin:true}).addTo(radarLayer);
           setText("radarStatus","Radar mosaic + newer "+site+" base reflectivity • "+fmtTime(product.scan_time_utc));
         }
       });
@@ -445,6 +449,58 @@ async function renderRadarMosaic(){
   fitMapToBoundsOnce(radarMosaic.bounds);
 }
 function setRadarMode(mode){if(mode!=="reflectivity"&&mode!=="velocity")mode="reflectivity";radarMode=mode;document.querySelectorAll(".display-btn").forEach(function(b){b.classList.toggle("active",b.dataset.radarMode===mode)});renderRadarMosaic()}
+
+function alertEventIsSps(p){
+  var eventName=String(p?.event||"").toLowerCase();
+  var params=p?.parameters||{};
+  var awips=params.AWIPSidentifier||params.awipsidentifier||[];
+  if(!Array.isArray(awips))awips=[awips];
+  return eventName==="special weather statement"||awips.some(function(v){return String(v).toUpperCase().includes("SPS")});
+}
+function alertStyle(p,isSps){
+  if(isSps)return {color:"#83d9ff",weight:2.5,dashArray:"7 5",fillColor:"#83d9ff",fillOpacity:.10};
+  var sev=String(p?.severity||"").toLowerCase();
+  var color=sev==="extreme"?"#ff354f":sev==="severe"?"#ff7b35":sev==="moderate"?"#ffd84a":"#62b9f5";
+  return {color:color,weight:2.5,fillColor:color,fillOpacity:.12};
+}
+function renderAlertOverlays(){
+  alertLayers.warnings.clearLayers();alertLayers.sps.clearLayers();
+  (alertFeatures||[]).forEach(function(feature){
+    var p=feature?.properties||{},isSps=alertEventIsSps(p);
+    var isWarning=/warning/i.test(String(p.event||""))&&!isSps;
+    var target=isSps?"sps":(isWarning?"warnings":null);
+    if(!target||!alertsEnabled[target]||!feature.geometry)return;
+    var layer=L.geoJSON(feature,{style:alertStyle(p,isSps),onEachFeature:function(f,l){
+      var a=f.properties||{},headline=a.headline||a.event||"NWS alert";
+      var ends=a.ends||a.expires||a.effective;
+      l.bindPopup("<b>"+esc(headline)+"</b>"+(ends?"<br>Until "+esc(fmtTime(ends)):""));
+    }});
+    layer.addTo(alertLayers[target]);
+  });
+}
+async function refreshAlertData(force){
+  if(!force&&Date.now()-alertsLastFetch<180000){renderAlertOverlays();return}
+  alertsLastFetch=Date.now();
+  try{
+    var response=await fetch("https://api.weather.gov/alerts/active?area=VT,NY",{cache:"no-store",headers:{Accept:"application/geo+json"}});
+    if(!response.ok)throw new Error("NWS alerts HTTP "+response.status);
+    var data=await response.json();
+    alertFeatures=Array.isArray(data.features)?data.features:[];
+    renderAlertOverlays();
+    setText("radarStatus",(q("radarStatus")?.textContent||"")+" • NWS alerts "+alertFeatures.length);
+  }catch(e){
+    // Keep last successfully retrieved alert polygons visible if the service
+    // is temporarily unavailable; don't break radar/object refresh.
+    renderAlertOverlays();
+  }
+}
+function setAlertLayer(which,on){
+  alertsEnabled[which]=!!on;
+  var button=q(which==="warnings"?"warningsBtn":"spsBtn");
+  if(button){button.classList.toggle("active",!!on);button.setAttribute("aria-pressed",String(!!on));button.textContent=which==="warnings"?(on?"Warnings: ON":"Warnings: OFF"):(on?"SPS: ON":"SPS: OFF")}
+  renderAlertOverlays();
+}
+
 function objectReferenceTime(){
   var times=allObjects.map(function(p){return p&&p.timestamp?new Date(p.timestamp).getTime():NaN}).filter(Number.isFinite);
   return times.length?Math.max.apply(null,times):null;
@@ -986,8 +1042,18 @@ q("scoringMode").onchange=function(){
 document.querySelectorAll("[data-jump]").forEach(function(btn){btn.onclick=function(){var el=q(btn.dataset.jump);if(el)el.scrollIntoView({behavior:"smooth",block:"start"});document.querySelectorAll("[data-jump]").forEach(function(b){b.classList.toggle("active",b===btn)})}});
 q("refreshBtn").onclick=refresh;q("refreshBtn2").onclick=refresh;
 q("radarPlayBtn").onclick=playRadarAnimation;
-q("radarTimelineSlider").oninput=function(){setRadarHistoryIndex(this.value)};
+q("radarTimelineSlider").oninput=function(){forceCurrentMosaic=false;setRadarHistoryIndex(this.value)};
 q("objectNumbersBtn").onclick=function(){objectNumbers=!objectNumbers;q("objectNumbersBtn").classList.toggle("active",objectNumbers);renderMap()};
+q("clutterSuppressionBtn").onclick=function(){
+  clutterSuppression=!clutterSuppression;forceCurrentMosaic=true;
+  this.classList.toggle("active",clutterSuppression);
+  this.setAttribute("aria-pressed",String(clutterSuppression));
+  this.textContent="Clutter suppression: "+(clutterSuppression?"ON":"OFF");
+  renderRadarMosaic();
+};
+q("warningsBtn").onclick=function(){setAlertLayer("warnings",!alertsEnabled.warnings)};
+q("spsBtn").onclick=function(){setAlertLayer("sps",!alertsEnabled.sps)};
+
 document.addEventListener("keydown",function(e){
   if(e.defaultPrevented||e.ctrlKey||e.metaKey||e.altKey)return;
   var target=e.target;
@@ -1024,4 +1090,4 @@ map.on("click",function(e){
     selectObject(matches[0]);
   }
 });
-bindCursorReadout();loadRadarHistory();refresh();refreshTimer=setInterval(refresh,60000);
+bindCursorReadout();loadRadarHistory();refreshAlertData(true);refresh();refreshTimer=setInterval(refresh,60000);setInterval(function(){refreshAlertData(false)},180000);
