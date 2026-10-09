@@ -257,11 +257,11 @@ def _render(mosaic, latlon, output_path: Path, *, mode="clean", rhohv=None):
         # uses the familiar operational color scale.
         cmap = nws_reflectivity_cmap()
         cmap.set_bad((0, 0, 0, 0))
-        ax.pcolormesh(lon, lat, masked, cmap=cmap, vmin=-10, vmax=75, shading="auto")
+        ax.pcolormesh(lon, lat, masked, cmap=cmap, vmin=-5, vmax=40, shading="auto")
     else:
         cmap = nws_reflectivity_cmap()
         cmap.set_bad((0, 0, 0, 0))
-        ax.pcolormesh(lon, lat, masked, cmap=cmap, vmin=-10, vmax=75, shading="auto")
+        ax.pcolormesh(lon, lat, masked, cmap=cmap, vmin=-5, vmax=40, shading="auto")
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(output_path, format="png", transparent=True, dpi=120, pad_inches=0)
@@ -541,7 +541,7 @@ def _direct_render(sweep_products, output_dir: Path, *, product_name: str, clean
         if masked.count():
             kwargs = {"cmap": cmap, "shading": "auto"}
             if norm is None:
-                kwargs.update(vmin=-10, vmax=75)
+                kwargs.update(vmin=-5, vmax=40)
             else:
                 kwargs["norm"] = norm
             ax.pcolormesh(item["lon"], item["lat"], masked, **kwargs)
