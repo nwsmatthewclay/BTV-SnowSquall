@@ -518,13 +518,14 @@ function renderObjectCard(){
 }
 function renderProbability(){
   var p=latestForSelected();if(!p){return}
-  var probs=p.research_probabilities||{};
+  var shadowScore=shadowRecord(p.radar_site,p.track_id);
+  var probs=p.research_probabilities||shadowScore?.research_probabilities||{};
   var horizons=[15,30,45,60];
-  var nowScore=p.research_probability_now??p.probability_now??probs.now;
-  if(nowScore==null) nowScore=probs["15min"]??probs["15"]??p.probability_15min;
+  var nowScore=p.research_probability_now??p.probability_now??probs.now??probs["15min"]??probs["15"]??p.probability_15min;
   var prevRows=trackHistory(p).slice(0,-1),prev=prevRows.length?prevRows.at(-1):null;
-  var prevNow=prev?.research_probability_now??prev?.probability_now??prev?.research_probabilities?.now;
-  if(prevNow==null&&prev) prevNow=prev.research_probabilities?.["15min"]??prev.research_probabilities?.["15"]??null;
+  var prevShadow=prev?shadowRecord(p.radar_site,prev.track_id):null;
+  var prevProbabilities=prev?.research_probabilities||prevShadow?.research_probabilities||{};
+  var prevNow=prev?.research_probability_now??prev?.probability_now??prevProbabilities.now??prevProbabilities["15min"]??prevProbabilities["15"]??null;
   if(nowScore==null){
     q("probabilityValue").classList.add("na");setText("probabilityValue","—");setText("probabilityDelta","Awaiting weighted score");q("probabilityDelta").className="prob-delta flat";
     setText("probabilityNote","Research component score is waiting for a usable radar/environment object record. Analog guidance remains provisional.");
@@ -533,7 +534,7 @@ function renderProbability(){
     var d=prevNow==null?null:Number(nowScore)-Number(prevNow);
     setText("probabilityDelta",d==null?"Current weighted score":(d>=0?"▲ +":"▼ ")+(Math.abs(d)*100).toFixed(1)+" pp");
     q("probabilityDelta").className="prob-delta "+(d==null?"flat":d>=0?"up":"down");
-    setText("probabilityNote","NOW = current object-state score • +15/+30/+45/+60 = forward guidance. Research only; Radar 50% + Environment 50%.");
+    setText("probabilityNote","Experimental research-model output; not calibrated or operational. Horizon values use the separate shadow-model feed.");
   }
   var radar=p.radar_component_score,env=p.environment_component_score;
   var cards=[
@@ -555,15 +556,14 @@ function renderProbabilityChart(hist){
     var ts=String(r.timestamp||"");
     if(!ts||seen[ts])return false;
     seen[ts]=true;
-    var v=r.research_probability_now??r.probability_now??r.research_probabilities?.now;
-    if(v==null)v=r.research_probabilities?.["15min"]??r.research_probabilities?.["15"];
-    if(v==null&&r.candidate_rank_score!=null)v=Number(r.candidate_rank_score)/100;
-    return Number.isFinite(Number(v));
+    var shadowRow=shadowRecord(r.radar_site||p?.radar_site,r.track_id);
+    var probs=r.research_probabilities||shadowRow?.research_probabilities||{};
+    var v=r.research_probability_now??r.probability_now??probs.now??probs["15min"]??probs["15"];
+    return v!=null&&Number.isFinite(Number(v));
   });
-  var currentNow=p?(p.research_probability_now??p.probability_now??p.research_probabilities?.now):null;
-  if(currentNow==null&&p)currentNow=p.research_probabilities?.["15min"]??p.research_probabilities?.["15"]??p.probability_15min;
-  if(currentNow==null&&p&&p.candidate_rank_score!=null)currentNow=Number(p.candidate_rank_score)/100;
-  if(currentNow==null&&p)currentNow=riskScore(p);
+  var currentShadow=p?shadowRecord(p.radar_site,p.track_id):null;
+  var currentProbabilities=p?.research_probabilities||currentShadow?.research_probabilities||{};
+  var currentNow=p?(p.research_probability_now??p.probability_now??currentProbabilities.now??currentProbabilities["15min"]??currentProbabilities["15"]??p.probability_15min):null;
 
   if(!rows.length && !Number.isFinite(Number(currentNow))){
     svg.innerHTML="<text x='210' y='70' text-anchor='middle' class='chart-text'>Awaiting object score history</text>";
@@ -575,10 +575,10 @@ function renderProbabilityChart(hist){
   var latestTime=rows.length?new Date(rows.at(-1).timestamp).getTime():Date.now();
   var observed=rows.map(function(r){
     var t=new Date(r.timestamp).getTime();
-    var v=r.research_probability_now??r.probability_now??r.research_probabilities?.now;
-    if(v==null)v=r.research_probabilities?.["15min"]??r.research_probabilities?.["15"];
-    if(v==null&&r.candidate_rank_score!=null)v=Number(r.candidate_rank_score)/100;
-    return {x:(t-latestTime)/60000,v:Number(v)};
+    var shadowRow=shadowRecord(r.radar_site||p?.radar_site,r.track_id);
+    var probs=r.research_probabilities||shadowRow?.research_probabilities||{};
+    var v=r.research_probability_now??r.probability_now??probs.now??probs["15min"]??probs["15"];
+    return {x:(t-latestTime)/60000,v:v==null?NaN:Number(v)};
   }).filter(function(pt){return Number.isFinite(pt.x)&&Number.isFinite(pt.v)});
 
   // Always anchor the current object state at NOW so the chart remains useful
