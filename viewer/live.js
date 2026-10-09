@@ -609,47 +609,64 @@ function renderObjectCard(){
 }
 function renderProbability(){
   var p=latestForSelected();if(!p)return;
-  var shadowScore=shadowRecord(p.radar_site,p.track_id);
-  var payload=probabilityPayload(p),scoreRecord=p;
-  if(payload.source!=="calibrated"&&shadowScore){payload=probabilityPayload(shadowScore);scoreRecord=shadowScore}
-  var probs=payload.values,horizons=[15,30,45,60],calibrated=payload.source==="calibrated";
-  var nowScore=probabilityNow(scoreRecord);
-  var prevRows=trackHistory(p).slice(0,-1),prev=prevRows.length?prevRows.at(-1):null;
-  var prevShadow=prev?shadowRecord(p.radar_site,prev.track_id):null;
-  var prevRecord=prev||prevShadow,prevIsCalibrated=validatedCalibratedProbabilities(prevRecord)!=null,prevNow=prevRecord&&prevIsCalibrated===calibrated?probabilityNow(prevRecord):null;
+  var weighted=scoringMode==="weighted",payload=weighted?null:modelPayloadFor(p,false);
+  var scoreRecord=weighted?p:(payload?.record||p);
+  var values=weighted?null:(payload?.values||{});
+  var horizons=[15,30,45,60],nowScore=modeProbabilityNow(p);
   var badge=q("probBadge"),label=document.querySelector(".prob-label");
-  if(badge){badge.textContent=calibrated?"CALIBRATED • RELEASED":"EXPERIMENTAL • NOT CALIBRATED";badge.className="dashboard-pill "+(calibrated?"":"gated")}
-  if(label)label.textContent=calibrated?"Validated model probability":"Experimental research estimate";
+  var released=!weighted&&payload?.source==="released";
+  var candidate=!weighted&&payload?.source==="candidate_calibrated";
+  if(badge){
+    badge.textContent=weighted?"50/50 BASELINE":released?"CALIBRATED • RELEASED":candidate?"MODEL CANDIDATE • RESEARCH ONLY":"MODEL OUTPUT UNAVAILABLE";
+    badge.className="dashboard-pill "+(weighted||released?"":"gated");
+  }
+  if(label)label.textContent=weighted?"50/50 radar + environment guidance":released?"Validated model probability":candidate?"Calibrated candidate model • research only":"Calibrated model • waiting for fresh scores";
+  setText("scoringModeState",weighted?"Radar 50% + environment 50%":candidate?"Candidate model output available":released?"Released calibrated output available":"No fresh model scores for selected object");
   if(nowScore==null){
     q("probabilityValue").classList.add("na");setText("probabilityValue","—");
-    setText("probabilityDelta",calibrated?"Waiting for calibrated NOW anchor":"Awaiting research score");
+    setText("probabilityDelta",weighted?"Baseline score unavailable":"Model score unavailable");
     q("probabilityDelta").className="prob-delta flat";
-    setText("probabilityNote",calibrated
-      ?"Validated calibrated horizon outputs are present, but no calibrated_probability_now value is available for the chart anchor."
-      :"Experimental research estimate only — not a calibrated probability or operational forecast. The operational object feed remains probability-free.");
+    setText("probabilityNote",weighted
+      ?"The 50/50 score needs radar and environment component values for this object."
+      :"No fresh model output is available for this object. The viewer will not silently substitute the 50/50 score; switch scoring mode to compare the baseline.");
   }else{
     q("probabilityValue").classList.remove("na");setText("probabilityValue",(Number(nowScore)*100).toFixed(1)+"%");
+    var prior=null;
+    if(weighted){
+      var hist=trackHistory(p),currentTime=new Date(p.timestamp).getTime();
+      prior=hist.filter(function(r){return new Date(r.timestamp).getTime()<currentTime}).at(-1)||null;
+    }else{
+      prior=shadowRows(p.radar_site,p.track_id).filter(function(r){return new Date(r.timestamp).getTime()<new Date(p.timestamp).getTime()}).at(-1)||null;
+    }
+    var prevNow=prior?modeProbabilityNow(prior):null;
     var d=prevNow==null?null:Number(nowScore)-Number(prevNow);
-    setText("probabilityDelta",d==null?(calibrated?"Validated calibrated NOW estimate":"Current research estimate"):(d>=0?"▲ +":"▼ ")+(Math.abs(d)*100).toFixed(1)+" pp");
+    setText("probabilityDelta",d==null?(weighted?"Current 50/50 guidance score":released?"Released model near-term estimate":"Research model near-term estimate"):(d>=0?"▲ +":"▼ ")+(Math.abs(d)*100).toFixed(1)+" pp");
     q("probabilityDelta").className="prob-delta "+(d==null?"flat":d>=0?"up":"down");
-    setText("probabilityNote",calibrated
-      ?"Independently validated, released model output. Horizon values use the calibrated model bundle."
-      :"Experimental research-model output; not calibrated or operational. Horizon values remain provisional shadow-feed guidance.");
+    setText("probabilityNote",weighted
+      ?"Baseline score = 50% radar signature + 50% RAP/environment score. This is a research index, not an event-calibrated probability."
+      :released
+        ?"Independent validation and release metadata are present. Model horizon probabilities are shown from the released bundle."
+        :"Research candidate only. This uses the existing shadow model bundle and its bundled calibrators; the new case-held-out Platt calibrators from the training gate are not yet wired into live scoring. Do not use as operational guidance.");
   }
   var horizonHtml="<div style='display:grid;grid-template-columns:repeat(4,1fr);gap:4px;margin-top:7px'>"+horizons.map(function(h){
-    var v=probabilityAt(scoreRecord,h);
+    var v=weighted?weightedHorizon(p,h):readProbability(values,h);
     return "<div style='border:1px solid rgba(190,210,220,.14);padding:5px;text-align:center'><span style='display:block;font-size:8px;color:#748a9b'>+"+h+" MIN</span><b style='font-size:13px'>"+(v==null?"—":(v*100).toFixed(1)+"%")+"</b></div>";
   }).join("")+"</div>";
   var cardHtml="";
-  if(calibrated){
-    cardHtml="<div class='prob-component'><span>CALIBRATION STATUS</span><b>VALIDATED</b></div>";
-  }else{
+  if(weighted){
     var radar=p.radar_component_score,env=p.environment_component_score;
-    var cards=[["RADAR DIAGNOSTIC",radar,"#ff5648"],["ENVIRONMENT DIAGNOSTIC",env,"#62ce73"]];
+    var cards=[["RADAR • 50%",radar,"#ff5648"],["ENVIRONMENT • 50%",env,"#62ce73"]];
     cardHtml=cards.map(function(x){return "<div class='prob-component'><span><i class='comp-dot' style='background:"+x[2]+"'></i>"+x[0]+"</span><b>"+(x[1]==null?"—":Number(x[1]).toFixed(1)+"%")+"</b></div>"}).join("");
+  }else{
+    var info=payload?.modelInfo||datasets[p.radar_site]?.shadow?.model_info||{};
+    var model=info["15"]||{};
+    var coverage=payload?.record?.feature_coverage?.["15"]?.fraction;
+    cardHtml="<div class='prob-component'><span>MODEL STATUS</span><b>"+(released?"RELEASED":candidate?"CANDIDATE ONLY":"UNAVAILABLE")+"</b></div>"+
+      "<div class='prob-component'><span>MODEL FAMILY</span><b>"+esc(String(model.model_version||payload?.record?.model_version||"—"))+"</b></div>"+
+      "<div class='prob-component'><span>15-MIN FEATURE COVERAGE</span><b>"+(coverage==null?"—":(Number(coverage)*100).toFixed(0)+"%")+"</b></div>";
   }
-  q("probComponents").innerHTML=cardHtml+horizonHtml+"<div style='margin-top:6px;font-size:8px;color:#748a9b'>"+(calibrated?"Calibrated model horizons; release metadata is required before this path is enabled.":"Research diagnostics only; component values are not calibrated probabilities and no fixed 50/50 blend is implied.")+"</div>";
-  renderProbabilityChart(trackHistory(p));
+  q("probComponents").innerHTML=cardHtml+horizonHtml+"<div style='margin-top:6px;font-size:8px;color:#748a9b'>"+(weighted?"50/50 baseline only; values are component-weighted research scores, not calibrated event probabilities.":released?"Released calibrated model output.":candidate?"Bundled candidate calibration only; independent release status has not been granted.":"Model scores missing or stale; no baseline substitution is made.")+"</div>";
+  renderProbabilityChart(weighted?trackHistory(p):shadowRows(p.radar_site,p.track_id));
 }
 function renderProbabilityChart(hist){
   var svg=q("probChart");svg.innerHTML="";
