@@ -6,6 +6,7 @@ future-contaminated examples and reports class/coverage statistics.
 from __future__ import annotations
 
 import argparse
+import json
 from pathlib import Path
 
 import pandas as pd
@@ -82,6 +83,12 @@ def main():
     print("=====================")
     for key, value in summary.items():
         print(f"{key}: {value}")
+
+    if args.report:
+        report_path = Path(args.report)
+        report_path.parent.mkdir(parents=True, exist_ok=True)
+        report_path.write_text(json.dumps(summary, indent=2, default=str) + "\n", encoding="utf-8")
+        print(f"Report written: {report_path}")
 
     if summary["issues"]:
         raise SystemExit("QC FAILED")
