@@ -161,16 +161,15 @@ function weightedHorizon(p,h){
     var weights=p.probability_component_weights||{radar:.5,environment:.5},a=Number(weights.radar),b=Number(weights.environment),sum=a+b;
     if(Number.isFinite(a)&&Number.isFinite(b)&&sum>0)return validProbability(((Number(p.radar_component_score)*a+Number(p.environment_component_score)*b)/sum)/100);
   }
-  var legacy=p["probability_"+h+"min"];
-  if(legacy==null&&!isShadowScoreRecord(p))legacy=probValue(p,h);
-  return validProbability(legacy);
+  // Never fall back to learned/calibrated probabilities here. The 50/50
+  // baseline must be computed only from explicit radar + environment components;
+  // otherwise it silently becomes numerically identical to the model mode.
+  return null;
 }
 function weightedNow(p){
   if(!p)return null;
-  if(!isShadowScoreRecord(p)){
-    var value=validProbability(p.probability_now??p.research_probability_now);
-    if(value!=null)return value;
-  }
+  // Baseline has no separate learned "now" output; derive it from its own
+  // component-weighted 15-minute score only.
   return weightedHorizon(p,15);
 }
 function modeProbabilityAt(p,h){
@@ -200,9 +199,22 @@ function latestForSelected(){
   return selected;
 }
 function trackHistory(p){
+  if(!p||p.track_id==null||String(p.track_id)==="")return [];
   var rows=datasets[p.radar_site]?.history||[];
-  var res=rows.filter(function(r){return String(r.track_id)===String(p.track_id)}).sort(function(a,b){return String(a.timestamp).localeCompare(String(b.timestamp))});
-  return res;
+  var byTime=new Map();
+  rows.filter(function(r){
+    return r&&r.track_id!=null&&String(r.track_id)===String(p.track_id)&&parseUtcDate(r.timestamp);
+  }).forEach(function(r){byTime.set(String(r.timestamp),r)});
+  return Array.from(byTime.values()).sort(function(a,b){return parseUtcDate(a.timestamp)-parseUtcDate(b.timestamp)});
+}
+function hasConfirmedTrack(p){
+  if(!p||p.track_id==null||String(p.track_id)==="")return false;
+  var rows=trackHistory(p);
+  var age=Number(p.track_age_scans??p.age_scans);
+  var positions=Array.isArray(p.track_position_history)?p.track_position_history:[];
+  // A detector ID or a shadow-score row alone is not proof of a tracked object.
+  // Require independent temporal evidence from the tracker/history pipeline.
+  return rows.length>=2 || (Number.isFinite(age)&&age>=2&&positions.length>=2);
 }
 function durationText(rows){if(rows.length<2)return rows.length+" scan";var d=(new Date(rows.at(-1).timestamp)-new Date(rows[0].timestamp))/60000;return num(d,0)+" min"}
 function currentHistoryRow(p){var rows=trackHistory(p);return rows.at(-1)||p}
@@ -616,6 +628,17 @@ function renderObjectCard(){
 function renderProbability(){
   var p=latestForSelected();if(!p)return;
   var weighted=scoringMode==="weighted",payload=weighted?null:modelPayloadFor(p,false);
+  if(!hasConfirmedTrack(p)){
+    q("probabilityValue").classList.add("na");setText("probabilityValue","—");
+    setText("probabilityDelta","Awaiting confirmed track");
+    q("probabilityDelta").className="prob-delta flat";
+    setText("probabilityNote","No probability history is shown until the radar tracker confirms a persistent object across at least two scans. Single-scan detections and shadow-score rows cannot create an object history.");
+    setText("scoringModeState","Object tracking not yet confirmed");
+    setText("probBadge","TRACK NOT CONFIRMED");q("probBadge").className="dashboard-pill gated";
+    q("probComponents").innerHTML="<div class='prob-component'><span>TRACK STATUS</span><b>Awaiting ≥2 scans</b></div>";
+    renderProbabilityChart([]);
+    return;
+  }
   var scoreRecord=weighted?p:(payload?.record||p);
   var values=weighted?null:(payload?.values||{});
   var horizons=[15,30,45,60],nowScore=modeProbabilityNow(p);
@@ -677,6 +700,10 @@ function renderProbability(){
 function renderProbabilityChart(hist){
   var svg=q("probChart");svg.innerHTML="";
   var p=latestForSelected(),weighted=scoringMode==="weighted";
+  if(!hasConfirmedTrack(p)){
+    svg.innerHTML="<text x='210' y='70' text-anchor='middle' class='chart-text'>Waiting for confirmed multi-scan track</text>";
+    setText("probabilityChartState","TRACK NOT CONFIRMED");return;
+  }
   var chartSubtitle=document.querySelector(".probability-chart-head span");
   if(chartSubtitle)chartSubtitle.textContent=weighted?"Observed 50/50 score → baseline guidance":"Observed candidate-model score → model horizons";
   var chartNote=document.querySelector(".probability-chart-note");
@@ -822,7 +849,10 @@ function renderEvidence(){
     evidenceItem(p.environment_forecast_30min_model_ready?"✓":"!",p.environment_forecast_30min_model_ready?"":"warn","RAP +30 min forecast",p.environment_forecast_30min_model_ready?"Expected conditions attached for the +30 minute horizon":"Waiting for a usable RAP forecast at +30 minutes");
 }
 function renderHistory(){
-  var p=latestForSelected(),rows=p?trackHistory(p):[];setText("historyCount",rows.length+" retained scans");if(!rows.length){q("historyChart").innerHTML="<text x='260' y='70' text-anchor='middle' class='chart-text'>No retained track history</text>";q("historyTable").innerHTML="";return}
+  var p=latestForSelected(),rows=p?trackHistory(p):[];
+  if(!hasConfirmedTrack(p))rows=[];
+  setText("historyCount",rows.length+" retained scans");
+  if(!rows.length){q("historyChart").innerHTML="<text x='260' y='70' text-anchor='middle' class='chart-text'>Waiting for confirmed multi-scan track</text>";q("historyTable").innerHTML="";return}
   var W=520,H=145,P=28,vals=rows.map(function(r){return {z:Number(r.max_reflectivity_dbz),a:Number(r.area_km2),m:Number(r.motion_speed_kt)}}),z=vals.map(x=>x.z).filter(Number.isFinite),a=vals.map(x=>x.a).filter(Number.isFinite),m=vals.map(x=>x.m).filter(Number.isFinite),minZ=z.length?Math.min(...z):0,maxZ=z.length?Math.max(...z):1,minA=a.length?Math.min(...a):0,maxA=a.length?Math.max(...a):1,minM=m.length?Math.min(...m):0,maxM=m.length?Math.max(...m):1;
   var norm=function(v,min,max){return Number.isFinite(v)?(v-min)/(Math.max(.001,max-min)):null};var x=function(i){return P+(rows.length===1?0:i*(W-2*P)/(rows.length-1))},y=function(v){return H-P-v*(H-2*P)},svg="<line x1='"+P+"' y1='"+(H-P)+"' x2='"+(W-P)+"' y2='"+(H-P)+"' class='chart-axis'/><text x='3' y='12' class='chart-text'>100</text><text x='7' y='"+(H/2+3)+"' class='chart-text'>50</text><text x='7' y='"+(H-P+3)+"' class='chart-text'>0</text>";
   [["max_reflectivity_dbz","#d34bc0",minZ,maxZ,"z"],["area_km2","#1f90e9",minA,maxA,"a"],["motion_speed_kt","#54c56b",minM,maxM,"m"]].forEach(function(line){var path=rows.map(function(r,i){var key=line[4],val=norm(Number(r[key]),line[2],line[3]);return val==null?null:(i?"L":"M")+x(i).toFixed(1)+" "+y(val).toFixed(1)}).filter(Boolean).join(" ");if(path)svg+="<path d='"+path+"' fill='none' stroke='"+line[1]+"' stroke-width='2.1' stroke-linecap='round' stroke-linejoin='round'/>"});
@@ -875,7 +905,8 @@ async function refresh(){
     var latest=got.map(function(x){return x.state?.last_scan_time_utc||x.geo?.metadata?.scan_time_utc}).filter(Boolean).sort().at(-1);
     setText("liveTime",latest?fmtTime(latest):"No scan time available");
     setText("mapScanLabel",latest?fmtTime(latest):"No live radar");
-    setText("feedSummary",(allObjects.length)+" tracked objects • "+detectedObjects.length+" radar detections • "+got.map(function(x){return x.site+" "+(x.error?"OFFLINE":(ageMinutes(x.state?.last_scan_time_utc)<=15?"LIVE":(ageMinutes(x.state?.last_scan_time_utc)<=45?"AGING":"STALE")))}).join(" • "));
+    var confirmedCount=allObjects.filter(hasConfirmedTrack).length;
+    setText("feedSummary",confirmedCount+" confirmed tracks • "+allObjects.length+" active detections • "+got.map(function(x){return x.site+" "+(x.error?"OFFLINE":(ageMinutes(x.state?.last_scan_time_utc)<=15?"LIVE":(ageMinutes(x.state?.last_scan_time_utc)<=45?"AGING":"STALE")))}).join(" • "));
     var degraded=got.filter(function(x){return x.error||ageMinutes(x.state?.last_scan_time_utc)>30}).length>0;
     q("liveBadge").classList.toggle("gated",degraded);if(degraded)setText("liveBadge","DEGRADED");
   }catch(e){setText("feedSummary","Live feed error: "+e.message);q("liveBadge").classList.add("gated");setText("liveBadge","DEGRADED")}
