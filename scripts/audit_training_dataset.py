@@ -199,6 +199,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("input_csv")
     parser.add_argument("--report", default=None)
+    parser.add_argument("--report-only", action="store_true", help="Write and print QC issues without failing the process.")
     args = parser.parse_args()
 
     summary = audit(Path(args.input_csv))
@@ -213,8 +214,10 @@ def main():
         report_path.write_text(json.dumps(summary, indent=2, default=str) + "\n", encoding="utf-8")
         print(f"Report written: {report_path}")
 
-    if summary["issues"]:
+    if summary["issues"] and not args.report_only:
         raise SystemExit("QC FAILED")
+    if summary["issues"] and args.report_only:
+        print("QC REPORT ONLY: issues recorded; process remains successful.")
 
 
 if __name__ == "__main__":
