@@ -5,6 +5,7 @@ on:
   workflow_run:
     workflows:
       - Snow Squall Expansion Dataset
+      - Historical Benchmark Acquisition
     types:
       - completed
   push:
@@ -24,6 +25,7 @@ jobs:
     timeout-minutes: 30
     env:
       PYTHONUNBUFFERED: "1"
+      PYTHONPATH: ${{ github.workspace }}
 
     steps:
       - uses: actions/checkout@v4
@@ -39,49 +41,165 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Locate latest successful expansion feature artifact
+      - name: Locate completed historical benchmark batches
+        id: historical
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          echo "run_id=" >> "$GITHUB_OUTPUT"
+          for run_id in $(gh run list --workflow "Historical Benchmark Acquisition" --branch main --status success --limit 10 --json databaseId --jq '.[].databaseId'); do
+            artifacts="$(gh api "/repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}/artifacts?per_page=100")"
+            a0="$(printf '%s' "$artifacts" | jq -r '[.artifacts[] | select(.expired==false and .name=="historical-benchmark-batch-0") | .id][0] // empty')"
+            a1="$(printf '%s' "$artifacts" | jq -r '[.artifacts[] | select(.expired==false and .name=="historical-benchmark-batch-1") | .id][0] // empty')"
+            a2="$(printf '%s' "$artifacts" | jq -r '[.artifacts[] | select(.expired==false and .name=="historical-benchmark-batch-2") | .id][0] // empty')"
+            if [ -n "$a0" ] && [ -n "$a1" ] && [ -n "$a2" ]; then
+              echo "run_id=$run_id" >> "$GITHUB_OUTPUT"
+              echo "artifact_0=$a0" >> "$GITHUB_OUTPUT"
+              echo "artifact_1=$a1" >> "$GITHUB_OUTPUT"
+              echo "artifact_2=$a2" >> "$GITHUB_OUTPUT"
+              echo "Using complete historical benchmark acquisition run $run_id"
+              exit 0
+            fi
+          done
+          echo "No complete successful historical benchmark run with all 3 batch artifacts yet; will fall back to the existing feature-artifact path."
+      - name: Locate a usable recent feature artifact
+        if: steps.historical.outputs.run_id == ''
         id: source
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          if [ "${{ github.event_name }}" = "workflow_run" ]; then
-            RUN_ID="${{ github.event.workflow_run.id }}"
-          else
-            RUN_ID="$(gh run list --workflow "snow-squall-expansion-dataset.yml" --branch snow-squall-model-foundation --status success --limit 1 --json databaseId --jq '.[0].databaseId')"
-          fi
-          test -n "${RUN_ID}" && test "${RUN_ID}" != "null"
-          echo "run_id=${RUN_ID}" >> "${GITHUB_OUTPUT}"
-          echo "Using expansion dataset run ${RUN_ID}"
-      - name: Download expansion feature artifact only
+          candidate=""
+          for workflow in object-dataset-pilot.yml snow-squall-expansion-dataset.yml object-dataset-full-expansion.yml; do
+            while IFS= read -r run; do
+              run_id="$(printf '%s' "$run" | jq -r '.databaseId')"
+              run_name="$(printf '%s' "$run" | jq -r '.name')"
+              artifact_json="$(gh api "/repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}/artifacts?per_page=100")"
+              artifact_id="$(printf '%s' "$artifact_json" | jq -r '[.artifacts[] | select(.expired==false) | select(.name=="snow-squall-expansion-feature-batch" or .name=="object-model-feature-table") | .id] | .[0]')"
+              if [ -n "$artifact_id" ] && [ "$artifact_id" != "null" ]; then
+                candidate="$run_id|$artifact_id|$run_name"
+                break 2
+              fi
+              full_id="$(printf '%s' "$artifact_json" | jq -r '[.artifacts[] | select(.expired==false) | select(.name=="object-population-pilot" or .name=="object-population-expansion") | .id] | .[0]')"
+              if [ -n "$full_id" ] && [ "$full_id" != "null" ]; then
+                candidate="$run_id|$full_id|$run_name"
+                break 2
+              fi
+            done < <(gh run list --workflow "$workflow" --branch snow-squall-model-foundation --status success --limit 20 --json databaseId,name --jq ".[] | @json")
+          done
+          test -n "$candidate" || { echo "No usable feature artifact found."; exit 1; }
+          IFS='|' read -r run_id artifact_id source_name <<< "$candidate"
+          echo "run_id=$run_id" >> "$GITHUB_OUTPUT"
+          echo "artifact_id=$artifact_id" >> "$GITHUB_OUTPUT"
+          echo "source_name=$source_name" >> "$GITHUB_OUTPUT"
+          echo "Using $source_name run $run_id artifact $artifact_id"
+
+      - name: Download historical benchmark batches
+        if: steps.historical.outputs.run_id != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          for batch in 0 1 2; do
+            artifact_id="${{ steps.historical.outputs.artifact_0 }}"
+            [ "$batch" = "0" ] || artifact_id="${{ steps.historical.outputs.artifact_1 }}"
+            [ "$batch" != "2" ] || artifact_id="${{ steps.historical.outputs.artifact_2 }}"
+            mkdir -p "data/derived/input/historical_batch_${batch}"
+            curl -fsSL -H "Authorization: Bearer ${GH_TOKEN}" -H "Accept: application/vnd.github+json" \
+              -o "/tmp/historical_batch_${batch}.zip" \
+              "https://api.github.com/repos/${GITHUB_REPOSITORY}/actions/artifacts/${artifact_id}/zip"
+            unzip -q "/tmp/historical_batch_${batch}.zip" -d "data/derived/input/historical_batch_${batch}"
+          done
+          find data/derived/input/historical_batch_* -type f -name 'positive_object_labeled.csv' -print
+      - name: Merge labeled historical batches and build forecast-time features
+        if: steps.historical.outputs.run_id != ''
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+          import pandas as pd
+          files = sorted(Path("data/derived/input").glob("historical_batch_*/**/positive_object_labeled.csv"))
+          if len(files) != 3:
+              raise SystemExit(f"Expected 3 labeled batch files, found {len(files)}: {files}")
+          frames = [pd.read_csv(p, low_memory=False) for p in files]
+          combined = pd.concat(frames, ignore_index=True)
+          if "scan_time_utc" not in combined or "case_id" not in combined:
+              raise SystemExit("Historical labeled table lacks scan_time_utc or case_id.")
+          combined.to_csv("data/derived/input/historical_labeled_all.csv", index=False)
+          print("Historical labeled rows:", len(combined))
+          print("Cases:", combined["case_id"].nunique())
+          for h in (15, 30, 45, 60):
+              col = f"squall_onset_within_{h}m"
+              if col in combined:
+                  y = pd.to_numeric(combined[col], errors="coerce")
+                  print(col, "known=", int(y.notna().sum()), "positive=", int((y == 1).sum()), "negative=", int((y == 0).sum()))
+          PY
+          python scripts/build_model_features.py data/derived/input/historical_labeled_all.csv \
+            --output data/derived/input/rebuilt_model_features.csv \
+            --schema-output data/derived/input/rebuilt_model_features.schema.json
+      - name: Download feature artifact
+        if: steps.historical.outputs.run_id == ''
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           mkdir -p data/derived/input
-          ARTIFACT_ID="$(gh api "/repos/${GITHUB_REPOSITORY}/actions/runs/${{ steps.source.outputs.run_id }}/artifacts?per_page=100" -q '.artifacts[] | select(.name=="snow-squall-expansion-feature-batch" and .expired==false) | .id' | head -1)
-          test -n "${ARTIFACT_ID}"
-          curl -fsSL -H "Authorization: Bearer ${GH_TOKEN}" -H "Accept: application/vnd.github+json" -o /tmp/expansion_features.zip "https://api.github.com/repos/${GITHUB_REPOSITORY}/actions/artifacts/${ARTIFACT_ID}/zip"
-          unzip -q /tmp/expansion_features.zip -d data/derived/input
-          find data/derived/input -maxdepth 4 -type f | sort
+          echo "Downloading selected artifact; this may be large when only a full pilot artifact is available."
+          curl -fsSL -H "Authorization: Bearer ${GH_TOKEN}" -H "Accept: application/vnd.github+json" -o /tmp/features.zip "https://api.github.com/repos/${GITHUB_REPOSITORY}/actions/artifacts/${{ steps.source.outputs.artifact_id }}/zip"
+          unzip -q /tmp/features.zip -d data/derived/input
+          find data/derived/input -type f | sort
+
+      - name: Rebuild model features from cached object population
+        if: steps.historical.outputs.run_id == '' && (contains(steps.source.outputs.source_name, 'Object Dataset Pilot') || contains(steps.source.outputs.source_name, 'Object Dataset Full Expansion') || contains(steps.source.outputs.source_name, 'Object Population'))
+        run: |
+          set -euo pipefail
+          population="$(find data/derived/input -type f -name 'object_population_pilot.csv' -o -name 'object_population_expansion.csv' | head -1)"
+          if [ -z "$population" ]; then
+            echo "No cached object population available; retaining published feature table."
+            exit 0
+          fi
+          python scripts/build_model_features.py "$population"             --output data/derived/input/rebuilt_model_features.csv             --schema-output data/derived/input/rebuilt_model_features.schema.json
+          echo "Rebuilt feature table from: $population"
+
+      - name: Resolve training feature table
+        id: feature_table
+        run: |
+          set -euo pipefail
+          path=""
+          rebuilt="$(find data/derived/input -type f -name 'rebuilt_model_features.csv' | head -1)"
+          if [ -n "$rebuilt" ]; then
+            path="$rebuilt"
+          else
+            path="$(find data/derived/input -type f \( -name 'snow_squall_model_features_cumulative.csv' -o -name 'object_model_features_pilot.csv' -o -name 'object_model_features_expansion.csv' \) | head -1)"
+          fi
+          test -n "$path"
+          echo "path=$path" >> "$GITHUB_OUTPUT"
+          echo "Training feature table: $path"
       - name: Verify training input
         run: |
-          test -f data/derived/input/data/derived/snow_squall_model_features_cumulative.csv
+          test -f "${{ steps.feature_table.outputs.path }}"
           python - <<'PY'
           import pandas as pd
-          p = "data/derived/input/data/derived/snow_squall_model_features_cumulative.csv"
+          p = "${{ steps.feature_table.outputs.path }}"
           d = pd.read_csv(p)
           print("TRAINING INPUT RECORDS:", len(d))
           print("TRAINING INPUT COLUMNS:", len(d.columns))
           print("CASES:", d["case_id"].nunique() if "case_id" in d else "missing")
           assert "future_information_policy" in d.columns
           PY
-
       - name: Run four-horizon event-held-out gate
         run: |
           python scripts/train_case_heldout_models.py \
-            data/derived/input/data/derived/snow_squall_model_features_cumulative.csv \
+            "${{ steps.feature_table.outputs.path }}" \
             --output-dir data/derived/model_gate
+
+      - name: Compare model families on common held-out folds
+        run: |
+          set -euo pipefail
+          python scripts/model_family_compare.py \
+            "${{ steps.feature_table.outputs.path }}" \
+            --output-dir data/derived/model_family_comparison
 
       - name: Upload model gate
         uses: actions/upload-artifact@v4
@@ -91,3 +209,4 @@ jobs:
             data/derived/model_gate/metrics.json
             data/derived/model_gate/metrics.csv
             data/derived/model_gate/models.joblib
+            data/derived/model_family_comparison/metrics.json
