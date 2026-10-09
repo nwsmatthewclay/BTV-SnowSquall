@@ -118,9 +118,9 @@ def wait_for_kcxx(s3, target: datetime, tolerance_minutes: float, attempts: int,
 def archive_live_radar_frame(live_root: Path, *, cycle_time: datetime) -> None:
     """Archive the exact radar mosaic produced for this synchronized cycle.
 
-    Reflectivity history is versioned with the standard NWSRef palette. Any
-    pre-NWSRef frames are discarded from the active manifest during the one-time
-    palette migration so the viewer never mixes old and new color scales.
+    Reflectivity history is versioned with the BTV winter reflectivity v2 palette.
+    Older frames are discarded from the active manifest during palette migration
+    so the viewer never mixes images rendered with different color scales.
     """
     mosaic_path = live_root / "radar_mosaic.json"
     if not mosaic_path.exists():
@@ -138,8 +138,8 @@ def archive_live_radar_frame(live_root: Path, *, cycle_time: datetime) -> None:
         return
 
     grid = mosaic.get("grid") or {}
-    if str(grid.get("color_table") or "") != "NWSRef":
-        print("Skipping radar-history archive: mosaic is not marked NWSRef.")
+    if str(grid.get("color_table") or "") != "BTV_WINTER_REFLECTIVITY_V2":
+        print("Skipping radar-history archive: mosaic is not marked BTV_WINTER_REFLECTIVITY_V2.")
         return
 
     history = live_root / "radar_history"
@@ -157,7 +157,7 @@ def archive_live_radar_frame(live_root: Path, *, cycle_time: datetime) -> None:
     # One-time migration: old history images were rendered with earlier display
     # palettes. Remove those reflectivity PNGs from the active archive so the
     # timeline cannot jump between color tables.
-    if manifest.get("reflectivity_palette") != "NWSRef" or manifest.get("reflectivity_palette_version") != "NWSRef_V2":
+    if manifest.get("reflectivity_palette") != "BTV_WINTER_REFLECTIVITY_V2" or manifest.get("reflectivity_palette_version") != "BTV_WINTER_REFLECTIVITY_V2":
         for old in history.glob("mosaic_*.png"):
             try:
                 old.unlink()
@@ -167,8 +167,8 @@ def archive_live_radar_frame(live_root: Path, *, cycle_time: datetime) -> None:
             "version": 2,
             "retention_frames": 18,
             "interval_hint_minutes": 5,
-            "reflectivity_palette": "NWSRef",
-            "reflectivity_palette_version": "NWSRef_V2",
+            "reflectivity_palette": "BTV_WINTER_REFLECTIVITY_V2",
+            "reflectivity_palette_version": "BTV_WINTER_REFLECTIVITY_V2",
             "frames": [],
         }
 
@@ -180,8 +180,8 @@ def archive_live_radar_frame(live_root: Path, *, cycle_time: datetime) -> None:
         "timestamp": cycle_time.astimezone(timezone.utc).isoformat().replace("+00:00", "Z"),
         "image": f"radar_history/{image_name}",
         "bounds": mosaic.get("bounds"),
-        "palette": "NWSRef",
-        "palette_version": "NWSRef_V2",
+        "palette": "BTV_WINTER_REFLECTIVITY_V2",
+        "palette_version": "BTV_WINTER_REFLECTIVITY_V2",
     }
 
     # The archive filename has second resolution. If this workflow is
@@ -193,7 +193,7 @@ def archive_live_radar_frame(live_root: Path, *, cycle_time: datetime) -> None:
         if isinstance(f, dict)
         and str(f.get("timestamp")) != frame["timestamp"]
         and str(f.get("image") or "").split("?")[0] != frame["image"]
-        and str(f.get("palette") or "") == "NWSRef"
+        and str(f.get("palette") or "") == "BTV_WINTER_REFLECTIVITY_V2"
     ]
     frames.append(frame)
 
@@ -210,8 +210,8 @@ def archive_live_radar_frame(live_root: Path, *, cycle_time: datetime) -> None:
         "version": 2,
         "retention_frames": 18,
         "interval_hint_minutes": 5,
-        "reflectivity_palette": "NWSRef",
-        "reflectivity_palette_version": "NWSRef_V2",
+        "reflectivity_palette": "BTV_WINTER_REFLECTIVITY_V2",
+        "reflectivity_palette_version": "BTV_WINTER_REFLECTIVITY_V2",
         "frames": frames,
     })
     manifest_path.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
