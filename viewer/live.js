@@ -621,7 +621,7 @@ function renderProbability(){
   var horizons=[15,30,45,60],nowScore=modeProbabilityNow(p);
   var badge=q("probBadge"),label=document.querySelector(".prob-label");
   var released=!weighted&&payload?.source==="released";
-  var candidate=!weighted&&payload?.source==="candidate_calibrated";
+  var candidate=!weighted&&!!payload&&!released;
   if(badge){
     badge.textContent=weighted?"50/50 BASELINE":released?"CALIBRATED • RELEASED":candidate?"MODEL CANDIDATE • RESEARCH ONLY":"MODEL OUTPUT UNAVAILABLE";
     badge.className="dashboard-pill "+(weighted||released?"":"gated");
