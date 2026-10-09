@@ -123,12 +123,18 @@ def archive_live_radar_frame(live_root: Path, *, cycle_time: datetime) -> None:
     palette migration so the viewer never mixes old and new color scales.
     """
     mosaic_path = live_root / "radar_mosaic.json"
-    image = live_root / "radar_mosaic_clean.png"
-    if not mosaic_path.exists() or not image.exists():
+    if not mosaic_path.exists():
         return
     try:
         mosaic = json.loads(mosaic_path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError):
+        return
+
+    products = mosaic.get("display_products") or {}
+    image_name = products.get("clean_image") or mosaic.get("image") or "radar_mosaic_clean.png"
+    image = live_root / str(image_name)
+    if not image.exists() or image.stat().st_size == 0:
+        print(f"Skipping radar-history archive: reflectivity image unavailable: {image}")
         return
 
     grid = mosaic.get("grid") or {}
@@ -199,7 +205,7 @@ def archive_live_radar_frame(live_root: Path, *, cycle_time: datetime) -> None:
         "retention_frames": 18,
         "interval_hint_minutes": 5,
         "reflectivity_palette": "NWSRef",
-        "reflectivity_palette_version": "NWSRef_V1",
+        "reflectivity_palette_version": "NWSRef_V2",
         "frames": frames,
     })
     manifest_path.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
