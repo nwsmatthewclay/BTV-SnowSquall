@@ -630,7 +630,11 @@ function renderProbabilityChart(hist){
     setText("probabilityChartState","WAITING FOR OBSERVATIONS");return;
   }
   var W=420,H=142,P=24,TOP=16,BOTTOM=24;
-  var latestTime=rows.length?new Date(rows.at(-1).timestamp).getTime():Date.now();
+  // Anchor observed history to the selected object's actual scan, not the
+  // newest persisted score row. The score history can lag live object state.
+  var selectedTime=parseUtcDate(p&&p.timestamp);
+  var latestTime=selectedTime?selectedTime.getTime():(rows.length?new Date(rows.at(-1).timestamp).getTime():Date.now());
+  if(!Number.isFinite(latestTime))latestTime=Date.now();
   var observed=rows.map(function(r){
     var t=new Date(r.timestamp).getTime(),v=probabilityNow(r);
     return {x:(t-latestTime)/60000,v:v};
