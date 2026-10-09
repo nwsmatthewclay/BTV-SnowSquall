@@ -569,7 +569,7 @@ def build_direct_fallback(raw_root: Path, states: dict[str, Path]):
         except Exception as exc:
             print(f"{radar}: direct display fallback failed: {type(exc).__name__}: {exc}")
     if not products: return None
-    output_dir=raw_root.parent/"viewer"/"data"/"live"
+    output_dir=raw_root.parent.parent/"viewer"/"data"/"live"
     bounds,_=_direct_render(products,output_dir,product_name="radar_mosaic_native_clean.png",clean=True)
     _direct_render(products,output_dir,product_name="radar_mosaic_native_raw.png",clean=False)
     velocity_products={}
@@ -700,7 +700,13 @@ def main():
             payload["stale_reason"]="Native-gate display fallback used because Cartesian radar gridding was unavailable."
             payload["bounds"]=direct_fallback["bounds"]
             payload["sources"]=direct_fallback["sources"]
-            payload["image"]="radar_mosaic_clean.png"
+            # Point the browser at the files created by the native-gate fallback
+            # instead of the gridded-mosaic filenames, which may be stale/missing.
+            payload["image"]="radar_mosaic_native_clean.png"
+            payload["display_products"]["clean_image"]="radar_mosaic_native_clean.png"
+            payload["display_products"]["raw_image"]="radar_mosaic_native_raw.png"
+            payload["display_products"]["clean_description"]="Native-gate KCXX/KTYX fallback display used when Cartesian gridding is unavailable."
+            payload["display_products"]["raw_description"]="Unfiltered native-gate KCXX/KTYX fallback display."
             payload["display_products"]["base_velocity"]=direct_fallback["velocity_products"]
             payload["radar_moment_products"]={"velocity_native_units":"m/s","velocity_display_units":"kt","velocity_rendering":"signed_radial_velocity","velocity_sources":sorted(direct_fallback["velocity_products"])}
         # Never destroy the last good radar display just because one publisher
