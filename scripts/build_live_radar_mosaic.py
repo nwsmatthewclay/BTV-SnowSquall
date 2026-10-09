@@ -648,8 +648,8 @@ def main():
             "field": "reflectivity_dbz",
             "color_table": "BTV_WINTER_REFLECTIVITY_V2",
             "palette_version": "BTV_WINTER_REFLECTIVITY_V2",
-            "vmin_dbz": -10,
-            "vmax_dbz": 75,
+            "vmin_dbz": -5,
+            "vmax_dbz": 40,
             "display_qc": {
                 "low_dbz_cutoff": -10,
                 "low_cc_threshold": 0.65,
