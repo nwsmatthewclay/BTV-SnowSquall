@@ -42,6 +42,9 @@
       <button class="active display-btn" data-radar-mode="reflectivity">Reflectivity</button>
       <button class="display-btn" data-radar-mode="velocity">Velocity</button>
       <button id="objectNumbersBtn" class="active">Object IDs</button>
+      <button id="clutterSuppressionBtn" class="active" aria-pressed="true">Clutter suppression: ON</button>
+      <button id="warningsBtn" aria-pressed="false">Warnings: OFF</button>
+      <button id="spsBtn" aria-pressed="false">SPS: OFF</button>
     </div>
     <div id="cursorReadout" style="position:absolute;left:12px;bottom:12px;z-index:800;background:rgba(10,18,24,.86);border:1px solid rgba(190,210,220,.28);border-radius:4px;padding:6px 9px;font:12px/1.25 monospace;color:#eaf2f5;pointer-events:none">CURSOR — | Z — dBZ | V —</div>
     <div class="map-legend">
@@ -145,6 +148,6 @@
 </main>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<script src="live.js?v=20261009-radar-gap-repair-3"></script>
+<script src="live.js?v=20261009-restore-map-controls-1"></script>
 </body>
 </html>
