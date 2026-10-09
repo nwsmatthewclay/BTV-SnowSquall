@@ -695,7 +695,7 @@ def main():
             "velocity_rendering": "signed_radial_velocity",
             "velocity_sources": sorted(velocity_products),
         }
-        cursor_path = write_cursor_grid(args.output_image.parent, mosaic, site_velocity_fields, latlon=grid_latlon)
+        cursor_path = write_cursor_grid(args.output_image.parent, mosaic, site_velocity_fields, latlon=latlon)
         payload["cursor_grid"] = {
             "file": cursor_path.name if cursor_path is not None else None,
             "spacing_km": SPACING_KM,
