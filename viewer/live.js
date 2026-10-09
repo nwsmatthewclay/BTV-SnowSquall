@@ -19,7 +19,7 @@ function fitMapToBoundsOnce(bounds){if(mapExtentInitialized||!bounds)return;map.
 var LIVE_BASE="https://raw.githubusercontent.com/nwsmatthewclay/BTV-SnowSquall/snow-squall-live-data/viewer/data/live/";
 var SHADOW_BASE="https://raw.githubusercontent.com/nwsmatthewclay/BTV-SnowSquall/snow-squall-shadow-data/viewer/data/shadow/";
 var SHADOW_MIN_COVERAGE=0.40;
-var MAX_LIVE_OBJECT_AGE_MIN=180;
+var MAX_LIVE_OBJECT_AGE_MIN=45;
 var DISPLAY_MIN_SCORE=35;
 
 function q(id){return document.getElementById(id)}
@@ -897,6 +897,9 @@ async function refresh(){
     datasets=Object.fromEntries(got.map(function(x){return [x.site,x]}));
     cursorGrid=await fetchOptional(LIVE_BASE+"radar_cursor.json?cb="+Date.now(),null);
     await loadRadarHistory();
+    // Read the same published manifest used by the raster renderer before accepting objects.
+    // Object outlines are suppressed when their source scan does not match the displayed radar cycle.
+    radarMosaic=await fetchOptional(mosaicMetaUrl(),null);
     var detectedObjects=got.flatMap(function(x){
       var scan=x.state?.last_scan_time_utc||x.geo?.metadata?.scan_time_utc;
       var stateFresh=ageMinutes(scan)<=MAX_LIVE_OBJECT_AGE_MIN;
@@ -911,15 +914,20 @@ async function refresh(){
         // Object timestamps must themselves be recent and agree with the scan
         // advertised by state/metadata, otherwise discard the stale feature.
         var aligned=Number.isFinite(scanMs)&&Number.isFinite(objectMs)&&Math.abs(scanMs-objectMs)<=15*60000;
-        return objectFresh&&aligned;
+        var sourceEntry=(radarMosaic?.sources||[]).find(function(s){return String(s.radar||"").toUpperCase()===String(p.radar_site||"").toUpperCase()});
+        var sourceMs=parseUtcDate(sourceEntry?.scan_time_utc)?.getTime();
+        var radarCycleAligned=!Number.isFinite(sourceMs)||Math.abs(sourceMs-objectMs)<=15*60000;
+        return objectFresh&&aligned&&radarCycleAligned;
       });
     });
     // Keep every valid detected radar object visible. Detection/tracking and
     // hazard ranking are separate concepts: a cell can be trackable before it
     // reaches the research probability/rank threshold.
+    var rb=radarMosaic?.bounds||[[41.86,-76.91],[46.40,-70.39]];
     allObjects=detectedObjects.filter(function(p){
       var lat=Number(p.centroid_lat),lon=Number(p.centroid_lon),area=Number(p.area_km2);
-      return Number.isFinite(lat)&&Number.isFinite(lon)&&Number.isFinite(area)&&area>0;
+      var inside=Number.isFinite(lat)&&Number.isFinite(lon)&&lat>=Number(rb[0]?.[0])&&lat<=Number(rb[1]?.[0])&&lon>=Number(rb[0]?.[1])&&lon<=Number(rb[1]?.[1]);
+      return inside&&Number.isFinite(area)&&area>0;
     });
     allObjects.sort(function(a,b){var d=scoreForSort(b)-scoreForSort(a);return d||Number(b.max_reflectivity_dbz||0)-Number(a.max_reflectivity_dbz||0)});
     selectDefault();
