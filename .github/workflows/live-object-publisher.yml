@@ -161,10 +161,76 @@ jobs:
           echo "Raw radar files available:"
           find data/raw/KCXX data/raw/KTYX -maxdepth 1 -type f -size +0c -printf '%p %s bytes\n' | tail -20 || true
 
+
+      - name: Refresh live objects from newest KCXX scan
+        # Radar display must still publish if RAP/object scoring is temporarily
+        # unavailable. This step processes the current pair and updates state,
+        # objects, RAP environment, and radar history when possible.
+        continue-on-error: true
+        timeout-minutes: 6
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import subprocess
+          import sys
+          from pathlib import Path
+          from acquisition.radar_watcher import parse_volume_time
+
+          candidates = []
+          for path in Path("data/raw/KCXX").glob("*"):
+              if not path.is_file() or path.stat().st_size <= 0:
+                  continue
+              scan_time = parse_volume_time(path.name, "KCXX")
+              if scan_time is not None:
+                  candidates.append((scan_time, path))
+          if not candidates:
+              raise SystemExit("No local KCXX Level-II volume available to process.")
+          scan_time, source = max(candidates, key=lambda item: item[0])
+          print(f"Processing newest KCXX source {source.name} at {scan_time.isoformat()}")
+          subprocess.run([
+              sys.executable, "scripts/process_live_event.py",
+              "--radar", "KCXX",
+              "--scan-time", scan_time.isoformat(),
+              "--raw-root", "data/raw",
+              "--live-root", "viewer/data/live",
+              "--kcxx-tolerance-minutes", "4",
+              "--ktyx-max-age-minutes", "8",
+              "--archive-attempts", "1",
+              "--archive-delay-seconds", "5",
+          ], check=True)
+          PY
+
       - name: Build KCXX KTYX live radar mosaic
         run: |
           set -euo pipefail
           python scripts/build_live_radar_mosaic.py             --raw-root data/raw             --kcxx-state viewer/data/live/KCXX_state.json             --ktyx-state viewer/data/live/KTYX_state.json             --output-image viewer/data/live/radar_mosaic.png             --output-json viewer/data/live/radar_mosaic.json
+
+
+      - name: Archive current NWSRef radar image for timeline
+        continue-on-error: true
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          from scripts.process_live_event import archive_live_radar_frame, parse_time
+
+          root = Path("viewer/data/live")
+          metadata = json.loads((root / "radar_mosaic.json").read_text(encoding="utf-8"))
+          source_times = [
+              parse_time(source["scan_time_utc"])
+              for source in (metadata.get("sources") or [])
+              if source.get("scan_time_utc")
+          ]
+          if not source_times:
+              raise SystemExit("No radar source times available for history archive.")
+          archive_live_radar_frame(root, cycle_time=max(source_times))
+          manifest_path = root / "radar_history" / "manifest.json"
+          manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+          frames = manifest.get("frames") or []
+          print("NWSRef history frames:", len(frames), "manifest updated:", manifest.get("updated_utc"))
+          if not any(frame.get("palette") == "NWSRef" and frame.get("palette_version") == "NWSRef_V2" for frame in frames):
+              raise SystemExit("No valid NWSRef_V2 frame was archived.")
+          PY
 
       - name: Verify radar display payload before publish
         run: |
