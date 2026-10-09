@@ -30,13 +30,14 @@ TARGET_TEMPLATE = "squall_onset_within_{h}m"
 
 BLOCKED_PREFIXES = (
     "case_", "label_", "squall_", "track_event_", "association_",
-    "truth_", "surface_", "warning_", "weak_",
+    "truth_", "surface_", "warning_", "weak_", "future_", "outcome_", "impact_",
 )
 BLOCKED_EXACT = {
     "lead_time_min", "lead_time_to_warning_min", "warning_issue_utc",
     "warning_distance_km", "warning_verifying_lsr_count",
     "warning_supervision_class", "sqw_intersection",
     "scan_time_utc", "source_file", "radar_site", "object_id",
+    "verified_event", "event_onset", "event_end", "visibility_min", "lsr_",
 }
 
 def as_binary(series: pd.Series) -> pd.Series:
@@ -50,10 +51,18 @@ def as_binary(series: pd.Series) -> pd.Series:
     return mapped.astype(float)
 
 def choose_predictors(df: pd.DataFrame, target: str) -> list[str]:
+    """Conservative name-based predictor guard; review feature provenance too."""
     blocked = set(BLOCKED_EXACT) | {target}
     cols = []
     for c in df.columns:
-        if c in blocked or any(c.startswith(p) for p in BLOCKED_PREFIXES):
+        name = str(c).lower()
+        if c in blocked or any(name.startswith(p) for p in BLOCKED_PREFIXES):
+            continue
+        if any(token in name for token in (
+            "future", "lead_time", "warning", "verification", "verifying",
+            "truth", "label", "onset_time", "event_start", "event_end",
+            "supervision", "association", "impact_observed", "outcome",
+        )):
             continue
         if c in {"population", "future_information_policy", "environment_status",
                  "environment_source", "label_status", "label_reason"}:
@@ -104,6 +113,7 @@ def evaluate(df: pd.DataFrame, target: str, predictors: list[str]) -> dict:
 
     folds = event_folds(groups, y)
     fold_rows = []
+    oof_rows = []
     for i, held_groups in enumerate(folds, 1):
         test_mask = groups.isin(set(held_groups))
         train_mask = ~test_mask
@@ -123,6 +133,14 @@ def evaluate(df: pd.DataFrame, target: str, predictors: list[str]) -> dict:
         model.fit(work.loc[train_mask, fold_predictors], y.loc[train_mask], model__sample_weight=row_weights[train_mask])
         p = model.predict_proba(work.loc[test_mask, fold_predictors])[:, 1]
         yt = y.loc[test_mask]
+        for idx, prob in zip(yt.index, p):
+            oof_rows.append({
+                "row_index": str(idx),
+                "fold": i,
+                "split_group": str(groups.loc[idx]),
+                "target_value": int(y.loc[idx]),
+                "oof_probability": float(prob),
+            })
         fold_rows.append({
             "fold": i,
             "n_train": int(train_mask.sum()),
@@ -143,6 +161,7 @@ def evaluate(df: pd.DataFrame, target: str, predictors: list[str]) -> dict:
         "cases": int(groups.nunique()),
         "predictor_count": len(predictors),
         "folds": fold_rows,
+        "oof_predictions": oof_rows,
     }
     if fold_rows:
         for metric in ("roc_auc", "pr_auc", "brier"):
@@ -169,6 +188,7 @@ def main():
 
     summaries = {}
     final_models = {}
+    oof_frames = []
     for h in HORIZONS:
         target = TARGET_TEMPLATE.format(h=h)
         if target not in df.columns:
@@ -177,6 +197,13 @@ def main():
         predictors = choose_predictors(df, target)
         result = evaluate(df, target, predictors)
         result["target"] = target
+        oof_rows = result.pop("oof_predictions", [])
+        if oof_rows:
+            oof_frame = pd.DataFrame(oof_rows)
+            oof_frame["horizon_min"] = h
+            oof_frame["target"] = target
+            oof_frame[target] = oof_frame["target_value"]
+            oof_frames.append(oof_frame)
         result["predictors_with_any_data"] = int(sum(df[p].notna().any() for p in predictors))
         summaries[str(h)] = result
 
@@ -190,6 +217,13 @@ def main():
 
     with (out / "metrics.json").open("w") as f:
         json.dump(summaries, f, indent=2)
+    if oof_frames:
+        pd.concat(oof_frames, ignore_index=True).to_csv(out / "oof_predictions.csv", index=False)
+    else:
+        pd.DataFrame(columns=[
+            "row_index", "fold", "split_group", "target_value",
+            "oof_probability", "horizon_min", "target",
+        ]).to_csv(out / "oof_predictions.csv", index=False)
 
     joblib.dump(final_models, out / "models.joblib")
     pd.DataFrame([
