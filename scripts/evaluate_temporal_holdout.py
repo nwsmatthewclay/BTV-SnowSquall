@@ -60,7 +60,7 @@ def filter_evaluation_population(df: pd.DataFrame, reviewed_negative_ids: set[st
     # independently associated that specific radar track with the documented
     # event corridor. Case membership alone is never supervision.
     positive_population = verified_population | historical_context
-    supervised = supervised_class | (historical_context & event_associated)
+    supervised = event_associated & (supervised_class | historical_context)
 
     pre_onset = (
         d["label_status"].isin(["prospective_positive", "case_associated_nonimpact"])
