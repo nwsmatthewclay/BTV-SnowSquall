@@ -550,14 +550,13 @@ function renderProbabilityChart(hist){
   var svg=q("probChart");svg.innerHTML="";
   var p=latestForSelected();
   var shadow=p?shadowRows(p.radar_site,p.track_id):[];
-  var source=(hist||[]).concat(shadow||[]).sort(function(a,b){return String(a.timestamp||"").localeCompare(String(b.timestamp||""))});
+  var source=(shadow||[]).concat(hist||[]).sort(function(a,b){return String(a.timestamp||"").localeCompare(String(b.timestamp||""))});
   var seen={};
   var rows=source.filter(function(r){
     var ts=String(r.timestamp||"");
     if(!ts||seen[ts])return false;
     seen[ts]=true;
-    var shadowRow=shadowRecord(r.radar_site||p?.radar_site,r.track_id);
-    var probs=r.research_probabilities||shadowRow?.research_probabilities||{};
+    var probs=r.research_probabilities||{};
     var v=r.research_probability_now??r.probability_now??probs.now??probs["15min"]??probs["15"];
     return v!=null&&Number.isFinite(Number(v));
   });
@@ -575,8 +574,7 @@ function renderProbabilityChart(hist){
   var latestTime=rows.length?new Date(rows.at(-1).timestamp).getTime():Date.now();
   var observed=rows.map(function(r){
     var t=new Date(r.timestamp).getTime();
-    var shadowRow=shadowRecord(r.radar_site||p?.radar_site,r.track_id);
-    var probs=r.research_probabilities||shadowRow?.research_probabilities||{};
+    var probs=r.research_probabilities||{};
     var v=r.research_probability_now??r.probability_now??probs.now??probs["15min"]??probs["15"];
     return {x:(t-latestTime)/60000,v:v==null?NaN:Number(v)};
   }).filter(function(pt){return Number.isFinite(pt.x)&&Number.isFinite(pt.v)});
