@@ -26,22 +26,19 @@ def test_component_scores_are_0_to_100_and_weight_to_100():
         components = result["components"][horizon]
         assert 0 <= components["radar"] <= 100
         assert 0 <= components["environment"] <= 100
-        assert 0 <= components["analog"] <= 100
         assert components["weights"] == {
             "radar": 0.50,
-            "environment": 0.35,
-            "analog": 0.15,
+            "environment": 0.50,
         }
         expected = (
             components["radar"] * 0.50
-            + components["environment"] * 0.35
-            + components["analog"] * 0.15
+            + components["environment"] * 0.50
         )
         assert abs(result["probabilities"][horizon] - round(expected, 2)) < 1e-9
         assert 0 <= result["probabilities"][horizon] <= 100
 
 
-def test_unavailable_analog_is_explicitly_neutral():
+def test_analogs_are_excluded_from_component_score():
     result = horizon_component_scores({"max_reflectivity_dbz": 30.0})
-    assert result["analog"]["score"] == 50.0
-    assert result["analog"]["detail"]["status"] == "provisional_neutral"
+    assert "analog" not in result
+    assert result["status"] == "research_radar_environment_only"
