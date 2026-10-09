@@ -792,17 +792,14 @@ def process_volume(
         component_result = horizon_component_scores(feature)
         feature["radar_component_score"] = component_result["radar"]["score"]
         feature["environment_component_score"] = component_result["environment"]["score"]
-        feature["analog_component_score"] = component_result["analog"]["score"]
         feature["probability_component_weights"] = {
             "radar": 0.50,
-            "environment": 0.35,
-            "analog": 0.15,
+            "environment": 0.50,
         }
         feature["probability_components"] = component_result["components"]
         feature["probability_component_detail"] = {
             "radar": component_result["radar"]["detail"],
             "environment": component_result["environment"]["detail"],
-            "analog": component_result["analog"]["detail"],
         }
         feature["research_probabilities_raw"] = {
             f"{h}min": float(v) / 100.0
