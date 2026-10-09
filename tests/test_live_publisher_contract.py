@@ -31,3 +31,23 @@ def test_live_history_clean_rejects_nonfinite_values():
     assert _clean(float("inf")) is None
     assert _clean(float("-inf")) is None
     assert _clean(12.5) == 12.5
+
+
+def test_ktyx_companion_uses_closest_scan_even_if_slightly_newer(monkeypatch):
+    from datetime import datetime, timedelta, timezone
+    from scripts import process_live_event
+
+    target = datetime(2026, 10, 9, 17, 56, 44, tzinfo=timezone.utc)
+    older = ("KTYX20261009_174900_V06", target - timedelta(minutes=7, seconds=43))
+    newer = ("KTYX20261009_175739_V06", target + timedelta(seconds=55))
+    monkeypatch.setattr(
+        process_live_event,
+        "find_recent_volumes",
+        lambda *args, **kwargs: [older, newer],
+    )
+
+    selected = process_live_event.choose_ktyx(
+        object(), target, max_age_minutes=8.0, raw_root=None
+    )
+
+    assert selected == newer
