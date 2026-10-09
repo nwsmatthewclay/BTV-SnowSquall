@@ -574,7 +574,7 @@ function renderProbability(){
   var nowScore=probabilityNow(scoreRecord);
   var prevRows=trackHistory(p).slice(0,-1),prev=prevRows.length?prevRows.at(-1):null;
   var prevShadow=prev?shadowRecord(p.radar_site,prev.track_id):null;
-  var prevRecord=prev||prevShadow,prevNow=prevRecord?probabilityNow(prevRecord):null;
+  var prevRecord=prev||prevShadow,prevIsCalibrated=validatedCalibratedProbabilities(prevRecord)!=null,prevNow=prevRecord&&prevIsCalibrated===calibrated?probabilityNow(prevRecord):null;
   var badge=q("probBadge"),label=document.querySelector(".prob-label");
   if(badge){badge.textContent=calibrated?"CALIBRATED • RELEASED":"EXPERIMENTAL • NOT CALIBRATED";badge.className="dashboard-pill "+(calibrated?"":"gated")}
   if(label)label.textContent=calibrated?"Validated model probability":"Experimental research estimate";
