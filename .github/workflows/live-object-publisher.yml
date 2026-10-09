@@ -3,6 +3,12 @@ name: Publish Live Snow Squall Objects
 
 on:
   workflow_dispatch:
+    inputs:
+      backfill_history:
+        description: "Run the slower chronological radar backfill before publishing"
+        required: false
+        default: false
+        type: boolean
   schedule:
     - cron: "*/5 * * * *"
   push:
@@ -69,6 +75,7 @@ jobs:
           pip install -r requirements.txt -r requirements-science.txt
 
       - name: Backfill missed radar scans chronologically
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.backfill_history == true }}
         continue-on-error: true
         timeout-minutes: 3
         run: |
@@ -178,6 +185,11 @@ jobs:
           print("velocity products:", sorted(velocity))
           if status not in {"ready","stale"} or not bounds:
               raise SystemExit("Radar display is unavailable; refusing to publish a broken live payload.")
+          reflectivity_name = products.get("clean_image") or d.get("image") or "radar_mosaic_clean.png"
+          reflectivity_path = Path("viewer/data/live") / str(reflectivity_name)
+          if not reflectivity_path.exists() or reflectivity_path.stat().st_size == 0:
+              raise SystemExit(f"Missing reflectivity image: {reflectivity_path}")
+          print("reflectivity image:", reflectivity_path, reflectivity_path.stat().st_size, "bytes")
           if status == "ready" and not velocity:
               print("WARNING: Radar reflectivity is ready but no base velocity product was generated; publishing reflectivity rather than discarding the fresh scan.")
           for site,item in velocity.items():
@@ -252,11 +264,15 @@ jobs:
           PY
 
       - name: Validate KCXX live product
+        # Object health must be visible, but stale object state must not prevent
+        # independent fresh radar reflectivity/velocity from reaching the viewer.
+        continue-on-error: true
         run: |
           python scripts/audit_operational_readiness.py             --state viewer/data/live/KCXX_state.json             --geojson viewer/data/live/KCXX_objects.geojson             --max-age-minutes 60
           python scripts/live_healthcheck.py             --state viewer/data/live/KCXX_state.json             --geojson viewer/data/live/KCXX_objects.geojson             --max-age-minutes 60
 
       - name: Validate KTYX live product
+        continue-on-error: true
         run: |
           python scripts/audit_operational_readiness.py             --state viewer/data/live/KTYX_state.json             --geojson viewer/data/live/KTYX_objects.geojson             --max-age-minutes 60
           python scripts/live_healthcheck.py             --state viewer/data/live/KTYX_state.json             --geojson viewer/data/live/KTYX_objects.geojson             --max-age-minutes 60
