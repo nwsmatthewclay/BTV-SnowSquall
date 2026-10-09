@@ -159,8 +159,20 @@ class CentroidTracker:
         return 0.58*position_cost+0.18*overlap_cost+0.14*size_cost+0.10*intensity_cost
 
     def update(self,timestamp,objects,radar_motion=None):
-        self._prune_stale(timestamp)
         objects=list(objects)
+        # Live publishers can occasionally deliver a delayed volume after a
+        # newer scan has already updated persistent state. Never rewind a
+        # track's clock or append older positions to its history: that corrupts
+        # motion estimates and makes the browser's time-aligned trails jump.
+        if self.tracks:
+            incoming_time=self._as_datetime(timestamp)
+            latest_time=max(self._as_datetime(track.last_time) for track in self.tracks.values())
+            if incoming_time <= latest_time:
+                raise ValueError(
+                    "Out-of-order or duplicate radar scan rejected: "
+                    f"{incoming_time.isoformat()} <= {latest_time.isoformat()}"
+                )
+        self._prune_stale(timestamp)
         if not objects:
             for tid,track in list(self.tracks.items()):
                 track.missed_scans += 1
