@@ -321,7 +321,7 @@ async function renderRadarMosaic(){
       reference?.clean_image||reference?.raw_image);
     if(!radarMosaic.bounds && reference?.bounds)radarMosaic.bounds=reference.bounds;
     if(!radarMosaic.grid && hasLocalImage){
-      radarMosaic.grid={color_table:"NWSRef"};
+      radarMosaic.grid={color_table:"BTV_WINTER_REFLECTIVITY_V2"};
     }
     if(!Array.isArray(radarMosaic.sources)){
       radarMosaic.sources=Object.keys(reflectivity).map(function(site){return {radar:site}});
@@ -353,13 +353,13 @@ async function renderRadarMosaic(){
           {pane:"liveRadarPane",opacity:.96,interactive:false,crossOrigin:true}
         ).addTo(radarLayer);
         setText("radarStatus","Historical NWSRef reflectivity • "+fmtTime(histFrame.timestamp));
-        setText("legendTitle","NWS REFLECTIVITY • dBZ");
-        setText("legendNote","Standard NWSRef palette. Local live mosaic is temporarily unavailable; showing the last retained matching frame.");
+        setText("legendTitle","BTV WINTER REFLECTIVITY • dBZ");
+        setText("legendNote","BTV winter palette v2 • light blue, deep blue, purple, red, maroon. Showing last retained frame while local feed recovers.");
         fitMapToBoundsOnce(histBounds);
       }else{
         setText("radarStatus","Waiting for local NWSRef radar feed");
-        setText("legendTitle","NWS REFLECTIVITY • dBZ");
-        setText("legendNote","Radar acquisition is recovering. The viewer will not substitute a different reflectivity color scale.");
+        setText("legendTitle","BTV WINTER REFLECTIVITY • dBZ");
+        setText("legendNote","BTV winter palette v2 • light blue, deep blue, purple, red, maroon.");
       }
       return;
     }
@@ -441,9 +441,9 @@ async function renderRadarMosaic(){
     }
     var syncText=useStoredFrame&&selectedFrame.timestamp?" • "+(radarHistoryIndex>=0?"timeline ":"synced ")+fmtTime(selectedFrame.timestamp):"";
     setText("radarStatus","Reflectivity mosaic "+freshness+" • KCXX + KTYX"+syncText+(radarRefText?" • objects "+radarRefText:""));
-    var activePalette=(selectedFrame&&selectedFrame.palette)||radarMosaic.grid.color_table||"NWSRef";
-    setText("legendTitle",activePalette==="BTV_WINTER_REFLECTIVITY_V2"?"BTV WINTER REFLECTIVITY • dBZ":"NWS REFLECTIVITY • dBZ");
-    setText("legendNote",activePalette==="BTV_WINTER_REFLECTIVITY_V2"?"BTV winter palette v2 • light blue, deep blue, purple, red, maroon.":"Standard NWSRef palette • local KCXX + KTYX reflectivity mosaic.");
+    var activePalette=(selectedFrame&&selectedFrame.palette)||radarMosaic.grid.color_table||"BTV_WINTER_REFLECTIVITY_V2";
+    setText("legendTitle","BTV WINTER REFLECTIVITY • dBZ");
+    setText("legendNote","BTV winter palette v2 • light blue, deep blue, purple, red, maroon. Clutter suppression: "+(clutterSuppression?"ON":"OFF")+".");
     radarInitialRender=false;
   }
   fitMapToBoundsOnce(radarMosaic.bounds);
