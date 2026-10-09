@@ -415,6 +415,26 @@ async function renderRadarMosaic(){
     var imageBounds=useStoredFrame&&selectedFrame.bounds?selectedFrame.bounds:radarMosaic.bounds;
     var ov=L.imageOverlay(imageUrl,imageBounds,{pane:"liveRadarPane",opacity:.96,interactive:false,crossOrigin:true});
     ov.addTo(radarLayer);
+    // When a radar's native-gate image is newer than the Cartesian composite,
+    // layer it over the current frame so that radar's newest coverage is not lost.
+    // Only do this for a frame synchronized to the current object cycle.
+    var objectRef=objectReferenceTime();
+    var selectedMs=parseUtcDate(selectedFrame?.timestamp)?.getTime();
+    var nearCurrent=objectRef!=null&&Number.isFinite(selectedMs)&&Math.abs(objectRef-selectedMs)<=10*60000;
+    if(nearCurrent){
+      var compositeSources=radarMosaic.sources||[];
+      var perRadar=radarMosaic.display_products?.base_reflectivity||{};
+      ["KCXX","KTYX"].forEach(function(site){
+        var product=perRadar[site];
+        var compositeSource=compositeSources.find(function(s){return String(s.radar||"").toUpperCase()===site});
+        var productMs=parseUtcDate(product?.scan_time_utc)?.getTime();
+        var compositeMs=parseUtcDate(compositeSource?.scan_time_utc)?.getTime();
+        if(product?.clean_image&&product?.bounds&&Number.isFinite(productMs)&&(!Number.isFinite(compositeMs)||productMs-compositeMs>8*60000)){
+          L.imageOverlay(LIVE_BASE+product.clean_image+"?cb="+Date.now(),product.bounds,{pane:"liveRadarPane",opacity:.90,interactive:false,crossOrigin:true}).addTo(radarLayer);
+          setText("radarStatus","Radar mosaic + newer "+site+" base reflectivity • "+fmtTime(product.scan_time_utc));
+        }
+      });
+    }
     var syncText=useStoredFrame&&selectedFrame.timestamp?" • "+(radarHistoryIndex>=0?"timeline ":"synced ")+fmtTime(selectedFrame.timestamp):"";
     setText("radarStatus","Reflectivity mosaic "+freshness+" • KCXX + KTYX"+syncText+(radarRefText?" • objects "+radarRefText:""));
     var activePalette=(selectedFrame&&selectedFrame.palette)||radarMosaic.grid.color_table||"NWSRef";
@@ -878,6 +898,10 @@ function renderModelStatus(){
   setText("liveGateText",cov==null?"Research shadow data are not attached to this object yet.":(Number(cov)*100).toFixed(0)+"% 15-min feature coverage; research candidate scoring is enabled at ≥"+(SHADOW_MIN_COVERAGE*100).toFixed(0)+"%. Operational release remains gated.");
 }
 async function fetchOptional(url,fallback){try{var r=await fetch(url,{cache:"no-store"});if(!r.ok)return fallback;return await r.json()}catch(_){return fallback}}
+function freshestFeedScan(x){
+  var dates=[x?.state?.last_scan_time_utc,x?.geo?.metadata?.scan_time_utc].map(parseUtcDate).filter(Boolean).sort(function(a,b){return a.getTime()-b.getTime()});
+  return dates.length?dates[dates.length-1].toISOString():null;
+}
 async function getSite(site){
   var base=LIVE_BASE;
   var results=await Promise.all([
@@ -901,7 +925,7 @@ async function refresh(){
     // Object outlines are suppressed when their source scan does not match the displayed radar cycle.
     radarMosaic=await fetchOptional(mosaicMetaUrl(),null);
     var detectedObjects=got.flatMap(function(x){
-      var scan=x.state?.last_scan_time_utc||x.geo?.metadata?.scan_time_utc;
+      var scan=freshestFeedScan(x);
       var stateFresh=ageMinutes(scan)<=MAX_LIVE_OBJECT_AGE_MIN;
       if(!stateFresh)return [];
       return (x.geo.features||[]).map(function(f){
@@ -940,12 +964,12 @@ async function refresh(){
     alignRadarHistoryToObjects();
     await renderRadarMosaic();
     renderMap();renderInventory();renderObjectCard();renderProbability();renderKeyTrends();renderEnvironment();renderEvidence();renderHistory();renderModelStatus();
-    var latest=got.map(function(x){return x.state?.last_scan_time_utc||x.geo?.metadata?.scan_time_utc}).filter(Boolean).sort().at(-1);
+    var latest=got.map(freshestFeedScan).filter(Boolean).sort().at(-1);
     setText("liveTime",latest?fmtTime(latest):"No scan time available");
     setText("mapScanLabel",latest?fmtTime(latest):"No live radar");
     var confirmedCount=allObjects.filter(hasConfirmedTrack).length;
-    setText("feedSummary",confirmedCount+" confirmed tracks • "+allObjects.length+" active detections • "+got.map(function(x){return x.site+" "+(x.error?"OFFLINE":(ageMinutes(x.state?.last_scan_time_utc)<=15?"LIVE":(ageMinutes(x.state?.last_scan_time_utc)<=45?"AGING":"STALE")))}).join(" • "));
-    var degraded=got.filter(function(x){return x.error||ageMinutes(x.state?.last_scan_time_utc)>30}).length>0;
+    setText("feedSummary",confirmedCount+" confirmed tracks • "+allObjects.length+" active detections • "+got.map(function(x){return x.site+" "+(x.error?"OFFLINE":(ageMinutes(freshestFeedScan(x))<=15?"LIVE":(ageMinutes(freshestFeedScan(x))<=45?"AGING":"STALE")))}).join(" • "));
+    var degraded=got.filter(function(x){return x.error||ageMinutes(freshestFeedScan(x))>30}).length>0;
     q("liveBadge").classList.toggle("gated",degraded);if(degraded)setText("liveBadge","DEGRADED");
   }catch(e){setText("feedSummary","Live feed error: "+e.message);q("liveBadge").classList.add("gated");setText("liveBadge","DEGRADED")}
 }
