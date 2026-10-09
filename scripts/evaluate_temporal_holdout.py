@@ -40,17 +40,29 @@ def filter_evaluation_population(df: pd.DataFrame, reviewed_negative_ids: set[st
         return df.copy()
 
     d = df.copy()
-    positive_population = d["population"].eq("verified_case_context")
-    supervised = d.get(
+    verified_population = d["population"].eq("verified_case_context")
+    historical_context = d["population"].eq("historical_case_context_only")
+    null_population = d["population"].eq("winter_null_candidate")
+
+    supervised_class = d.get(
         "supervision_class",
         pd.Series("", index=d.index, dtype="object"),
     ).eq("supervised_positive")
-    null_population = d["population"].eq("winter_null_candidate")
+    event_associated = d.get(
+        "track_event_associated",
+        pd.Series(False, index=d.index),
+    ).fillna(False).astype(bool)
+
+    # Historical case-context rows are eligible only when the labeler has
+    # independently associated that specific radar track with the documented
+    # event corridor. Case membership alone is never supervision.
+    positive_population = verified_population | historical_context
+    supervised = supervised_class | (historical_context & event_associated)
 
     pre_onset = (
         d["label_status"].isin(["prospective_positive", "case_associated_nonimpact"])
         if "label_status" in d.columns
-        else positive_population
+        else verified_population
     )
     if {"scan_time_utc", "case_event_start_utc"}.issubset(d.columns):
         scan = pd.to_datetime(d["scan_time_utc"], utc=True, errors="coerce")
