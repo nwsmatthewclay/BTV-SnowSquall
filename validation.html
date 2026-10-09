@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>BTV Snow Squall Independent Validation Review</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header>
+  <div>
+    <div class="eyebrow">BTV SNOW SQUALL PROJECT</div>
+    <h1>Independent Validation Review</h1>
+    <div id="subtitle">Loading validation evidence…</div>
+  </div>
+  <div class="header-actions">
+    <span class="badge research">NON-SCORING</span>
+    <a class="nav-link" href="index.html">Historical Explorer</a>
+  </div>
+</header>
+<main style="display:block;height:calc(100vh - 68px);overflow:auto;padding:18px">
+  <div style="max-width:1200px;margin:0 auto">
+    <div class="control-block">
+      <label for="caseSelect">Validation case</label>
+      <select id="caseSelect"></select>
+    </div>
+    <div class="case-card" id="caseCard"></div>
+    <div class="section-head"><h2>Evidence Chain</h2><span id="selectionState">—</span></div>
+    <div class="metric-grid" id="metrics"></div>
+    <div class="section-head compact"><h3>Surface / Radar Timing</h3></div>
+    <div class="metric-grid" id="surface"></div>
+    <div class="section-head compact"><h3>Cross-Sensor Agreement</h3></div>
+    <div class="metric-grid" id="mrms"></div>
+    <div class="section-head compact"><h3>Review Status</h3></div>
+    <div class="outcome" id="review">
+      Truth is not established automatically. This page is evidence review only.
+    </div>
+  </div>
+</main>
+<script src="validation.js"></script>
+</body></html>

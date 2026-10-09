@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Snow Squall Historical Similarity</title><link rel="stylesheet" href="style.css">
+<style>
+body{overflow:auto}.analog-page{max-width:1200px;margin:0 auto;padding:22px}.analog-head{display:flex;justify-content:space-between;gap:20px;align-items:flex-start}.analog-head h1{margin:0}.analog-sub{color:var(--muted);font-size:12px;margin-top:4px}.notice{margin:16px 0;padding:11px 13px;border-left:3px solid var(--amber);background:#141f28;border-radius:5px;color:#c4d0db;font-size:12px}.source-card{padding:12px;background:#121e29;border:1px solid #2b4051;border-radius:8px}.source-title{font-weight:700;color:#9dd4ff}.source-meta{color:var(--muted);font-size:11px;margin-top:3px}.controls{display:flex;gap:8px;margin:14px 0}.controls select{max-width:280px}.results{display:grid;gap:8px}.analog-row{display:grid;grid-template-columns:85px 1.6fr 1fr 1fr 1fr 1fr;gap:10px;align-items:center;padding:10px 12px;background:#111c26;border:1px solid #263847;border-radius:6px}.analog-row.header{background:#162431;color:#8ea1b4;font-size:10px;text-transform:uppercase;letter-spacing:.06em}.score{font-size:18px;font-weight:800;color:#9dd4ff}.cell span{display:block;color:var(--muted);font-size:10px}.cell b{display:block;margin-top:2px;font-size:12px}.empty{padding:22px;text-align:center;color:var(--muted);background:#111c26;border:1px dashed #314556;border-radius:7px}@media(max-width:850px){.analog-row{grid-template-columns:70px 1fr 1fr}.analog-row.header{display:none}.analog-row .hidden-mobile{display:none}}
+</style>
+</head>
+<body><div class="analog-page">
+<div class="analog-head"><div><div class="eyebrow">BTV SNOW SQUALL PROJECT</div><h1>Historical Similarity Explorer</h1><div class="analog-sub">Exploratory nearest-neighbor comparison of reconstructed object states</div></div><button onclick="history.back()">← Back to Explorer</button></div>
+<div id="source" class="source-card">Loading selected object…</div>
+<div class="notice">Similarity is computed from available radar/object and environmental fields in the historical pilot. It is not an onset probability, does not use future outcome labels, and should not be interpreted as a forecast skill score.</div>
+<div class="controls"><select id="featureSet"><option value="radar">Radar structure + evolution</option><option value="environment">Environment + radar</option></select><select id="limit"><option value="10">10 analogs</option><option value="20">20 analogs</option><option value="30">30 analogs</option></select></div>
+<div class="analog-row header"><div>Similarity</div><div>Historical state</div><div>Reflectivity</div><div>Size / shape</div><div>Motion / trend</div><div>Environment</div></div>
+<div class="results" id="results"></div>
+</div>
+<script>
+const q=new URLSearchParams(location.search),caseIndex=Number(q.get("case")||0),trackKey=q.get("track")||"";
+const num=(v,d=1)=>v==null||Number.isNaN(Number(v))?"—":Number(v).toFixed(d);
+const fmt=t=>t?new Date(t).toLocaleString(undefined,{month:"short",day:"numeric",year:"numeric",hour:"numeric",minute:"2-digit"}):"—";
+const radDiff=(a,b)=>{if(a==null||b==null)return null;let d=Math.abs(Number(a)-Number(b))%360;return Math.min(d,360-d)};
+function value(p,key){return p?.environment?.[key]?.value??null}
+function robustScale(values){const v=values.filter(x=>Number.isFinite(Number(x))).map(Number).sort((a,b)=>a-b);if(v.length<4)return 1;const q1=v[Math.floor((v.length-1)*.25)],q3=v[Math.floor((v.length-1)*.75)];return Math.max(q3-q1,1)}
+function buildDistance(a,b,all,set){
+ const keys=set==="environment"
+  ? [["max_reflectivity_dbz",1],["mean_reflectivity_dbz",1],["area_km2",1],["length_km",1],["width_km",1],["aspect_ratio",1],["motion_speed_kt",1],["reflectivity_trend_dbz_per_hr",1],["env:sbcape_jkg",.8],["env:pwat_mm",.8],["env:lapse_rate_0_3km_c_km",.8]]
+  : [["max_reflectivity_dbz",1],["mean_reflectivity_dbz",1],["area_km2",1.2],["length_km",1.1],["width_km",1],["aspect_ratio",.8],["motion_speed_kt",.8],["reflectivity_trend_dbz_per_hr",1]];
+ let sum=0,w=0;
+ for(const [key,wt] of keys){
+   const av=key.startsWith("env:")?value(a,key.slice(4)):a[key],bv=key.startsWith("env:")?value(b,key.slice(4)):b[key];
+   if(av==null||bv==null)continue;
+   const vals=all.map(x=>key.startsWith("env:")?value(x.properties,key.slice(4)):x.properties[key]);
+   sum+=wt*Math.abs(Number(av)-Number(bv))/robustScale(vals);w+=wt;
+ }
+ const d=radDiff(a.motion_direction_deg,b.motion_direction_deg);if(d!=null){sum+=.5*(d/45);w+=.5}
+ return w?sum/w:null;
+}
+async function init(){
+ const catalog=await fetch("data/catalog.json").then(r=>r.json());
+ const geos=await Promise.all(catalog.cases.map(c=>fetch("data/"+c.file).then(r=>r.json())));
+ const all=geos.flatMap(g=>g.features||[]);
+ const source=all.find(f=>f.properties.track_key===trackKey)||geos[caseIndex]?.features?.[0];
+ if(!source){document.getElementById("source").textContent="Selected object not found.";return}
+ const p=source.properties;
+ document.getElementById("source").innerHTML="<div class='source-title'>Reference: "+p.case_id+" • "+p.radar_site+" • Track "+p.object_id+"</div><div class='source-meta'>"+fmt(p.timestamp)+" • Max Z "+num(p.max_reflectivity_dbz)+" dBZ • Area "+num(p.area_km2)+" km² • Motion "+num(p.motion_speed_kt)+" kt</div>";
+ function render(){
+  const set=document.getElementById("featureSet").value,limit=Number(document.getElementById("limit").value);
+  const candidates=all.filter(f=>f.properties.track_key!==p.track_key);
+  const scored=candidates.map(f=>({f,d:buildDistance(p,f.properties,candidates,set)})).filter(x=>x.d!=null).sort((a,b)=>a.d-b.d).slice(0,limit);
+  const out=document.getElementById("results");
+  if(!scored.length){out.innerHTML="<div class='empty'>No comparable historical object states have enough shared fields yet.</div>";return}
+  out.innerHTML=scored.map(x=>{const r=x.f.properties;const sim=Math.max(0,100-100*x.d/(1+x.d));return "<div class='analog-row'><div class='score'>"+num(sim,0)+"</div><div class='cell'><span>Case / radar</span><b>"+r.case_id+" • "+r.radar_site+"</b><span>"+fmt(r.timestamp)+" • Track "+r.object_id+"</span></div><div class='cell'><span>Max / mean Z</span><b>"+num(r.max_reflectivity_dbz)+" / "+num(r.mean_reflectivity_dbz)+" dBZ</b></div><div class='cell'><span>Area / aspect</span><b>"+num(r.area_km2)+" km² / "+num(r.aspect_ratio)+"</b></div><div class='cell'><span>Speed / Z trend</span><b>"+num(r.motion_speed_kt)+" kt / "+num(r.reflectivity_trend_dbz_per_hr)+" dBZ/hr</b></div><div class='cell'><span>SBCAPE / PWAT</span><b>"+num(value(r,"sbcape_jkg"))+" / "+num(value(r,"pwat_mm"))+"</b></div></div>"}).join("");
+ }
+ document.getElementById("featureSet").onchange=render;document.getElementById("limit").onchange=render;render();
+}
+init().catch(err=>document.getElementById("source").textContent="Viewer data unavailable: "+err);
+</script></body></html>
