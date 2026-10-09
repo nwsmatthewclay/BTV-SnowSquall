@@ -62,39 +62,8 @@ jobs:
               exit 0
             fi
           done
-          echo "No complete successful historical benchmark run with all 3 batch artifacts yet; will fall back to the existing feature-artifact path."
-      - name: Locate a usable recent feature artifact
-        if: steps.historical.outputs.run_id == ''
-        id: source
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          candidate=""
-          for workflow in object-dataset-pilot.yml snow-squall-expansion-dataset.yml object-dataset-full-expansion.yml; do
-            while IFS= read -r run; do
-              run_id="$(printf '%s' "$run" | jq -r '.databaseId')"
-              run_name="$(printf '%s' "$run" | jq -r '.name')"
-              artifact_json="$(gh api "/repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}/artifacts?per_page=100")"
-              artifact_id="$(printf '%s' "$artifact_json" | jq -r '[.artifacts[] | select(.expired==false) | select(.name=="snow-squall-expansion-feature-batch" or .name=="object-model-feature-table") | .id] | .[0]')"
-              if [ -n "$artifact_id" ] && [ "$artifact_id" != "null" ]; then
-                candidate="$run_id|$artifact_id|$run_name"
-                break 2
-              fi
-              full_id="$(printf '%s' "$artifact_json" | jq -r '[.artifacts[] | select(.expired==false) | select(.name=="object-population-pilot" or .name=="object-population-expansion") | .id] | .[0]')"
-              if [ -n "$full_id" ] && [ "$full_id" != "null" ]; then
-                candidate="$run_id|$full_id|$run_name"
-                break 2
-              fi
-            done < <(gh run list --workflow "$workflow" --branch snow-squall-model-foundation --status success --limit 20 --json databaseId,name --jq ".[] | @json")
-          done
-          test -n "$candidate" || { echo "No usable feature artifact found."; exit 1; }
-          IFS='|' read -r run_id artifact_id source_name <<< "$candidate"
-          echo "run_id=$run_id" >> "$GITHUB_OUTPUT"
-          echo "artifact_id=$artifact_id" >> "$GITHUB_OUTPUT"
-          echo "source_name=$source_name" >> "$GITHUB_OUTPUT"
-          echo "Using $source_name run $run_id artifact $artifact_id"
-
+          echo "No complete successful historical benchmark run with all 3 labeled batch artifacts. Refusing to train on stale or unrelated feature artifacts."
+          exit 1
       - name: Download historical benchmark batches
         if: steps.historical.outputs.run_id != ''
         env:
@@ -138,44 +107,14 @@ jobs:
           python scripts/build_model_features.py data/derived/input/historical_labeled_all.csv \
             --output data/derived/input/rebuilt_model_features.csv \
             --schema-output data/derived/input/rebuilt_model_features.schema.json
-      - name: Download feature artifact
-        if: steps.historical.outputs.run_id == ''
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          mkdir -p data/derived/input
-          echo "Downloading selected artifact; this may be large when only a full pilot artifact is available."
-          curl -fsSL -H "Authorization: Bearer ${GH_TOKEN}" -H "Accept: application/vnd.github+json" -o /tmp/features.zip "https://api.github.com/repos/${GITHUB_REPOSITORY}/actions/artifacts/${{ steps.source.outputs.artifact_id }}/zip"
-          unzip -q /tmp/features.zip -d data/derived/input
-          find data/derived/input -type f | sort
-
-      - name: Rebuild model features from cached object population
-        if: steps.historical.outputs.run_id == '' && (contains(steps.source.outputs.source_name, 'Object Dataset Pilot') || contains(steps.source.outputs.source_name, 'Object Dataset Full Expansion') || contains(steps.source.outputs.source_name, 'Object Population'))
-        run: |
-          set -euo pipefail
-          population="$(find data/derived/input -type f -name 'object_population_pilot.csv' -o -name 'object_population_expansion.csv' | head -1)"
-          if [ -z "$population" ]; then
-            echo "No cached object population available; retaining published feature table."
-            exit 0
-          fi
-          python scripts/build_model_features.py "$population"             --output data/derived/input/rebuilt_model_features.csv             --schema-output data/derived/input/rebuilt_model_features.schema.json
-          echo "Rebuilt feature table from: $population"
-
       - name: Resolve training feature table
         id: feature_table
         run: |
           set -euo pipefail
-          path=""
-          rebuilt="$(find data/derived/input -type f -name 'rebuilt_model_features.csv' | head -1)"
-          if [ -n "$rebuilt" ]; then
-            path="$rebuilt"
-          else
-            path="$(find data/derived/input -type f \( -name 'snow_squall_model_features_cumulative.csv' -o -name 'object_model_features_pilot.csv' -o -name 'object_model_features_expansion.csv' \) | head -1)"
-          fi
-          test -n "$path"
+          path="data/derived/input/rebuilt_model_features.csv"
+          test -s "$path" || { echo "Missing rebuilt features from merged, labeled historical acquisition batches."; exit 1; }
           echo "path=$path" >> "$GITHUB_OUTPUT"
-          echo "Training feature table: $path"
+          echo "Training feature table (fresh historical acquisition only): $path"
       - name: Verify training input
         run: |
           test -f "${{ steps.feature_table.outputs.path }}"
@@ -186,7 +125,20 @@ jobs:
           print("TRAINING INPUT RECORDS:", len(d))
           print("TRAINING INPUT COLUMNS:", len(d.columns))
           print("CASES:", d["case_id"].nunique() if "case_id" in d else "missing")
-          assert "future_information_policy" in d.columns
+          required = {"future_information_policy", "case_id", "label_status", "track_event_associated"}
+          missing = sorted(required - set(d.columns))
+          if missing:
+              raise SystemExit(f"Training input missing required provenance/label columns: {missing}")
+          targets = [f"squall_onset_within_{h}m" for h in (15, 30, 45, 60)]
+          missing_targets = [c for c in targets if c not in d.columns]
+          if missing_targets:
+              raise SystemExit(f"Training input missing onset targets: {missing_targets}")
+          print("LABELLED TARGET COVERAGE:")
+          for target in targets:
+              y = pd.to_numeric(d[target], errors="coerce")
+              print(target, {"known": int(y.notna().sum()), "positive": int((y == 1).sum()), "negative": int((y == 0).sum())})
+          if not any(pd.to_numeric(d[c], errors="coerce").notna().any() for c in targets):
+              raise SystemExit("No known onset labels found; refusing to train.")
           PY
       - name: Run four-horizon event-held-out gate
         run: |
