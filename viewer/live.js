@@ -487,7 +487,6 @@ async function refreshAlertData(force){
     var data=await response.json();
     alertFeatures=Array.isArray(data.features)?data.features:[];
     renderAlertOverlays();
-    setText("radarStatus",(q("radarStatus")?.textContent||"")+" • NWS alerts "+alertFeatures.length);
   }catch(e){
     // Keep last successfully retrieved alert polygons visible if the service
     // is temporarily unavailable; don't break radar/object refresh.
