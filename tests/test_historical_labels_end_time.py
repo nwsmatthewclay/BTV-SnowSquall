@@ -17,5 +17,7 @@ def test_missing_event_end_does_not_create_ongoing_labels(tmp_path):
     cases.to_csv(cases_path, index=False)
     result = build_labels(objects, cases_path)
     assert int(result.loc[0, 'squall_onset_within_15m']) == 0
-    assert int(result.loc[0, 'squall_ongoing_within_15m']) == 0
+    # Onset is documented, but the end/visibility interval is not. Ongoing
+    # truth must remain missing rather than be fabricated as a negative.
+    assert pd.isna(result.loc[0, 'squall_ongoing_within_15m'])
     assert result.loc[0, 'label_status'] == 'event_onset_no_verified_end'
