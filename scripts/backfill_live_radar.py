@@ -205,6 +205,7 @@ def main() -> int:
             sys.executable,
             "scripts/process_live_event.py",
             "--scan-time", stamp,
+            "--archive-only",
             "--raw-root", str(args.raw_root),
             "--live-root", str(args.live_root),
             "--kcxx-tolerance-minutes", str(args.kcxx_tolerance_minutes),
