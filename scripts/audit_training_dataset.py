@@ -202,7 +202,17 @@ def main():
     parser.add_argument("--report-only", action="store_true", help="Write and print QC issues without failing the process.")
     args = parser.parse_args()
 
-    summary = audit(Path(args.input_csv))
+    try:
+        summary = audit(Path(args.input_csv))
+        summary["audit_completed"] = True
+    except ValueError as exc:
+        if not args.report_only:
+            raise
+        summary = {
+            "audit_completed": False,
+            "records": None,
+            "issues": [f"audit_error:{exc}"],
+        }
     print("Historical dataset QC")
     print("=====================")
     for key, value in summary.items():
