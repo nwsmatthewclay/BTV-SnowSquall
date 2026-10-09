@@ -67,7 +67,7 @@ def fit_calibrators(model_dir: Path, min_rows: int = 30, min_per_class: int = 5)
     if calibrators:
         joblib.dump(calibrators, model_dir / "probability_calibrators_research.joblib")
     (model_dir / "calibration_report.json").write_text(
-        json.dumps(report, indent=2) + "\\n", encoding="utf-8"
+        json.dumps(report, indent=2) + "\n", encoding="utf-8"
     )
     print(json.dumps(report, indent=2))
     return report
