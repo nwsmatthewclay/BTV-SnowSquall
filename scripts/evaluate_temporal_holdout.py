@@ -80,7 +80,7 @@ def filter_evaluation_population(df: pd.DataFrame, reviewed_negative_ids: set[st
     associated_negative_rows = (
         positive_population
         & supervised
-        & d.get("track_event_associated", pd.Series(False, index=d.index)).fillna(False).astype(bool)
+        & event_associated
         & pre_onset
     )
 
