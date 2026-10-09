@@ -611,17 +611,20 @@ function renderProbability(){
 }
 function renderProbabilityChart(hist){
   var svg=q("probChart");svg.innerHTML="";
-  var p=latestForSelected(),shadow=p?shadowRows(p.radar_site,p.track_id):[];
-  var source=(shadow||[]).concat(hist||[]).sort(function(a,b){return String(a.timestamp||"").localeCompare(String(b.timestamp||""))});
-  var seen={};
-  var rows=source.filter(function(r){
-    var ts=String(r.timestamp||"");if(!ts||seen[ts])return false;seen[ts]=true;
-    return probabilityNow(r)!=null;
-  });
-  var currentShadow=p?shadowRecord(p.radar_site,p.track_id):null;
+  var p=latestForSelected(),currentShadow=p?shadowRecord(p.radar_site,p.track_id):null;
   var currentPayload=probabilityPayload(p||{}),currentRecord=p||{};
   if(currentPayload.source!=="calibrated"&&currentShadow){currentPayload=probabilityPayload(currentShadow);currentRecord=currentShadow}
   var currentProbs=currentPayload.values,currentNow=probabilityNow(currentRecord),calibrated=currentPayload.source==="calibrated";
+  var shadow=p?shadowRows(p.radar_site,p.track_id):[];
+  var source=(shadow||[]).concat(hist||[]).sort(function(a,b){return String(a.timestamp||"").localeCompare(String(b.timestamp||""))});
+  var seen={};
+  var rows=source.filter(function(r){
+    var ts=String(r.timestamp||"");if(!ts||seen[ts])return false;
+    var rowIsCalibrated=probabilityPayload(r).source==="calibrated";
+    if(rowIsCalibrated!==calibrated)return false;
+    if(probabilityNow(r)==null)return false;
+    seen[ts]=true;return true;
+  });
   if(!rows.length&&currentNow==null&&![15,30,45,60].some(function(h){return probabilityAt(currentRecord,h)!=null})){
     svg.innerHTML="<text x='210' y='70' text-anchor='middle' class='chart-text'>Awaiting object probability history</text>";
     setText("probabilityChartState","WAITING FOR OBSERVATIONS");return;
