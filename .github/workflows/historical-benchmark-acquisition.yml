@@ -76,9 +76,16 @@ jobs:
       - name: Build historical environmental features
         run: |
           python scripts/build_historical_dataset.py data/derived/positive_object_scans_annotated.csv --output data/derived/positive_object_environment.csv --cases data/manifests/historical_batch_cases.csv --rap-dir data/raw/RAP --ruc-dir data/raw/RUC --narr-dir data/raw/NARR
+      - name: Label verified historical outcomes
+        run: |
+          python scripts/label_historical_outcomes.py \
+            data/derived/positive_object_environment.csv \
+            --cases data/manifests/historical_batch_cases.csv \
+            --output data/derived/positive_object_labeled.csv \
+            --diagnostics-output data/derived/historical_label_diagnostics.json
       - name: Audit training feature coverage
         run: |
-          python scripts/audit_training_dataset.py data/derived/positive_object_environment.csv --report data/derived/historical_training_audit.json
+          python scripts/audit_training_dataset.py data/derived/positive_object_labeled.csv --report data/derived/historical_training_audit.json
       - name: Write batch completion summary
         env:
           BATCH: ${{ matrix.batch }}
@@ -109,6 +116,8 @@ jobs:
             data/derived/positive_object_scans.csv
             data/derived/positive_object_scans_annotated.csv
             data/derived/positive_object_environment.csv
+            data/derived/positive_object_labeled.csv
+            data/derived/historical_label_diagnostics.json
             data/derived/historical_batch_radar_coverage.json
             data/derived/historical_training_audit.json
             data/derived/historical_batch_summary.json
