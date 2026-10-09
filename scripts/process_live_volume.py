@@ -33,6 +33,47 @@ from snow_squall.environment_risk import environment_risk_features
 LIVE_ENV_MAX_AGE_MINUTES = 120.0
 
 
+def grid_point_to_geo(row, column, lat, lon):
+    """Bilinearly interpolate a fractional radar-grid position to lat/lon.
+
+    Object centroids and historical track positions are fractional grid
+    coordinates. Rounding them to a pixel causes sub-grid motion to disappear
+    from the published track trail, so use the same interpolation principle
+    as the object-footprint contour conversion.
+    """
+    lat = np.asarray(lat, dtype=float)
+    lon = np.asarray(lon, dtype=float)
+    if lat.ndim != 2 or lon.shape != lat.shape or lat.size == 0:
+        return None, None
+    try:
+        row = float(row)
+        column = float(column)
+    except (TypeError, ValueError, OverflowError):
+        return None, None
+    if not np.isfinite(row) or not np.isfinite(column):
+        return None, None
+    row = float(np.clip(row, 0, lat.shape[0] - 1))
+    column = float(np.clip(column, 0, lat.shape[1] - 1))
+    r0, c0 = int(np.floor(row)), int(np.floor(column))
+    r1, c1 = min(r0 + 1, lat.shape[0] - 1), min(c0 + 1, lat.shape[1] - 1)
+    fr, fc = row - r0, column - c0
+    lat_value = (
+        lat[r0, c0] * (1-fr) * (1-fc)
+        + lat[r1, c0] * fr * (1-fc)
+        + lat[r0, c1] * (1-fr) * fc
+        + lat[r1, c1] * fr * fc
+    )
+    lon_value = (
+        lon[r0, c0] * (1-fr) * (1-fc)
+        + lon[r1, c0] * fr * (1-fc)
+        + lon[r0, c1] * (1-fr) * fc
+        + lon[r1, c1] * fr * fc
+    )
+    if not np.isfinite(lat_value) or not np.isfinite(lon_value):
+        return None, None
+    return float(lat_value), float(lon_value)
+
+
 def object_geometry(mask, lat, lon, spacing_km=1.0):
     """Return a compact polygon tracing the detected radar-object mask.
 
@@ -175,6 +216,20 @@ def load_state(path: Path):
     state = json.loads(path.read_text(encoding="utf-8"))
     tracker = CentroidTracker.from_state(state.get("tracker"))
     return state, tracker
+
+
+def is_out_of_order_scan(last_scan_time: str | None, incoming_time: datetime) -> bool:
+    """Return True when a volume would rewind or duplicate persisted scan time."""
+    if not last_scan_time:
+        return False
+    try:
+        previous = datetime.fromisoformat(
+            str(last_scan_time).replace("Z", "+00:00")
+        ).astimezone(timezone.utc)
+        incoming = incoming_time.astimezone(timezone.utc)
+    except (AttributeError, TypeError, ValueError, OverflowError):
+        return False
+    return incoming <= previous
 
 
 
@@ -365,6 +420,13 @@ def process_volume(
         str(raw_timestamp).replace("Z", "+00:00")
     ).astimezone(timezone.utc)
     timestamp = radar_dt.isoformat().replace("+00:00", "Z")
+    if is_out_of_order_scan(state.get("last_scan_time_utc"), radar_dt):
+        print(
+            f"SKIP out-of-order/duplicate scan: {timestamp} "
+            f"(latest persisted scan: {state.get('last_scan_time_utc')})"
+        )
+        return False
+
     rap_result = None
     try:
         rap_result = acquire_for_radar_time(radar_dt)
@@ -434,25 +496,22 @@ def process_volume(
         track_position_history = []
         for position in obj.get("track_position_history", []) or []:
             try:
-                py = int(round(float(position["row"])))
-                px = int(round(float(position["column"])))
-                if 0 <= py < lat.shape[0] and 0 <= px < lat.shape[1]:
-                    plat = float(lat[py, px])
-                    plon = float(lon[py, px])
-                    if np.isfinite(plat) and np.isfinite(plon):
-                        track_position_history.append({
-                            "timestamp": position.get("timestamp"),
-                            "lat": plat,
-                            "lon": plon,
-                            "age_scans": int(position.get("age_scans", 0)),
-                        })
+                plat, plon = grid_point_to_geo(
+                    position["row"], position["column"], lat, lon
+                )
+                if plat is not None and plon is not None:
+                    track_position_history.append({
+                        "timestamp": position.get("timestamp"),
+                        "lat": plat,
+                        "lon": plon,
+                        "age_scans": int(position.get("age_scans", 0)),
+                    })
             except (KeyError, TypeError, ValueError, OverflowError):
                 continue
 
-        cy = int(round(obj["row_centroid"]))
-        cx = int(round(obj["column_centroid"]))
-        centroid_lat = float(lat[cy, cx]) if 0 <= cy < lat.shape[0] and 0 <= cx < lat.shape[1] else None
-        centroid_lon = float(lon[cy, cx]) if 0 <= cy < lon.shape[0] and 0 <= cx < lon.shape[1] else None
+        centroid_lat, centroid_lon = grid_point_to_geo(
+            obj["row_centroid"], obj["column_centroid"], lat, lon
+        )
 
         speed_kt, direction_deg = motion_from_positions(
             previous_positions.get(str(obj["object_id"])),
