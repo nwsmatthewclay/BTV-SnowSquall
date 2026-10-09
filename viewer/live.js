@@ -1014,6 +1014,25 @@ async function refresh(){
       var inside=Number.isFinite(lat)&&Number.isFinite(lon)&&lat>=Number(rb[0]?.[0])&&lat<=Number(rb[1]?.[0])&&lon>=Number(rb[0]?.[1])&&lon<=Number(rb[1]?.[1]);
       return inside&&Number.isFinite(area)&&area>0;
     });
+    // Fail open for display if strict radar-cycle alignment unexpectedly drops
+    // every object. The feed retains its real observation timestamps.
+    var objectFeedFallback=false;
+    if(!allObjects.length){
+      var fallbackObjects=got.flatMap(function(x){
+        return (x.geo?.features||[]).map(function(f){
+          return Object.assign({},f.properties,{radar_site:x.site,radar_geometry:f.geometry});
+        }).filter(function(p){
+          var t=parseUtcDate(p.timestamp),lat=Number(p.centroid_lat),lon=Number(p.centroid_lon),area=Number(p.area_km2);
+          return t&&ageMinutes(t)<=120&&Number.isFinite(lat)&&Number.isFinite(lon)&&Number.isFinite(area)&&area>0;
+        });
+      });
+      var inBoundsFallback=fallbackObjects.filter(function(p){
+        var lat=Number(p.centroid_lat),lon=Number(p.centroid_lon);
+        return lat>=Number(rb[0]?.[0])&&lat<=Number(rb[1]?.[0])&&lon>=Number(rb[0]?.[1])&&lon<=Number(rb[1]?.[1]);
+      });
+      allObjects=inBoundsFallback.length?inBoundsFallback:fallbackObjects;
+      objectFeedFallback=allObjects.length>0;
+    }
     allObjects.sort(function(a,b){var d=scoreForSort(b)-scoreForSort(a);return d||Number(b.max_reflectivity_dbz||0)-Number(a.max_reflectivity_dbz||0)});
     selectDefault();
     alignRadarHistoryToObjects();
@@ -1023,7 +1042,7 @@ async function refresh(){
     setText("liveTime",latest?fmtTime(latest):"No scan time available");
     setText("mapScanLabel",latest?fmtTime(latest):"No live radar");
     var confirmedCount=allObjects.filter(hasConfirmedTrack).length;
-    setText("feedSummary",confirmedCount+" confirmed tracks • "+allObjects.length+" active detections • "+got.map(function(x){return x.site+" "+(x.error?"OFFLINE":(ageMinutes(freshestFeedScan(x))<=15?"LIVE":(ageMinutes(freshestFeedScan(x))<=45?"AGING":"STALE")))}).join(" • "));
+    setText("feedSummary",confirmedCount+" confirmed tracks • "+allObjects.length+" active detections"+(objectFeedFallback?" • alignment fallback":"")+" • "+got.map(function(x){return x.site+" "+(x.error?"OFFLINE":(ageMinutes(freshestFeedScan(x))<=15?"LIVE":(ageMinutes(freshestFeedScan(x))<=45?"AGING":"STALE")))}).join(" • "));
     var degraded=got.filter(function(x){return x.error||ageMinutes(freshestFeedScan(x))>30}).length>0;
     q("liveBadge").classList.toggle("gated",degraded);if(degraded)setText("liveBadge","DEGRADED");
   }catch(e){setText("feedSummary","Live feed error: "+e.message);q("liveBadge").classList.add("gated");setText("liveBadge","DEGRADED")}
