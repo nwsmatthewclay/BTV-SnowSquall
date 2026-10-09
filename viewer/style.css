@@ -824,3 +824,49 @@ body.live-dashboard-page .map-legend-bar i:nth-child(10){background:rgba(240,64,
 body.live-dashboard-page .map-legend-bar i:nth-child(11){background:rgba(245,87,46,1) !important}
 body.live-dashboard-page .map-legend-bar i:nth-child(12){background:rgba(250,168,20,1) !important}
 body.live-dashboard-page .map-legend-bar i:nth-child(13){background:rgba(255,235,71,1) !important}
+
+
+/* Scoring-mode switch: model is the default, with the weighted baseline available for comparison. */
+body.live-dashboard-page .scoring-mode-row{
+  display:flex;
+  align-items:center;
+  flex-wrap:wrap;
+  gap:8px;
+  margin:8px 0 10px;
+  padding:8px 9px;
+  border:1px solid rgba(151,180,195,.20);
+  border-radius:5px;
+  background:rgba(15,26,34,.72);
+}
+body.live-dashboard-page .scoring-mode-row label{
+  color:#8fa6b4;
+  font-size:9px;
+  font-weight:800;
+  letter-spacing:.08em;
+}
+body.live-dashboard-page #scoringMode{
+  min-width:205px;
+  max-width:100%;
+  padding:7px 9px;
+  border:1px solid rgba(122,167,190,.45);
+  border-radius:4px;
+  background:#14242e;
+  color:#e5f0f5;
+  font:600 11px/1.2 inherit;
+  color-scheme:dark;
+}
+body.live-dashboard-page #scoringMode:focus{
+  outline:2px solid rgba(104,190,230,.7);
+  outline-offset:2px;
+}
+body.live-dashboard-page #scoringModeState{
+  flex:1 1 150px;
+  min-width:120px;
+  color:#9eb1bd;
+  font-size:10px;
+  line-height:1.35;
+}
+@media(max-width:540px){
+  body.live-dashboard-page .scoring-mode-row{align-items:stretch}
+  body.live-dashboard-page #scoringMode{width:100%;min-width:0}
+}
