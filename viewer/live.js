@@ -13,6 +13,8 @@ var radarLocations={KCXX:[44.511,-73.166],KTYX:[43.756,-75.680],KBTV:[44.472,-73
 var BTV=[44.472,-73.154];
 var datasets={},allObjects=[],selected=null,objectNumbers=true,refreshTimer=null,cursorGrid=null,cursorBound=false,lastObjectClickAt=0;
 var radarHistory={frames:[]},radarHistoryIndex=-1,radarAnimationTimer=null,radarInitialRender=true;
+var mapExtentInitialized=false;
+function fitMapToBoundsOnce(bounds){if(mapExtentInitialized||!bounds)return;map.fitBounds(bounds,{padding:[25,25],maxZoom:8});mapExtentInitialized=true;}
 
 var LIVE_BASE="https://raw.githubusercontent.com/nwsmatthewclay/BTV-SnowSquall/snow-squall-live-data/viewer/data/live/";
 var SHADOW_BASE="https://raw.githubusercontent.com/nwsmatthewclay/BTV-SnowSquall/snow-squall-shadow-data/viewer/data/shadow/";
@@ -163,6 +165,17 @@ async function loadRadarHistory(){
     return f && parseUtcDate(f.timestamp) && f.image &&
       (!f.palette || f.palette==="NWSRef");
   });
+  // The publisher can run more than once during the same radar second. The
+  // archive filename is second-resolution, so those entries point to the same
+  // PNG even if their ISO timestamps differ by milliseconds. Keep one frame
+  // per actual archived image, preferring the latest timestamp for that image.
+  var uniqueFrames=new Map();
+  radarHistory.frames.forEach(function(f){
+    var key=String(f.image).split("?")[0];
+    var prior=uniqueFrames.get(key);
+    if(!prior || parseUtcDate(f.timestamp).getTime()>parseUtcDate(prior.timestamp).getTime())uniqueFrames.set(key,f);
+  });
+  radarHistory.frames=Array.from(uniqueFrames.values());
   radarHistory.frames.sort(function(a,b){return parseUtcDate(a.timestamp).getTime()-parseUtcDate(b.timestamp).getTime()});
   radarHistoryIndex=radarHistory.frames.length?radarHistory.frames.length-1:-1;
   updateRadarTimelineUI();
@@ -207,7 +220,7 @@ async function renderRadarMosaic(){
         setText("radarStatus","Historical NWSRef reflectivity • "+fmtTime(histFrame.timestamp));
         setText("legendTitle","NWS REFLECTIVITY • dBZ");
         setText("legendNote","Standard NWSRef palette. Local live mosaic is temporarily unavailable; showing the last retained matching frame.");
-        if(!map._sqExtent)map.fitBounds(histBounds,{padding:[25,25],maxZoom:8});
+        fitMapToBoundsOnce(histBounds);
       }else{
         setText("radarStatus","Waiting for local NWSRef radar feed");
         setText("legendTitle","NWS REFLECTIVITY • dBZ");
@@ -276,7 +289,7 @@ async function renderRadarMosaic(){
     setText("legendNote","Standard NWSRef palette • local KCXX + KTYX reflectivity mosaic.");
     radarInitialRender=false;
   }
-  if(!map._sqExtent)map.fitBounds(radarMosaic.bounds,{padding:[25,25],maxZoom:8});
+  fitMapToBoundsOnce(radarMosaic.bounds);
 }
 function setRadarMode(mode){if(mode!=="reflectivity"&&mode!=="velocity")mode="reflectivity";radarMode=mode;document.querySelectorAll(".display-btn").forEach(function(b){b.classList.toggle("active",b.dataset.radarMode===mode)});renderRadarMosaic()}
 function objectReferenceTime(){
