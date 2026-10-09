@@ -865,6 +865,14 @@ async function refresh(){
   }catch(e){setText("feedSummary","Live feed error: "+e.message);q("liveBadge").classList.add("gated");setText("liveBadge","DEGRADED")}
 }
 document.querySelectorAll(".display-btn").forEach(function(b){b.onclick=function(){setRadarMode(b.dataset.radarMode)}});
+q("scoringMode").value=scoringMode;
+q("scoringMode").onchange=function(){
+  scoringMode=this.value==="weighted"?"weighted":"model";
+  renderMap();
+  renderInventory();
+  renderObjectCard();
+  renderProbability();
+};
 document.querySelectorAll("[data-jump]").forEach(function(btn){btn.onclick=function(){var el=q(btn.dataset.jump);if(el)el.scrollIntoView({behavior:"smooth",block:"start"});document.querySelectorAll("[data-jump]").forEach(function(b){b.classList.toggle("active",b===btn)})}});
 q("refreshBtn").onclick=refresh;q("refreshBtn2").onclick=refresh;
 q("radarPlayBtn").onclick=playRadarAnimation;
