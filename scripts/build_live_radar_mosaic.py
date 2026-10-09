@@ -61,12 +61,12 @@ def read_state(path: Path) -> dict:
 
 
 def latest_source(raw_root: Path, state_path: Path, radar: str) -> Path | None:
-    state = read_state(state_path)
-    source = state.get("last_source")
-    if source:
-        candidate = raw_root / radar / Path(str(source)).name
-        if candidate.exists() and candidate.stat().st_size:
-            return candidate
+    """Choose the newest available volume, not merely the worker state's last volume.
+
+    The object worker and radar publisher can run concurrently. A state pointer
+    can therefore lag behind a newer volume already downloaded by acquisition;
+    preferring that pointer made the displayed mosaic older than the object feed.
+    """
     radar_dir = raw_root / radar
     if not radar_dir.exists():
         return None
