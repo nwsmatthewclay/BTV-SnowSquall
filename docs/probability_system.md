@@ -81,6 +81,51 @@ The BTV and Southern New England studies are initial positive-event seed populat
 
 That converts published case lists into a storm-centric machine-learning dataset capable of supporting real-time tracking and probability updates.
 
+## Calibration plan (required before probability claims)
+
+The hand-weighted radar/environment equation above is a temporary research
+benchmark only. The intended live product is a supervised, calibrated,
+object-based probability model inspired by ProbSevere's methodology, adapted to
+snow squalls and the available BTV inputs.
+
+### Predictors and exclusions
+
+- Radar: KCXX/KTYX reflectivity and velocity, object morphology, intensity,
+  gradients, motion, and scan-to-scan evolution.
+- Environment: forecast-time RAP fields and physically derived parameters
+  available to the object at that scan.
+- Satellite: excluded from the initial model; evaluate separately only if a
+  later controlled experiment demonstrates incremental value.
+- Historical analog similarity: excluded from live predictors and scoring.
+- Leakage exclusions: future observations, outcome/association labels, warning
+  metadata, and any fields unavailable at prediction time.
+
+### Training and calibration protocol
+
+1. Define the positive target as a verified snow-squall onset/impact matched to
+   an object, with explicit onset-time and spatial/temporal matching rules.
+   Unknown outcomes remain unlabeled; negative examples require defensible
+   non-event evidence.
+2. Compare an interpretable logistic-regression baseline with a nonlinear
+   tree-based candidate using identical case-grouped folds and predictors.
+3. Generate out-of-fold predictions with all scans from the same storm/event
+   confined to one fold. Also evaluate forward-in-time splits.
+4. Fit a probability calibrator (initial candidates: sigmoid/Platt and
+   isotonic) only from training-side out-of-fold predictions. Keep the final
+   temporal/case-held-out test set untouched for calibration assessment.
+5. Assess each 15/30/45/60-minute target independently using Brier score,
+   reliability diagrams, PR-AUC, event detection, false alarms, and baseline
+   comparisons. Report sample sizes and uncertainty; do not declare calibration
+   successful solely because the training workflow completes.
+6. Publish calibrated values only after sufficient independent labeled cases
+   and acceptable held-out reliability. Until then, label outputs as
+   experimental model estimates, not calibrated operational probabilities.
+
+The existing training/evaluation scripts provide leakage controls, case-grouped
+evaluation, and ROC-AUC/PR-AUC/Brier metrics, but the presence of those metrics
+does not mean the deployed model is already calibrated. Calibration must be
+implemented and independently tested as a distinct stage.
+
 ## Explicit research component equation
 
 The current transparent component guidance score uses radar and environmental
