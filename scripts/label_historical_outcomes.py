@@ -61,8 +61,14 @@ def build_labels(df: pd.DataFrame, cases_csv: Path):
     out["scan_dt"] = pd.to_datetime(out["scan_time_utc"], utc=True, errors="coerce")
 
     for horizon in HORIZONS:
-        out[f"squall_onset_within_{horizon}m"] = 0
-        out[f"squall_ongoing_within_{horizon}m"] = 0
+        # Unknown/unassociated objects are unlabeled, not negatives. Only an
+        # object associated with a verified event corridor can receive a
+        # supervised onset target below.
+        out[f"squall_onset_within_{horizon}m"] = pd.Series(pd.NA, index=out.index, dtype="Int64")
+        # Ongoing-duration truth is less consistently documented than onset;
+        # leave it missing until a separate interval-specific label contract
+        # can establish valid positive AND negative targets.
+        out[f"squall_ongoing_within_{horizon}m"] = pd.Series(pd.NA, index=out.index, dtype="Int64")
         out[f"label_confidence_{horizon}m"] = "unknown"
 
     out["label_status"] = "unknown"
@@ -223,14 +229,17 @@ def build_labels(df: pd.DataFrame, cases_csv: Path):
         end = event_end(case)
 
         for horizon in HORIZONS:
-            future_end = scan + timedelta(minutes=horizon)
-            if start is not None and scan < start <= future_end:
-                out.at[idx, f"squall_onset_within_{horizon}m"] = 1
-                out.at[idx, f"label_confidence_{horizon}m"] = "verified_onset"
-
-            if end is not None and scan < end and start <= scan:
-                out.at[idx, f"squall_ongoing_within_{horizon}m"] = 1
-                out.at[idx, f"label_confidence_{horizon}m"] = "verified_visibility_interval"
+            # The scan belongs to the selected event-associated object and
+            # the case has a documented onset: absence of onset within this
+            # horizon is therefore a valid 0; a future onset inside the
+            # horizon is a 1. Unassociated rows remain NA above.
+            if start is not None:
+                out.at[idx, f"squall_onset_within_{horizon}m"] = 0
+                out.at[idx, f"label_confidence_{horizon}m"] = "verified_event_timing"
+                future_end = scan + timedelta(minutes=horizon)
+                if scan < start <= future_end:
+                    out.at[idx, f"squall_onset_within_{horizon}m"] = 1
+                    out.at[idx, f"label_confidence_{horizon}m"] = "verified_onset"
 
         if start is not None and scan >= start and end is not None and scan < end:
             out.at[idx, "label_status"] = "verified_event_interval"
