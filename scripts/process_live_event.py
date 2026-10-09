@@ -301,9 +301,9 @@ def main() -> int:
         tmp_path = Path(tmp)
         kcxx_state = tmp_path / "KCXX_state.json"
         ktyx_state = tmp_path / "KTYX_state.json"
-        kcxx_state.write_text(json.dumps({"last_source": kcxx_path.name}) + "\n", encoding="utf-8")
+        kcxx_state.write_text(json.dumps({"last_source": kcxx_path.name, "force_source": True}) + "\n", encoding="utf-8")
         ktyx_state.write_text(
-            json.dumps({"last_source": ktyx_path.name}) + "\n" if ktyx_path else "{}\n",
+            json.dumps({"last_source": ktyx_path.name, "force_source": True}) + "\n" if ktyx_path else "{}\n",
             encoding="utf-8",
         )
 
