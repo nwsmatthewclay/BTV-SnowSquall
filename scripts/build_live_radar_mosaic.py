@@ -686,7 +686,14 @@ def main():
         # not replace or mutate the browser-facing mosaic image.
         clean_output = args.output_image.parent / "radar_mosaic_clean.png"
         raw_output = args.output_image.parent / "radar_mosaic_raw.png"
-        bounds = render_clean(mosaic, latlon, clean_output, rhohv=rhohv)
+        bounds = render_clean(
+            mosaic,
+            latlon,
+            clean_output,
+            rhohv=rhohv,
+            site_fields=site_fields,
+            rhohv_by_site=site_rho_fields,
+        )
         render_raw(mosaic, latlon, raw_output)
         # radar_mosaic.png is a compatibility alias and must contain the exact
         # same pixels as the canonical clean product.
