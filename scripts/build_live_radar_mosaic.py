@@ -244,6 +244,9 @@ def _render(mosaic, latlon, output_path: Path, *, mode="clean", rhohv=None):
     ax.set_axis_off()
     ax.set_xlim(float(np.nanmin(lon)), float(np.nanmax(lon)))
     ax.set_ylim(float(np.nanmin(lat)), float(np.nanmax(lat)))
+    # Leaflet stretches the full PNG to geographic bounds. Disable Matplotlib's
+    # equal-aspect letterboxing so the raster cannot shift/scale vs. objects.
+    ax.set_aspect("auto")
 
     if mode == "clean":
         # Standard NWS radar reflectivity palette. Keep the clean display
@@ -305,6 +308,7 @@ def _render_velocity(velocity, latlon, output_path: Path, *, raw=False):
     ax.set_axis_off()
     ax.set_xlim(float(np.nanmin(lon)), float(np.nanmax(lon)))
     ax.set_ylim(float(np.nanmin(lat)), float(np.nanmax(lat)))
+    ax.set_aspect("auto")
     if norm is None:
         ax.pcolormesh(lon, lat, masked, cmap=cmap, vmin=-limit, vmax=limit, shading="auto")
     else:
@@ -412,7 +416,7 @@ def render_native_site_products(raw_root: Path, states: dict[str, Path], output_
     return products
 
 
-def write_cursor_grid(output_dir: Path, mosaic, site_velocity_fields):
+def write_cursor_grid(output_dir: Path, mosaic, site_velocity_fields, latlon=None):
     """Publish compact 1-km cursor-sampling arrays for the browser viewer."""
     if mosaic is None:
         return None
@@ -430,6 +434,9 @@ def write_cursor_grid(output_dir: Path, mosaic, site_velocity_fields):
         "spacing_km": SPACING_KM,
         "half_width_km": GRID_SIZE_KM,
         "shape": [int(mosaic.shape[0]), int(mosaic.shape[1])],
+        # Coordinate axes from the same Py-ART grid as the radar raster.
+        "latitude_axis": np.asarray(latlon[0], dtype=float)[:, 0].tolist() if latlon is not None else None,
+        "longitude_axis": np.asarray(latlon[1], dtype=float)[0, :].tolist() if latlon is not None else None,
         "reflectivity_scale": 1,
         "reflectivity_missing": -9999,
         "reflectivity_dbz": encode(mosaic),
@@ -471,6 +478,7 @@ def _direct_render(sweep_products, output_dir: Path, *, product_name: str, clean
     ax.set_axis_off()
     ax.set_xlim(-76.78, -70.52)
     ax.set_ylim(41.90, 46.40)
+    ax.set_aspect("auto")
     if clean:
         # Native Level-II reflectivity uses the same standard NWS palette as
         # the Cartesian mosaic and raw product.
@@ -521,6 +529,7 @@ def _direct_velocity_render(item, output_dir: Path, site: str):
     ax.set_axis_off()
     ax.set_xlim(-76.78, -70.52)
     ax.set_ylim(41.90, 46.40)
+    ax.set_aspect("auto")
     velocity_bounds = [-60, -40, -30, -20, -15, -10, -5, -2, 0, 2, 5, 10, 15, 20, 30, 40, 60]
     velocity_colors = [
         "#003b24", "#006b3c", "#15945a", "#55bd7a", "#8bd7a0",
@@ -686,7 +695,7 @@ def main():
             "velocity_rendering": "signed_radial_velocity",
             "velocity_sources": sorted(velocity_products),
         }
-        cursor_path = write_cursor_grid(args.output_image.parent, mosaic, site_velocity_fields)
+        cursor_path = write_cursor_grid(args.output_image.parent, mosaic, site_velocity_fields, latlon=grid_latlon)
         payload["cursor_grid"] = {
             "file": cursor_path.name if cursor_path is not None else None,
             "spacing_km": SPACING_KM,
