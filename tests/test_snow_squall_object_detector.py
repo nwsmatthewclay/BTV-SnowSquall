@@ -146,3 +146,32 @@ def test_candidate_rank_score_is_monotonic_and_tiered():
     score = objects[0]["candidate_rank_score"]
     assert 0.0 <= score <= 100.0
     assert objects[0]["candidate_rank_tier"] in {"low", "weak", "candidate", "strong", "priority"}
+
+def test_live_style_detection_retains_coherent_weak_echo_for_early_tracking():
+    # A modest 16–22 dBZ band should enter object tracking before it develops
+    # a 30+ dBZ core or a high snow-squall probability.
+    field = np.full((60, 80), 8.0)
+    field[26:34, 12:68] = 18.0
+    field[28:32, 24:56] = 22.0
+
+    objects = detect_reflectivity_objects(
+        field,
+        ObjectDetectionConfig(
+            threshold_dbz=15.0,
+            core_threshold_dbz=30.0,
+            min_pixels=4,
+            min_background_contrast_db=2.0,
+            min_gradient_pixels=2,
+            min_gradient_fraction=0.02,
+            close_iterations=0,
+            open_iterations=0,
+            fill_holes=False,
+            retain_coherent_objects=True,
+            use_watershed=False,
+        ),
+    )
+
+    assert len(objects) == 1
+    assert objects[0]["max_reflectivity_dbz"] == 22.0
+    assert objects[0]["area_km2"] >= 4.0
+
