@@ -100,8 +100,8 @@ def main() -> int:
     parser.add_argument("--radar", default="KCXX", choices=("KCXX", "KTYX"))
     parser.add_argument("--live-root", type=Path, default=Path("viewer/data/live"))
     parser.add_argument("--raw-root", type=Path, default=Path("data/raw"))
-    parser.add_argument("--max-cycles", type=int, default=12)
-    parser.add_argument("--lookback-hours", type=int, default=4)
+    parser.add_argument("--max-cycles", type=int, default=18)
+    parser.add_argument("--lookback-hours", type=int, default=3)
     parser.add_argument("--kcxx-tolerance-minutes", type=float, default=4.0)
     parser.add_argument("--ktyx-max-age-minutes", type=float, default=8.0)
     parser.add_argument("--archive-attempts", type=int, default=6)
@@ -113,62 +113,51 @@ def main() -> int:
     previous = published_time(args.live_root)
     s3 = make_s3_client()
 
-    # Do not use only the newest published timestamp as the backfill watermark.
-    # The live publisher can legitimately process the newest volume while
-    # missing one or more intermediate scans.  In that situation the newest
-    # timestamp looks healthy even though the track history has a hole.
-    #
-    # Instead, inspect the durable processed_sources ledger and recover every
-    # recent KCXX volume that is not actually recorded there.  process_live_event
-    # then processes those scans chronologically, preserving tracker continuity
-    # and filling the radar-history archive at the same time.
-    state_path = args.live_root / "KCXX_state.json"
-    processed_sources = set()
-    if state_path.exists():
-        try:
-            state = json.loads(state_path.read_text(encoding="utf-8"))
-            processed_sources = {
-                Path(str(value)).name
-                for value in (state.get("processed_sources") or [])
-                if value
-            }
-        except (OSError, json.JSONDecodeError, TypeError):
-            processed_sources = set()
-
-    # Only select scans that the event processor can still resolve from the
-    # same near-real-time archive window. Older entries can remain in the
-    # discovery list after their processing window has expired; feeding one
-    # of those to process_live_event can fail the entire cycle before newer
-    # scans are reached. Let old gaps age out instead of blocking the feed.
-    # Do one archive discovery pass for each radar, then reuse those
-    # results throughout this run. Re-querying S3 for every candidate was the
-    # main source of publisher stalls: a six-scan backfill could perform a
-    # dozen+ archive listings before it ever reached the processing step.
+    # Repair the radar-history archive by comparing recent KCXX scans with
+    # actual retained frames, not with the latest processed-source watermark.
+    # The newest scan can be healthy while earlier timeline frames are missing.
+    # Replaying an already-processed scan is safe here: process_live_volume
+    # skips duplicate/out-of-order tracker updates, while process_live_event
+    # still rebuilds the matching radar image and archives the missing frame.
     all_recent = find_recent_volumes(
         s3, "KCXX", since=None, lookback_hours=args.lookback_hours
     )
     ktyx_recent = find_recent_volumes(
         s3, "KTYX", since=None, lookback_hours=args.lookback_hours
     )
-    processing_cutoff = datetime.now(timezone.utc) - timedelta(hours=2)
+    manifest_path = args.live_root / "radar_history" / "manifest.json"
+    frame_times = []
+    if manifest_path.exists():
+        try:
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            frame_times = [
+                parsed for frame in manifest.get("frames", [])
+                if (parsed := parse_time(frame.get("timestamp"))) is not None
+            ]
+        except (OSError, json.JSONDecodeError, TypeError):
+            frame_times = []
+    # The browser archive retains roughly the last 100 minutes. Keep a small
+    # margin and rebuild any scan not represented by a frame within 3 minutes.
+    processing_cutoff = datetime.now(timezone.utc) - timedelta(minutes=100)
     candidates = [
         item for item in all_recent
-        if Path(item[0]).name not in processed_sources
-        and item[1] > (previous or datetime.min.replace(tzinfo=timezone.utc))
-        and item[1] >= processing_cutoff
+        if item[1] >= processing_cutoff
+        and not any(abs((frame_time - item[1]).total_seconds()) <= 180 for frame_time in frame_times)
     ]
 
     print(
-        "Backfill watermark:",
+        "Latest published watermark:",
         previous.isoformat() if previous else "none",
         "| recent KCXX volumes:",
         len(all_recent),
-        "| unprocessed:",
+        "| retained frames:",
+        len(frame_times),
+        "| radar-history gaps to repair:",
         len(candidates),
     )
 
     if not candidates:
-        print("No unprocessed KCXX scans are available.")
+        print("Radar history is caught up; no missing recent frames found.")
         return 0
 
     if len(candidates) > args.max_cycles:
