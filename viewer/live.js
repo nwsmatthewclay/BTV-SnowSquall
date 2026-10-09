@@ -595,8 +595,8 @@ function renderProbability(){
       :"Experimental research-model output; not calibrated or operational. Horizon values remain provisional shadow-feed guidance.");
   }
   var horizonHtml="<div style='display:grid;grid-template-columns:repeat(4,1fr);gap:4px;margin-top:7px'>"+horizons.map(function(h){
-    var v=probs[h+"min"]??probs[String(h)];
-    return "<div style='border:1px solid rgba(190,210,220,.14);padding:5px;text-align:center'><span style='display:block;font-size:8px;color:#748a9b'>+"+h+" MIN</span><b style='font-size:13px'>"+(v==null?"—":(Number(v)*100).toFixed(1)+"%")+"</b></div>";
+    var v=probabilityAt(scoreRecord,h);
+    return "<div style='border:1px solid rgba(190,210,220,.14);padding:5px;text-align:center'><span style='display:block;font-size:8px;color:#748a9b'>+"+h+" MIN</span><b style='font-size:13px'>"+(v==null?"—":(v*100).toFixed(1)+"%")+"</b></div>";
   }).join("")+"</div>";
   var cardHtml="";
   if(calibrated){
