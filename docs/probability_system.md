@@ -126,6 +126,24 @@ evaluation, and ROC-AUC/PR-AUC/Brier metrics, but the presence of those metrics
 does not mean the deployed model is already calibrated. Calibration must be
 implemented and independently tested as a distinct stage.
 
+The case-held-out trainer now writes `oof_predictions.csv` with each evaluable
+row's held-out fold, split group, target, horizon, and out-of-fold score. The
+research calibration step can be run against that output with
+`python scripts/calibrate_model_bundle.py --model-dir data/derived/model_gate`.
+It fits separate Platt calibrators per horizon when row and class support meet
+the configured minimums, and writes `probability_calibrators_research.joblib`
+plus `calibration_report.json`. These are research artifacts only; the script
+explicitly labels them as not independently validated and does not connect them
+to live scoring.
+
+Model comparisons must use the same eligible population, target definition,
+predictor availability rules, grouped folds, and sample weighting. Report the
+class prevalence and positive/negative case counts beside PR-AUC, ROC-AUC,
+Brier score, and reliability; compare against prevalence and simple baseline
+models. A model must not win solely on ROC-AUC, and an absent/failed horizon is
+not silently omitted from the release decision. Temporal evaluation and
+independent validation remain separate gates.
+
 ## Explicit research component equation
 
 The current transparent component guidance score uses radar and environmental
