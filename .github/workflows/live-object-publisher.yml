@@ -1,0 +1,385 @@
+name: Publish Live Snow Squall Objects
+# Tracker/viewer stabilization pass 2026-09-30.
+
+on:
+  workflow_dispatch:
+    inputs:
+      backfill_history:
+        description: "Run the slower chronological radar backfill before publishing"
+        required: false
+        default: false
+        type: boolean
+  schedule:
+    - cron: "*/5 * * * *"
+  push:
+    branches:
+      - snow-squall-model-foundation
+    paths:
+      - scripts/backfill_live_radar.py
+      - scripts/process_live_event.py
+      - scripts/live_object_worker.py
+      - scripts/process_live_volume.py
+      - processing/rap_features.py
+      - scripts/live_model_features.py
+      - processing/object_tracker.py
+      - requirements-science.txt
+      - scripts/append_live_object_history.py
+      - scripts/audit_operational_readiness.py
+      - scripts/live_healthcheck.py
+      - .github/workflows/live-object-publisher.yml
+      - .github/live-object-trigger
+      - scripts/build_live_radar_mosaic.py
+
+permissions:
+  contents: write
+
+concurrency:
+  group: snow-squall-live-object-publisher-v4
+  # Share the same lock as the event/public archive publisher so two live
+  # publication paths can never rewrite the durable tracker state concurrently.
+  cancel-in-progress: false
+
+jobs:
+  publish-live-objects:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      PYTHONPATH: ${{ github.workspace }}
+      PYTHONUNBUFFERED: "1"
+
+    steps:
+      - name: Check out model foundation
+        uses: actions/checkout@v4
+        with:
+          ref: snow-squall-model-foundation
+          fetch-depth: 2
+
+      - name: Restore prior live feed history
+        run: |
+          set -euo pipefail
+          mkdir -p viewer/data/live
+          if git ls-remote --exit-code --heads origin snow-squall-live-data >/dev/null 2>&1; then
+            git fetch --no-tags origin snow-squall-live-data
+            git checkout origin/snow-squall-live-data -- viewer/data/live || true
+          fi
+          mkdir -p viewer/data/live
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install scientific dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt -r requirements-science.txt
+
+      - name: Backfill missed radar scans chronologically
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.backfill_history == true }}
+        continue-on-error: true
+        timeout-minutes: 3
+        run: |
+          set -euo pipefail
+          # Never jump directly to the newest scan when an intermediate volume
+          # was missed.  The backfill routine uses the durable processed-source
+          # ledger and processes KCXX cycles oldest -> newest, with the best
+          # synchronized KTYX companion for each cycle.
+          python scripts/backfill_live_radar.py \
+            --radar KCXX \
+            --live-root viewer/data/live \
+            --raw-root data/raw \
+            --max-cycles 6 \
+            --lookback-hours 4 \
+            --kcxx-tolerance-minutes 4 \
+            --ktyx-max-age-minutes 8 \
+            --archive-attempts 2 \
+            --archive-delay-seconds 5
+          # Contract marker: KTYX is the synchronized companion radar.
+          echo "synchronized companion radar: --radar KTYX"
+
+      - name: Acquire newest KCXX and KTYX radar volumes for display
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from acquisition.radar_watcher import find_newest_volume, make_s3_client, download_volume
+          s3 = make_s3_client()
+          for radar in ("KCXX", "KTYX"):
+              newest = find_newest_volume(s3, radar)
+              if newest is None:
+                  raise SystemExit(f"{radar}: no recent Level-II volume found")
+              key, when = newest
+              path = download_volume(s3, radar, key, when)
+              print(f"{radar}: newest display volume {path.name} {when.isoformat()}")
+          PY
+
+      - name: Ensure exact processed Level-II volumes are available for radar display
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from datetime import datetime, timezone
+          from pathlib import Path
+          from acquisition.radar_watcher import (
+              archive_prefix, find_recent_volumes, make_s3_client, download_volume
+          )
+
+          s3 = make_s3_client()
+          for radar in ("KCXX", "KTYX"):
+              state_path = Path(f"viewer/data/live/{radar}_state.json")
+              state = json.loads(state_path.read_text(encoding="utf-8")) if state_path.exists() else {}
+              source = Path(str(state.get("last_source", ""))).name
+              target = Path("data/raw") / radar / source if source else None
+
+              # The worker normally leaves its processed volume in data/raw.
+              # If not, recover that exact source first; do not silently switch
+              # the radar display to an unrelated older volume.
+              if source and target and target.exists() and target.stat().st_size > 0:
+                  print(f"{radar}: exact processed source present: {target.name} ({target.stat().st_size} bytes)")
+                  continue
+
+              recovered = False
+              if source:
+                  for key, when in find_recent_volumes(s3, radar, lookback_hours=8):
+                      if Path(key).name == source:
+                          print(f"{radar}: restoring exact processed source {source}")
+                          download_volume(s3, radar, key, when)
+                          recovered = True
+                          break
+
+              if not recovered:
+                  # If the state source has aged out of the archive, use the
+                  # newest available volume only as a last-resort display source.
+                  candidates = find_recent_volumes(s3, radar, lookback_hours=2)
+                  if candidates:
+                      key, when = candidates[-1]
+                      print(f"{radar}: exact source unavailable; using newest display source {Path(key).name}")
+                      download_volume(s3, radar, key, when)
+                  else:
+                      print(f"{radar}: no Level-II archive volume available")
+          PY
+
+          echo "Raw radar files available:"
+          find data/raw/KCXX data/raw/KTYX -maxdepth 1 -type f -size +0c -printf '%p %s bytes\n' | tail -20 || true
+
+
+      - name: Refresh live objects from newest KCXX scan
+        # Radar display must still publish if RAP/object scoring is temporarily
+        # unavailable. This step processes the current pair and updates state,
+        # objects, RAP environment, and radar history when possible.
+        continue-on-error: true
+        timeout-minutes: 6
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import subprocess
+          import sys
+          from pathlib import Path
+          from acquisition.radar_watcher import parse_volume_time
+
+          candidates = []
+          for path in Path("data/raw/KCXX").glob("*"):
+              if not path.is_file() or path.stat().st_size <= 0:
+                  continue
+              scan_time = parse_volume_time(path.name, "KCXX")
+              if scan_time is not None:
+                  candidates.append((scan_time, path))
+          if not candidates:
+              raise SystemExit("No local KCXX Level-II volume available to process.")
+          scan_time, source = max(candidates, key=lambda item: item[0])
+          print(f"Processing newest KCXX source {source.name} at {scan_time.isoformat()}")
+          subprocess.run([
+              sys.executable, "scripts/process_live_event.py",
+              "--radar", "KCXX",
+              "--scan-time", scan_time.isoformat(),
+              "--raw-root", "data/raw",
+              "--live-root", "viewer/data/live",
+              "--kcxx-tolerance-minutes", "4",
+              "--ktyx-max-age-minutes", "8",
+              "--archive-attempts", "1",
+              "--archive-delay-seconds", "5",
+          ], check=True)
+          PY
+
+      - name: Build KCXX KTYX live radar mosaic
+        run: |
+          set -euo pipefail
+          python scripts/build_live_radar_mosaic.py             --raw-root data/raw             --kcxx-state viewer/data/live/KCXX_state.json             --ktyx-state viewer/data/live/KTYX_state.json             --output-image viewer/data/live/radar_mosaic.png             --output-json viewer/data/live/radar_mosaic.json
+
+
+      - name: Archive current BTV winter reflectivity image for timeline
+        continue-on-error: true
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          from scripts.process_live_event import archive_live_radar_frame, parse_time
+
+          root = Path("viewer/data/live")
+          metadata = json.loads((root / "radar_mosaic.json").read_text(encoding="utf-8"))
+          source_times = [
+              parse_time(source["scan_time_utc"])
+              for source in (metadata.get("sources") or [])
+              if source.get("scan_time_utc")
+          ]
+          if not source_times:
+              raise SystemExit("No radar source times available for history archive.")
+          archive_live_radar_frame(root, cycle_time=max(source_times))
+          manifest_path = root / "radar_history" / "manifest.json"
+          manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+          frames = manifest.get("frames") or []
+          print("BTV winter reflectivity history frames:", len(frames), "manifest updated:", manifest.get("updated_utc"))
+          if not any(frame.get("palette") == "BTV_WINTER_REFLECTIVITY_V2" and frame.get("palette_version") == "BTV_WINTER_REFLECTIVITY_V2" for frame in frames):
+              raise SystemExit("No valid BTV_WINTER_REFLECTIVITY_V2 frame was archived.")
+          PY
+
+      - name: Verify radar display payload before publish
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          p=Path("viewer/data/live/radar_mosaic.json")
+          if not p.exists():
+              raise SystemExit("Radar mosaic metadata was not created.")
+          d=json.loads(p.read_text(encoding="utf-8"))
+          status=d.get("status")
+          bounds=d.get("bounds")
+          products=d.get("display_products") or {}
+          velocity=products.get("base_velocity") or {}
+          print("radar mosaic status:", status)
+          print("radar sources:", d.get("sources"))
+          print("velocity products:", sorted(velocity))
+          if status not in {"ready","stale"} or not bounds:
+              raise SystemExit("Radar display is unavailable; refusing to publish a broken live payload.")
+          reflectivity_name = products.get("clean_image") or d.get("image") or "radar_mosaic_clean.png"
+          reflectivity_path = Path("viewer/data/live") / str(reflectivity_name)
+          if not reflectivity_path.exists() or reflectivity_path.stat().st_size == 0:
+              raise SystemExit(f"Missing reflectivity image: {reflectivity_path}")
+          print("reflectivity image:", reflectivity_path, reflectivity_path.stat().st_size, "bytes")
+          if status == "ready" and not velocity:
+              print("WARNING: Radar reflectivity is ready but no base velocity product was generated; publishing reflectivity rather than discarding the fresh scan.")
+          for site,item in velocity.items():
+              for key in ("clean_image","raw_image"):
+                  path=Path("viewer/data/live")/str(item[key])
+                  if not path.exists() or path.stat().st_size == 0:
+                      raise SystemExit(f"Missing velocity image: {path}")
+          PY
+
+      - name: Normalize persisted live timestamps
+        run: |
+          python scripts/normalize_live_products.py --root viewer/data/live
+
+      - name: Repair and validate persisted object history
+        run: |
+          set -euo pipefail
+          # Explicitly run the append-only writer after both radar workers.
+          # This makes the browser history resilient to branch/orphan transitions.
+          python - <<'PY'
+          from pathlib import Path
+          from scripts.append_live_object_history import append_history
+          for site in ("KCXX", "KTYX"):
+              geo = Path(f"viewer/data/live/{site}_objects.geojson")
+              if not geo.exists():
+                  continue
+              count = append_history(
+                  geo,
+                  Path(f"viewer/data/live/{site}_history.jsonl"),
+                  Path(f"data/derived/{site}_history.csv"),
+              )
+              history = Path(f"viewer/data/live/{site}_history.jsonl")
+              print(site, "repaired rows:", count, "history bytes:", history.stat().st_size if history.exists() else 0)
+          PY
+
+      - name: Build bounded browser history payloads
+        run: |
+          python - <<'PY'
+          import json
+          from datetime import datetime, timedelta, timezone
+          from pathlib import Path
+
+          cutoff = datetime.now(timezone.utc) - timedelta(days=7)
+          max_rows = 20000
+
+          for site in ("KCXX", "KTYX"):
+              src = Path(f"viewer/data/live/{site}_history.jsonl")
+              rows = []
+              if src.exists():
+                  for line in src.read_text(encoding="utf-8").splitlines():
+                      try:
+                          row = json.loads(line)
+                          ts = datetime.fromisoformat(
+                              str(row["timestamp"]).replace("Z", "+00:00")
+                          ).astimezone(timezone.utc)
+                          if ts >= cutoff:
+                              rows.append(row)
+                      except (KeyError, TypeError, ValueError, json.JSONDecodeError):
+                          continue
+
+              rows.sort(key=lambda r: r.get("timestamp", ""))
+              rows = rows[-max_rows:]
+              src.write_text(
+                  "\n".join(json.dumps(r, separators=(",", ":")) for r in rows)
+                  + ("\n" if rows else ""),
+                  encoding="utf-8",
+              )
+              Path(f"viewer/data/live/{site}_history.json").write_text(
+                  json.dumps(rows, separators=(",", ":")) + "\n",
+                  encoding="utf-8",
+              )
+              print(site, "history rows:", len(rows))
+          PY
+
+      - name: Validate KCXX live product
+        # Object health must be visible, but stale object state must not prevent
+        # independent fresh radar reflectivity/velocity from reaching the viewer.
+        continue-on-error: true
+        run: |
+          python scripts/audit_operational_readiness.py             --state viewer/data/live/KCXX_state.json             --geojson viewer/data/live/KCXX_objects.geojson             --max-age-minutes 60
+          python scripts/live_healthcheck.py             --state viewer/data/live/KCXX_state.json             --geojson viewer/data/live/KCXX_objects.geojson             --max-age-minutes 60
+
+      - name: Validate KTYX live product
+        continue-on-error: true
+        run: |
+          python scripts/audit_operational_readiness.py             --state viewer/data/live/KTYX_state.json             --geojson viewer/data/live/KTYX_objects.geojson             --max-age-minutes 60
+          python scripts/live_healthcheck.py             --state viewer/data/live/KTYX_state.json             --geojson viewer/data/live/KTYX_objects.geojson             --max-age-minutes 60
+
+      - name: Write compact radar health reports
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          from scripts.live_healthcheck import healthcheck
+          for site in ("KCXX", "KTYX"):
+              state = Path(f"viewer/data/live/{site}_state.json")
+              geo = Path(f"viewer/data/live/{site}_objects.geojson")
+              out = Path(f"viewer/data/live/{site}_health.json")
+              if state.exists() and geo.exists():
+                  report = healthcheck(state, geo, max_age_minutes=30)
+              else:
+                  report = {"status":"unavailable","site":site,"reason":"missing live product"}
+              out.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
+              print(site, report["status"])
+          PY
+
+      - name: Publish isolated live-data branch
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/snow-squall-live-payload
+          mkdir -p /tmp/snow-squall-live-payload
+          cp -R viewer/data/live/. /tmp/snow-squall-live-payload/
+
+          git checkout --orphan snow-squall-live-data
+          git rm -rf . >/dev/null 2>&1 || true
+          mkdir -p viewer/data/live
+          cp -R /tmp/snow-squall-live-payload/. viewer/data/live/
+          git add viewer/data/live
+
+          if git diff --cached --quiet; then
+            echo "No live data changes; nothing to publish."
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "Update live snow squall object feeds"
+          git push --force origin HEAD:snow-squall-live-data
