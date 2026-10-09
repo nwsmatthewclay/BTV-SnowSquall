@@ -30,7 +30,7 @@ TARGET_TEMPLATE = "squall_onset_within_{h}m"
 
 BLOCKED_PREFIXES = (
     "case_", "label_", "squall_", "track_event_", "association_",
-    "truth_", "surface_",
+    "truth_", "surface_", "warning_", "weak_",
 )
 BLOCKED_EXACT = {
     "lead_time_min", "lead_time_to_warning_min", "warning_issue_utc",
