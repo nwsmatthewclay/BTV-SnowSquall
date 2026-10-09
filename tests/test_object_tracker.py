@@ -131,3 +131,43 @@ def test_moving_object_keeps_identity_through_short_action_gap():
     assert second["object_id"] == first
     assert second["track_association_status"] == "matched"
     assert second["track_association_distance_px"] > 0
+
+
+def test_track_history_persists_positions_across_state_restore():
+    t = CentroidTracker()
+    first = t.update("2026-01-01T12:00:00Z", [obj(10, 10)])[0]
+    second = t.update("2026-01-01T12:05:00Z", [obj(10, 12)])[0]
+    restored = CentroidTracker.from_state(t.to_state())
+    third = restored.update("2026-01-01T12:10:00Z", [obj(10, 14)])[0]
+
+    assert third["track_id"] == first["track_id"] == second["track_id"]
+    history = third["track_position_history"]
+    assert [row["timestamp"] for row in history] == [
+        "2026-01-01T12:00:00Z",
+        "2026-01-01T12:05:00Z",
+        "2026-01-01T12:10:00Z",
+    ]
+    assert [row["column"] for row in history] == [10.0, 12.0, 14.0]
+
+
+def test_out_of_order_scan_is_rejected_without_rewinding_track():
+    t = CentroidTracker()
+    first = t.update("2026-01-01T12:10:00Z", [obj(10, 10)])[0]
+    before = t.to_state()
+
+    import pytest
+    with pytest.raises(ValueError, match="Out-of-order or duplicate radar scan rejected"):
+        t.update("2026-01-01T12:05:00Z", [obj(10, 9)])
+
+    assert t.to_state() == before
+    next_row = t.update("2026-01-01T12:15:00Z", [obj(10, 12)])[0]
+    assert next_row["track_id"] == first["track_id"]
+    assert next_row["track_position_history"][-1]["timestamp"] == "2026-01-01T12:15:00Z"
+
+
+def test_duplicate_scan_timestamp_is_rejected():
+    t = CentroidTracker()
+    t.update("2026-01-01T12:10:00Z", [obj(10, 10)])
+    import pytest
+    with pytest.raises(ValueError, match="Out-of-order or duplicate radar scan rejected"):
+        t.update("2026-01-01T12:10:00Z", [obj(10, 11)])
