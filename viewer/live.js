@@ -117,6 +117,7 @@ function shadowRecord(site,trackId){return datasets[site]?.shadow?.records?.find
 function shadowRows(site,trackId){return (datasets[site]?.shadowHistory||[]).filter(function(r){return String(r.track_id)===String(trackId)}).sort(function(a,b){return String(a.timestamp).localeCompare(String(b.timestamp))})}
 var scoringMode="model";
 var MAX_MODEL_SCORE_AGE_MINUTES=20;
+var MAX_MODEL_SCAN_LAG_MINUTES=10;
 function probValue(r,h){var v=r?.research_probabilities;if(!v)return null;return v[h+"min"]??v[String(h)]??v[String(h).replace("min","")]??null}
 function validProbability(v){var n=Number(v);return v!=null&&Number.isFinite(n)&&n>=0&&n<=1?n:null}
 function readProbability(values,h){if(!values)return null;return validProbability(values[h+"min"]??values[String(h)]??values[String(h)+"min"])}
@@ -138,7 +139,12 @@ function modelPayloadFor(p,allowHistorical){
   var shadow=isShadowScoreRecord(p)?p:shadowRecord(p.radar_site,p.track_id);
   if(!shadow||!hasProbabilityHorizons(shadow.research_probabilities))return null;
   var shadowStatus=datasets[p.radar_site]?.shadow?.operational_release_status||"candidate_only_not_operational";
-  if(!allowHistorical&&!isShadowScoreRecord(p)&&ageMinutes(datasets[p.radar_site]?.shadow?.updated_utc)>MAX_MODEL_SCORE_AGE_MINUTES)return null;
+  if(!allowHistorical&&!isShadowScoreRecord(p)){
+    if(ageMinutes(datasets[p.radar_site]?.shadow?.updated_utc)>MAX_MODEL_SCORE_AGE_MINUTES)return null;
+    if(ageMinutes(p.timestamp)>MAX_MODEL_SCORE_AGE_MINUTES)return null;
+    var objectTime=new Date(p.timestamp).getTime(),scoreTime=new Date(shadow.timestamp).getTime();
+    if(Number.isFinite(objectTime)&&Number.isFinite(scoreTime)&&Math.abs(objectTime-scoreTime)/60000>MAX_MODEL_SCAN_LAG_MINUTES)return null;
+  }
   var shadowReleased=validatedCalibratedProbabilities(shadow);
   if(shadowReleased)return {values:shadowReleased,source:"released",record:shadow,status:"released"};
   return {values:shadow.research_probabilities,source:"candidate_calibrated",record:shadow,status:shadowStatus,modelInfo:datasets[p.radar_site]?.shadow?.model_info||{}};
