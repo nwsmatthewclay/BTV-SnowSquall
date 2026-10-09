@@ -914,8 +914,14 @@ async function refresh(){
         // Object timestamps must themselves be recent and agree with the scan
         // advertised by state/metadata, otherwise discard the stale feature.
         var aligned=Number.isFinite(scanMs)&&Number.isFinite(objectMs)&&Math.abs(scanMs-objectMs)<=15*60000;
-        var sourceEntry=(radarMosaic?.sources||[]).find(function(s){return String(s.radar||"").toUpperCase()===String(p.radar_site||"").toUpperCase()});
-        var sourceMs=parseUtcDate(sourceEntry?.scan_time_utc)?.getTime();
+        var site=String(p.radar_site||"").toUpperCase();
+        // Prefer the scan time for the actual per-radar raster displayed above this object.
+        // The composite grid may omit a radar whose Cartesian gridding failed even when
+        // its native-gate image was successfully produced; top-level sources can then lag.
+        var siteProduct=radarMosaic?.display_products?.base_reflectivity?.[site];
+        var sourceEntry=(radarMosaic?.sources||[]).find(function(s){return String(s.radar||"").toUpperCase()===site});
+        var sourceTime=siteProduct?.scan_time_utc||sourceEntry?.scan_time_utc;
+        var sourceMs=parseUtcDate(sourceTime)?.getTime();
         var radarCycleAligned=!Number.isFinite(sourceMs)||Math.abs(sourceMs-objectMs)<=15*60000;
         return objectFresh&&aligned&&radarCycleAligned;
       });
