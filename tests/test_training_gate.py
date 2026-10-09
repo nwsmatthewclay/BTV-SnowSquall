@@ -112,3 +112,27 @@ def test_case_heldout_folds_keep_positive_and_null_groups_separate():
     flattened = [item for fold in folds for item in fold]
     assert sorted(flattened) == sorted(groups.unique())
     assert not set(groups[ y.eq(1) ]) & set(groups[ y.eq(0) ])
+
+
+def test_case_heldout_predictors_exclude_future_label_columns():
+    from scripts.train_case_heldout_models import choose_predictors
+    from scripts.model_family_compare import choose_predictors as choose_family_predictors
+
+    frame = pd.DataFrame({
+        "max_reflectivity_dbz": [25.0, 35.0],
+        "cape_jkg": [10.0, 50.0],
+        "warning_iem_verified": [0, 1],
+        "warning_verifying_lsr_count": [0, 2],
+        "weak_onset_within_15m": [0, 1],
+        "weak_sample_weight": [1.0, 2.0],
+        "squall_onset_within_15m": [0, 1],
+    })
+    target = "squall_onset_within_15m"
+
+    for predictors in (
+        choose_predictors(frame, target),
+        choose_family_predictors(frame, target),
+    ):
+        assert "max_reflectivity_dbz" in predictors
+        assert "cape_jkg" in predictors
+        assert not any(c.startswith(("warning_", "weak_", "squall_")) for c in predictors)
