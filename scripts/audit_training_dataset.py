@@ -23,11 +23,25 @@ def audit(path: Path):
 
     issues = []
 
-    if df["scan_time_utc"].isna().any():
-        issues.append("records_missing_scan_time")
+    parsed_scan_time = pd.to_datetime(df["scan_time_utc"], utc=True, errors="coerce")
+    if parsed_scan_time.isna().any():
+        missing_or_invalid = int(parsed_scan_time.isna().sum())
+        issues.append(f"records_missing_or_invalid_scan_time:{missing_or_invalid}")
 
     if df["object_id"].isna().any():
-        issues.append("records_missing_object_id")
+        issues.append(f"records_missing_object_id:{int(df['object_id'].isna().sum())}")
+
+    if "case_id" in df and df["case_id"].isna().any():
+        issues.append(f"records_missing_case_id:{int(df['case_id'].isna().sum())}")
+
+    if "future_information_policy" in df:
+        policy = df["future_information_policy"].fillna("<missing>").astype(str)
+        summary_policy_counts = policy.value_counts(dropna=False).to_dict()
+        invalid_policy = ~policy.str.contains("current|past|forecast", case=False, regex=True)
+        if invalid_policy.any():
+            issues.append(f"invalid_future_information_policy_rows:{int(invalid_policy.sum())}")
+    else:
+        summary_policy_counts = None
 
     known = {
         "prospective_positive",
@@ -106,6 +120,7 @@ def audit(path: Path):
         "unique_split_groups": int(df["split_group"].nunique()) if "split_group" in df else None,
         "duplicate_object_scan_rows": int(df.duplicated(["scan_time_utc", "object_id"], keep=False).sum()),
         "label_status_counts": df["label_status"].value_counts(dropna=False).to_dict(),
+        "future_information_policy_counts": summary_policy_counts,
         "target_stats": target_stats,
         "issues": issues,
     }
