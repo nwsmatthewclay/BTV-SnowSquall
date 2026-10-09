@@ -389,14 +389,20 @@ def process_volume(
     # high-gradient pixels. Keep the general detector unchanged for training
     # while using a more spatially coherent configuration for the live view.
     live_detection_config = ObjectDetectionConfig(
-        # ProbSevere-style detection is intentionally permissive: identify the
-        # coherent radar object first, then let the snow-squall probability
-        # model decide whether the object is meteorologically threatening.
-        min_pixels=8,
+        # Early tracking is intentionally more permissive than squall scoring:
+        # retain coherent precipitation features from 15 dBZ upward so the
+        # tracker can build histories before a feature develops a strong core.
+        # Probability/rank remain diagnostics; they do not gate object creation.
+        threshold_dbz=15.0,
+        core_threshold_dbz=30.0,
+        min_pixels=4,
         close_iterations=1,
         open_iterations=0,
         split_merged=False,
         min_candidate_rank_score=0.0,
+        min_background_contrast_db=2.0,
+        min_gradient_pixels=2,
+        min_gradient_fraction=0.02,
         use_watershed=True,
         watershed_seed_dbz=25.0,
         watershed_max_dbz=57.0,
