@@ -152,10 +152,16 @@ function modelPayloadFor(p,allowHistorical){
 function weightedHorizon(p,h){
   if(!p)return null;
   var comps=p.probability_components||{},c=comps[String(h)]||comps[h+"min"];
-  if(c&&validProbability(Number(c.radar)/100)!=null&&validProbability(Number(c.environment)/100)!=null){
+  // Require both component values explicitly. Number(null) is 0 in JavaScript,
+  // so validating after coercion can turn a missing environment score into a
+  // fabricated 0% and make the baseline look valid when it is not.
+  var radarComponent=c?.radar,environmentComponent=c?.environment;
+  var radarPresent=radarComponent!==null&&radarComponent!==undefined&&radarComponent!==""&&Number.isFinite(Number(radarComponent))&&Number(radarComponent)>=0&&Number(radarComponent)<=100;
+  var environmentPresent=environmentComponent!==null&&environmentComponent!==undefined&&environmentComponent!==""&&Number.isFinite(Number(environmentComponent))&&Number(environmentComponent)>=0&&Number(environmentComponent)<=100;
+  if(c&&radarPresent&&environmentPresent){
     var w=c.weights||p.probability_component_weights||{radar:.5,environment:.5};
     var wr=Number(w.radar),we=Number(w.environment),den=wr+we;
-    if(Number.isFinite(wr)&&Number.isFinite(we)&&den>0)return validProbability(((Number(c.radar)*wr+Number(c.environment)*we)/den)/100);
+    if(Number.isFinite(wr)&&Number.isFinite(we)&&wr>=0&&we>=0&&den>0)return validProbability(((Number(radarComponent)*wr+Number(environmentComponent)*we)/den)/100);
   }
   if(h===15&&p.radar_component_score!=null&&p.environment_component_score!=null){
     var weights=p.probability_component_weights||{radar:.5,environment:.5},a=Number(weights.radar),b=Number(weights.environment),sum=a+b;
@@ -627,6 +633,7 @@ function renderObjectCard(){
 }
 function renderProbability(){
   var p=latestForSelected();if(!p)return;
+  q("probabilityValue").classList.remove("na");
   var weighted=scoringMode==="weighted",payload=weighted?null:modelPayloadFor(p,false);
   if(!hasConfirmedTrack(p)){
     q("probabilityValue").classList.add("na");setText("probabilityValue","—");
