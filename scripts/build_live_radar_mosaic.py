@@ -34,18 +34,19 @@ GRID_SIZE_KM = 250.0
 SPACING_KM = 1.0
 RADARS = ("KCXX", "KTYX")
 
-# Winter-focused high-contrast reflectivity table inspired by the supplied radar reference.
-# No gray reflectivity bin: weak echoes begin in blue/cyan, then green, yellow,
-# orange, red, deep red, and magenta for the strongest returns. No-data stays transparent.
+# BTV winter reflectivity palette v2: light blue -> deep blue -> purple ->
+# deep purple -> red -> maroon. No gray, green, or yellow reflectivity bins.
+# Missing/no-data pixels remain transparent. Keep this exact ramp synchronized
+# with the live viewer legend in style.css.
 NWSREF_COLORS = [
-    "#003b7a", "#005bbb", "#00a6e8", "#00d7ff", "#00ffcc", "#00e600",
-    "#00b800", "#a8e000", "#ffff00", "#ffc400", "#ff8c00", "#ff4b00",
-    "#e00000", "#b00020", "#ff00ff", "#a000c8"
+    "#b9eaff", "#73c8ff", "#3588ed", "#174bc4", "#29218f",
+    "#5127a5", "#7022a0", "#4b126f", "#9d174d", "#d51f32",
+    "#a91425", "#740f20", "#4b0a19"
 ]
 
 
 def nws_reflectivity_cmap():
-    cmap = ListedColormap(NWSREF_COLORS, name="NWSRef")
+    cmap = ListedColormap(NWSREF_COLORS, name="BTV_WINTER_REFLECTIVITY_V2")
     cmap.set_bad((0, 0, 0, 0))
     return cmap
 
@@ -250,7 +251,7 @@ def _render(mosaic, latlon, output_path: Path, *, mode="clean", rhohv=None):
     ax.set_aspect("auto")
 
     if mode == "clean":
-        # Standard NWS radar reflectivity palette. Keep the clean display
+        # BTV winter reflectivity v2 palette. Keep the clean display
         # identical to the raw/native reflectivity products so every frame
         # uses the familiar operational color scale.
         cmap = nws_reflectivity_cmap()
@@ -614,7 +615,8 @@ def main():
             "spacing_km": SPACING_KM,
             "combine_method": "maximum valid reflectivity",
             "field": "reflectivity_dbz",
-            "color_table": "NWSRef",
+            "color_table": "BTV_WINTER_REFLECTIVITY_V2",
+            "palette_version": "BTV_WINTER_REFLECTIVITY_V2",
             "vmin_dbz": -10,
             "vmax_dbz": 75,
             "display_qc": {
@@ -639,7 +641,7 @@ def main():
                     "raw_image": "KTYX_base_reflectivity_raw.png",
                 },
             },
-            "clean_description": "Standard NWSRef reflectivity palette with edge-preserving neighborhood QC. No smoothing; does not alter model input.",
+            "clean_description": "BTV winter reflectivity palette v2 (light blue to deep blue, purple, red, and maroon) with edge-preserving neighborhood QC. No smoothing; does not alter model input.",
             "raw_description": "Unfiltered gridded KCXX/KTYX reflectivity mosaic.",
             "base_reflectivity_description": "Native-gate lowest-valid-sweep base reflectivity from the downloaded KCXX and KTYX Level-II volumes; not a multi-sweep composite.",
         },
@@ -649,7 +651,7 @@ def main():
 
     if mosaic is not None:
         # One canonical browser reflectivity path: the Cartesian KCXX/KTYX
-        # mosaic rendered once with the standard NWSRef palette. Native-gate
+        # mosaic rendered once with the BTV winter reflectivity v2 palette. Native-gate
         # products remain available as separate per-radar diagnostics, but do
         # not replace or mutate the browser-facing mosaic image.
         clean_output = args.output_image.parent / "radar_mosaic_clean.png"
