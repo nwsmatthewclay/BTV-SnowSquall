@@ -677,6 +677,16 @@ function renderProbability(){
 function renderProbabilityChart(hist){
   var svg=q("probChart");svg.innerHTML="";
   var p=latestForSelected(),weighted=scoringMode==="weighted";
+  var chartSubtitle=document.querySelector(".probability-chart-head span");
+  if(chartSubtitle)chartSubtitle.textContent=weighted?"Observed 50/50 score → baseline guidance":"Observed candidate-model score → model horizons";
+  var chartNote=document.querySelector(".probability-chart-note");
+  if(chartNote)chartNote.textContent=weighted
+    ?"Solid = historical 50/50 radar/environment score. Dotted = the current 15/30/45/60-minute component-weighted guidance scores."
+    :"Solid = historical candidate-model near-term estimate. Dotted = current model outputs for +15/+30/+45/+60 minutes. Research-only; not operational guidance.";
+  var observedKey=document.querySelector(".probability-legend .observed-key");
+  if(observedKey&&observedKey.lastChild)observedKey.lastChild.textContent=weighted?"Observed 50/50 score":"Observed model score";
+  var forecastKey=document.querySelector(".probability-legend .forecast-key");
+  if(forecastKey&&forecastKey.lastChild)forecastKey.lastChild.textContent=weighted?"Baseline horizons":"Model horizons";
   var payload=weighted?null:modelPayloadFor(p,false),values=weighted?null:(payload?.values||{});
   var currentNow=modeProbabilityNow(p);
   var source=(hist||[]).slice().sort(function(a,b){return String(a.timestamp||"").localeCompare(String(b.timestamp||""))});
