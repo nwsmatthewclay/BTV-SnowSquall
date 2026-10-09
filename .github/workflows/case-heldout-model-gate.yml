@@ -201,6 +201,28 @@ jobs:
             "${{ steps.feature_table.outputs.path }}" \
             --output-dir data/derived/model_family_comparison
 
+      - name: Require actual labeled evaluation before passing the gate
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          trained = json.loads(Path("data/derived/model_gate/metrics.json").read_text())
+          compared = json.loads(Path("data/derived/model_family_comparison/metrics.json").read_text())
+          train_ok = [h for h, m in trained.items() if m.get("status") == "ok" and m.get("folds")]
+          family_ok = []
+          for h, m in compared.get("horizons", {}).items():
+              models = m.get("models", {})
+              if m.get("status") == "ok" and m.get("folds") and sum(v.get("status") == "ok" for v in models.values()) >= 2:
+                  family_ok.append(h)
+          print("Horizons with valid case-held-out training metrics:", train_ok)
+          print("Horizons with valid common-fold model comparisons:", family_ok)
+          if not train_ok or not family_ok:
+              raise SystemExit(
+                  "MODEL GATE FAILED: no valid labeled, held-out evaluation. "
+                  "Do not treat artifact creation or workflow completion as successful training."
+              )
+          PY
+
       - name: Upload model gate
         uses: actions/upload-artifact@v4
         with:
