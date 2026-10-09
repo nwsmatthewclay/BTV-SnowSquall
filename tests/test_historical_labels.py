@@ -63,6 +63,9 @@ def test_track_association_rejects_unrelated_object(tmp_path):
 
     assert bool(a["track_event_associated"])
     assert b["label_status"] == "unassociated_object"
+    # An unrelated object is unknown, not a verified negative training sample.
+    assert pd.isna(b["squall_onset_within_15m"])
+    assert pd.isna(b["squall_onset_within_60m"])
 
 
 def test_only_nearest_track_per_radar_is_event_associated(tmp_path):
