@@ -63,30 +63,19 @@ def model_specs():
         "logistic": Pipeline([
             ("impute", SimpleImputer(strategy="median", add_indicator=True)),
             ("scale", StandardScaler()),
-            ("model", LogisticRegression(
-                max_iter=3000, class_weight="balanced", solver="liblinear", random_state=42
-            )),
+            ("model", LogisticRegression(max_iter=3000, class_weight="balanced", solver="liblinear", random_state=42)),
         ]),
         "hgb": Pipeline([
             ("impute", SimpleImputer(strategy="median", add_indicator=True)),
-            ("model", HistGradientBoostingClassifier(
-                learning_rate=0.08, max_iter=220, max_leaf_nodes=15,
-                l2_regularization=1.0, random_state=42
-            )),
+            ("model", HistGradientBoostingClassifier(learning_rate=0.08, max_iter=220, max_leaf_nodes=15, l2_regularization=1.0, random_state=42)),
         ]),
         "random_forest": Pipeline([
             ("impute", SimpleImputer(strategy="median", add_indicator=True)),
-            ("model", RandomForestClassifier(
-                n_estimators=300, min_samples_leaf=3, max_features="sqrt",
-                class_weight="balanced", random_state=42, n_jobs=-1
-            )),
+            ("model", RandomForestClassifier(n_estimators=300, min_samples_leaf=3, max_features="sqrt", class_weight="balanced", random_state=42, n_jobs=-1)),
         ]),
         "extra_trees": Pipeline([
             ("impute", SimpleImputer(strategy="median", add_indicator=True)),
-            ("model", ExtraTreesClassifier(
-                n_estimators=300, min_samples_leaf=3, max_features="sqrt",
-                class_weight="balanced", random_state=43, n_jobs=-1
-            )),
+            ("model", ExtraTreesClassifier(n_estimators=300, min_samples_leaf=3, max_features="sqrt", class_weight="balanced", random_state=43, n_jobs=-1)),
         ]),
     }
 
@@ -95,26 +84,43 @@ def evaluate(df: pd.DataFrame, target: str):
     y_series = as_binary(df[target])
     valid = y_series.notna()
     data = df.loc[valid].copy()
+    if data.empty:
+        return {
+            "status": "no_eligible_labeled_rows",
+            "target": target,
+            "records_after_population_policy": int(len(df)),
+            "records_with_target": 0,
+            "note": "The strict evaluation-population policy retained no rows with a known binary target. Do not relax labels silently; review target construction and negative-example supervision.",
+            "models": {},
+            "folds": [],
+        }
+
     y = y_series.loc[valid].astype(int).to_numpy()
-    groups = (
-        data["split_group"].astype(str).to_numpy()
-        if "split_group" in data.columns
-        else (
-            data["case_id"].fillna("").astype(str).to_numpy()
-            if "case_id" in data.columns
-            else np.arange(len(data)).astype(str)
-        )
-    )
+    if "split_group" in data.columns and data["split_group"].notna().any():
+        groups = data["split_group"].fillna("").astype(str).to_numpy()
+    elif "case_id" in data.columns:
+        case = data["case_id"].fillna("").astype(str)
+        null = data.get("null_id", pd.Series("", index=data.index)).fillna("").astype(str)
+        groups = np.where(case.ne(""), "case:" + case, "null:" + null)
+    else:
+        groups = np.arange(len(data)).astype(str)
     unique = np.asarray(sorted(set(groups)))
     if unique.size < 3:
-        raise ValueError(f"Need at least 3 independent groups; found {unique.size}")
+        return {
+            "status": "insufficient_independent_groups",
+            "target": target,
+            "records": int(len(data)),
+            "independent_groups": int(unique.size),
+            "note": "At least three independent event/null groups are required for model-family comparison.",
+            "models": {},
+            "folds": [],
+        }
 
     rng = np.random.default_rng(42)
     shuffled = unique.copy()
     rng.shuffle(shuffled)
     nfolds = min(5, unique.size)
     fold_groups = [shuffled[i::nfolds] for i in range(nfolds)]
-
     row_weights = case_scan_balanced_weights(data)
     predictor_cols = choose_predictors(data, target)
     specs = model_specs()
@@ -127,7 +133,6 @@ def evaluate(df: pd.DataFrame, target: str):
         train = ~test
         if len(np.unique(y[train])) < 2 or len(np.unique(y[test])) < 2:
             continue
-
         fold_predictors = [
             c for c in predictor_cols
             if data.iloc[train][c].notna().any()
@@ -135,55 +140,37 @@ def evaluate(df: pd.DataFrame, target: str):
         ]
         if not fold_predictors:
             continue
-
-        X_train = data.iloc[train][fold_predictors]
-        X_test = data.iloc[test][fold_predictors]
+        X_train, X_test = data.iloc[train][fold_predictors], data.iloc[test][fold_predictors]
         weights = class_weights(y[train])
         probs = {}
-
         for name, spec in specs.items():
             spec.fit(X_train, y[train], model__sample_weight=weights * row_weights[train])
             probs[name] = spec.predict_proba(X_test)[:, 1]
             oof[name][test] = probs[name]
-
         oof["soft_vote"][test] = np.mean(
-            np.column_stack([
-                probs["hgb"],
-                probs["random_forest"],
-                probs["extra_trees"],
-            ]),
-            axis=1,
+            np.column_stack([probs["hgb"], probs["random_forest"], probs["extra_trees"]]), axis=1
         )
         folds.append({
-            "fold": fold,
-            "held_out_groups": [str(x) for x in held],
-            "n_train": int(train.sum()),
-            "n_test": int(test.sum()),
-            "test_positives": int(y[test].sum()),
-            "predictor_count": len(fold_predictors),
+            "fold": fold, "held_out_groups": [str(x) for x in held],
+            "n_train": int(train.sum()), "n_test": int(test.sum()),
+            "test_positives": int(y[test].sum()), "predictor_count": len(fold_predictors),
         })
 
     report = {
         "status": "ok" if folds else "no_valid_folds",
-        "target": target,
-        "records": int(len(data)),
-        "positive": int(y.sum()),
-        "negative": int((1 - y).sum()),
-        "independent_groups": int(len(unique)),
-        "candidate_predictor_count": len(predictor_cols),
-        "folds": folds,
-        "models": {},
+        "target": target, "records": int(len(data)),
+        "positive": int(y.sum()), "negative": int((1-y).sum()),
+        "independent_groups": int(len(unique)), "candidate_predictor_count": len(predictor_cols),
+        "folds": folds, "models": {},
     }
     for name, pred in oof.items():
         ok = np.isfinite(pred)
         if not ok.any():
             report["models"][name] = {"status": "no_valid_predictions"}
             continue
-        yy = y[ok]
-        pp = pred[ok]
+        yy, pp = y[ok], pred[ok]
         report["models"][name] = {
-            "status": "ok",
-            "evaluated_rows": int(ok.sum()),
+            "status": "ok", "evaluated_rows": int(ok.sum()),
             "roc_auc": float(roc_auc_score(yy, pp)) if len(np.unique(yy)) == 2 else None,
             "pr_auc": float(average_precision_score(yy, pp)) if yy.sum() else None,
             "brier": float(brier_score_loss(yy, pp)),
@@ -196,13 +183,10 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("features_csv")
     ap.add_argument("--output-dir", required=True)
-    ap.add_argument(
-        "--reviewed-negative-manifest",
-        default=None,
-        help="Optional human-reviewed hard-negative manifest used to define the evaluation population.",
-    )
+    ap.add_argument("--reviewed-negative-manifest", default=None,
+                    help="Optional human-reviewed hard-negative manifest used to define the evaluation population.")
     args = ap.parse_args()
-    source = pd.read_csv(args.features_csv)
+    source = pd.read_csv(args.features_csv, low_memory=False)
     reviewed_negative_ids = load_reviewed_negative_ids(
         Path(args.reviewed_negative_manifest) if args.reviewed_negative_manifest else None
     )
@@ -210,11 +194,11 @@ def main():
     out = Path(args.output_dir)
     out.mkdir(parents=True, exist_ok=True)
     overall = {
-        "version": "model-family-comparison-v2",
+        "version": "model-family-comparison-v3",
         "dataset": str(args.features_csv),
         "future_information_policy": (
             str(source["future_information_policy"].dropna().iloc[0])
-            if "future_information_policy" in source.columns
+            if "future_information_policy" in source.columns and source["future_information_policy"].notna().any()
             else "unknown"
         ),
         "horizons": {},
@@ -222,14 +206,9 @@ def main():
     for h in HORIZONS:
         target = f"squall_onset_within_{h}m"
         overall["horizons"][str(h)] = (
-            evaluate(source, target)
-            if target in source.columns
-            else {"status": "target_missing"}
+            evaluate(source, target) if target in source.columns else {"status": "target_missing"}
         )
-    (out / "metrics.json").write_text(
-        json.dumps(overall, indent=2) + "\n",
-        encoding="utf-8",
-    )
+    (out / "metrics.json").write_text(json.dumps(overall, indent=2) + "\n", encoding="utf-8")
     print(json.dumps(overall, indent=2))
 
 
