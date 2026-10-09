@@ -115,34 +115,82 @@ function compass(deg){var d=Number(deg);if(!Number.isFinite(d))return "—";var 
 function haversineMi(lat,lon,lat2,lon2){var R=3958.7613,rad=Math.PI/180,p1=Number(lat)*rad,p2=Number(lat2)*rad,dp=(Number(lat2)-Number(lat))*rad,dl=(Number(lon2)-Number(lon))*rad,a=Math.sin(dp/2)**2+Math.cos(p1)*Math.cos(p2)*Math.sin(dl/2)**2;return R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a))}
 function shadowRecord(site,trackId){return datasets[site]?.shadow?.records?.find(function(r){return String(r.track_id)===String(trackId)})||null}
 function shadowRows(site,trackId){return (datasets[site]?.shadowHistory||[]).filter(function(r){return String(r.track_id)===String(trackId)}).sort(function(a,b){return String(a.timestamp).localeCompare(String(b.timestamp))})}
-function probValue(r,h){var v=r?.research_probabilities;if(!v)return null;return v[h]??v[String(h).replace("min","")]??null}
+var scoringMode="model";
+var MAX_MODEL_SCORE_AGE_MINUTES=20;
+var MAX_MODEL_SCAN_LAG_MINUTES=10;
+function probValue(r,h){var v=r?.research_probabilities;if(!v)return null;return v[h+"min"]??v[String(h)]??v[String(h).replace("min","")]??null}
+function validProbability(v){var n=Number(v);return v!=null&&Number.isFinite(n)&&n>=0&&n<=1?n:null}
+function readProbability(values,h){if(!values)return null;return validProbability(values[h+"min"]??values[String(h)]??values[String(h)+"min"])}
+function hasProbabilityHorizons(values){return !!values&&[15,30,45,60].some(function(h){return readProbability(values,h)!=null})}
 function validatedCalibratedProbabilities(r){
   var status=r?.calibration_status??r?.model_metadata?.calibration_status;
   var release=r?.operational_release_status??r?.model_metadata?.operational_release_status;
   var values=r?.calibrated_probabilities;
-  if(status!=="independently_validated"||release!=="released"||!values||typeof values!=="object")return null;
-  var hasHorizon=[15,30,45,60].some(function(h){var v=values[h+"min"]??values[String(h)];return v!=null&&Number.isFinite(Number(v))&&Number(v)>=0&&Number(v)<=1});
-  return hasHorizon?values:null;
+  if(status!=="independently_validated"||release!=="released"||!hasProbabilityHorizons(values))return null;
+  return values;
 }
-function probabilityPayload(r){
-  var calibrated=validatedCalibratedProbabilities(r);
-  return calibrated?{values:calibrated,source:"calibrated"}:{values:r?.research_probabilities||{},source:"research"};
-}
-function probabilityAt(r,h){
-  var payload=probabilityPayload(r),v=payload.values[h+"min"]??payload.values[String(h)];
-  return v!=null&&Number.isFinite(Number(v))&&Number(v)>=0&&Number(v)<=1?Number(v):null;
-}
-function probabilityNow(r){
-  var payload=probabilityPayload(r);
-  if(payload.source==="calibrated"){
-    var value=r?.calibrated_probability_now??payload.values.now;
-    return value!=null&&Number.isFinite(Number(value))&&Number(value)>=0&&Number(value)<=1?Number(value):null;
+function isShadowScoreRecord(r){return !!(r&&r.score_policy&&r.research_probabilities&&typeof r.research_probabilities==="object")}
+function modelPayloadFor(p,allowHistorical){
+  if(!p)return null;
+  var released=validatedCalibratedProbabilities(p);
+  if(released)return {values:released,source:"released",record:p,status:"released"};
+  var direct=p.learned_model_probabilities;
+  if(hasProbabilityHorizons(direct))return {values:direct,source:"candidate",record:p,status:p.operational_release_status||"candidate_only"};
+  var shadow=isShadowScoreRecord(p)?p:shadowRecord(p.radar_site,p.track_id);
+  if(!shadow||!hasProbabilityHorizons(shadow.research_probabilities))return null;
+  var shadowStatus=datasets[p.radar_site]?.shadow?.operational_release_status||"candidate_only_not_operational";
+  if(!allowHistorical&&!isShadowScoreRecord(p)){
+    if(ageMinutes(datasets[p.radar_site]?.shadow?.updated_utc)>MAX_MODEL_SCORE_AGE_MINUTES)return null;
+    if(ageMinutes(p.timestamp)>MAX_MODEL_SCORE_AGE_MINUTES)return null;
+    var objectTime=new Date(p.timestamp).getTime(),scoreTime=new Date(shadow.timestamp).getTime();
+    if(Number.isFinite(objectTime)&&Number.isFinite(scoreTime)&&Math.abs(objectTime-scoreTime)/60000>MAX_MODEL_SCAN_LAG_MINUTES)return null;
   }
-  var value=r?.research_probability_now??r?.probability_now??payload.values.now??payload.values["15min"]??payload.values["15"]??r?.probability_15min;
-  return value!=null&&Number.isFinite(Number(value))&&Number(value)>=0&&Number(value)<=1?Number(value):null;
+  var shadowReleased=validatedCalibratedProbabilities(shadow);
+  if(shadowReleased)return {values:shadowReleased,source:"released",record:shadow,status:"released"};
+  return {values:shadow.research_probabilities,source:"candidate_calibrated",record:shadow,status:shadowStatus,modelInfo:datasets[p.radar_site]?.shadow?.model_info||{}};
 }
-function riskScore(p){var v=probabilityAt(p,15);if(v!=null)return v;var s=shadowRecord(p.radar_site,p.track_id),sv=probabilityAt(s,15);if(sv!=null)return sv;var rank=Number(p.candidate_rank_score);if(Number.isFinite(rank))return rank/100;var z=Number(p.max_reflectivity_dbz);if(z>=45)return .85;if(z>=35)return .62;if(z>=25)return .38;return .16}
-function objectRisk(p){var s=riskScore(p);return s>=.70?"#ff4d3d":s>=.45?"#ff9a3c":s>=.25?"#efcd48":"#54b6ee"}
+function weightedHorizon(p,h){
+  if(!p)return null;
+  var comps=p.probability_components||{},c=comps[String(h)]||comps[h+"min"];
+  if(c&&validProbability(Number(c.radar)/100)!=null&&validProbability(Number(c.environment)/100)!=null){
+    var w=c.weights||p.probability_component_weights||{radar:.5,environment:.5};
+    var wr=Number(w.radar),we=Number(w.environment),den=wr+we;
+    if(Number.isFinite(wr)&&Number.isFinite(we)&&den>0)return validProbability(((Number(c.radar)*wr+Number(c.environment)*we)/den)/100);
+  }
+  if(h===15&&p.radar_component_score!=null&&p.environment_component_score!=null){
+    var weights=p.probability_component_weights||{radar:.5,environment:.5},a=Number(weights.radar),b=Number(weights.environment),sum=a+b;
+    if(Number.isFinite(a)&&Number.isFinite(b)&&sum>0)return validProbability(((Number(p.radar_component_score)*a+Number(p.environment_component_score)*b)/sum)/100);
+  }
+  var legacy=p["probability_"+h+"min"];
+  if(legacy==null&&!isShadowScoreRecord(p))legacy=probValue(p,h);
+  return validProbability(legacy);
+}
+function weightedNow(p){
+  if(!p)return null;
+  if(!isShadowScoreRecord(p)){
+    var value=validProbability(p.probability_now??p.research_probability_now);
+    if(value!=null)return value;
+  }
+  return weightedHorizon(p,15);
+}
+function modeProbabilityAt(p,h){
+  if(scoringMode==="weighted")return weightedHorizon(p,h);
+  var payload=modelPayloadFor(p,isShadowScoreRecord(p));
+  return payload?readProbability(payload.values,h):null;
+}
+function modeProbabilityNow(p){
+  if(scoringMode==="weighted")return weightedNow(p);
+  var payload=modelPayloadFor(p,isShadowScoreRecord(p));
+  if(!payload)return null;
+  var explicit=validProbability(p?.calibrated_probability_now??payload.values.now??payload.values["now"]);
+  if(explicit!=null)return explicit;
+  // Candidate shadow records publish horizon probabilities rather than a
+  // separate instantaneous probability; use +15m as the near-term anchor.
+  return readProbability(payload.values,15);
+}
+function riskScore(p){return modeProbabilityAt(p,15)}
+function scoreForSort(p){var v=riskScore(p);return v==null?-1:v}
+function objectRisk(p){var s=riskScore(p);if(s==null)return "#74838d";return s>=.70?"#ff4d3d":s>=.45?"#ff9a3c":s>=.25?"#efcd48":"#54b6ee"}
 function objectOrdinal(p){var site=String(p?.radar_site||"RADAR").toUpperCase();var track=String(p?.track_id??p?.object_id??"—");return site+"-"+track}
 function latestForSelected(){
   if(!selected)return null;
@@ -547,7 +595,7 @@ function renderInventory(){
   box.innerHTML=allObjects.slice(0,24).map(function(p){var c=objectRisk(p),sel=selected&&selected.radar_site===p.radar_site&&String(selected.track_id)===String(p.track_id);return "<button type='button' class='object-pick "+(sel?"active":"")+"' data-id='"+esc(p.radar_site+"|"+p.track_id)+"'><b><span class='risk-dot' style='background:"+c+"'></span>OBJECT "+objectOrdinal(p)+"</b><span>"+p.radar_site+" • "+num(p.max_reflectivity_dbz,0)+" dBZ • "+num(p.motion_speed_kt,0)+" kt</span></button>"}).join("");
   box.querySelectorAll("[data-id]").forEach(function(btn){btn.onclick=function(){var s=btn.dataset.id.split("|");var p=allObjects.find(function(x){return x.radar_site===s[0]&&String(x.track_id)===s[1]});if(p)selectObject(p)}});
 }
-function selectDefault(){if(selected&&allObjects.some(function(p){return p.radar_site===selected.radar_site&&String(p.track_id)===String(selected.track_id)}))return;var sorted=allObjects.slice().sort(function(a,b){var d=riskScore(b)-riskScore(a);return d||Number(b.max_reflectivity_dbz||0)-Number(a.max_reflectivity_dbz||0)});selected=sorted[0]||null}
+function selectDefault(){if(selected&&allObjects.some(function(p){return p.radar_site===selected.radar_site&&String(p.track_id)===String(selected.track_id)}))return;var sorted=allObjects.slice().sort(function(a,b){var d=scoreForSort(b)-scoreForSort(a);return d||Number(b.max_reflectivity_dbz||0)-Number(a.max_reflectivity_dbz||0)});selected=sorted[0]||null}
 function renderObjectCard(){
   var p=latestForSelected();if(!p){setText("objectTitle","OBJECT —");setText("objectSubtitle","No current object selected.");setText("objectBadge","NO SELECTION");q("objectAccent").style.background="#526776";return}
   var rows=trackHistory(p),last=rows.at(-1)||p,first=rows[0]||p,dist=haversineMi(p.centroid_lat,p.centroid_lon,BTV[0],BTV[1]),speed=Number(p.motion_speed_kt),dir=Number(p.motion_direction_deg??p.motion_dir_deg),age=Number(p.age_scans);
@@ -555,7 +603,7 @@ function renderObjectCard(){
   setText("objectTitle","OBJECT "+objectOrdinal(p));
   setText("objectSubtitle",p.radar_site+" • Track "+p.track_id);
   setText("objectTime",fmtTime(p.timestamp));
-  var z=Number(p.max_reflectivity_dbz);setText("objectBadge",riskScore(p)>=.70?"ELEVATED":riskScore(p)>=.45?"WATCH":"CANDIDATE");
+  var z=Number(p.max_reflectivity_dbz),score=riskScore(p);setText("objectBadge",score==null?"MODEL N/A":score>=.70?"ELEVATED":score>=.45?"WATCH":"CANDIDATE");
   setText("objectTrack",p.radar_site+" • "+p.track_id);
   setText("objectLatLon",num(p.centroid_lat,2)+"°N / "+num(Math.abs(Number(p.centroid_lon)),2)+"°W");
   setText("objectMotion",Number.isFinite(speed)?Math.round(speed)+" kt • "+num(dir,0)+"° ("+compass(dir)+")":"Motion —");
@@ -567,77 +615,101 @@ function renderObjectCard(){
 }
 function renderProbability(){
   var p=latestForSelected();if(!p)return;
-  var shadowScore=shadowRecord(p.radar_site,p.track_id);
-  var payload=probabilityPayload(p),scoreRecord=p;
-  if(payload.source!=="calibrated"&&shadowScore){payload=probabilityPayload(shadowScore);scoreRecord=shadowScore}
-  var probs=payload.values,horizons=[15,30,45,60],calibrated=payload.source==="calibrated";
-  var nowScore=probabilityNow(scoreRecord);
-  var prevRows=trackHistory(p).slice(0,-1),prev=prevRows.length?prevRows.at(-1):null;
-  var prevShadow=prev?shadowRecord(p.radar_site,prev.track_id):null;
-  var prevRecord=prev||prevShadow,prevIsCalibrated=validatedCalibratedProbabilities(prevRecord)!=null,prevNow=prevRecord&&prevIsCalibrated===calibrated?probabilityNow(prevRecord):null;
+  var weighted=scoringMode==="weighted",payload=weighted?null:modelPayloadFor(p,false);
+  var scoreRecord=weighted?p:(payload?.record||p);
+  var values=weighted?null:(payload?.values||{});
+  var horizons=[15,30,45,60],nowScore=modeProbabilityNow(p);
   var badge=q("probBadge"),label=document.querySelector(".prob-label");
-  if(badge){badge.textContent=calibrated?"CALIBRATED • RELEASED":"EXPERIMENTAL • NOT CALIBRATED";badge.className="dashboard-pill "+(calibrated?"":"gated")}
-  if(label)label.textContent=calibrated?"Validated model probability":"Experimental research estimate";
+  var released=!weighted&&payload?.source==="released";
+  var candidate=!weighted&&!!payload&&!released;
+  if(badge){
+    badge.textContent=weighted?"50/50 BASELINE":released?"CALIBRATED • RELEASED":candidate?"MODEL CANDIDATE • RESEARCH ONLY":"MODEL OUTPUT UNAVAILABLE";
+    badge.className="dashboard-pill "+(weighted||released?"":"gated");
+  }
+  if(label)label.textContent=weighted?"50/50 radar + environment guidance":released?"Validated model probability":candidate?"Calibrated candidate model • research only":"Calibrated model • waiting for fresh scores";
+  setText("scoringModeState",weighted?"Radar 50% + environment 50%":candidate?"Candidate model output available":released?"Released calibrated output available":"No fresh model scores for selected object");
   if(nowScore==null){
     q("probabilityValue").classList.add("na");setText("probabilityValue","—");
-    setText("probabilityDelta",calibrated?"Waiting for calibrated NOW anchor":"Awaiting research score");
+    setText("probabilityDelta",weighted?"Baseline score unavailable":"Model score unavailable");
     q("probabilityDelta").className="prob-delta flat";
-    setText("probabilityNote",calibrated
-      ?"Validated calibrated horizon outputs are present, but no calibrated_probability_now value is available for the chart anchor."
-      :"Experimental research estimate only — not a calibrated probability or operational forecast. The operational object feed remains probability-free.");
+    setText("probabilityNote",weighted
+      ?"The 50/50 score needs radar and environment component values for this object."
+      :"No fresh model output is available for this object. The viewer will not silently substitute the 50/50 score; switch scoring mode to compare the baseline.");
   }else{
     q("probabilityValue").classList.remove("na");setText("probabilityValue",(Number(nowScore)*100).toFixed(1)+"%");
+    var prior=null;
+    if(weighted){
+      var hist=trackHistory(p),currentTime=new Date(p.timestamp).getTime();
+      prior=hist.filter(function(r){return new Date(r.timestamp).getTime()<currentTime}).at(-1)||null;
+    }else{
+      prior=shadowRows(p.radar_site,p.track_id).filter(function(r){return new Date(r.timestamp).getTime()<new Date(p.timestamp).getTime()}).at(-1)||null;
+    }
+    var prevNow=prior?modeProbabilityNow(prior):null;
     var d=prevNow==null?null:Number(nowScore)-Number(prevNow);
-    setText("probabilityDelta",d==null?(calibrated?"Validated calibrated NOW estimate":"Current research estimate"):(d>=0?"▲ +":"▼ ")+(Math.abs(d)*100).toFixed(1)+" pp");
+    setText("probabilityDelta",d==null?(weighted?"Current 50/50 guidance score":released?"Released model near-term estimate":"Research model near-term estimate"):(d>=0?"▲ +":"▼ ")+(Math.abs(d)*100).toFixed(1)+" pp");
     q("probabilityDelta").className="prob-delta "+(d==null?"flat":d>=0?"up":"down");
-    setText("probabilityNote",calibrated
-      ?"Independently validated, released model output. Horizon values use the calibrated model bundle."
-      :"Experimental research-model output; not calibrated or operational. Horizon values remain provisional shadow-feed guidance.");
+    setText("probabilityNote",weighted
+      ?"Baseline score = 50% radar signature + 50% RAP/environment score. This is a research index, not an event-calibrated probability."
+      :released
+        ?"Independent validation and release metadata are present. Model horizon probabilities are shown from the released bundle."
+        :"Research candidate only. This uses the existing shadow model bundle and its bundled calibrators; the new case-held-out Platt calibrators from the training gate are not yet wired into live scoring. Do not use as operational guidance.");
   }
   var horizonHtml="<div style='display:grid;grid-template-columns:repeat(4,1fr);gap:4px;margin-top:7px'>"+horizons.map(function(h){
-    var v=probabilityAt(scoreRecord,h);
+    var v=weighted?weightedHorizon(p,h):readProbability(values,h);
     return "<div style='border:1px solid rgba(190,210,220,.14);padding:5px;text-align:center'><span style='display:block;font-size:8px;color:#748a9b'>+"+h+" MIN</span><b style='font-size:13px'>"+(v==null?"—":(v*100).toFixed(1)+"%")+"</b></div>";
   }).join("")+"</div>";
   var cardHtml="";
-  if(calibrated){
-    cardHtml="<div class='prob-component'><span>CALIBRATION STATUS</span><b>VALIDATED</b></div>";
-  }else{
+  if(weighted){
     var radar=p.radar_component_score,env=p.environment_component_score;
-    var cards=[["RADAR DIAGNOSTIC",radar,"#ff5648"],["ENVIRONMENT DIAGNOSTIC",env,"#62ce73"]];
+    var cards=[["RADAR • 50%",radar,"#ff5648"],["ENVIRONMENT • 50%",env,"#62ce73"]];
     cardHtml=cards.map(function(x){return "<div class='prob-component'><span><i class='comp-dot' style='background:"+x[2]+"'></i>"+x[0]+"</span><b>"+(x[1]==null?"—":Number(x[1]).toFixed(1)+"%")+"</b></div>"}).join("");
+  }else{
+    var info=payload?.modelInfo||datasets[p.radar_site]?.shadow?.model_info||{};
+    var model=info["15"]||{};
+    var coverage=payload?.record?.feature_coverage?.["15"]?.fraction;
+    cardHtml="<div class='prob-component'><span>MODEL STATUS</span><b>"+(released?"RELEASED":candidate?"CANDIDATE ONLY":"UNAVAILABLE")+"</b></div>"+
+      "<div class='prob-component'><span>MODEL FAMILY</span><b>"+esc(String(model.model_version||payload?.record?.model_version||"—"))+"</b></div>"+
+      "<div class='prob-component'><span>15-MIN FEATURE COVERAGE</span><b>"+(coverage==null?"—":(Number(coverage)*100).toFixed(0)+"%")+"</b></div>";
   }
-  q("probComponents").innerHTML=cardHtml+horizonHtml+"<div style='margin-top:6px;font-size:8px;color:#748a9b'>"+(calibrated?"Calibrated model horizons; release metadata is required before this path is enabled.":"Research diagnostics only; component values are not calibrated probabilities and no fixed 50/50 blend is implied.")+"</div>";
-  renderProbabilityChart(trackHistory(p));
+  q("probComponents").innerHTML=cardHtml+horizonHtml+"<div style='margin-top:6px;font-size:8px;color:#748a9b'>"+(weighted?"50/50 baseline only; values are component-weighted research scores, not calibrated event probabilities.":released?"Released calibrated model output.":candidate?"Bundled candidate calibration only; independent release status has not been granted.":"Model scores missing or stale; no baseline substitution is made.")+"</div>";
+  renderProbabilityChart(weighted?trackHistory(p):shadowRows(p.radar_site,p.track_id));
 }
 function renderProbabilityChart(hist){
   var svg=q("probChart");svg.innerHTML="";
-  var p=latestForSelected(),currentShadow=p?shadowRecord(p.radar_site,p.track_id):null;
-  var currentPayload=probabilityPayload(p||{}),currentRecord=p||{};
-  if(currentPayload.source!=="calibrated"&&currentShadow){currentPayload=probabilityPayload(currentShadow);currentRecord=currentShadow}
-  var currentProbs=currentPayload.values,currentNow=probabilityNow(currentRecord),calibrated=currentPayload.source==="calibrated";
-  var shadow=p?shadowRows(p.radar_site,p.track_id):[];
-  var source=(shadow||[]).concat(hist||[]).sort(function(a,b){return String(a.timestamp||"").localeCompare(String(b.timestamp||""))});
-  var seen={};
-  var rows=source.filter(function(r){
-    var ts=String(r.timestamp||"");if(!ts||seen[ts])return false;
-    var rowIsCalibrated=probabilityPayload(r).source==="calibrated";
-    if(rowIsCalibrated!==calibrated)return false;
-    if(probabilityNow(r)==null)return false;
-    seen[ts]=true;return true;
+  var p=latestForSelected(),weighted=scoringMode==="weighted";
+  var chartSubtitle=document.querySelector(".probability-chart-head span");
+  if(chartSubtitle)chartSubtitle.textContent=weighted?"Observed 50/50 score → baseline guidance":"Observed candidate-model score → model horizons";
+  var chartNote=document.querySelector(".probability-chart-note");
+  if(chartNote)chartNote.textContent=weighted
+    ?"Solid = historical 50/50 radar/environment score. Dotted = the current 15/30/45/60-minute component-weighted guidance scores."
+    :"Solid = historical candidate-model near-term estimate. Dotted = current model outputs for +15/+30/+45/+60 minutes. Research-only; not operational guidance.";
+  var observedKey=document.querySelector(".probability-legend .observed-key");
+  if(observedKey&&observedKey.lastChild)observedKey.lastChild.textContent=weighted?"Observed 50/50 score":"Observed model score";
+  var forecastKey=document.querySelector(".probability-legend .forecast-key");
+  if(forecastKey&&forecastKey.lastChild)forecastKey.lastChild.textContent=weighted?"Baseline horizons":"Model horizons";
+  var payload=weighted?null:modelPayloadFor(p,false),values=weighted?null:(payload?.values||{});
+  var currentNow=modeProbabilityNow(p);
+  var source=(hist||[]).slice().sort(function(a,b){return String(a.timestamp||"").localeCompare(String(b.timestamp||""))});
+  var byTimestamp=new Map();
+  source.forEach(function(r){
+    var ts=String(r.timestamp||"");if(!ts)return;
+    var v=weighted?weightedNow(r):modeProbabilityNow(r);
+    if(v==null)return;
+    byTimestamp.set(ts,{timestamp:ts,value:v});
   });
-  if(!rows.length&&currentNow==null&&![15,30,45,60].some(function(h){return probabilityAt(currentRecord,h)!=null})){
-    svg.innerHTML="<text x='210' y='70' text-anchor='middle' class='chart-text'>Awaiting object probability history</text>";
-    setText("probabilityChartState","WAITING FOR OBSERVATIONS");return;
+  var rows=Array.from(byTimestamp.values()).sort(function(a,b){return String(a.timestamp).localeCompare(String(b.timestamp))});
+  var horizonValues=[15,30,45,60].map(function(h){return weighted?weightedHorizon(p,h):readProbability(values,h)});
+  if(currentNow==null&&!horizonValues.some(function(v){return v!=null})){
+    svg.innerHTML="<text x='210' y='70' text-anchor='middle' class='chart-text'>"+(weighted?"50/50 baseline unavailable":"No fresh model scores")+"</text>";
+    setText("probabilityChartState",weighted?"BASELINE UNAVAILABLE":"MODEL UNAVAILABLE");return;
   }
   var W=420,H=142,P=24,TOP=16,BOTTOM=24;
-  // Anchor observed history to the selected object's actual scan, not the
-  // newest persisted score row. The score history can lag live object state.
   var selectedTime=parseUtcDate(p&&p.timestamp);
   var latestTime=selectedTime?selectedTime.getTime():(rows.length?new Date(rows.at(-1).timestamp).getTime():Date.now());
   if(!Number.isFinite(latestTime))latestTime=Date.now();
   var observed=rows.map(function(r){
-    var t=new Date(r.timestamp).getTime(),v=probabilityNow(r);
-    return {x:(t-latestTime)/60000,v:v};
+    var t=new Date(r.timestamp).getTime();
+    return {x:(t-latestTime)/60000,v:r.value};
   }).filter(function(pt){return Number.isFinite(pt.x)&&pt.v!=null});
   if(currentNow!=null){
     var hasNow=observed.some(function(pt){return Math.abs(pt.x)<0.01});
@@ -645,10 +717,10 @@ function renderProbabilityChart(hist){
     observed.sort(function(a,b){return a.x-b.x});
   }
   var forecast=[[0,Number(currentNow)]];
-  [15,30,45,60].forEach(function(h){var v=currentProbs[h+"min"]??currentProbs[String(h)];if(v!=null&&Number.isFinite(Number(v)))forecast.push([h,Number(v)])});
+  [15,30,45,60].forEach(function(h,i){var v=horizonValues[i];if(v!=null)forecast.push([h,v])});
   forecast=forecast.filter(function(pt){return Number.isFinite(pt[1])&&pt[1]>=0&&pt[1]<=1});
-  var minX=Math.min(-60,observed.length?Math.min.apply(null,observed.map(function(pt){return pt.x})):0);
-  var maxX=60,x=function(v){return P+(v-minX)/(maxX-minX)*(W-2*P)};
+  var minX=Math.min(-60,observed.length?Math.min.apply(null,observed.map(function(pt){return pt.x})):0),maxX=60;
+  var x=function(v){return P+(v-minX)/(maxX-minX)*(W-2*P)};
   var y=function(v){return H-BOTTOM-Math.max(0,Math.min(1,v))*(H-TOP-BOTTOM)};
   [0,.25,.5,.75,1].forEach(function(v){var yy=y(v);svg.innerHTML+="<line x1='"+P+"' y1='"+yy+"' x2='"+(W-P)+"' y2='"+yy+"' class='chart-gridline'/><text x='"+(P-4)+"' y='"+(yy+3)+"' text-anchor='end' class='chart-text'>"+Math.round(v*100)+"</text>"});
   svg.innerHTML+="<line x1='"+P+"' y1='"+(H-BOTTOM)+"' x2='"+(W-P)+"' y2='"+(H-BOTTOM)+"' class='chart-axis'/>";
@@ -664,7 +736,7 @@ function renderProbabilityChart(hist){
     forecast.slice(1).forEach(function(pt){svg.innerHTML+="<circle cx='"+x(pt[0]).toFixed(1)+"' cy='"+y(pt[1]).toFixed(1)+"' r='2.5' fill='#6fb8e5'/>"});
   }
   svg.innerHTML+="<line x1='"+x(0)+"' y1='"+TOP+"' x2='"+x(0)+"' y2='"+(H-BOTTOM)+"' class='prob-now'/>";
-  setText("probabilityChartState",calibrated?(forecast.length>1?"VALIDATED / FORECAST":"VALIDATED HORIZONS"):(forecast.length>1?"OBSERVED / FORECAST":"OBSERVED / NOW"));
+  setText("probabilityChartState",weighted?"50/50 BASELINE":payload?.source==="released"?"CALIBRATED / RELEASED":"RESEARCH MODEL / CANDIDATE");
 }
 function renderKeyTrends(){
   var p=latestForSelected();if(!p){q("keyTrends").innerHTML="";return}var rows=trackHistory(p),first=rows[0]||p;
@@ -795,7 +867,7 @@ async function refresh(){
       var lat=Number(p.centroid_lat),lon=Number(p.centroid_lon),area=Number(p.area_km2);
       return Number.isFinite(lat)&&Number.isFinite(lon)&&Number.isFinite(area)&&area>0;
     });
-    allObjects.sort(function(a,b){var d=riskScore(b)-riskScore(a);return d||Number(b.max_reflectivity_dbz||0)-Number(a.max_reflectivity_dbz||0)});
+    allObjects.sort(function(a,b){var d=scoreForSort(b)-scoreForSort(a);return d||Number(b.max_reflectivity_dbz||0)-Number(a.max_reflectivity_dbz||0)});
     selectDefault();
     alignRadarHistoryToObjects();
     await renderRadarMosaic();
@@ -809,6 +881,15 @@ async function refresh(){
   }catch(e){setText("feedSummary","Live feed error: "+e.message);q("liveBadge").classList.add("gated");setText("liveBadge","DEGRADED")}
 }
 document.querySelectorAll(".display-btn").forEach(function(b){b.onclick=function(){setRadarMode(b.dataset.radarMode)}});
+q("scoringMode").value=scoringMode;
+q("scoringMode").onchange=function(){
+  scoringMode=this.value==="weighted"?"weighted":"model";
+  allObjects.sort(function(a,b){var d=scoreForSort(b)-scoreForSort(a);return d||Number(b.max_reflectivity_dbz||0)-Number(a.max_reflectivity_dbz||0)});
+  renderMap();
+  renderInventory();
+  renderObjectCard();
+  renderProbability();
+};
 document.querySelectorAll("[data-jump]").forEach(function(btn){btn.onclick=function(){var el=q(btn.dataset.jump);if(el)el.scrollIntoView({behavior:"smooth",block:"start"});document.querySelectorAll("[data-jump]").forEach(function(b){b.classList.toggle("active",b===btn)})}});
 q("refreshBtn").onclick=refresh;q("refreshBtn2").onclick=refresh;
 q("radarPlayBtn").onclick=playRadarAnimation;

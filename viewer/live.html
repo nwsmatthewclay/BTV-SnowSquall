@@ -6,7 +6,7 @@
 <title>BTV Snow Squall • Live Object Monitor</title>
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
-<link rel="stylesheet" href="style.css?v=20261009-radar-manifest-schema-1">
+<link rel="stylesheet" href="style.css?v=20261009-scoring-mode-switch-1">
 </head>
 <body class="live-dashboard-page">
 <header>
@@ -95,7 +95,15 @@
     </div>
 
     <div class="section-block" id="probabilitySection">
-      <div class="section-header"><h2>MODEL PROBABILITY • 15 / 30 / 45 / 60 MIN</h2><span class="dashboard-pill gated" id="probBadge">EXPERIMENTAL • NOT CALIBRATED</span></div>
+      <div class="section-header"><h2>MODEL PROBABILITY • 15 / 30 / 45 / 60 MIN</h2><span class="dashboard-pill gated" id="probBadge">MODEL CANDIDATE • RESEARCH ONLY</span></div>
+      <div class="scoring-mode-row">
+        <label for="scoringMode">SCORING MODE</label>
+        <select id="scoringMode" aria-label="Choose snow squall scoring mode">
+          <option value="model" selected>Calibrated candidate model (research default)</option>
+          <option value="weighted">50/50 radar + environment</option>
+        </select>
+        <span id="scoringModeState">Checking model output…</span>
+      </div>
       <div class="prob-wrap">
         <div class="prob-main">
           <div class="prob-label">Experimental research estimate</div>
@@ -138,6 +146,6 @@
 </main>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<script src="live.js?v=20261009-calibrated-probability-contract-1"></script>
+<script src="live.js?v=20261009-scoring-mode-switch-1"></script>
 </body>
 </html>
