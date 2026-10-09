@@ -16,6 +16,11 @@ def _geojson(path):
                 "timestamp": "2026-01-01T00:00:00Z",
                 "radar_site": "KCXX",
                 "max_reflectivity_dbz": 42.0,
+                "research_probability_now": 0.63,
+                "probability_now": 0.63,
+                "research_probabilities": {"now": 0.63, "15": 0.66, "30": 0.58},
+                "radar_component_score": 72.0,
+                "environment_component_score": 48.0,
                 "environment_status": "complete",
                 "environment": {
                     "source": "RAP",
@@ -43,3 +48,8 @@ def test_append_history_and_deduplicate(tmp_path: Path):
     assert records[0]["cape_jkg"] == 125.0
     assert records[0]["shear_0_6km_ms"] == 12.0
     assert records[0]["label_status"] == "unlabeled"
+    assert records[0]["research_probability_now"] == 0.63
+    assert records[0]["probability_now"] == 0.63
+    assert json.loads(records[0]["research_probabilities"]) == {"now": 0.63, "15": 0.66, "30": 0.58}
+    assert records[0]["radar_component_score"] == 72.0
+    assert records[0]["environment_component_score"] == 48.0
