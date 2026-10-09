@@ -4,8 +4,8 @@ This module deliberately separates three component scores from the final weighte
 probability. Each component is always expressed on a 0-100 scale:
 
     radar        50%
-    environment  50%
-    analog       0%
+    environment  35%
+    analog       15%
 
 The resulting weighted value is still 0-100. These are research guidance
 scores, not calibrated operational probabilities.
@@ -18,7 +18,7 @@ from pathlib import Path
 from typing import Mapping
 
 
-WEIGHTS = {"radar": 0.50, "environment": 0.50, "analog": 0.00}
+WEIGHTS = {"radar": 0.50, "environment": 0.35, "analog": 0.15}
 HORIZONS = (15, 30, 45, 60)
 
 
@@ -275,18 +275,18 @@ def horizon_component_scores(record: Mapping) -> dict:
             f = env_detail.get("forecast_30")
             env_h = env if f is None else 0.25 * env + 0.75 * f
         env_horizon[horizon] = round(_clamp(env_h / 100.0) * 100.0, 2)
-        analog_horizon[horizon] = 50.0
+        analog_horizon[horizon] = analog
 
     final = {}
     components = {}
     for horizon in HORIZONS:
         rs = radar_horizon[horizon]
         es = env_horizon[horizon]
-        final[horizon] = round(rs * WEIGHTS["radar"] + es * WEIGHTS["environment"], 2)
+        ans = analog_horizon[horizon]\n        final[horizon] = round(\n            rs * WEIGHTS["radar"]\n            + es * WEIGHTS["environment"]\n            + ans * WEIGHTS["analog"], 2\n        )
         components[horizon] = {
             "radar": rs,
             "environment": es,
-            "analog": 0.0,
+            "analog": ans,
             "weights": dict(WEIGHTS),
         }
 
@@ -295,6 +295,6 @@ def horizon_component_scores(record: Mapping) -> dict:
         "components": components,
         "radar": {"score": radar, "detail": radar_detail},
         "environment": {"score": env, "detail": env_detail},
-        "analog": {"score": 50.0, "detail": {"status": "provisional_neutral", "message": "Analog cases are diagnostic only and excluded from the probability equation."}},
+        "analog": {"score": analog, "detail": analog_detail},
         "status": "research_weighted_components",
     }
