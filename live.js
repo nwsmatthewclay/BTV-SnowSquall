@@ -651,7 +651,13 @@ function renderProbabilityChart(hist){
   }
 
   var W=420,H=142,P=24,TOP=16,BOTTOM=24;
-  var latestTime=rows.length?new Date(rows.at(-1).timestamp).getTime():Date.now();
+  // Anchor all observed history to the selected object's actual current scan,
+  // not the newest scored history row. The append-only history can lag the live
+  // object by a scan; anchoring to history alone incorrectly shifts the observed
+  // line while the forecast always starts at NOW.
+  var selectedTime=parseUtcDate(p&&p.timestamp);
+  var latestTime=selectedTime?selectedTime.getTime():(rows.length?new Date(rows.at(-1).timestamp).getTime():Date.now());
+  if(!Number.isFinite(latestTime))latestTime=Date.now();
   var observed=rows.map(function(r){
     var t=new Date(r.timestamp).getTime();
     return {x:(t-latestTime)/60000,v:currentResearchScore(r)};
