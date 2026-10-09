@@ -243,21 +243,19 @@ def analog_component(record: Mapping) -> tuple[float, dict]:
 
 
 def horizon_component_scores(record: Mapping) -> dict:
+    """Return radar/environment-only research guidance for 15/30/45/60 min."""
     radar, radar_detail = radar_component(record)
     env, env_detail = environment_component(record)
+
     radar_growth = _num(record.get("reflectivity_trend_dbz_per_hr"))
     radar_horizon = {}
     env_horizon = {}
-    analog_horizon = {}
 
     for horizon in HORIZONS:
-        # Project radar intensity/evolution modestly by horizon.
         trend_adjustment = 0.0 if radar_growth is None else _clamp((radar_growth + 5.0) / 20.0) - 0.25
         radar_h = _clamp((radar + trend_adjustment * horizon * 0.45) / 100.0) * 100.0
         radar_horizon[horizon] = round(radar_h, 2)
 
-        # Blend current RAP environment with the available +30-minute guidance
-        # more strongly at longer lead times.
         if horizon <= 15:
             env_h = env
         elif horizon == 30:
@@ -270,23 +268,18 @@ def horizon_component_scores(record: Mapping) -> dict:
             f = env_detail.get("forecast_30")
             env_h = env if f is None else 0.25 * env + 0.75 * f
         env_horizon[horizon] = round(_clamp(env_h / 100.0) * 100.0, 2)
-        analog_horizon[horizon] = analog
 
     final = {}
     components = {}
     for horizon in HORIZONS:
         rs = radar_horizon[horizon]
         es = env_horizon[horizon]
-        ans = analog_horizon[horizon]
         final[horizon] = round(
-            rs * WEIGHTS["radar"]
-            + es * WEIGHTS["environment"]
-            + ans * WEIGHTS["analog"], 2
+            rs * WEIGHTS["radar"] + es * WEIGHTS["environment"], 2
         )
         components[horizon] = {
             "radar": rs,
             "environment": es,
-            "analog": ans,
             "weights": dict(WEIGHTS),
         }
 
@@ -295,6 +288,5 @@ def horizon_component_scores(record: Mapping) -> dict:
         "components": components,
         "radar": {"score": radar, "detail": radar_detail},
         "environment": {"score": env, "detail": env_detail},
-        "analog": {"score": analog, "detail": analog_detail},
         "status": "research_radar_environment_only",
     }
