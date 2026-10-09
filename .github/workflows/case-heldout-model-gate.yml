@@ -140,11 +140,25 @@ jobs:
           if not any(pd.to_numeric(d[c], errors="coerce").notna().any() for c in targets):
               raise SystemExit("No known onset labels found; refusing to train.")
           PY
+      - name: Generate detailed historical label-quality report
+        if: always() && steps.feature_table.outputs.path != ''
+        run: |
+          mkdir -p data/derived/model_gate
+          python scripts/audit_training_dataset.py "${{ steps.feature_table.outputs.path }}" \
+            --report data/derived/model_gate/training_data_quality.json \
+            --report-only
+
       - name: Run four-horizon event-held-out gate
         run: |
           python scripts/train_case_heldout_models.py \
             "${{ steps.feature_table.outputs.path }}" \
             --output-dir data/derived/model_gate
+
+      - name: Fit research-only horizon calibrators from held-out predictions
+        if: always() && hashFiles('data/derived/model_gate/oof_predictions.csv') != ''
+        run: |
+          python scripts/calibrate_model_bundle.py \
+            --model-dir data/derived/model_gate
 
       - name: Compare model families on common held-out folds
         run: |
@@ -183,4 +197,8 @@ jobs:
             data/derived/model_gate/metrics.json
             data/derived/model_gate/metrics.csv
             data/derived/model_gate/models.joblib
+            data/derived/model_gate/oof_predictions.csv
+            data/derived/model_gate/calibration_report.json
+            data/derived/model_gate/probability_calibrators_research.joblib
+            data/derived/model_gate/training_data_quality.json
             data/derived/model_family_comparison/metrics.json
