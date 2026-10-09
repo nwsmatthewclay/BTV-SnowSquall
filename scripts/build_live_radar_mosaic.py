@@ -34,12 +34,13 @@ GRID_SIZE_KM = 250.0
 SPACING_KM = 1.0
 RADARS = ("KCXX", "KTYX")
 
-# Stable NWS legacy reflectivity table. Do not depend on Py-ART exposing the
-# historical pyart.graph.cm namespace (removed in some supported releases).
+# Winter-focused high-contrast reflectivity table inspired by the supplied radar reference.
+# No gray reflectivity bin: weak echoes begin in blue/cyan, then green, yellow,
+# orange, red, deep red, and magenta for the strongest returns. No-data stays transparent.
 NWSREF_COLORS = [
-    "#646464", "#ccffff", "#0099cc", "#0000cc", "#00ff00", "#00cc00",
-    "#009900", "#ffff00", "#ffcc00", "#ff9900", "#ff0000", "#cc0000",
-    "#990000", "#ff00ff", "#cc00cc", "#990099"
+    "#003b7a", "#005bbb", "#00a6e8", "#00d7ff", "#00ffcc", "#00e600",
+    "#00b800", "#a8e000", "#ffff00", "#ffc400", "#ff8c00", "#ff4b00",
+    "#e00000", "#b00020", "#ff00ff", "#a000c8"
 ]
 
 
