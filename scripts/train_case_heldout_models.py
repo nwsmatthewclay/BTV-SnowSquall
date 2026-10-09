@@ -60,7 +60,7 @@ def choose_predictors(df: pd.DataFrame, target: str) -> list[str]:
             continue
         if any(token in name for token in (
             "future", "lead_time", "warning", "verification", "verifying",
-            "truth", "label", "onset_time", "event_start", "event_end",
+            "truth", "label", "verified_event", "onset_time", "event_start", "event_end",
             "supervision", "association", "impact_observed", "outcome",
         )):
             continue
