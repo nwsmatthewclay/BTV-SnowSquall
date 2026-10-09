@@ -177,6 +177,20 @@ def load_state(path: Path):
     return state, tracker
 
 
+def is_out_of_order_scan(last_scan_time: str | None, incoming_time: datetime) -> bool:
+    """Return True when a volume would rewind or duplicate persisted scan time."""
+    if not last_scan_time:
+        return False
+    try:
+        previous = datetime.fromisoformat(
+            str(last_scan_time).replace("Z", "+00:00")
+        ).astimezone(timezone.utc)
+        incoming = incoming_time.astimezone(timezone.utc)
+    except (AttributeError, TypeError, ValueError, OverflowError):
+        return False
+    return incoming <= previous
+
+
 
 def _json_safe(value):
     """Convert non-finite numeric values to JSON null recursively."""
@@ -365,6 +379,13 @@ def process_volume(
         str(raw_timestamp).replace("Z", "+00:00")
     ).astimezone(timezone.utc)
     timestamp = radar_dt.isoformat().replace("+00:00", "Z")
+    if is_out_of_order_scan(state.get("last_scan_time_utc"), radar_dt):
+        print(
+            f"SKIP out-of-order/duplicate scan: {timestamp} "
+            f"(latest persisted scan: {state.get('last_scan_time_utc')})"
+        )
+        return False
+
     rap_result = None
     try:
         rap_result = acquire_for_radar_time(radar_dt)
