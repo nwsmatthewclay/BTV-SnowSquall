@@ -206,7 +206,7 @@ jobs:
           python scripts/build_live_radar_mosaic.py             --raw-root data/raw             --kcxx-state viewer/data/live/KCXX_state.json             --ktyx-state viewer/data/live/KTYX_state.json             --output-image viewer/data/live/radar_mosaic.png             --output-json viewer/data/live/radar_mosaic.json
 
 
-      - name: Archive current NWSRef radar image for timeline
+      - name: Archive current BTV winter reflectivity image for timeline
         continue-on-error: true
         run: |
           python - <<'PY'
@@ -227,9 +227,9 @@ jobs:
           manifest_path = root / "radar_history" / "manifest.json"
           manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
           frames = manifest.get("frames") or []
-          print("NWSRef history frames:", len(frames), "manifest updated:", manifest.get("updated_utc"))
-          if not any(frame.get("palette") == "NWSRef" and frame.get("palette_version") == "NWSRef_V2" for frame in frames):
-              raise SystemExit("No valid NWSRef_V2 frame was archived.")
+          print("BTV winter reflectivity history frames:", len(frames), "manifest updated:", manifest.get("updated_utc"))
+          if not any(frame.get("palette") == "BTV_WINTER_REFLECTIVITY_V2" and frame.get("palette_version") == "BTV_WINTER_REFLECTIVITY_V2" for frame in frames):
+              raise SystemExit("No valid BTV_WINTER_REFLECTIVITY_V2 frame was archived.")
           PY
 
       - name: Verify radar display payload before publish
