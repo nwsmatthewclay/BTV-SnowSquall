@@ -23,11 +23,25 @@ def audit(path: Path):
 
     issues = []
 
-    if df["scan_time_utc"].isna().any():
-        issues.append("records_missing_scan_time")
+    parsed_scan_time = pd.to_datetime(df["scan_time_utc"], utc=True, errors="coerce")
+    if parsed_scan_time.isna().any():
+        missing_or_invalid = int(parsed_scan_time.isna().sum())
+        issues.append(f"records_missing_or_invalid_scan_time:{missing_or_invalid}")
 
     if df["object_id"].isna().any():
-        issues.append("records_missing_object_id")
+        issues.append(f"records_missing_object_id:{int(df['object_id'].isna().sum())}")
+
+    if "case_id" in df and df["case_id"].isna().any():
+        issues.append(f"records_missing_case_id:{int(df['case_id'].isna().sum())}")
+
+    if "future_information_policy" in df:
+        policy = df["future_information_policy"].fillna("<missing>").astype(str)
+        summary_policy_counts = policy.value_counts(dropna=False).to_dict()
+        invalid_policy = ~policy.str.contains("current|past|forecast", case=False, regex=True)
+        if invalid_policy.any():
+            issues.append(f"invalid_future_information_policy_rows:{int(invalid_policy.sum())}")
+    else:
+        summary_policy_counts = None
 
     known = {
         "prospective_positive",
@@ -106,6 +120,7 @@ def audit(path: Path):
         "unique_split_groups": int(df["split_group"].nunique()) if "split_group" in df else None,
         "duplicate_object_scan_rows": int(df.duplicated(["scan_time_utc", "object_id"], keep=False).sum()),
         "label_status_counts": df["label_status"].value_counts(dropna=False).to_dict(),
+        "future_information_policy_counts": summary_policy_counts,
         "target_stats": target_stats,
         "issues": issues,
     }
@@ -118,6 +133,80 @@ def audit(path: Path):
             summary[f"onset_{h}m_negative"] = int((numeric == 0).sum())
             summary[f"onset_{h}m_known"] = int(numeric.notna().sum())
 
+    # Coverage by forecast horizon and independent case. Row counts alone can
+    # look healthy while nearly all rows have unknown targets or come from a
+    # single event; report both dimensions explicitly for calibration review.
+    horizon_coverage = {}
+    case_horizon_coverage = {}
+    status_horizon_coverage = {}
+    for horizon in HORIZONS:
+        target = f"squall_onset_within_{horizon}m"
+        if target not in df:
+            continue
+        y = pd.to_numeric(df[target], errors="coerce")
+        known_mask = y.isin([0, 1])
+        horizon_coverage[str(horizon)] = {
+            "rows_total": int(len(df)),
+            "rows_known": int(known_mask.sum()),
+            "rows_unknown": int((~known_mask).sum()),
+            "coverage_fraction": float(known_mask.mean()) if len(df) else 0.0,
+            "positive_rows": int(y.eq(1).sum()),
+            "negative_rows": int(y.eq(0).sum()),
+        }
+        if "case_id" in df:
+            case_frame = pd.DataFrame({
+                "case_id": df["case_id"].astype("string"),
+                "target": y,
+            })
+            case_frame = case_frame[case_frame["case_id"].notna() & case_frame["case_id"].ne("")]
+            known_cases = case_frame[case_frame["target"].isin([0, 1])].groupby("case_id")["target"]
+            case_horizon_coverage[str(horizon)] = {
+                "cases_total": int(case_frame["case_id"].nunique()),
+                "cases_with_known_targets": int(known_cases.size().gt(0).sum()),
+                "cases_with_positive_target": int((known_cases.max() == 1).sum()),
+                "cases_with_negative_target": int((known_cases.min() == 0).sum()),
+                "cases_with_both_classes": int(((known_cases.min() == 0) & (known_cases.max() == 1)).sum()),
+            }
+        if "label_status" in df:
+            status_frame = pd.DataFrame({
+                "label_status": df["label_status"].fillna("<missing>").astype(str),
+                "target": y,
+            })
+            status_horizon_coverage[str(horizon)] = {
+                str(status): {
+                    "rows": int(len(group)),
+                    "known": int(group["target"].isin([0, 1]).sum()),
+                    "positive": int(group["target"].eq(1).sum()),
+                    "negative": int(group["target"].eq(0).sum()),
+                    "unknown": int((~group["target"].isin([0, 1])).sum()),
+                }
+                for status, group in status_frame.groupby("label_status", dropna=False)
+            }
+
+    summary["horizon_coverage"] = horizon_coverage
+    summary["case_horizon_coverage"] = case_horizon_coverage
+    summary["label_status_horizon_coverage"] = status_horizon_coverage
+    summary["rows_with_all_onset_targets_unknown"] = int(
+        df[onset_cols].apply(pd.to_numeric, errors="coerce").isna().all(axis=1).sum()
+    ) if all(c in df for c in onset_cols) else None
+    summary["rows_with_any_onset_target_known"] = int(
+        df[onset_cols].apply(pd.to_numeric, errors="coerce").notna().any(axis=1).sum()
+    ) if all(c in df for c in onset_cols) else None
+
+    # Case grouping is the unit of held-out validation. Surface accidental
+    # remapping rather than silently allowing one event to cross split groups.
+    if {"case_id", "split_group"}.issubset(df.columns):
+        case_split_counts = df.dropna(subset=["case_id", "split_group"]).groupby("case_id")["split_group"].nunique()
+        split_case_counts = df.dropna(subset=["case_id", "split_group"]).groupby("split_group")["case_id"].nunique()
+        summary["case_split_integrity"] = {
+            "cases": int(case_split_counts.size),
+            "cases_in_multiple_split_groups": int(case_split_counts.gt(1).sum()),
+            "split_groups_containing_multiple_cases": int(split_case_counts.gt(1).sum()),
+        }
+        if case_split_counts.gt(1).any():
+            issues.append(f"case_spans_multiple_split_groups:{int(case_split_counts.gt(1).sum())}")
+        summary["issues"] = issues
+
     return summary
 
 
@@ -125,9 +214,20 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("input_csv")
     parser.add_argument("--report", default=None)
+    parser.add_argument("--report-only", action="store_true", help="Write and print QC issues without failing the process.")
     args = parser.parse_args()
 
-    summary = audit(Path(args.input_csv))
+    try:
+        summary = audit(Path(args.input_csv))
+        summary["audit_completed"] = True
+    except ValueError as exc:
+        if not args.report_only:
+            raise
+        summary = {
+            "audit_completed": False,
+            "records": None,
+            "issues": [f"audit_error:{exc}"],
+        }
     print("Historical dataset QC")
     print("=====================")
     for key, value in summary.items():
@@ -139,8 +239,10 @@ def main():
         report_path.write_text(json.dumps(summary, indent=2, default=str) + "\n", encoding="utf-8")
         print(f"Report written: {report_path}")
 
-    if summary["issues"]:
+    if summary["issues"] and not args.report_only:
         raise SystemExit("QC FAILED")
+    if summary["issues"] and args.report_only:
+        print("QC REPORT ONLY: issues recorded; process remains successful.")
 
 
 if __name__ == "__main__":
