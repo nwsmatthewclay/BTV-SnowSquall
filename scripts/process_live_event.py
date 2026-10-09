@@ -255,6 +255,7 @@ def main() -> int:
     parser.add_argument("--ktyx-max-age-minutes", type=float, default=8.0)
     parser.add_argument("--archive-attempts", type=int, default=6)
     parser.add_argument("--archive-delay-seconds", type=int, default=20)
+    parser.add_argument("--archive-only", action="store_true", help="Rebuild radar imagery/history without rerunning object or RAP processing.")
     args = parser.parse_args()
 
     requested = parse_time(args.scan_time)
@@ -277,22 +278,25 @@ def main() -> int:
     else:
         print("KTYX companion: unavailable within synchronization window; KCXX-only cycle.")
 
-    process_volume(
-        kcxx_path,
-        args.live_root / "KCXX_state.json",
-        args.live_root / "KCXX_objects.geojson",
-        history_jsonl_path=args.live_root / "KCXX_history.jsonl",
-        history_csv_path=Path("data/derived/KCXX_history.csv"),
-    )
-
-    if ktyx_path:
+    if not args.archive_only:
         process_volume(
-            ktyx_path,
-            args.live_root / "KTYX_state.json",
-            args.live_root / "KTYX_objects.geojson",
-            history_jsonl_path=args.live_root / "KTYX_history.jsonl",
-            history_csv_path=Path("data/derived/KTYX_history.csv"),
+            kcxx_path,
+            args.live_root / "KCXX_state.json",
+            args.live_root / "KCXX_objects.geojson",
+            history_jsonl_path=args.live_root / "KCXX_history.jsonl",
+            history_csv_path=Path("data/derived/KCXX_history.csv"),
         )
+
+        if ktyx_path:
+            process_volume(
+                ktyx_path,
+                args.live_root / "KTYX_state.json",
+                args.live_root / "KTYX_objects.geojson",
+                history_jsonl_path=args.live_root / "KTYX_history.jsonl",
+                history_csv_path=Path("data/derived/KTYX_history.csv"),
+            )
+    else:
+        print("Archive-only replay: preserving live tracker state and object feeds.")
 
     # Force the existing mosaic builder to use these exact source files by
     # supplying temporary state files with last_source set to the selected
