@@ -23,13 +23,30 @@ var MAX_LIVE_OBJECT_AGE_MIN=180;
 var DISPLAY_MIN_SCORE=35;
 
 function q(id){return document.getElementById(id)}
+function nearestAxisIndex(axis,value){
+  var best=-1,distance=Infinity;
+  for(var i=0;i<axis.length;i++){
+    var v=Number(axis[i]);if(!Number.isFinite(v))continue;
+    var d=Math.abs(v-value);if(d<distance){distance=d;best=i}
+  }
+  return best;
+}
 function cursorGridIndex(lat,lon){
   if(!cursorGrid||!cursorGrid.shape)return null;
-  var ny=Number(cursorGrid.shape[0]),nx=Number(cursorGrid.shape[1]),spacing=Number(cursorGrid.spacing_km||1),half=Number(cursorGrid.half_width_km||180),clat=Number(cursorGrid.center_lat||44.15),clon=Number(cursorGrid.center_lon||-73.65);
-  if(![ny,nx,spacing,half,clat,clon].every(Number.isFinite)||ny<2||nx<2)return null;
-  var latKm=(Number(lat)-clat)*111.32;
-  var lonKm=(Number(lon)-clon)*111.32*Math.cos(clat*Math.PI/180);
-  var row=Math.round((latKm+half)/spacing),col=Math.round((lonKm+half)/spacing);
+  var ny=Number(cursorGrid.shape[0]),nx=Number(cursorGrid.shape[1]);
+  if(!Number.isFinite(ny)||!Number.isFinite(nx)||ny<2||nx<2)return null;
+  var latAxis=cursorGrid.latitude_axis,lonAxis=cursorGrid.longitude_axis;
+  var row,col;
+  if(Array.isArray(latAxis)&&latAxis.length===ny&&Array.isArray(lonAxis)&&lonAxis.length===nx){
+    row=nearestAxisIndex(latAxis,Number(lat));
+    col=nearestAxisIndex(lonAxis,Number(lon));
+  }else{
+    // Backward compatibility with older cached cursor products.
+    var spacing=Number(cursorGrid.spacing_km||1),half=Number(cursorGrid.half_width_km||180),clat=Number(cursorGrid.center_lat||44.15),clon=Number(cursorGrid.center_lon||-73.65);
+    if(![spacing,half,clat,clon].every(Number.isFinite))return null;
+    row=Math.round(((Number(lat)-clat)*111.32+half)/spacing);
+    col=Math.round(((Number(lon)-clon)*111.32*Math.cos(clat*Math.PI/180)+half)/spacing);
+  }
   if(row<0||row>=ny||col<0||col>=nx)return null;
   return {row:row,col:col,index:row*nx+col};
 }
