@@ -166,6 +166,9 @@ function setRadarHistoryIndex(index){
   stopRadarAnimation();
   updateRadarTimelineUI();
   renderRadarMosaic();
+  renderMap();
+  var frame=radarHistoryFrame();
+  if(frame)setText("mapScanLabel",fmtTime(frame.timestamp));
 }
 function playRadarAnimation(){
   var frames=radarHistory.frames||[];
@@ -178,6 +181,9 @@ function playRadarAnimation(){
     if(radarHistoryIndex>=frames.length){radarHistoryIndex=0}
     updateRadarTimelineUI();
     renderRadarMosaic();
+    renderMap();
+    var frame=radarHistoryFrame();
+    if(frame)setText("mapScanLabel",fmtTime(frame.timestamp));
   },900);
 }
 async function loadRadarHistory(){
@@ -445,8 +451,42 @@ function selectObject(p){
 function renderMap(){
   Object.values(layers).forEach(function(l){l.clearLayers()});
   if(!allObjects.length)return;
+  var selectedFrame=radarHistoryFrame();
+  var frameDate=selectedFrame?parseUtcDate(selectedFrame.timestamp):null;
+  var liveRef=objectReferenceTime();
+  // Historical reflectivity must not be covered by today's object polygons.
+  // For an older selected frame, show only track centroids observed at or
+  // before that frame, never a current footprint at a stale location.
+  var historicalMode=!!(frameDate&&liveRef!=null&&frameDate.getTime()<liveRef-120000);
+  var targetMs=historicalMode?frameDate.getTime():liveRef;
   allObjects.forEach(function(p){
-    var c=objectRisk(p),sel=selected&&selected.radar_site===p.radar_site&&String(selected.track_id)===String(p.track_id);
+    var c=objectRisk(p),sel=selected&&selected.radar_site===p.radar_site&&String(p.track_id)===String(selected.track_id);
+    var history=Array.isArray(p.track_position_history)?p.track_position_history.slice().sort(function(a,b){return String(a.timestamp||"").localeCompare(String(b.timestamp||""))}):[];
+    var position=null;
+    if(historicalMode){
+      var bestDiff=Infinity;
+      history.forEach(function(h){
+        var ht=parseUtcDate(h&&h.timestamp),lat=Number(h&&h.lat),lon=Number(h&&h.lon);
+        if(!ht||!Number.isFinite(lat)||!Number.isFinite(lon)||ht.getTime()>targetMs)return;
+        var diff=targetMs-ht.getTime();
+        if(diff<bestDiff){bestDiff=diff;position={lat:lat,lon:lon,timestamp:h.timestamp};}
+      });
+      if(!position||bestDiff>8*60000)return;
+      var historicalMarker=L.circleMarker([position.lat,position.lon],{
+        radius:sel?7:4,color:sel?"#fff":c,weight:sel?2.5:1.5,
+        fillColor:c,fillOpacity:sel?.9:.72,interactive:true
+      }).addTo(layers[p.radar_site]);
+      historicalMarker.bindTooltip("OBJECT "+objectOrdinal(p)+" • "+p.radar_site+" • observed "+fmtTime(position.timestamp),{sticky:true});
+      historicalMarker.on("click",function(e){if(e&&e.originalEvent)L.DomEvent.stopPropagation(e.originalEvent);selectObject(p)});
+      if(sel&&history.length>1){
+        var historicalTrail=history.map(function(h){var t=parseUtcDate(h&&h.timestamp),lat=Number(h&&h.lat),lon=Number(h&&h.lon);return t&&t.getTime()<=targetMs&&Number.isFinite(lat)&&Number.isFinite(lon)?[lat,lon]:null;}).filter(Boolean);
+        if(historicalTrail.length>1)L.polyline(historicalTrail,{color:"#fff",weight:2.4,opacity:.9,dashArray:"5 4",interactive:false,lineCap:"round",lineJoin:"round"}).addTo(layers.motion);
+      }
+      if(objectNumbers){
+        L.marker([position.lat,position.lon],{icon:L.divIcon({className:"sq-object-label-wrap",iconSize:null,iconAnchor:[0,0],html:"<div class='sq-object-label "+(sel?"":"dim")+"'>"+objectOrdinal(p)+"</div>"}),interactive:true}).addTo(layers.labels).on("click",function(e){if(e&&e.originalEvent)L.DomEvent.stopPropagation(e.originalEvent);selectObject(p)});
+      }
+      return;
+    }
     var feature=p.radar_geometry?{type:"Feature",geometry:p.radar_geometry,properties:{}}:null;
     var pts=cellPoints(p);
     if(!feature&&!pts.length)return;
@@ -795,7 +835,10 @@ async function refresh(){
     renderMap();renderInventory();renderObjectCard();renderProbability();renderKeyTrends();renderEnvironment();renderEvidence();renderHistory();renderModelStatus();
     var latest=got.map(function(x){return x.state?.last_scan_time_utc||x.geo?.metadata?.scan_time_utc}).filter(Boolean).sort().at(-1);
     setText("liveTime",latest?fmtTime(latest):"No scan time available");
-    setText("mapScanLabel",latest?fmtTime(latest):"No live radar");
+    var frameForLabel=radarHistoryFrame();
+    var refForLabel=objectReferenceTime();
+    var historicalLabelFrame=frameForLabel&&refForLabel!=null&&parseUtcDate(frameForLabel.timestamp)?.getTime()<refForLabel-120000;
+    setText("mapScanLabel",historicalLabelFrame?fmtTime(frameForLabel.timestamp):(latest?fmtTime(latest):"No live radar"));
     setText("feedSummary",(allObjects.length)+" tracked objects • "+detectedObjects.length+" radar detections • "+got.map(function(x){return x.site+" "+(x.error?"OFFLINE":(ageMinutes(x.state?.last_scan_time_utc)<=15?"LIVE":(ageMinutes(x.state?.last_scan_time_utc)<=45?"AGING":"STALE")))}).join(" • "));
     var degraded=got.filter(function(x){return x.error||ageMinutes(x.state?.last_scan_time_utc)>30}).length>0;
     q("liveBadge").classList.toggle("gated",degraded);if(degraded)setText("liveBadge","DEGRADED");
