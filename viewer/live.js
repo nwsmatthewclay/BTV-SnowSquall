@@ -115,34 +115,76 @@ function compass(deg){var d=Number(deg);if(!Number.isFinite(d))return "—";var 
 function haversineMi(lat,lon,lat2,lon2){var R=3958.7613,rad=Math.PI/180,p1=Number(lat)*rad,p2=Number(lat2)*rad,dp=(Number(lat2)-Number(lat))*rad,dl=(Number(lon2)-Number(lon))*rad,a=Math.sin(dp/2)**2+Math.cos(p1)*Math.cos(p2)*Math.sin(dl/2)**2;return R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a))}
 function shadowRecord(site,trackId){return datasets[site]?.shadow?.records?.find(function(r){return String(r.track_id)===String(trackId)})||null}
 function shadowRows(site,trackId){return (datasets[site]?.shadowHistory||[]).filter(function(r){return String(r.track_id)===String(trackId)}).sort(function(a,b){return String(a.timestamp).localeCompare(String(b.timestamp))})}
-function probValue(r,h){var v=r?.research_probabilities;if(!v)return null;return v[h]??v[String(h).replace("min","")]??null}
+var scoringMode="model";
+var MAX_MODEL_SCORE_AGE_MINUTES=20;
+function probValue(r,h){var v=r?.research_probabilities;if(!v)return null;return v[h+"min"]??v[String(h)]??v[String(h).replace("min","")]??null}
+function validProbability(v){var n=Number(v);return v!=null&&Number.isFinite(n)&&n>=0&&n<=1?n:null}
+function readProbability(values,h){if(!values)return null;return validProbability(values[h+"min"]??values[String(h)]??values[String(h)+"min"])}
+function hasProbabilityHorizons(values){return !!values&&[15,30,45,60].some(function(h){return readProbability(values,h)!=null})}
 function validatedCalibratedProbabilities(r){
   var status=r?.calibration_status??r?.model_metadata?.calibration_status;
   var release=r?.operational_release_status??r?.model_metadata?.operational_release_status;
   var values=r?.calibrated_probabilities;
-  if(status!=="independently_validated"||release!=="released"||!values||typeof values!=="object")return null;
-  var hasHorizon=[15,30,45,60].some(function(h){var v=values[h+"min"]??values[String(h)];return v!=null&&Number.isFinite(Number(v))&&Number(v)>=0&&Number(v)<=1});
-  return hasHorizon?values:null;
+  if(status!=="independently_validated"||release!=="released"||!hasProbabilityHorizons(values))return null;
+  return values;
 }
-function probabilityPayload(r){
-  var calibrated=validatedCalibratedProbabilities(r);
-  return calibrated?{values:calibrated,source:"calibrated"}:{values:r?.research_probabilities||{},source:"research"};
+function isShadowScoreRecord(r){return !!(r&&r.score_policy&&r.research_probabilities&&typeof r.research_probabilities==="object")}
+function modelPayloadFor(p,allowHistorical){
+  if(!p)return null;
+  var released=validatedCalibratedProbabilities(p);
+  if(released)return {values:released,source:"released",record:p,status:"released"};
+  var direct=p.learned_model_probabilities;
+  if(hasProbabilityHorizons(direct))return {values:direct,source:"candidate",record:p,status:p.operational_release_status||"candidate_only"};
+  var shadow=isShadowScoreRecord(p)?p:shadowRecord(p.radar_site,p.track_id);
+  if(!shadow||!hasProbabilityHorizons(shadow.research_probabilities))return null;
+  var shadowStatus=datasets[p.radar_site]?.shadow?.operational_release_status||"candidate_only_not_operational";
+  if(!allowHistorical&&!isShadowScoreRecord(p)&&ageMinutes(datasets[p.radar_site]?.shadow?.updated_utc)>MAX_MODEL_SCORE_AGE_MINUTES)return null;
+  var shadowReleased=validatedCalibratedProbabilities(shadow);
+  if(shadowReleased)return {values:shadowReleased,source:"released",record:shadow,status:"released"};
+  return {values:shadow.research_probabilities,source:"candidate_calibrated",record:shadow,status:shadowStatus,modelInfo:datasets[p.radar_site]?.shadow?.model_info||{}};
 }
-function probabilityAt(r,h){
-  var payload=probabilityPayload(r),v=payload.values[h+"min"]??payload.values[String(h)];
-  return v!=null&&Number.isFinite(Number(v))&&Number(v)>=0&&Number(v)<=1?Number(v):null;
-}
-function probabilityNow(r){
-  var payload=probabilityPayload(r);
-  if(payload.source==="calibrated"){
-    var value=r?.calibrated_probability_now??payload.values.now;
-    return value!=null&&Number.isFinite(Number(value))&&Number(value)>=0&&Number(value)<=1?Number(value):null;
+function weightedHorizon(p,h){
+  if(!p)return null;
+  var comps=p.probability_components||{},c=comps[String(h)]||comps[h+"min"];
+  if(c&&validProbability(Number(c.radar)/100)!=null&&validProbability(Number(c.environment)/100)!=null){
+    var w=c.weights||p.probability_component_weights||{radar:.5,environment:.5};
+    var wr=Number(w.radar),we=Number(w.environment),den=wr+we;
+    if(Number.isFinite(wr)&&Number.isFinite(we)&&den>0)return validProbability(((Number(c.radar)*wr+Number(c.environment)*we)/den)/100);
   }
-  var value=r?.research_probability_now??r?.probability_now??payload.values.now??payload.values["15min"]??payload.values["15"]??r?.probability_15min;
-  return value!=null&&Number.isFinite(Number(value))&&Number(value)>=0&&Number(value)<=1?Number(value):null;
+  if(h===15&&p.radar_component_score!=null&&p.environment_component_score!=null){
+    var weights=p.probability_component_weights||{radar:.5,environment:.5},a=Number(weights.radar),b=Number(weights.environment),sum=a+b;
+    if(Number.isFinite(a)&&Number.isFinite(b)&&sum>0)return validProbability(((Number(p.radar_component_score)*a+Number(p.environment_component_score)*b)/sum)/100);
+  }
+  var legacy=p["probability_"+h+"min"];
+  if(legacy==null&&!isShadowScoreRecord(p))legacy=probValue(p,h);
+  return validProbability(legacy);
 }
-function riskScore(p){var v=probabilityAt(p,15);if(v!=null)return v;var s=shadowRecord(p.radar_site,p.track_id),sv=probabilityAt(s,15);if(sv!=null)return sv;var rank=Number(p.candidate_rank_score);if(Number.isFinite(rank))return rank/100;var z=Number(p.max_reflectivity_dbz);if(z>=45)return .85;if(z>=35)return .62;if(z>=25)return .38;return .16}
-function objectRisk(p){var s=riskScore(p);return s>=.70?"#ff4d3d":s>=.45?"#ff9a3c":s>=.25?"#efcd48":"#54b6ee"}
+function weightedNow(p){
+  if(!p)return null;
+  if(!isShadowScoreRecord(p)){
+    var value=validProbability(p.probability_now??p.research_probability_now);
+    if(value!=null)return value;
+  }
+  return weightedHorizon(p,15);
+}
+function modeProbabilityAt(p,h){
+  if(scoringMode==="weighted")return weightedHorizon(p,h);
+  var payload=modelPayloadFor(p,isShadowScoreRecord(p));
+  return payload?readProbability(payload.values,h):null;
+}
+function modeProbabilityNow(p){
+  if(scoringMode==="weighted")return weightedNow(p);
+  var payload=modelPayloadFor(p,isShadowScoreRecord(p));
+  if(!payload)return null;
+  var explicit=validProbability(p?.calibrated_probability_now??payload.values.now??payload.values["now"]);
+  if(explicit!=null)return explicit;
+  // Candidate shadow records publish horizon probabilities rather than a
+  // separate instantaneous probability; use +15m as the near-term anchor.
+  return readProbability(payload.values,15);
+}
+function riskScore(p){return modeProbabilityAt(p,15)}
+function scoreForSort(p){var v=riskScore(p);return v==null?-1:v}
+function objectRisk(p){var s=riskScore(p);if(s==null)return "#74838d";return s>=.70?"#ff4d3d":s>=.45?"#ff9a3c":s>=.25?"#efcd48":"#54b6ee"}
 function objectOrdinal(p){var site=String(p?.radar_site||"RADAR").toUpperCase();var track=String(p?.track_id??p?.object_id??"—");return site+"-"+track}
 function latestForSelected(){
   if(!selected)return null;
