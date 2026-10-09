@@ -17,7 +17,7 @@ from src.snow_squall.training import case_scan_balanced_weights, case_weighted_m
 from scripts.evaluate_temporal_holdout import load_reviewed_negative_ids, filter_evaluation_population
 
 HORIZONS = (15, 30, 45, 60)
-BLOCKED_PREFIXES = ("case_", "label_", "squall_", "track_event_", "association_", "truth_", "surface_")
+BLOCKED_PREFIXES = ("case_", "label_", "squall_", "track_event_", "association_", "truth_", "surface_", "warning_", "weak_")
 BLOCKED_EXACT = {
     "lead_time_min", "lead_time_to_warning_min", "warning_issue_utc",
     "warning_distance_km", "warning_verifying_lsr_count", "warning_supervision_class",
