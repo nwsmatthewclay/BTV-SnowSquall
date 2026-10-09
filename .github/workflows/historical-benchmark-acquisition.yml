@@ -78,7 +78,7 @@ jobs:
           python scripts/build_historical_dataset.py data/derived/positive_object_scans_annotated.csv --output data/derived/positive_object_environment.csv --cases data/manifests/historical_batch_cases.csv --rap-dir data/raw/RAP --ruc-dir data/raw/RUC --narr-dir data/raw/NARR
       - name: Audit training feature coverage
         run: |
-          python scripts/audit_training_dataset.py data/derived/positive_object_environment.csv --output data/derived/historical_training_audit.json
+          python scripts/audit_training_dataset.py data/derived/positive_object_environment.csv --report data/derived/historical_training_audit.json
       - name: Write batch completion summary
         env:
           BATCH: ${{ matrix.batch }}
