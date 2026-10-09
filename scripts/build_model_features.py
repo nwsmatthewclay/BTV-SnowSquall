@@ -163,6 +163,9 @@ def haversine_km(lat1, lon1, lat2, lon2):
 
 def build_features(frame: pd.DataFrame) -> pd.DataFrame:
     df = frame.copy()
+    # Persist the temporal-information contract in the feature table itself so downstream gates can verify it.
+    # This string column is provenance metadata and is excluded from numeric predictors.
+    df["future_information_policy"] = "current_and_past_only"
 
     # Normalize environment aliases so historical and live scoring share one
     # canonical predictor vocabulary.
