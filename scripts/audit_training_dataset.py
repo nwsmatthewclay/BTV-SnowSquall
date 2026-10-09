@@ -118,6 +118,80 @@ def audit(path: Path):
             summary[f"onset_{h}m_negative"] = int((numeric == 0).sum())
             summary[f"onset_{h}m_known"] = int(numeric.notna().sum())
 
+    # Coverage by forecast horizon and independent case. Row counts alone can
+    # look healthy while nearly all rows have unknown targets or come from a
+    # single event; report both dimensions explicitly for calibration review.
+    horizon_coverage = {}
+    case_horizon_coverage = {}
+    status_horizon_coverage = {}
+    for horizon in HORIZONS:
+        target = f"squall_onset_within_{horizon}m"
+        if target not in df:
+            continue
+        y = pd.to_numeric(df[target], errors="coerce")
+        known_mask = y.isin([0, 1])
+        horizon_coverage[str(horizon)] = {
+            "rows_total": int(len(df)),
+            "rows_known": int(known_mask.sum()),
+            "rows_unknown": int((~known_mask).sum()),
+            "coverage_fraction": float(known_mask.mean()) if len(df) else 0.0,
+            "positive_rows": int(y.eq(1).sum()),
+            "negative_rows": int(y.eq(0).sum()),
+        }
+        if "case_id" in df:
+            case_frame = pd.DataFrame({
+                "case_id": df["case_id"].astype("string"),
+                "target": y,
+            })
+            case_frame = case_frame[case_frame["case_id"].notna() & case_frame["case_id"].ne("")]
+            known_cases = case_frame[case_frame["target"].isin([0, 1])].groupby("case_id")["target"]
+            case_horizon_coverage[str(horizon)] = {
+                "cases_total": int(case_frame["case_id"].nunique()),
+                "cases_with_known_targets": int(known_cases.size().gt(0).sum()),
+                "cases_with_positive_target": int((known_cases.max() == 1).sum()),
+                "cases_with_negative_target": int((known_cases.min() == 0).sum()),
+                "cases_with_both_classes": int(((known_cases.min() == 0) & (known_cases.max() == 1)).sum()),
+            }
+        if "label_status" in df:
+            status_frame = pd.DataFrame({
+                "label_status": df["label_status"].fillna("<missing>").astype(str),
+                "target": y,
+            })
+            status_horizon_coverage[str(horizon)] = {
+                str(status): {
+                    "rows": int(len(group)),
+                    "known": int(group["target"].isin([0, 1]).sum()),
+                    "positive": int(group["target"].eq(1).sum()),
+                    "negative": int(group["target"].eq(0).sum()),
+                    "unknown": int((~group["target"].isin([0, 1])).sum()),
+                }
+                for status, group in status_frame.groupby("label_status", dropna=False)
+            }
+
+    summary["horizon_coverage"] = horizon_coverage
+    summary["case_horizon_coverage"] = case_horizon_coverage
+    summary["label_status_horizon_coverage"] = status_horizon_coverage
+    summary["rows_with_all_onset_targets_unknown"] = int(
+        df[onset_cols].apply(pd.to_numeric, errors="coerce").isna().all(axis=1).sum()
+    ) if all(c in df for c in onset_cols) else None
+    summary["rows_with_any_onset_target_known"] = int(
+        df[onset_cols].apply(pd.to_numeric, errors="coerce").notna().any(axis=1).sum()
+    ) if all(c in df for c in onset_cols) else None
+
+    # Case grouping is the unit of held-out validation. Surface accidental
+    # remapping rather than silently allowing one event to cross split groups.
+    if {"case_id", "split_group"}.issubset(df.columns):
+        case_split_counts = df.dropna(subset=["case_id", "split_group"]).groupby("case_id")["split_group"].nunique()
+        split_case_counts = df.dropna(subset=["case_id", "split_group"]).groupby("split_group")["case_id"].nunique()
+        summary["case_split_integrity"] = {
+            "cases": int(case_split_counts.size),
+            "cases_in_multiple_split_groups": int(case_split_counts.gt(1).sum()),
+            "split_groups_containing_multiple_cases": int(split_case_counts.gt(1).sum()),
+        }
+        if case_split_counts.gt(1).any():
+            issues.append(f"case_spans_multiple_split_groups:{int(case_split_counts.gt(1).sum())}")
+        summary["issues"] = issues
+
     return summary
 
 
