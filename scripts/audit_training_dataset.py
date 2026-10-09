@@ -72,6 +72,25 @@ def audit(path: Path):
     if not any(target_stats.get(c, {}).get("known", 0) > 0 for c in onset_cols):
         issues.append("no_known_onset_targets_any_horizon")
 
+    # A positive onset at a shorter horizon must also be positive at longer horizons.
+    for short_h, long_h in zip(HORIZONS[:-1], HORIZONS[1:]):
+        short_col = f"squall_onset_within_{short_h}m"
+        long_col = f"squall_onset_within_{long_h}m"
+        if short_col in df and long_col in df:
+            short = pd.to_numeric(df[short_col], errors="coerce")
+            long = pd.to_numeric(df[long_col], errors="coerce")
+            contradiction = short.eq(1) & long.eq(0)
+            if contradiction.any():
+                issues.append(
+                    f"nonmonotone_onset_horizons:{short_h}m_to_{long_h}m:{int(contradiction.sum())}"
+                )
+
+    # Duplicate object-scan identities inflate samples and risk train/test leakage.
+    if {"scan_time_utc", "object_id"}.issubset(df.columns):
+        duplicate_identity = df.duplicated(["scan_time_utc", "object_id"], keep=False)
+        if duplicate_identity.any():
+            issues.append(f"duplicate_object_scan_identity:{int(duplicate_identity.sum())}")
+
     # Unknown or unrelated objects must not be silently used as negatives.
     unknown_status = df["label_status"].isin(["unassociated_object", "unknown", "candidate_null"])
     for c in onset_cols:
@@ -83,6 +102,9 @@ def audit(path: Path):
     summary = {
         "records": len(df),
         "unique_objects": int(df["object_id"].nunique()),
+        "unique_cases": int(df["case_id"].nunique()) if "case_id" in df else None,
+        "unique_split_groups": int(df["split_group"].nunique()) if "split_group" in df else None,
+        "duplicate_object_scan_rows": int(df.duplicated(["scan_time_utc", "object_id"], keep=False).sum()),
         "label_status_counts": df["label_status"].value_counts(dropna=False).to_dict(),
         "target_stats": target_stats,
         "issues": issues,
