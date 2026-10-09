@@ -80,3 +80,43 @@ A trend such as 12% → 28% → 51% is more informative operationally than a sin
 The BTV and Southern New England studies are initial positive-event seed populations, not the final training population. We should reconstruct each positive case at scan resolution and deliberately sample matched null/non-squall objects from the same cool-season radar environments.
 
 That converts published case lists into a storm-centric machine-learning dataset capable of supporting real-time tracking and probability updates.
+
+## Explicit research component equation
+
+The transparent component guidance score is computed separately for each lead time
+(15, 30, 45, and 60 minutes). Each component is on a 0–100 scale:
+
+```text
+research_score_h = 0.50 × radar_score_h
+                 + 0.35 × environment_score_h
+                 + 0.15 × analog_score
+```
+
+The radar component combines reflectivity intensity (27% of radar score), reflectivity
+contrast (16%), leading-edge reflectivity gradient (16%), velocity contrast (16%),
+core fraction (8%), reflectivity growth (10%), and object organization (7%). Missing
+radar ingredients are omitted and the remaining radar-ingredient weights are
+renormalized.
+
+The environmental component uses the repository's environment-risk features, including
+instability, low-level moisture, low-level wind, lapse rate, and SNSQ, with a snow-at-
+surface gate. At 30, 45, and 60 minutes, available RAP +30-minute guidance contributes
+40%, 60%, and 75% of the environmental score, respectively; current conditions supply
+the remainder. At 15 minutes, the current environment is used.
+
+The analog component compares the object to labeled historical cases using standardized
+feature distance and an inverse-distance-weighted estimate from up to eight nearest
+matches. If no usable labeled analog catalog exists, the component is explicitly marked
+`provisional_neutral` and assigned 50/100; that is a placeholder, not learned evidence.
+
+**Important:** this weighted score is research guidance, not a calibrated probability.
+The trained machine-learning candidate is a separate layer: a model is fit for each
+onset horizon from numeric forecast-time predictors. The baseline uses median
+imputation plus missingness indicators, feature standardization, and logistic
+regression with class/case-scan balancing. Model-family evaluation also compares
+gradient boosting, random forest, and extra trees on common case-held-out folds.
+Labels, warnings, future observations, event association metadata, and other truth
+fields must not be predictors. Cases—not individual scans—are held out together.
+ROC-AUC and PR-AUC assess discrimination; Brier score assesses probability error.
+Calibration and operational release require separate evidence and approval; a
+successful training workflow alone does not make the output operational.
