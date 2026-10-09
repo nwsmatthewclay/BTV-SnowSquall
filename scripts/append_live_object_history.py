@@ -17,6 +17,8 @@ CSV_FIELDS = [
     "timestamp", "radar_site", "source_file", "track_id",
     "track_first_scan_utc", "track_age_min", "track_age_scans",
     "track_missed_scans", "track_association_status", "track_status",
+    "research_probability_now", "probability_now", "research_probabilities",
+    "radar_component_score", "environment_component_score",
     "centroid_lat", "centroid_lon", "pixel_count", "area_km2",
     "length_km", "width_km", "aspect_ratio", "orientation_deg",
     "max_reflectivity_dbz", "mean_reflectivity_dbz", "core_pixel_count",
@@ -67,7 +69,8 @@ def flatten(feature, source_file):
         "core_pixel_count", "core_fraction", "motion_speed_kt",
         "motion_dir_deg", "age_scans", "reflectivity_trend_dbz_per_hr",
         "area_growth_fraction", "environment_status", "data_quality",
-        "model_version",
+        "model_version", "research_probability_now", "probability_now",
+        "radar_component_score", "environment_component_score",
         "echo_top_km", "top_minus_base_km", "vertical_reflectivity_gradient", "vertical_valid_points",
         "zdr_mean_db", "zdr_p90_db", "zdr_gradient_dbkm", "rhohv_mean", "rhohv_max", "rhohv_p90", "rhohv_min",
         "kdp_mean_degkm", "kdp_p90_degkm", "velocity_mean_kt", "velocity_std_kt", "velocity_p90_abs_kt", "velocity_gradient_ktkm",
@@ -75,6 +78,12 @@ def flatten(feature, source_file):
     for key in direct:
         row[key] = _clean(props.get(key))
 
+    # Preserve the score produced for this exact scan. These are research scores,
+    # not calibrated probabilities; historical rows must retain them so the viewer
+    # can plot observed object evolution without borrowing a different scan's score.
+    row["research_probabilities"] = _clean(props.get("research_probabilities"))
+    if isinstance(row["research_probabilities"], dict):
+        row["research_probabilities"] = json.dumps(row["research_probabilities"], separators=(",", ":"), allow_nan=False)
     row["source_file"] = source_file
     row["environment_source"] = env.get("source")
     row["environment_valid_time_utc"] = env.get("source_valid_time_utc")
