@@ -889,7 +889,23 @@ async function refresh(){
     datasets=Object.fromEntries(got.map(function(x){return [x.site,x]}));
     cursorGrid=await fetchOptional(LIVE_BASE+"radar_cursor.json?cb="+Date.now(),null);
     await loadRadarHistory();
-    var detectedObjects=got.flatMap(function(x){var scan=x.state?.last_scan_time_utc||x.geo?.metadata?.scan_time_utc; var fresh=ageMinutes(scan)<=MAX_LIVE_OBJECT_AGE_MIN; return fresh?(x.geo.features||[]).map(function(f){return Object.assign({},f.properties,{radar_site:x.site,radar_geometry:f.geometry})}):[]});
+    var detectedObjects=got.flatMap(function(x){
+      var scan=x.state?.last_scan_time_utc||x.geo?.metadata?.scan_time_utc;
+      var stateFresh=ageMinutes(scan)<=MAX_LIVE_OBJECT_AGE_MIN;
+      if(!stateFresh)return [];
+      return (x.geo.features||[]).map(function(f){
+        return Object.assign({},f.properties,{radar_site:x.site,radar_geometry:f.geometry});
+      }).filter(function(p){
+        var objectTime=p.timestamp;
+        var objectFresh=ageMinutes(objectTime)<=MAX_LIVE_OBJECT_AGE_MIN;
+        var scanMs=parseUtcDate(scan)?.getTime(),objectMs=parseUtcDate(objectTime)?.getTime();
+        // A fresh state file must not make an old GeoJSON payload appear live.
+        // Object timestamps must themselves be recent and agree with the scan
+        // advertised by state/metadata, otherwise discard the stale feature.
+        var aligned=Number.isFinite(scanMs)&&Number.isFinite(objectMs)&&Math.abs(scanMs-objectMs)<=15*60000;
+        return objectFresh&&aligned;
+      });
+    });
     // Keep every valid detected radar object visible. Detection/tracking and
     // hazard ranking are separate concepts: a cell can be trackable before it
     // reaches the research probability/rank threshold.
