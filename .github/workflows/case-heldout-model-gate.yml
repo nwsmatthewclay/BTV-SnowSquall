@@ -5,6 +5,7 @@ on:
   workflow_run:
     workflows:
       - Snow Squall Expansion Dataset
+      - Historical Benchmark Acquisition
     types:
       - completed
   push:
@@ -40,7 +41,30 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
+      - name: Locate completed historical benchmark batches
+        id: historical
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          echo "run_id=" >> "$GITHUB_OUTPUT"
+          for run_id in $(gh run list --workflow "Historical Benchmark Acquisition" --branch main --status success --limit 10 --json databaseId --jq '.[].databaseId'); do
+            artifacts="$(gh api "/repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}/artifacts?per_page=100")"
+            a0="$(printf '%s' "$artifacts" | jq -r '[.artifacts[] | select(.expired==false and .name=="historical-benchmark-batch-0") | .id][0] // empty')"
+            a1="$(printf '%s' "$artifacts" | jq -r '[.artifacts[] | select(.expired==false and .name=="historical-benchmark-batch-1") | .id][0] // empty')"
+            a2="$(printf '%s' "$artifacts" | jq -r '[.artifacts[] | select(.expired==false and .name=="historical-benchmark-batch-2") | .id][0] // empty')"
+            if [ -n "$a0" ] && [ -n "$a1" ] && [ -n "$a2" ]; then
+              echo "run_id=$run_id" >> "$GITHUB_OUTPUT"
+              echo "artifact_0=$a0" >> "$GITHUB_OUTPUT"
+              echo "artifact_1=$a1" >> "$GITHUB_OUTPUT"
+              echo "artifact_2=$a2" >> "$GITHUB_OUTPUT"
+              echo "Using complete historical benchmark acquisition run $run_id"
+              exit 0
+            fi
+          done
+          echo "No complete successful historical benchmark run with all 3 batch artifacts yet; will fall back to the existing feature-artifact path."
       - name: Locate a usable recent feature artifact
+        if: steps.historical.outputs.run_id == ''
         id: source
         env:
           GH_TOKEN: ${{ github.token }}
@@ -71,7 +95,51 @@ jobs:
           echo "source_name=$source_name" >> "$GITHUB_OUTPUT"
           echo "Using $source_name run $run_id artifact $artifact_id"
 
+      - name: Download historical benchmark batches
+        if: steps.historical.outputs.run_id != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          for batch in 0 1 2; do
+            artifact_id="${{ steps.historical.outputs.artifact_0 }}"
+            [ "$batch" = "0" ] || artifact_id="${{ steps.historical.outputs.artifact_1 }}"
+            [ "$batch" != "2" ] || artifact_id="${{ steps.historical.outputs.artifact_2 }}"
+            mkdir -p "data/derived/input/historical_batch_${batch}"
+            curl -fsSL -H "Authorization: Bearer ${GH_TOKEN}" -H "Accept: application/vnd.github+json" \
+              -o "/tmp/historical_batch_${batch}.zip" \
+              "https://api.github.com/repos/${GITHUB_REPOSITORY}/actions/artifacts/${artifact_id}/zip"
+            unzip -q "/tmp/historical_batch_${batch}.zip" -d "data/derived/input/historical_batch_${batch}"
+          done
+          find data/derived/input/historical_batch_* -type f -name 'positive_object_labeled.csv' -print
+      - name: Merge labeled historical batches and build forecast-time features
+        if: steps.historical.outputs.run_id != ''
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+          import pandas as pd
+          files = sorted(Path("data/derived/input").glob("historical_batch_*/**/positive_object_labeled.csv"))
+          if len(files) != 3:
+              raise SystemExit(f"Expected 3 labeled batch files, found {len(files)}: {files}")
+          frames = [pd.read_csv(p, low_memory=False) for p in files]
+          combined = pd.concat(frames, ignore_index=True)
+          if "scan_time_utc" not in combined or "case_id" not in combined:
+              raise SystemExit("Historical labeled table lacks scan_time_utc or case_id.")
+          combined.to_csv("data/derived/input/historical_labeled_all.csv", index=False)
+          print("Historical labeled rows:", len(combined))
+          print("Cases:", combined["case_id"].nunique())
+          for h in (15, 30, 45, 60):
+              col = f"squall_onset_within_{h}m"
+              if col in combined:
+                  y = pd.to_numeric(combined[col], errors="coerce")
+                  print(col, "known=", int(y.notna().sum()), "positive=", int((y == 1).sum()), "negative=", int((y == 0).sum()))
+          PY
+          python scripts/build_model_features.py data/derived/input/historical_labeled_all.csv \
+            --output data/derived/input/rebuilt_model_features.csv \
+            --schema-output data/derived/input/rebuilt_model_features.schema.json
       - name: Download feature artifact
+        if: steps.historical.outputs.run_id == ''
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -83,7 +151,7 @@ jobs:
           find data/derived/input -type f | sort
 
       - name: Rebuild model features from cached object population
-        if: contains(steps.source.outputs.source_name, 'Object Dataset Pilot') || contains(steps.source.outputs.source_name, 'Object Dataset Full Expansion') || contains(steps.source.outputs.source_name, 'Object Population')
+        if: steps.historical.outputs.run_id == '' && (contains(steps.source.outputs.source_name, 'Object Dataset Pilot') || contains(steps.source.outputs.source_name, 'Object Dataset Full Expansion') || contains(steps.source.outputs.source_name, 'Object Population'))
         run: |
           set -euo pipefail
           population="$(find data/derived/input -type f -name 'object_population_pilot.csv' -o -name 'object_population_expansion.csv' | head -1)"
