@@ -321,7 +321,7 @@ async function renderRadarMosaic(){
       reference?.clean_image||reference?.raw_image);
     if(!radarMosaic.bounds && reference?.bounds)radarMosaic.bounds=reference.bounds;
     if(!radarMosaic.grid && hasLocalImage){
-      radarMosaic.grid={color_table:"BTV_WINTER_REFLECTIVITY_V2"};
+      radarMosaic.grid={color_table:"NWSRef"};
     }
     if(!Array.isArray(radarMosaic.sources)){
       radarMosaic.sources=Object.keys(reflectivity).map(function(site){return {radar:site}});
@@ -441,7 +441,7 @@ async function renderRadarMosaic(){
     }
     var syncText=useStoredFrame&&selectedFrame.timestamp?" • "+(radarHistoryIndex>=0?"timeline ":"synced ")+fmtTime(selectedFrame.timestamp):"";
     setText("radarStatus","Reflectivity mosaic "+freshness+" • KCXX + KTYX"+syncText+(radarRefText?" • objects "+radarRefText:""));
-    var activePalette=(selectedFrame&&selectedFrame.palette)||radarMosaic.grid.color_table||"BTV_WINTER_REFLECTIVITY_V2";
+    var activePalette=(selectedFrame&&selectedFrame.palette)||radarMosaic.grid.palette_version||radarMosaic.grid.color_table||"BTV_WINTER_REFLECTIVITY_V2";
     setText("legendTitle","BTV WINTER REFLECTIVITY • dBZ");
     setText("legendNote","BTV winter palette v2 • light blue, deep blue, purple, red, maroon. Clutter suppression: "+(clutterSuppression?"ON":"OFF")+".");
     radarInitialRender=false;
