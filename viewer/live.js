@@ -670,33 +670,30 @@ function renderProbability(){
 }
 function renderProbabilityChart(hist){
   var svg=q("probChart");svg.innerHTML="";
-  var p=latestForSelected(),currentShadow=p?shadowRecord(p.radar_site,p.track_id):null;
-  var currentPayload=probabilityPayload(p||{}),currentRecord=p||{};
-  if(currentPayload.source!=="calibrated"&&currentShadow){currentPayload=probabilityPayload(currentShadow);currentRecord=currentShadow}
-  var currentProbs=currentPayload.values,currentNow=probabilityNow(currentRecord),calibrated=currentPayload.source==="calibrated";
-  var shadow=p?shadowRows(p.radar_site,p.track_id):[];
-  var source=(shadow||[]).concat(hist||[]).sort(function(a,b){return String(a.timestamp||"").localeCompare(String(b.timestamp||""))});
-  var seen={};
-  var rows=source.filter(function(r){
-    var ts=String(r.timestamp||"");if(!ts||seen[ts])return false;
-    var rowIsCalibrated=probabilityPayload(r).source==="calibrated";
-    if(rowIsCalibrated!==calibrated)return false;
-    if(probabilityNow(r)==null)return false;
-    seen[ts]=true;return true;
+  var p=latestForSelected(),weighted=scoringMode==="weighted";
+  var payload=weighted?null:modelPayloadFor(p,false),values=weighted?null:(payload?.values||{});
+  var currentNow=modeProbabilityNow(p);
+  var source=(hist||[]).slice().sort(function(a,b){return String(a.timestamp||"").localeCompare(String(b.timestamp||""))});
+  var byTimestamp=new Map();
+  source.forEach(function(r){
+    var ts=String(r.timestamp||"");if(!ts)return;
+    var v=weighted?weightedNow(r):modeProbabilityNow(r);
+    if(v==null)return;
+    byTimestamp.set(ts,{timestamp:ts,value:v});
   });
-  if(!rows.length&&currentNow==null&&![15,30,45,60].some(function(h){return probabilityAt(currentRecord,h)!=null})){
-    svg.innerHTML="<text x='210' y='70' text-anchor='middle' class='chart-text'>Awaiting object probability history</text>";
-    setText("probabilityChartState","WAITING FOR OBSERVATIONS");return;
+  var rows=Array.from(byTimestamp.values()).sort(function(a,b){return String(a.timestamp).localeCompare(String(b.timestamp))});
+  var horizonValues=[15,30,45,60].map(function(h){return weighted?weightedHorizon(p,h):readProbability(values,h)});
+  if(currentNow==null&&!horizonValues.some(function(v){return v!=null})){
+    svg.innerHTML="<text x='210' y='70' text-anchor='middle' class='chart-text'>"+(weighted?"50/50 baseline unavailable":"No fresh model scores")+"</text>";
+    setText("probabilityChartState",weighted?"BASELINE UNAVAILABLE":"MODEL UNAVAILABLE");return;
   }
   var W=420,H=142,P=24,TOP=16,BOTTOM=24;
-  // Anchor observed history to the selected object's actual scan, not the
-  // newest persisted score row. The score history can lag live object state.
   var selectedTime=parseUtcDate(p&&p.timestamp);
   var latestTime=selectedTime?selectedTime.getTime():(rows.length?new Date(rows.at(-1).timestamp).getTime():Date.now());
   if(!Number.isFinite(latestTime))latestTime=Date.now();
   var observed=rows.map(function(r){
-    var t=new Date(r.timestamp).getTime(),v=probabilityNow(r);
-    return {x:(t-latestTime)/60000,v:v};
+    var t=new Date(r.timestamp).getTime();
+    return {x:(t-latestTime)/60000,v:r.value};
   }).filter(function(pt){return Number.isFinite(pt.x)&&pt.v!=null});
   if(currentNow!=null){
     var hasNow=observed.some(function(pt){return Math.abs(pt.x)<0.01});
@@ -704,10 +701,10 @@ function renderProbabilityChart(hist){
     observed.sort(function(a,b){return a.x-b.x});
   }
   var forecast=[[0,Number(currentNow)]];
-  [15,30,45,60].forEach(function(h){var v=currentProbs[h+"min"]??currentProbs[String(h)];if(v!=null&&Number.isFinite(Number(v)))forecast.push([h,Number(v)])});
+  [15,30,45,60].forEach(function(h,i){var v=horizonValues[i];if(v!=null)forecast.push([h,v])});
   forecast=forecast.filter(function(pt){return Number.isFinite(pt[1])&&pt[1]>=0&&pt[1]<=1});
-  var minX=Math.min(-60,observed.length?Math.min.apply(null,observed.map(function(pt){return pt.x})):0);
-  var maxX=60,x=function(v){return P+(v-minX)/(maxX-minX)*(W-2*P)};
+  var minX=Math.min(-60,observed.length?Math.min.apply(null,observed.map(function(pt){return pt.x})):0),maxX=60;
+  var x=function(v){return P+(v-minX)/(maxX-minX)*(W-2*P)};
   var y=function(v){return H-BOTTOM-Math.max(0,Math.min(1,v))*(H-TOP-BOTTOM)};
   [0,.25,.5,.75,1].forEach(function(v){var yy=y(v);svg.innerHTML+="<line x1='"+P+"' y1='"+yy+"' x2='"+(W-P)+"' y2='"+yy+"' class='chart-gridline'/><text x='"+(P-4)+"' y='"+(yy+3)+"' text-anchor='end' class='chart-text'>"+Math.round(v*100)+"</text>"});
   svg.innerHTML+="<line x1='"+P+"' y1='"+(H-BOTTOM)+"' x2='"+(W-P)+"' y2='"+(H-BOTTOM)+"' class='chart-axis'/>";
@@ -723,7 +720,7 @@ function renderProbabilityChart(hist){
     forecast.slice(1).forEach(function(pt){svg.innerHTML+="<circle cx='"+x(pt[0]).toFixed(1)+"' cy='"+y(pt[1]).toFixed(1)+"' r='2.5' fill='#6fb8e5'/>"});
   }
   svg.innerHTML+="<line x1='"+x(0)+"' y1='"+TOP+"' x2='"+x(0)+"' y2='"+(H-BOTTOM)+"' class='prob-now'/>";
-  setText("probabilityChartState",calibrated?(forecast.length>1?"VALIDATED / FORECAST":"VALIDATED HORIZONS"):(forecast.length>1?"OBSERVED / FORECAST":"OBSERVED / NOW"));
+  setText("probabilityChartState",weighted?"50/50 BASELINE":payload?.source==="released"?"CALIBRATED / RELEASED":"RESEARCH MODEL / CANDIDATE");
 }
 function renderKeyTrends(){
   var p=latestForSelected();if(!p){q("keyTrends").innerHTML="";return}var rows=trackHistory(p),first=rows[0]||p;
