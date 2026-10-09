@@ -260,18 +260,19 @@ body.live-dashboard-page header{
 .map-legend-title{font-size:9px;color:#aec1cf;font-weight:800;letter-spacing:.08em;margin-bottom:5px}
 .map-legend-bar{display:grid;grid-template-columns:28px repeat(12,1fr) 30px;gap:2px;align-items:center;font-size:8px;color:#7f94a5}
 .map-legend-bar i{height:9px;border-radius:2px}
-.map-legend-bar i:nth-child(2){background:rgba(210,225,235,.35)}
-.map-legend-bar i:nth-child(3){background:rgba(174,199,214,.48)}
-.map-legend-bar i:nth-child(4){background:rgba(97,173,219,.70)}
-.map-legend-bar i:nth-child(5){background:rgba(46,148,224,.82)}
-.map-legend-bar i:nth-child(6){background:rgba(31,97,219,.92)}
-.map-legend-bar i:nth-child(7){background:rgba(61,51,199,.96)}
-.map-legend-bar i:nth-child(8){background:rgba(122,46,194,.98)}
-.map-legend-bar i:nth-child(9){background:rgba(194,46,173,1)}
-.map-legend-bar i:nth-child(10){background:rgba(240,64,141,1)}
-.map-legend-bar i:nth-child(11){background:rgba(245,87,46,1)}
-.map-legend-bar i:nth-child(12){background:rgba(250,168,20,1)}
-.map-legend-bar i:nth-child(13){background:rgba(255,235,71,1)}
+.map-legend-bar i:nth-child(2){background:#b9eaff}
+.map-legend-bar i:nth-child(3){background:#73c8ff}
+.map-legend-bar i:nth-child(4){background:#3588ed}
+.map-legend-bar i:nth-child(5){background:#174bc4}
+.map-legend-bar i:nth-child(6){background:#29218f}
+.map-legend-bar i:nth-child(7){background:#5127a5}
+.map-legend-bar i:nth-child(8){background:#7022a0}
+.map-legend-bar i:nth-child(9){background:#4b126f}
+.map-legend-bar i:nth-child(10){background:#9d174d}
+.map-legend-bar i:nth-child(11){background:#d51f32}
+.map-legend-bar i:nth-child(12){background:#a91425}
+.map-legend-bar i:nth-child(13){background:#740f20}
+.map-legend-bar i:nth-child(14){background:#4b0a19}
 .map-legend-bar span:last-child{text-align:right}
 .map-legend-note{margin-top:5px;color:#788d9d;font-size:8px;line-height:1.28}
 .timeline-overlay{
@@ -873,3 +874,8 @@ body.live-dashboard-page #scoringModeState{
   body.live-dashboard-page .scoring-mode-row{align-items:stretch}
   body.live-dashboard-page #scoringMode{width:100%;min-width:0}
 }
+
+/* Restored live-map controls and BTV winter reflectivity ramp (2026-10-09). */
+.map-controls button{white-space:nowrap}
+.map-controls button.active{background:#2b607d;border-color:#7dbfe0;color:#fff}
+.map-legend-bar i{height:10px;border-radius:2px}
