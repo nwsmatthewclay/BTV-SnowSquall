@@ -79,9 +79,9 @@ jobs:
           pip install -r requirements.txt -r requirements-science.txt
 
       - name: Backfill missed radar scans chronologically
-        if: ${{ github.event_name == 'workflow_dispatch' && inputs.backfill_history == true }}
+        if: ${{ (github.event_name == 'workflow_dispatch' && inputs.backfill_history == true) || (github.event_name == 'push' && contains(github.event.head_commit.message, '[radar-gap-repair]')) }}
         continue-on-error: true
-        timeout-minutes: 3
+        timeout-minutes: 10
         run: |
           set -euo pipefail
           # Never jump directly to the newest scan when an intermediate volume
@@ -92,12 +92,12 @@ jobs:
             --radar KCXX \
             --live-root viewer/data/live \
             --raw-root data/raw \
-            --max-cycles 6 \
-            --lookback-hours 4 \
+            --max-cycles 18 \
+            --lookback-hours 3 \
             --kcxx-tolerance-minutes 4 \
             --ktyx-max-age-minutes 8 \
             --archive-attempts 2 \
-            --archive-delay-seconds 5
+            --archive-delay-seconds 3
           # Contract marker: KTYX is the synchronized companion radar.
           echo "synchronized companion radar: --radar KTYX"
 
