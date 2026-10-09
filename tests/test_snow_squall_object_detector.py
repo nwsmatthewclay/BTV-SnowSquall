@@ -173,5 +173,5 @@ def test_live_style_detection_retains_coherent_weak_echo_for_early_tracking():
 
     assert len(objects) == 1
     assert objects[0]["max_reflectivity_dbz"] == 22.0
-    assert objects[0]["area_km2"] >= 4.0
+    assert objects[0]["pixel_count"] >= 4
 
