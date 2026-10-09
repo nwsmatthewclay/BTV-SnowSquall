@@ -214,13 +214,37 @@ async function renderRadarMosaic(){
     radarMosaic=null;
   }
 
+  // Accept both the canonical manifest and the current publisher schema.
+  // The publisher currently supplies bounds and per-product metadata under
+  // display_products.base_reflectivity rather than top-level bounds/grid.
+  // Normalize that schema here so valid, freshly published mosaics are not
+  // rejected and replaced by the "waiting for feed" state.
+  if(radarMosaic && radarMosaic.status==="ready" && radarMosaic.display_products){
+    var products=radarMosaic.display_products;
+    var reflectivity=products.base_reflectivity||{};
+    var reference=reflectivity.KCXX||reflectivity.KTYX;
+    var hasLocalImage=!!(products.clean_image||products.raw_image||
+      reference?.clean_image||reference?.raw_image);
+    if(!radarMosaic.bounds && reference?.bounds)radarMosaic.bounds=reference.bounds;
+    if(!radarMosaic.grid && hasLocalImage){
+      radarMosaic.grid={color_table:"NWSRef"};
+    }
+    if(!Array.isArray(radarMosaic.sources)){
+      radarMosaic.sources=Object.keys(reflectivity).map(function(site){return {radar:site}});
+    }
+  }
+
   // One reflectivity renderer, one palette. Do not swap to IEM/NOAA tiles or
   // legacy archived PNGs when the local product is temporarily unavailable.
   var mosaicIsNwsRef=!!(
     radarMosaic &&
+    radarMosaic.status==="ready" &&
     radarMosaic.bounds &&
     radarMosaic.grid &&
-    radarMosaic.grid.color_table==="NWSRef"
+    radarMosaic.grid.color_table==="NWSRef" &&
+    radarMosaic.display_products &&
+    (radarMosaic.display_products.clean_image||radarMosaic.display_products.raw_image||
+      radarMosaic.display_products.base_reflectivity)
   );
 
   if(!mosaicIsNwsRef){
