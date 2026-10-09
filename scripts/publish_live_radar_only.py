@@ -101,6 +101,8 @@ def main() -> None:
             latlon,
             args.output_root / "radar_mosaic_clean.png",
             rhohv=rhohv,
+            site_fields=site_fields,
+            rhohv_by_site=site_rho_fields,
         )
         renderer.render_raw(
             mosaic,
