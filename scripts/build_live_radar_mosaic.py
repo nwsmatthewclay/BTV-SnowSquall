@@ -19,7 +19,6 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pyart
 import cmweather
-from pyart.graph import cm as pyart_cm
 from matplotlib.colors import BoundaryNorm, ListedColormap
 from scipy import ndimage
 
@@ -34,6 +33,20 @@ CENTER_LON = -73.65
 GRID_SIZE_KM = 250.0
 SPACING_KM = 1.0
 RADARS = ("KCXX", "KTYX")
+
+# Stable NWS legacy reflectivity table. Do not depend on Py-ART exposing the
+# historical pyart.graph.cm namespace (removed in some supported releases).
+NWSREF_COLORS = [
+    "#646464", "#ccffff", "#0099cc", "#0000cc", "#00ff00", "#00cc00",
+    "#009900", "#ffff00", "#ffcc00", "#ff9900", "#ff0000", "#cc0000",
+    "#990000", "#ff00ff", "#cc00cc", "#990099"
+]
+
+
+def nws_reflectivity_cmap():
+    cmap = ListedColormap(NWSREF_COLORS, name="NWSRef")
+    cmap.set_bad((0, 0, 0, 0))
+    return cmap
 
 
 def read_state(path: Path) -> dict:
@@ -236,7 +249,7 @@ def _render(mosaic, latlon, output_path: Path, *, mode="clean", rhohv=None):
         # Standard NWS radar reflectivity palette. Keep the clean display
         # identical to the raw/native reflectivity products so every frame
         # uses the familiar operational color scale.
-        cmap = pyart_cm.NWSRef.copy()
+        cmap = nws_reflectivity_cmap()
         cmap.set_bad((0, 0, 0, 0))
         ax.pcolormesh(lon, lat, masked, cmap=cmap, vmin=-10, vmax=75, shading="auto")
     else:
