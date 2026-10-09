@@ -190,6 +190,7 @@ jobs:
           PY
 
       - name: Upload model gate
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: case-held-out-model-gate
