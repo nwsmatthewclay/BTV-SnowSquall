@@ -246,9 +246,9 @@ def analog_component(record: Mapping) -> tuple[float, dict]:
 def horizon_component_scores(record: Mapping) -> dict:
     radar, radar_detail = radar_component(record)
     env, env_detail = environment_component(record)
-    # Analogs are retained only as an optional diagnostic for future research;
-    # they have zero weight in the snow-squall probability equation.
-    # Analog matching is diagnostic research only and is deliberately excluded\n    # from all Snow Squall probabilities. Keep it available for research audits.\n    analog, analog_detail = analog_component(record)
+    # Use labeled analogs when available; otherwise analog_component explicitly
+    # reports a provisional neutral score rather than inventing historical truth.
+    analog, analog_detail = analog_component(record)
 
     radar_growth = _num(record.get("reflectivity_trend_dbz_per_hr"))
     radar_horizon = {}
@@ -256,13 +256,13 @@ def horizon_component_scores(record: Mapping) -> dict:
     analog_horizon = {}
 
     for horizon in HORIZONS:
-        # Project the radar component using observed intensity trend. This is
-        # deliberately modest: no trend can move the score by more than 20
-        # points through the 60-minute horizon.
+        # Project radar intensity/evolution modestly by horizon.
         trend_adjustment = 0.0 if radar_growth is None else _clamp((radar_growth + 5.0) / 20.0) - 0.25
         radar_h = _clamp((radar + trend_adjustment * horizon * 0.45) / 100.0) * 100.0
         radar_horizon[horizon] = round(radar_h, 2)
 
+        # Blend current RAP environment with the available +30-minute guidance
+        # more strongly at longer lead times.
         if horizon <= 15:
             env_h = env
         elif horizon == 30:
@@ -282,7 +282,12 @@ def horizon_component_scores(record: Mapping) -> dict:
     for horizon in HORIZONS:
         rs = radar_horizon[horizon]
         es = env_horizon[horizon]
-        ans = analog_horizon[horizon]\n        final[horizon] = round(\n            rs * WEIGHTS["radar"]\n            + es * WEIGHTS["environment"]\n            + ans * WEIGHTS["analog"], 2\n        )
+        ans = analog_horizon[horizon]
+        final[horizon] = round(
+            rs * WEIGHTS["radar"]
+            + es * WEIGHTS["environment"]
+            + ans * WEIGHTS["analog"], 2
+        )
         components[horizon] = {
             "radar": rs,
             "environment": es,
