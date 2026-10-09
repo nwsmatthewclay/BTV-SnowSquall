@@ -19,3 +19,15 @@ def test_cursor_readout_prefers_actual_grid_coordinate_axes():
     assert "cursorGrid.longitude_axis" in js
     assert "row=nearestAxisIndex(latAxis,Number(lat))" in js
     assert "col=nearestAxisIndex(lonAxis,Number(lon))" in js
+
+
+def test_live_viewer_accepts_published_radar_mosaic_manifest_schema():
+    root = Path(__file__).resolve().parents[1]
+    js = (root / "viewer" / "live.js").read_text(encoding="utf-8")
+    # The publisher emits ready + display_products.base_reflectivity and
+    # per-product bounds; it does not currently emit top-level grid/bounds.
+    # Keep the viewer and publisher schema contract covered by regression tests.
+    assert 'radarMosaic.status==="ready" && radarMosaic.display_products' in js
+    assert 'if(!radarMosaic.bounds && reference?.bounds)radarMosaic.bounds=reference.bounds' in js
+    assert 'radarMosaic.grid={color_table:"NWSRef"}' in js
+    assert 'radarMosaic.display_products.clean_image||radarMosaic.display_products.raw_image' in js
