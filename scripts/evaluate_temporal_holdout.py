@@ -48,10 +48,13 @@ def filter_evaluation_population(df: pd.DataFrame, reviewed_negative_ids: set[st
         "supervision_class",
         pd.Series("", index=d.index, dtype="object"),
     ).eq("supervised_positive")
-    event_associated = d.get(
+    association_raw = d.get(
         "track_event_associated",
         pd.Series(False, index=d.index),
-    ).fillna(False).astype(bool)
+    )
+    event_associated = association_raw.fillna(False).astype(str).str.strip().str.lower().isin(
+        {"true", "1", "yes"}
+    )
 
     # Historical case-context rows are eligible only when the labeler has
     # independently associated that specific radar track with the documented
