@@ -50,24 +50,51 @@ def audit(path: Path):
         if bad.any():
             issues.append(f"prospective_positive_without_future_onset:{int(bad.sum())}")
 
-    # Future targets must be binary.
+    # Future targets must be binary, and the table must contain actual
+    # supervised onset labels. A successful file write is not evidence of
+    # model-ingestible data.
+    target_stats = {}
     for c in onset_cols + [f"squall_ongoing_within_{h}m" for h in HORIZONS]:
+        if c not in df:
+            if c in onset_cols:
+                issues.append(f"missing_required_onset_target:{c}")
+            continue
+        numeric = pd.to_numeric(df[c], errors="coerce")
+        values = set(numeric.dropna().unique())
+        if not values.issubset({0, 1}):
+            issues.append(f"nonbinary_target:{c}")
+        target_stats[c] = {
+            "known": int(numeric.notna().sum()),
+            "positive": int((numeric == 1).sum()),
+            "negative": int((numeric == 0).sum()),
+        }
+
+    if not any(target_stats.get(c, {}).get("known", 0) > 0 for c in onset_cols):
+        issues.append("no_known_onset_targets_any_horizon")
+
+    # Unknown or unrelated objects must not be silently used as negatives.
+    unknown_status = df["label_status"].isin(["unassociated_object", "unknown", "candidate_null"])
+    for c in onset_cols:
         if c in df:
-            values = set(pd.to_numeric(df[c], errors="coerce").dropna().unique())
-            if not values.issubset({0, 1}):
-                issues.append(f"nonbinary_target:{c}")
+            known_unknown = unknown_status & pd.to_numeric(df[c], errors="coerce").notna()
+            if known_unknown.any():
+                issues.append(f"unknown_population_has_supervised_target:{c}:{int(known_unknown.sum())}")
 
     summary = {
         "records": len(df),
         "unique_objects": int(df["object_id"].nunique()),
         "label_status_counts": df["label_status"].value_counts(dropna=False).to_dict(),
+        "target_stats": target_stats,
         "issues": issues,
     }
 
     for h in HORIZONS:
         c = f"squall_onset_within_{h}m"
         if c in df:
-            summary[f"onset_{h}m_positive"] = int(pd.to_numeric(df[c], errors="coerce").fillna(0).sum())
+            numeric = pd.to_numeric(df[c], errors="coerce")
+            summary[f"onset_{h}m_positive"] = int((numeric == 1).sum())
+            summary[f"onset_{h}m_negative"] = int((numeric == 0).sum())
+            summary[f"onset_{h}m_known"] = int(numeric.notna().sum())
 
     return summary
 
