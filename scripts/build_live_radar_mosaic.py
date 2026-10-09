@@ -219,7 +219,7 @@ def _clean_field(mosaic, rhohv=None):
     if rhohv is not None:
         # Conservative dual-pol clutter screen. It only removes low-CC echoes
         # below 30 dBZ, where non-meteorological returns are most common.
-        low_cc = np.isfinite(rhohv) & (rhohv < 0.55) & (data < 25.0)
+        low_cc = np.isfinite(rhohv) & (rhohv < 0.65) & (data < 30.0)
         data[low_cc] = np.nan
 
     # Edge-preserving neighborhood support filter. This removes isolated
@@ -272,7 +272,37 @@ def _render(mosaic, latlon, output_path: Path, *, mode="clean", rhohv=None):
     ]
 
 
-def render_clean(mosaic, latlon, output_path: Path, rhohv=None):
+def render_clean(
+    mosaic,
+    latlon,
+    output_path: Path,
+    rhohv=None,
+    *,
+    site_fields=None,
+    rhohv_by_site=None,
+):
+    """Render a conservative clutter-reduced mosaic.
+
+    When per-radar fields are supplied, filter each radar against its own
+    co-located rhoHV before mosaicking. This avoids combining the maximum
+    reflectivity from one radar with the maximum rhoHV from another.
+    """
+    if site_fields:
+        cleaned = []
+        for site, field in site_fields.items():
+            if field is None:
+                continue
+            site_rho = (rhohv_by_site or {}).get(site)
+            cleaned.append(_clean_field(field, site_rho))
+        if cleaned:
+            mosaic = np.full_like(np.asarray(cleaned[0], dtype=float), np.nan)
+            for field in cleaned:
+                valid = np.isfinite(field)
+                new_only = valid & ~np.isfinite(mosaic)
+                overlap = valid & np.isfinite(mosaic)
+                mosaic[new_only] = field[new_only]
+                mosaic[overlap] = np.maximum(mosaic[overlap], field[overlap])
+            rhohv = None  # each radar was filtered with its own polarimetric data
     return _render(mosaic, latlon, output_path, mode="clean", rhohv=rhohv)
 
 
