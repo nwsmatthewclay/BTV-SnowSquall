@@ -271,7 +271,7 @@ async function loadRadarHistory(){
   // than reducing the viewer to the single current mosaic.
   radarHistory.frames=radarHistory.frames.filter(function(f){
     return f && parseUtcDate(f.timestamp) && f.image &&
-      (!f.palette || f.palette==="NWSRef");
+      (!f.palette || f.palette==="NWSRef" || f.palette==="BTV_WINTER_REFLECTIVITY_V1" || f.palette==="BTV_WINTER_REFLECTIVITY_V2");
   });
   // The publisher can run more than once during the same radar second. The
   // archive filename is second-resolution, so those entries point to the same
@@ -332,7 +332,7 @@ async function renderRadarMosaic(){
     radarMosaic.status==="ready" &&
     radarMosaic.bounds &&
     radarMosaic.grid &&
-    radarMosaic.grid.color_table==="NWSRef" &&
+    ["NWSRef","BTV_WINTER_REFLECTIVITY_V1","BTV_WINTER_REFLECTIVITY_V2"].includes(radarMosaic.grid.color_table) &&
     radarMosaic.display_products &&
     (radarMosaic.display_products.clean_image||radarMosaic.display_products.raw_image||
       radarMosaic.display_products.base_reflectivity)
@@ -341,7 +341,7 @@ async function renderRadarMosaic(){
   if(!mosaicIsNwsRef){
     if(radarMode==="reflectivity"){
       var histFrame=radarHistoryFrame();
-      if(histFrame && (!histFrame.palette || histFrame.palette==="NWSRef" || histFrame.palette==="BTV_WINTER_REFLECTIVITY_V1")){
+      if(histFrame && (!histFrame.palette || histFrame.palette==="NWSRef" || histFrame.palette==="BTV_WINTER_REFLECTIVITY_V1" || histFrame.palette==="BTV_WINTER_REFLECTIVITY_V2")){
         var histBounds=histFrame.bounds||[[41.90,-76.78],[46.40,-70.52]];
         var histName=histFrame.image.split("/").pop();
         L.imageOverlay(
@@ -404,7 +404,7 @@ async function renderRadarMosaic(){
     var selectedFrame=(!radarInitialRender&&radarHistoryIndex>=0&&frame)?frame:syncFrame;
     var useStoredFrame=!!(
       selectedFrame &&
-      (!selectedFrame.palette || selectedFrame.palette==="NWSRef" || selectedFrame.palette==="BTV_WINTER_REFLECTIVITY_V1") &&
+      (!selectedFrame.palette || selectedFrame.palette==="NWSRef" || selectedFrame.palette==="BTV_WINTER_REFLECTIVITY_V1" || selectedFrame.palette==="BTV_WINTER_REFLECTIVITY_V2") &&
       selectedFrame.image &&
       selectedFrame.image!=="iem-wms"
     );
@@ -417,8 +417,9 @@ async function renderRadarMosaic(){
     ov.addTo(radarLayer);
     var syncText=useStoredFrame&&selectedFrame.timestamp?" • "+(radarHistoryIndex>=0?"timeline ":"synced ")+fmtTime(selectedFrame.timestamp):"";
     setText("radarStatus","Reflectivity mosaic "+freshness+" • KCXX + KTYX"+syncText+(radarRefText?" • objects "+radarRefText:""));
-    setText("legendTitle","NWS REFLECTIVITY • dBZ");
-    setText("legendNote","Standard NWSRef palette • local KCXX + KTYX reflectivity mosaic.");
+    var activePalette=(selectedFrame&&selectedFrame.palette)||radarMosaic.grid.color_table||"NWSRef";
+    setText("legendTitle",activePalette==="BTV_WINTER_REFLECTIVITY_V2"?"BTV WINTER REFLECTIVITY • dBZ":"NWS REFLECTIVITY • dBZ");
+    setText("legendNote",activePalette==="BTV_WINTER_REFLECTIVITY_V2"?"BTV winter palette v2 • light blue, deep blue, purple, red, maroon.":"Standard NWSRef palette • local KCXX + KTYX reflectivity mosaic.");
     radarInitialRender=false;
   }
   fitMapToBoundsOnce(radarMosaic.bounds);
