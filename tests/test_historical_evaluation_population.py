@@ -1,4 +1,5 @@
 import pandas as pd
+import pytest
 
 from scripts.evaluate_temporal_holdout import filter_evaluation_population
 
@@ -51,5 +52,5 @@ def test_string_false_association_is_not_treated_as_true():
             "case_id": "CASE_A",
         }
     ])
-    result = filter_evaluation_population(frame, set())
-    assert result.empty
+    with pytest.raises(ValueError, match="No rows remain"):
+        filter_evaluation_population(frame, set())
