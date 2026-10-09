@@ -461,7 +461,7 @@ function renderMap(){
   var targetMs=historicalMode?frameDate.getTime():liveRef;
   allObjects.forEach(function(p){
     var c=objectRisk(p),sel=selected&&selected.radar_site===p.radar_site&&String(p.track_id)===String(selected.track_id);
-    var history=Array.isArray(p.track_position_history)?p.track_position_history.slice().sort(function(a,b){return String(a.timestamp||\"\").localeCompare(String(b.timestamp||\"\"))}):[];
+    var history=Array.isArray(p.track_position_history)?p.track_position_history.slice().sort(function(a,b){return String(a.timestamp||"").localeCompare(String(b.timestamp||""))}):[];
     var position=null;
     if(historicalMode){
       var bestDiff=Infinity;
@@ -473,17 +473,17 @@ function renderMap(){
       });
       if(!position||bestDiff>8*60000)return;
       var historicalMarker=L.circleMarker([position.lat,position.lon],{
-        radius:sel?7:4,color:sel?\"#fff\":c,weight:sel?2.5:1.5,
+        radius:sel?7:4,color:sel?"#fff":c,weight:sel?2.5:1.5,
         fillColor:c,fillOpacity:sel?.9:.72,interactive:true
       }).addTo(layers[p.radar_site]);
-      historicalMarker.bindTooltip(\"OBJECT \"+objectOrdinal(p)+\" • \"+p.radar_site+\" • observed \"+fmtTime(position.timestamp),{sticky:true});
-      historicalMarker.on(\"click\",function(e){if(e&&e.originalEvent)L.DomEvent.stopPropagation(e.originalEvent);selectObject(p)});
+      historicalMarker.bindTooltip("OBJECT "+objectOrdinal(p)+" • "+p.radar_site+" • observed "+fmtTime(position.timestamp),{sticky:true});
+      historicalMarker.on("click",function(e){if(e&&e.originalEvent)L.DomEvent.stopPropagation(e.originalEvent);selectObject(p)});
       if(sel&&history.length>1){
         var historicalTrail=history.map(function(h){var t=parseUtcDate(h&&h.timestamp),lat=Number(h&&h.lat),lon=Number(h&&h.lon);return t&&t.getTime()<=targetMs&&Number.isFinite(lat)&&Number.isFinite(lon)?[lat,lon]:null;}).filter(Boolean);
-        if(historicalTrail.length>1)L.polyline(historicalTrail,{color:\"#fff\",weight:2.4,opacity:.9,dashArray:\"5 4\",interactive:false,lineCap:\"round\",lineJoin:\"round\"}).addTo(layers.motion);
+        if(historicalTrail.length>1)L.polyline(historicalTrail,{color:"#fff",weight:2.4,opacity:.9,dashArray:"5 4",interactive:false,lineCap:"round",lineJoin:"round"}).addTo(layers.motion);
       }
       if(objectNumbers){
-        L.marker([position.lat,position.lon],{icon:L.divIcon({className:\"sq-object-label-wrap\",iconSize:null,iconAnchor:[0,0],html:\"<div class='sq-object-label \"+(sel?\"\":\"dim\")+\"'>\"+objectOrdinal(p)+\"</div>\"}),interactive:true}).addTo(layers.labels).on(\"click\",function(e){if(e&&e.originalEvent)L.DomEvent.stopPropagation(e.originalEvent);selectObject(p)});
+        L.marker([position.lat,position.lon],{icon:L.divIcon({className:"sq-object-label-wrap",iconSize:null,iconAnchor:[0,0],html:"<div class='sq-object-label "+(sel?"":"dim")+"'>"+objectOrdinal(p)+"</div>"}),interactive:true}).addTo(layers.labels).on("click",function(e){if(e&&e.originalEvent)L.DomEvent.stopPropagation(e.originalEvent);selectObject(p)});
       }
       return;
     }
