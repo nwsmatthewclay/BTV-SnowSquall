@@ -1,14 +1,11 @@
 #!/usr/bin/env python3
 """Process one event-driven KCXX radar cycle.
 
-The KCXX scan time is the master timestamp for the processing cycle.  KCXX is
-selected at/near the requested event time; KTYX is selected as the newest
-available volume at or before that KCXX time.  Both exact source volumes are
-then fed through the existing object processor and the exact same source
-selection is handed to the live radar mosaic builder.
-
-This is intentionally additive: the existing polling workflows remain valid
-while this path is being proven operationally.
+KCXX is the reference scan for the cycle. KTYX is selected as the closest
+available companion scan within the configured synchronization window; a
+slightly newer KTYX volume is valid when its timestamp is closer than the
+previous KTYX scan. Both exact source volumes are processed and used to build
+the published mosaic.
 """
 from __future__ import annotations
 
@@ -85,18 +82,28 @@ def choose_kcxx(s3, target: datetime, tolerance_minutes: float, raw_root: Path |
 
 
 def choose_ktyx(s3, kcxx_time: datetime, max_age_minutes: float, raw_root: Path | None = None) -> tuple[str, datetime] | None:
+    """Choose the closest KTYX scan in a symmetric time window around KCXX."""
+    tolerance_seconds = max(0.0, float(max_age_minutes)) * 60.0
     local = _local_volume_candidates(raw_root, "KTYX", kcxx_time, max_age_minutes) if raw_root else []
     if local:
-        eligible = [item for item in local if item[1] <= kcxx_time]
+        eligible = [
+            item for item in local
+            if abs((item[1] - kcxx_time).total_seconds()) <= tolerance_seconds
+        ]
         if eligible:
-            return max(eligible, key=lambda item: item[1])
-    candidates = find_recent_volumes(s3, "KTYX", lookback_hours=2)
+            return min(eligible, key=lambda item: abs((item[1] - kcxx_time).total_seconds()))
+
+    candidates = find_recent_volumes(
+        s3,
+        "KTYX",
+        since=kcxx_time - timedelta(minutes=max_age_minutes),
+        lookback_hours=2,
+    )
     eligible = [
         item for item in candidates
-        if item[1] <= kcxx_time
-        and (kcxx_time - item[1]).total_seconds() / 60.0 <= max_age_minutes
+        if abs((item[1] - kcxx_time).total_seconds()) <= tolerance_seconds
     ]
-    return max(eligible, key=lambda item: item[1]) if eligible else None
+    return min(eligible, key=lambda item: abs((item[1] - kcxx_time).total_seconds())) if eligible else None
 
 
 def wait_for_kcxx(s3, target: datetime, tolerance_minutes: float, attempts: int, delay_seconds: int):
@@ -260,8 +267,9 @@ def main() -> int:
         kcxx = wait_for_kcxx(s3, requested, args.kcxx_tolerance_minutes, args.archive_attempts, args.archive_delay_seconds)
     kcxx_path = download_volume(s3, "KCXX", *kcxx)
 
-    # KTYX is intentionally constrained to <= the KCXX reference time.  This
-    # prevents a newer KTYX scan from being paired with an older KCXX object.
+    # Select the closest synchronized KTYX scan. A newer KTYX timestamp is
+    # acceptable within the tolerance; rejecting it can pin KTYX to the prior
+    # volume whenever the two radars' scan schedules are offset.
     ktyx = choose_ktyx(s3, kcxx[1], args.ktyx_max_age_minutes, args.raw_root)
     ktyx_path = download_volume(s3, "KTYX", *ktyx) if ktyx else None
     if ktyx_path:
