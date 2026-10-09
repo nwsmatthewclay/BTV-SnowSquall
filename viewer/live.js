@@ -884,6 +884,7 @@ document.querySelectorAll(".display-btn").forEach(function(b){b.onclick=function
 q("scoringMode").value=scoringMode;
 q("scoringMode").onchange=function(){
   scoringMode=this.value==="weighted"?"weighted":"model";
+  allObjects.sort(function(a,b){var d=scoreForSort(b)-scoreForSort(a);return d||Number(b.max_reflectivity_dbz||0)-Number(a.max_reflectivity_dbz||0)});
   renderMap();
   renderInventory();
   renderObjectCard();
