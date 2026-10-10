@@ -234,13 +234,22 @@ function addStations(){
   Object.entries(radarLocations).forEach(function(entry){var site=entry[0],loc=entry[1];L.marker(loc,{icon:L.divIcon({className:"radar-station",iconSize:[12,12],iconAnchor:[6,6],html:""}),interactive:false,title:site}).addTo(map)});
 }
 function radarHistoryFrame(){return radarHistory.frames&&radarHistory.frames.length&&radarHistoryIndex>=0?radarHistory.frames[radarHistoryIndex]:null}
+function latestMosaicScanTime(){
+  var times=[];
+  (radarMosaic?.sources||[]).forEach(function(s){if(s?.scan_time_utc)times.push(s.scan_time_utc)});
+  var products=radarMosaic?.display_products?.base_reflectivity||{};
+  Object.values(products).forEach(function(p){if(p?.scan_time_utc)times.push(p.scan_time_utc)});
+  var valid=times.map(function(t){return {raw:t,date:parseUtcDate(t)}}).filter(function(x){return x.date});
+  valid.sort(function(a,b){return b.date-a.date});
+  return valid.length?valid[0].raw:null;
+}
 function updateRadarTimelineUI(){
   var slider=q("radarTimelineSlider"),label=q("radarTimelineLabel"),play=q("radarPlayBtn");
   if(!slider)return;
   slider.max=Math.max(0,(radarHistory.frames||[]).length-1);
   slider.value=Math.max(0,radarHistoryIndex<0?slider.max:radarHistoryIndex);
-  var f=radarHistoryFrame();
-  setText("radarTimelineLabel",f?fmtTime(f.timestamp):"Live");
+  var f=radarHistoryFrame(),liveTime=latestMosaicScanTime();
+  setText("radarTimelineLabel",f?fmtTime(f.timestamp):(liveTime?"LIVE • "+fmtTime(liveTime):"Live"));
   if(play)play.textContent=radarAnimationTimer?"❚❚ PAUSE":"▶ PLAY";
 }
 function stopRadarAnimation(){if(radarAnimationTimer){clearInterval(radarAnimationTimer);radarAnimationTimer=null}updateRadarTimelineUI()}
@@ -343,6 +352,25 @@ async function renderRadarMosaic(){
       radarMosaic.display_products.base_reflectivity)
   );
 
+  // The timeline is a display control, not just a label. If a frame is selected,
+  // render that exact archived image even when the live mosaic is available.
+  // This prevents a noon/current-image vs. newer timeline timestamp mismatch.
+  var selectedHistoryFrame=radarHistoryFrame();
+  if(radarMode==="reflectivity" && selectedHistoryFrame && selectedHistoryFrame.image &&
+      (!selectedHistoryFrame.palette || ["NWSRef","BTV_WINTER_REFLECTIVITY_V1","BTV_WINTER_REFLECTIVITY_V2"].includes(selectedHistoryFrame.palette))){
+    var selectedImageName=String(selectedHistoryFrame.image).split("/").pop();
+    var selectedBounds=selectedHistoryFrame.bounds||radarMosaic?.bounds||[[41.90,-76.78],[46.40,-70.52]];
+    L.imageOverlay(LIVE_BASE+"radar_history/"+selectedImageName+"?cb="+Date.now(),selectedBounds,{
+      pane:"liveRadarPane",opacity:.96,interactive:false,crossOrigin:true
+    }).addTo(radarLayer);
+    setText("mapScanLabel",fmtTime(selectedHistoryFrame.timestamp));
+    setText("radarStatus","Displayed archived reflectivity frame • "+fmtTime(selectedHistoryFrame.timestamp));
+    setText("legendTitle","BTV WINTER REFLECTIVITY • dBZ");
+    setText("legendNote","BTV winter palette v2 • light blue, deep blue, purple, red, maroon.");
+    fitMapToBoundsOnce(selectedBounds);
+    return;
+  }
+
   if(!mosaicIsNwsRef){
     if(radarMode==="reflectivity"){
       var histFrame=radarHistoryFrame();
@@ -444,6 +472,9 @@ async function renderRadarMosaic(){
     var syncText=useStoredFrame&&selectedFrame.timestamp?" • "+(radarHistoryIndex>=0?"timeline ":"synced ")+fmtTime(selectedFrame.timestamp):"";
     setText("radarStatus","Reflectivity mosaic "+freshness+" • KCXX + KTYX"+syncText+(radarRefText?" • objects "+radarRefText:""));
     var activePalette=(selectedFrame&&selectedFrame.palette)||radarMosaic.grid.palette_version||radarMosaic.grid.color_table||"BTV_WINTER_REFLECTIVITY_V2";
+    var displayedTime=latestMosaicScanTime();
+    setText("mapScanLabel",displayedTime?"LIVE • "+fmtTime(displayedTime):"Live radar time unavailable");
+    updateRadarTimelineUI();
     setText("legendTitle","BTV WINTER REFLECTIVITY • dBZ");
     setText("legendNote","BTV winter palette v2 • light blue, deep blue, purple, red, maroon. Clutter suppression: "+(clutterSuppression?"ON":"OFF")+".");
     radarInitialRender=false;
@@ -1034,7 +1065,8 @@ async function refresh(){
     renderMap();renderInventory();renderObjectCard();renderProbability();renderKeyTrends();renderEnvironment();renderEvidence();renderHistory();renderModelStatus();
     var latest=got.map(freshestFeedScan).filter(Boolean).sort().at(-1);
     setText("liveTime",latest?fmtTime(latest):"No scan time available");
-    setText("mapScanLabel",latest?fmtTime(latest):"No live radar");
+    // renderRadarMosaic owns mapScanLabel because it knows which image actually
+    // made it onto the map; do not overwrite it with the newest feed timestamp.
     var confirmedCount=allObjects.filter(hasConfirmedTrack).length;
     setText("feedSummary",confirmedCount+" confirmed tracks • "+allObjects.length+" active detections"+(objectFeedFallback?" • alignment fallback":"")+" • "+got.map(function(x){return x.site+" "+(x.error?"OFFLINE":(ageMinutes(freshestFeedScan(x))<=15?"LIVE":(ageMinutes(freshestFeedScan(x))<=45?"AGING":"STALE")))}).join(" • "));
     var degraded=got.filter(function(x){return x.error||ageMinutes(freshestFeedScan(x))>30}).length>0;
