@@ -116,10 +116,12 @@ function fieldUnits(obj,key){return obj&&obj[key]&&typeof obj[key]==="object"?ob
 function envField(p,key){var e=p&&p.environment||{},f=e.fields||{};return fieldValue(f,key)??fieldValue(e,key)??p?.[key]}
 function compass(deg){var d=Number(deg);if(!Number.isFinite(d))return "—";var names=["N","NNE","NE","ENE","E","ESE","SE","SSE","S","SSW","SW","WSW","W","WNW","NW","NNW"];return names[Math.round(((d%360)+360)%360/22.5)%16]}
 function haversineMi(lat,lon,lat2,lon2){var R=3958.7613,rad=Math.PI/180,p1=Number(lat)*rad,p2=Number(lat2)*rad,dp=(Number(lat2)-Number(lat))*rad,dl=(Number(lon2)-Number(lon))*rad,a=Math.sin(dp/2)**2+Math.cos(p1)*Math.cos(p2)*Math.sin(dl/2)**2;return R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a))}
-function shadowRecord(site,trackId){return datasets[site]?.shadow?.records?.find(function(r){return String(r.track_id)===String(trackId)})||null}
-function shadowRows(site,trackId){return (datasets[site]?.shadowHistory||[]).filter(function(r){return String(r.track_id)===String(trackId)}).sort(function(a,b){return String(a.timestamp).localeCompare(String(b.timestamp))})}
+function objectIds(value){if(value&&typeof value==="object")return [value.track_id,value.object_id].filter(function(v){return v!=null&&String(v)!==""}).map(String);return value==null||String(value)===""?[]:[String(value)]}
+function matchesObjectId(record,value){var ids=objectIds(value);return ids.length>0&&[record?.track_id,record?.object_id].some(function(id){return id!=null&&ids.includes(String(id))})}
+function shadowRecord(site,trackOrObject){return datasets[site]?.shadow?.records?.find(function(r){return matchesObjectId(r,trackOrObject)})||null}
+function shadowRows(site,trackOrObject){return (datasets[site]?.shadowHistory||[]).filter(function(r){return matchesObjectId(r,trackOrObject)}).sort(function(a,b){return String(a.timestamp).localeCompare(String(b.timestamp))})}
 var scoringMode="model";
-var MAX_MODEL_SCORE_AGE_MINUTES=20;
+var MAX_MODEL_SCORE_AGE_MINUTES=45;
 var MAX_MODEL_SCAN_LAG_MINUTES=10;
 function probValue(r,h){var v=r?.research_probabilities;if(!v)return null;return v[h+"min"]??v[String(h)]??v[String(h).replace("min","")]??null}
 function validProbability(v){var n=Number(v);return v!=null&&Number.isFinite(n)&&n>=0&&n<=1?n:null}
@@ -139,7 +141,7 @@ function modelPayloadFor(p,allowHistorical){
   if(released)return {values:released,source:"released",record:p,status:"released"};
   var direct=p.learned_model_probabilities;
   if(hasProbabilityHorizons(direct))return {values:direct,source:"candidate",record:p,status:p.operational_release_status||"candidate_only"};
-  var shadow=isShadowScoreRecord(p)?p:shadowRecord(p.radar_site,p.track_id);
+  var shadow=isShadowScoreRecord(p)?p:shadowRecord(p.radar_site,p);
   if(!shadow||!hasProbabilityHorizons(shadow.research_probabilities))return null;
   var shadowStatus=datasets[p.radar_site]?.shadow?.operational_release_status||"candidate_only_not_operational";
   if(!allowHistorical&&!isShadowScoreRecord(p)){
@@ -711,17 +713,9 @@ function renderProbability(){
   var p=latestForSelected();if(!p)return;
   q("probabilityValue").classList.remove("na");
   var weighted=scoringMode==="weighted",payload=weighted?null:modelPayloadFor(p,false);
-  if(!hasConfirmedTrack(p)){
-    q("probabilityValue").classList.add("na");setText("probabilityValue","—");
-    setText("probabilityDelta","Awaiting confirmed track");
-    q("probabilityDelta").className="prob-delta flat";
-    setText("probabilityNote","No probability history is shown until the radar tracker confirms a persistent object across at least two scans. Single-scan detections and shadow-score rows cannot create an object history.");
-    setText("scoringModeState","Object tracking not yet confirmed");
-    setText("probBadge","TRACK NOT CONFIRMED");q("probBadge").className="dashboard-pill gated";
-    q("probComponents").innerHTML="<div class='prob-component'><span>TRACK STATUS</span><b>Awaiting ≥2 scans</b></div>";
-    renderProbabilityChart([]);
-    return;
-  }
+  // Keep the current score visible when the model has a matching record.
+  // Track confirmation gates the historical graph, not the current score card.
+  var confirmedTrack=hasConfirmedTrack(p);
   var scoreRecord=weighted?p:(payload?.record||p);
   var values=weighted?null:(payload?.values||{});
   var horizons=[15,30,45,60],nowScore=modeProbabilityNow(p);
@@ -748,7 +742,7 @@ function renderProbability(){
       var hist=trackHistory(p),currentTime=new Date(p.timestamp).getTime();
       prior=hist.filter(function(r){return new Date(r.timestamp).getTime()<currentTime}).at(-1)||null;
     }else{
-      prior=shadowRows(p.radar_site,p.track_id).filter(function(r){return new Date(r.timestamp).getTime()<new Date(p.timestamp).getTime()}).at(-1)||null;
+      prior=shadowRows(p.radar_site,p).filter(function(r){return new Date(r.timestamp).getTime()<new Date(p.timestamp).getTime()}).at(-1)||null;
     }
     var prevNow=prior?modeProbabilityNow(prior):null;
     var d=prevNow==null?null:Number(nowScore)-Number(prevNow);
@@ -758,7 +752,7 @@ function renderProbability(){
       ?"Baseline score = 50% radar signature + 50% RAP/environment score. This is a research index, not an event-calibrated probability."
       :released
         ?"Independent validation and release metadata are present. Model horizon probabilities are shown from the released bundle."
-        :"Research candidate only. This uses the existing shadow model bundle and its bundled calibrators; the new case-held-out Platt calibrators from the training gate are not yet wired into live scoring. Do not use as operational guidance.");
+        :"Research candidate only. This uses the existing shadow model bundle and its bundled calibrators; the new case-held-out Platt calibrators from the training gate are not yet wired into live scoring. Do not use as operational guidance.")+( !confirmedTrack ? " Track confirmation is incomplete; historical graph remains gated." : "")+(payload&&ageMinutes(payload.record?.timestamp||p.timestamp)>20 ? " WARNING: last score is "+Math.round(ageMinutes(payload.record?.timestamp||p.timestamp))+" min old." : "");
   }
   var horizonHtml="<div style='display:grid;grid-template-columns:repeat(4,1fr);gap:4px;margin-top:7px'>"+horizons.map(function(h){
     var v=weighted?weightedHorizon(p,h):readProbability(values,h);
@@ -851,7 +845,7 @@ function renderProbabilityChart(hist){
 function renderKeyTrends(){
   var p=latestForSelected();if(!p){q("keyTrends").innerHTML="";return}var rows=trackHistory(p),first=rows[0]||p;
   var delta=function(a,b){var x=Number(a),y=Number(b);return Number.isFinite(x)&&Number.isFinite(y)?x-y:null}
-  var items=[["MAX REFLECTIVITY",num(p.max_reflectivity_dbz,0)+" dBZ",delta(p.max_reflectivity_dbz,first.max_reflectivity_dbz),"dBZ"],["OBJECT AREA",num(p.area_km2,0)+" km²",delta(p.area_km2,first.area_km2),"km²"],["MOTION SPEED",num(p.motion_speed_kt,0)+" kt",delta(p.motion_speed_kt,first.motion_speed_kt),"kt"],["FEATURE COVERAGE",shadowRecord(p.radar_site,p.track_id)?.feature_coverage?.["15"]?.fraction==null?"—":(Number(shadowRecord(p.radar_site,p.track_id).feature_coverage["15"].fraction)*100).toFixed(0)+"%",null,""]];
+  var items=[["MAX REFLECTIVITY",num(p.max_reflectivity_dbz,0)+" dBZ",delta(p.max_reflectivity_dbz,first.max_reflectivity_dbz),"dBZ"],["OBJECT AREA",num(p.area_km2,0)+" km²",delta(p.area_km2,first.area_km2),"km²"],["MOTION SPEED",num(p.motion_speed_kt,0)+" kt",delta(p.motion_speed_kt,first.motion_speed_kt),"kt"],["FEATURE COVERAGE",shadowRecord(p.radar_site,p)?.feature_coverage?.["15"]?.fraction==null?"—":(Number(shadowRecord(p.radar_site,p.track_id).feature_coverage["15"].fraction)*100).toFixed(0)+"%",null,""]];
   q("keyTrends").innerHTML=items.map(function(x){var d=x[2];return "<div class='trend-tile'><div class='label'>"+x[0]+"</div><div class='value'>"+x[1]+"</div><div class='delta "+(d==null?"neutral":"")+"'>"+(d==null?"Live snapshot":(d>=0?"▲ +":"▼ ")+Math.abs(d).toFixed(0)+" "+x[3])+"</div></div>"}).join("");
 }
 function fmtLiveEnv(v,key){if(v==null)return "—";if(key==="pwat_mm")return num(Number(v)/25.4,2)+" in";if(key.indexOf("cape")>=0||key.indexOf("cin")>=0||key==="dcape_jkg")return num(v,0);if(key==="srh01_m2s2"||key.indexOf("shear")>=0&&key!=="shear_0_6km_ms")return num(v,0);return num(v,1)}
