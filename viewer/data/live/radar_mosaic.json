@@ -1,0 +1,155 @@
+{
+  "product": "BTV live radar mosaic",
+  "status": "ready",
+  "updated_utc": "2026-10-10T19:42:56.079650+00:00",
+  "grid": {
+    "center_lat": 44.15,
+    "center_lon": -73.65,
+    "grid_size_km": 250.0,
+    "spacing_km": 1.0,
+    "combine_method": "maximum valid reflectivity",
+    "field": "reflectivity_dbz",
+    "color_table": "BTV_WINTER_REFLECTIVITY_V2",
+    "palette_version": "BTV_WINTER_REFLECTIVITY_V2",
+    "vmin_dbz": -5,
+    "vmax_dbz": 40,
+    "display_qc": {
+      "low_dbz_cutoff": -10,
+      "low_cc_threshold": 0.65,
+      "low_cc_max_dbz": 30,
+      "isolated_weak_echo_cleanup": true,
+      "cleanup_method": "3x3 neighborhood support; no smoothing"
+    }
+  },
+  "display_products": {
+    "default": "clean",
+    "clean_image": "radar_mosaic_clean.png",
+    "raw_image": "radar_mosaic_raw.png",
+    "base_reflectivity": {
+      "KCXX": {
+        "clean_image": "KCXX_base_reflectivity_clean.png",
+        "raw_image": "KCXX_base_reflectivity_raw.png",
+        "bounds": [
+          [
+            41.9,
+            -76.78
+          ],
+          [
+            46.4,
+            -70.52
+          ]
+        ],
+        "field": "base_reflectivity_dbz",
+        "source_file": "KCXX20261010_192242_V06",
+        "scan_time_utc": "2026-10-10T19:22:42.666000",
+        "sweep": 0,
+        "native_gates": true,
+        "composite": false
+      },
+      "KTYX": {
+        "clean_image": "KTYX_base_reflectivity_clean.png",
+        "raw_image": "KTYX_base_reflectivity_raw.png",
+        "bounds": [
+          [
+            41.9,
+            -76.78
+          ],
+          [
+            46.4,
+            -70.52
+          ]
+        ],
+        "field": "base_reflectivity_dbz",
+        "source_file": "KTYX20261010_185202_V06",
+        "scan_time_utc": "2026-10-10T18:52:02.071000",
+        "sweep": 0,
+        "native_gates": true,
+        "composite": false
+      }
+    },
+    "clean_description": "BTV winter reflectivity palette v2 (light blue to deep blue, purple, red, and maroon) with edge-preserving neighborhood QC. No smoothing; does not alter model input.",
+    "raw_description": "Unfiltered gridded KCXX/KTYX reflectivity mosaic.",
+    "base_reflectivity_description": "Native-gate lowest-valid-sweep base reflectivity from the downloaded KCXX and KTYX Level-II volumes; not a multi-sweep composite.",
+    "base_velocity": {
+      "KCXX": {
+        "clean_image": "KCXX_base_velocity_clean.png",
+        "raw_image": "KCXX_base_velocity_raw.png",
+        "bounds": [
+          [
+            41.86099794018779,
+            -76.90750006603258
+          ],
+          [
+            46.398305073487016,
+            -70.39249993396744
+          ]
+        ],
+        "field": "base_velocity_kt",
+        "native_units": "m/s",
+        "display_units": "kt"
+      },
+      "KTYX": {
+        "clean_image": "KTYX_base_velocity_clean.png",
+        "raw_image": "KTYX_base_velocity_raw.png",
+        "bounds": [
+          [
+            41.86099794018779,
+            -76.90750006603258
+          ],
+          [
+            46.398305073487016,
+            -70.39249993396744
+          ]
+        ],
+        "field": "base_velocity_kt",
+        "native_units": "m/s",
+        "display_units": "kt"
+      }
+    }
+  },
+  "sources": [
+    {
+      "radar": "KCXX",
+      "source_file": "KCXX20261010_192242_V06",
+      "scan_time_utc": "2026-10-10T19:22:42.666000"
+    },
+    {
+      "radar": "KTYX",
+      "source_file": "KTYX20261010_185202_V06",
+      "scan_time_utc": "2026-10-10T18:52:02.071000"
+    }
+  ],
+  "image": "radar_mosaic_clean.png",
+  "bounds": [
+    [
+      41.86099794018779,
+      -76.90750006603258
+    ],
+    [
+      46.398305073487016,
+      -70.39249993396744
+    ]
+  ],
+  "radar_moment_products": {
+    "velocity_native_units": "m/s",
+    "velocity_display_units": "kt",
+    "velocity_rendering": "signed_radial_velocity",
+    "velocity_sources": [
+      "KCXX",
+      "KTYX"
+    ]
+  },
+  "cursor_grid": {
+    "file": "radar_cursor.json",
+    "spacing_km": 1.0,
+    "shape": [
+      501,
+      501
+    ],
+    "velocity_sources": [
+      "KCXX",
+      "KTYX"
+    ],
+    "status": "ready"
+  }
+}
