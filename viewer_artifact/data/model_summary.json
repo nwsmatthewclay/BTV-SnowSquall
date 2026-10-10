@@ -1,0 +1,166 @@
+{
+  "release_status": "candidate_only_not_operational",
+  "national_pretraining_source": "BTV-excluded national SQW warning/radar weak supervision",
+  "horizons": {
+    "15m": {
+      "training_rows": 184,
+      "training_groups": 14,
+      "positive_case_group_count": 7,
+      "evaluation_status": "case_held_out_exploratory",
+      "operational_release_status": "candidate_only",
+      "metrics": {
+        "evaluated_rows": 184,
+        "positive_rows": 8,
+        "negative_rows": 176,
+        "auc_roc": 0.9026988636363636,
+        "average_precision": 0.45478222918722144,
+        "brier_score": 0.0702282411038679,
+        "grouped_bootstrap_95pct": {
+          "method": "grouped_case_or_null_bootstrap",
+          "group_count": 14,
+          "auc_roc": {
+            "lower": 0.8008073048336536,
+            "median": 0.9034645229897764,
+            "upper": 0.9859008528784649,
+            "samples": 500
+          },
+          "average_precision": {
+            "lower": 0.149672543241032,
+            "median": 0.5094762277951933,
+            "upper": 0.8572712418300653,
+            "samples": 500
+          },
+          "brier_score": {
+            "lower": 0.048440720777895296,
+            "median": 0.07112557829004397,
+            "upper": 0.11504712737854075,
+            "samples": 500
+          }
+        },
+        "climatology": {
+          "brier_score": 0.04954231133122402
+        }
+      }
+    },
+    "30m": {
+      "training_rows": 184,
+      "training_groups": 14,
+      "positive_case_group_count": 8,
+      "evaluation_status": "case_held_out_exploratory",
+      "operational_release_status": "candidate_only",
+      "metrics": {
+        "evaluated_rows": 184,
+        "positive_rows": 15,
+        "negative_rows": 169,
+        "auc_roc": 0.9132149901380671,
+        "average_precision": 0.6987489965790352,
+        "brier_score": 0.11149156501561204,
+        "grouped_bootstrap_95pct": {
+          "method": "grouped_case_or_null_bootstrap",
+          "group_count": 14,
+          "auc_roc": {
+            "lower": 0.8013543909053396,
+            "median": 0.9146748611725393,
+            "upper": 0.9905384680562617,
+            "samples": 500
+          },
+          "average_precision": {
+            "lower": 0.47025267206507904,
+            "median": 0.7445567992347155,
+            "upper": 0.9327496188915256,
+            "samples": 500
+          },
+          "brier_score": {
+            "lower": 0.07356444522819192,
+            "median": 0.11274546182880296,
+            "upper": 0.13912703487768302,
+            "samples": 500
+          }
+        },
+        "climatology": {
+          "brier_score": 0.1026291647760489
+        }
+      }
+    },
+    "45m": {
+      "training_rows": 184,
+      "training_groups": 14,
+      "positive_case_group_count": 8,
+      "evaluation_status": "case_held_out_exploratory",
+      "operational_release_status": "candidate_only",
+      "metrics": {
+        "evaluated_rows": 184,
+        "positive_rows": 21,
+        "negative_rows": 163,
+        "auc_roc": 0.9214139643587497,
+        "average_precision": 0.7385179576108577,
+        "brier_score": 0.14437457708459472,
+        "grouped_bootstrap_95pct": {
+          "method": "grouped_case_or_null_bootstrap",
+          "group_count": 14,
+          "auc_roc": {
+            "lower": 0.8549826347928225,
+            "median": 0.926448087431694,
+            "upper": 0.983610547061634,
+            "samples": 500
+          },
+          "average_precision": {
+            "lower": 0.5619066941791596,
+            "median": 0.7751355244641125,
+            "upper": 0.9523248064196338,
+            "samples": 500
+          },
+          "brier_score": {
+            "lower": 0.08457290233946321,
+            "median": 0.14270525268730788,
+            "upper": 0.15946333494554382,
+            "samples": 500
+          }
+        },
+        "climatology": {
+          "brier_score": 0.1556140000310458
+        }
+      }
+    },
+    "60m": {
+      "training_rows": 184,
+      "training_groups": 14,
+      "positive_case_group_count": 8,
+      "evaluation_status": "case_held_out_exploratory",
+      "operational_release_status": "candidate_only",
+      "metrics": {
+        "evaluated_rows": 184,
+        "positive_rows": 29,
+        "negative_rows": 155,
+        "auc_roc": 0.9145717463848722,
+        "average_precision": 0.7900234377422151,
+        "brier_score": 0.17700070747528446,
+        "grouped_bootstrap_95pct": {
+          "method": "grouped_case_or_null_bootstrap",
+          "group_count": 14,
+          "auc_roc": {
+            "lower": 0.8350057832121613,
+            "median": 0.9178854588394063,
+            "upper": 0.984822511717673,
+            "samples": 500
+          },
+          "average_precision": {
+            "lower": 0.6034089946139874,
+            "median": 0.8275283967825575,
+            "upper": 0.9511576452869283,
+            "samples": 500
+          },
+          "brier_score": {
+            "lower": 0.07771642490384077,
+            "median": 0.17328477891037242,
+            "upper": 0.1983439648204305,
+            "samples": 500
+          }
+        },
+        "climatology": {
+          "brier_score": 0.23648806387984384
+        }
+      }
+    }
+  }
+}
