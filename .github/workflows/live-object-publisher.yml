@@ -166,42 +166,87 @@ jobs:
           find data/raw/KCXX data/raw/KTYX -maxdepth 1 -type f -size +0c -printf '%p %s bytes\n' | tail -20 || true
 
 
-      - name: Refresh live objects from newest KCXX scan
-        # Radar display must still publish if RAP/object scoring is temporarily
-        # unavailable. This step processes the current pair and updates state,
-        # objects, RAP environment, and radar history when possible.
+      - name: Refresh live objects from every unprocessed KCXX scan
+        # Process every newly available KCXX volume in chronological order.
+        # Processing only the newest scan skips intermediate detections and
+        # breaks object identity/history when a publisher run is delayed.
         continue-on-error: true
-        timeout-minutes: 10
+        timeout-minutes: 20
         run: |
           set -euo pipefail
           python - <<'PY'
+          import json
           import subprocess
           import sys
+          from datetime import datetime, timezone
           from pathlib import Path
-          from acquisition.radar_watcher import parse_volume_time
+          from acquisition.radar_watcher import (
+              download_volume, find_recent_volumes, make_s3_client, parse_volume_time
+          )
 
-          candidates = []
-          for path in Path("data/raw/KCXX").glob("*"):
-              if not path.is_file() or path.stat().st_size <= 0:
+          state_path = Path("viewer/data/live/KCXX_state.json")
+          state = json.loads(state_path.read_text(encoding="utf-8")) if state_path.exists() else {}
+          raw_watermark = state.get("last_scan_time_utc")
+          watermark = None
+          if raw_watermark:
+              watermark = datetime.fromisoformat(str(raw_watermark).replace("Z", "+00:00"))
+              if watermark.tzinfo is None:
+                  watermark = watermark.replace(tzinfo=timezone.utc)
+              watermark = watermark.astimezone(timezone.utc)
+
+          s3 = make_s3_client()
+          candidates = {}
+          for key, scan_time in find_recent_volumes(
+              s3, "KCXX", since=watermark, lookback_hours=3
+          ):
+              if watermark is None or scan_time.astimezone(timezone.utc) > watermark:
+                  candidates[scan_time.astimezone(timezone.utc)] = (key, scan_time)
+
+          # Include any just-acquired local source even if the archive listing
+          # has not caught up to it yet.
+          for local_path in Path("data/raw/KCXX").glob("*"):
+              if not local_path.is_file() or local_path.stat().st_size <= 0:
                   continue
-              scan_time = parse_volume_time(path.name, "KCXX")
-              if scan_time is not None:
-                  candidates.append((scan_time, path))
-          if not candidates:
-              raise SystemExit("No local KCXX Level-II volume available to process.")
-          scan_time, source = max(candidates, key=lambda item: item[0])
-          print(f"Processing newest KCXX source {source.name} at {scan_time.isoformat()}")
-          subprocess.run([
-              sys.executable, "scripts/process_live_event.py",
-              "--radar", "KCXX",
-              "--scan-time", scan_time.isoformat(),
-              "--raw-root", "data/raw",
-              "--live-root", "viewer/data/live",
-              "--kcxx-tolerance-minutes", "4",
-              "--ktyx-max-age-minutes", "8",
-              "--archive-attempts", "1",
-              "--archive-delay-seconds", "5",
-          ], check=True)
+              scan_time = parse_volume_time(local_path.name, "KCXX")
+              if scan_time is None:
+                  continue
+              scan_time = scan_time.astimezone(timezone.utc)
+              if watermark is None or scan_time > watermark:
+                  candidates.setdefault(scan_time, (None, scan_time))
+
+          ordered = sorted(candidates.items(), key=lambda item: item[0])
+          if len(ordered) > 18:
+              print(f"Found {len(ordered)} unprocessed scans; processing the oldest 18 chronologically so later runs can continue catch-up.")
+              ordered = ordered[:18]
+
+          print(
+              "KCXX tracking watermark:",
+              watermark.isoformat() if watermark else "none",
+              "| unprocessed scans:",
+              len(ordered),
+          )
+          if not ordered:
+              print("No new KCXX scans beyond the persisted tracker watermark.")
+              raise SystemExit(0)
+
+          for index, (scan_time, (key, original_time)) in enumerate(ordered, start=1):
+              stamp = scan_time.isoformat().replace("+00:00", "Z")
+              if key:
+                  source = download_volume(s3, "KCXX", key, original_time)
+                  print(f"Processing scan {index}/{len(ordered)}: {source.name} at {stamp}")
+              else:
+                  print(f"Processing locally cached scan {index}/{len(ordered)} at {stamp}")
+              subprocess.run([
+                  sys.executable, "scripts/process_live_event.py",
+                  "--radar", "KCXX",
+                  "--scan-time", stamp,
+                  "--raw-root", "data/raw",
+                  "--live-root", "viewer/data/live",
+                  "--kcxx-tolerance-minutes", "4",
+                  "--ktyx-max-age-minutes", "8",
+                  "--archive-attempts", "1",
+                  "--archive-delay-seconds", "5",
+              ], check=True)
           PY
 
       - name: Build KCXX KTYX live radar mosaic
