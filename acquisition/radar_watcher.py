@@ -63,7 +63,13 @@ def utc_now() -> datetime:
 
 
 def parse_volume_time(key: str, radar: str) -> datetime | None:
-    match = VOLUME_TIME_RE.search(Path(key).name)
+    # Unidata publishes a separate *_MDM metadata object alongside each Level-II
+    # volume. It shares the scan timestamp but is not a radar volume and cannot
+    # be decoded by Py-ART/xradar. Exclude it before any newest/recent selection.
+    filename = Path(key).name
+    if filename.upper().endswith("_MDM") or filename.upper().endswith("_MDM.GZ"):
+        return None
+    match = VOLUME_TIME_RE.search(filename)
     if not match or match.group("radar").upper() != radar.upper():
         return None
 
