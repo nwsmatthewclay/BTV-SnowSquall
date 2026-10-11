@@ -153,3 +153,18 @@ def test_api_boolean_parser_does_not_truthify_false_text():
     assert as_bool("False") is False
     assert as_bool("0") is False
     assert as_bool(None) is False
+
+
+def test_expanded_impact_phrases_remain_screening_only():
+    from scripts.discover_snow_squall_cases import SCREEN_RE, SNOW_RE
+
+    phrases = [
+        "Blowing snow reduced visibility along the highway",
+        "Visibility rapidly dropped to less than a quarter mile",
+        "Sudden onset of snow caused hazardous travel",
+        "Snow showers causing poor visibility",
+        "Whiteout conditions developed quickly",
+    ]
+    assert all(SCREEN_RE.search(text) for text in phrases)
+    assert not SNOW_RE.search(phrases[0])
+    assert not SNOW_RE.search(phrases[1])
