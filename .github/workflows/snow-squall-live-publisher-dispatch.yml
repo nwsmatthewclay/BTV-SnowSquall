@@ -26,6 +26,12 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
-          echo "Dispatching Publish Live Snow Squall Objects on snow-squall-model-foundation"
-          gh workflow run "Publish Live Snow Squall Objects"             --repo "${{ github.repository }}"             --ref snow-squall-model-foundation
+          # The dispatchable workflow is defined on main. It checks out and
+          # executes the canonical processing code from snow-squall-model-foundation.
+          # Keep this as the only scheduled dispatcher; do not add a second
+          # scheduled publisher.
+          echo "Dispatching Snow Squall Live Object Publisher on main (processor code: snow-squall-model-foundation)"
+          gh workflow run "Snow Squall Live Object Publisher" \
+            --repo "${{ github.repository }}" \
+            --ref main
           echo "Canonical live publisher dispatched."
