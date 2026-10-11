@@ -1137,4 +1137,4 @@ map.on("click",function(e){
     selectObject(matches[0]);
   }
 });
-bindCursorReadout();loadRadarHistory();refreshAlertData(true);refresh();refreshTimer=setInterval(refresh,60000);setInterval(function(){refreshAlertData(false)},180000);
+bindCursorReadout();loadRadarHistory().then(function(){return refresh()}).catch(function(){return refresh()});refreshAlertData(true);refreshTimer=setInterval(refresh,60000);setInterval(function(){refreshAlertData(false)},180000);
