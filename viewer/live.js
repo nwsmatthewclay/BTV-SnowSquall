@@ -352,11 +352,11 @@ async function renderRadarMosaic(){
       radarMosaic.display_products.base_reflectivity)
   );
 
-  // The timeline is a display control, not just a label. If a frame is selected,
-  // render that exact archived image even when the live mosaic is available.
-  // This prevents a noon/current-image vs. newer timeline timestamp mismatch.
+  // The live mosaic is the default. The history slider only overrides it
+  // after the user explicitly selects a historical frame; an old manifest must
+  // never replace fresh Level-II imagery on initial page load or refresh.
   var selectedHistoryFrame=radarHistoryFrame();
-  if(radarMode==="reflectivity" && selectedHistoryFrame && selectedHistoryFrame.image &&
+  if(radarMode==="reflectivity" && radarTimelineUserSelected && selectedHistoryFrame && selectedHistoryFrame.image &&
       (!selectedHistoryFrame.palette || ["NWSRef","BTV_WINTER_REFLECTIVITY_V1","BTV_WINTER_REFLECTIVITY_V2"].includes(selectedHistoryFrame.palette))){
     var selectedImageName=String(selectedHistoryFrame.image).split("/").pop();
     var selectedBounds=selectedHistoryFrame.bounds||radarMosaic?.bounds||[[41.90,-76.78],[46.40,-70.52]];
@@ -431,10 +431,9 @@ async function renderRadarMosaic(){
     setText("legendNote","Lowest-valid-sweep KCXX + KTYX velocity. Signed inbound/outbound flow is shown for cell analysis.");
   }else{
     var frame=radarHistoryFrame();
-    var syncFrame=synchronizedRadarFrame();
-    // A manual slider selection controls the displayed radar image. The
-    // synchronized frame is only the automatic/default selection.
-    var selectedFrame=(!radarInitialRender&&radarHistoryIndex>=0&&frame)?frame:syncFrame;
+    // Never let lagging object timestamps pull the default display backwards.
+    // Archived frames are used only after explicit timeline interaction.
+    var selectedFrame=radarTimelineUserSelected&&radarHistoryIndex>=0&&frame?frame:null;
     var useStoredFrame=!!(
       !forceCurrentMosaic && selectedFrame &&
       (!selectedFrame.palette || selectedFrame.palette==="NWSRef" || selectedFrame.palette==="BTV_WINTER_REFLECTIVITY_V1" || selectedFrame.palette==="BTV_WINTER_REFLECTIVITY_V2") &&
