@@ -90,37 +90,82 @@ def _crossfit_calibration(
     *,
     min_rows: int,
     min_per_class: int,
+    scan_times: pd.Series | None = None,
 ) -> dict:
-    """Evaluate Platt calibration on groups excluded from each calibrator fit."""
-    unique_groups = np.unique(groups.astype(str))
+    """Evaluate calibration on later groups, never fitting on future labels."""
+    groups = groups.astype(str)
+    unique_groups = np.unique(groups)
+    temporal = scan_times is not None
     base = {
         "status": "insufficient_grouped_data",
-        "method": "GroupKFold cross-fit of Platt calibration on model OOF probabilities",
+        "method": (
+            "expanding-window chronological cross-fit of Platt calibration"
+            if temporal
+            else "GroupKFold cross-fit of Platt calibration (timestamps unavailable)"
+        ),
         "group_count": int(len(unique_groups)),
         "folds": [],
+        "temporal_ordering_enforced": bool(temporal),
     }
-    if len(unique_groups) < 3:
-        base["reason"] = "fewer than 3 independent split groups"
+    if len(unique_groups) < 6:
+        base["reason"] = "fewer than 6 independent split groups"
         return base
 
-    splitter = GroupKFold(n_splits=min(5, len(unique_groups)))
+    if temporal:
+        times = pd.to_datetime(pd.Series(scan_times).reset_index(drop=True), utc=True, errors="coerce")
+        if times.isna().any():
+            base["status"] = "insufficient_temporal_data"
+            base["reason"] = "some OOF rows lack a valid scan_time_utc"
+            return base
+        meta = pd.DataFrame({"group": groups, "time": times})
+        meta = meta.groupby("group", as_index=False).agg(
+            start_time=("time", "min"), end_time=("time", "max")
+        ).sort_values(["start_time", "end_time", "group"]).reset_index(drop=True)
+        n_initial = max(3, int(np.ceil(0.60 * len(meta))))
+        remaining = meta.iloc[n_initial:]["group"].tolist()
+        n_blocks = min(3, len(remaining))
+        if n_blocks < 1:
+            base["reason"] = "not enough later groups after the initial calibration-fit window"
+            return base
+        test_blocks = [list(x) for x in np.array_split(np.asarray(remaining, dtype=object), n_blocks) if len(x)]
+        fold_indices = []
+        for test_groups_list in test_blocks:
+            test_start = meta.loc[meta["group"].isin(test_groups_list), "start_time"].min()
+            # A training case is admitted only if its entire time span precedes
+            # the earliest scan in the held-out block. Overlapping case windows
+            # are excluded rather than allowing subtle future-time leakage.
+            train_groups_list = meta.loc[meta["end_time"] < test_start, "group"].astype(str).tolist()
+            train_idx = np.flatnonzero(np.isin(groups, train_groups_list))
+            test_idx = np.flatnonzero(np.isin(groups, test_groups_list))
+            fold_indices.append((train_idx, test_idx, train_groups_list, test_groups_list, test_start))
+    else:
+        splitter = GroupKFold(n_splits=min(5, len(unique_groups)))
+        fold_indices = []
+        for train_idx, test_idx in splitter.split(np.zeros(len(y)), y, groups):
+            fold_indices.append((
+                train_idx, test_idx,
+                np.unique(groups[train_idx]).tolist(),
+                np.unique(groups[test_idx]).tolist(),
+                None,
+            ))
+
     calibrated = np.full(len(y), np.nan, dtype=float)
     fold_climatology = np.full(len(y), np.nan, dtype=float)
     fold_reports = []
-    for fold_id, (train_idx, test_idx) in enumerate(
-        splitter.split(np.zeros(len(y)), y, groups.astype(str)), start=1
-    ):
+    for fold_id, (train_idx, test_idx, train_groups_list, test_groups_list, test_start) in enumerate(fold_indices, start=1):
         y_train = y[train_idx]
-        train_groups = np.unique(groups[train_idx].astype(str))
-        test_groups = np.unique(groups[test_idx].astype(str))
         fold = {
             "fold": fold_id,
-            "train_groups": int(len(train_groups)),
-            "test_groups": int(len(test_groups)),
+            "train_groups": int(len(set(train_groups_list))),
+            "test_groups": int(len(set(test_groups_list))),
             "train_rows": int(len(train_idx)),
             "test_rows": int(len(test_idx)),
         }
-        if np.intersect1d(train_groups, test_groups).size:
+        if not len(test_idx):
+            fold["status"] = "skipped_no_temporally_separated_test_rows"
+            fold_reports.append(fold)
+            continue
+        if set(train_groups_list) & set(test_groups_list):
             fold["status"] = "group_leakage_detected"
             fold_reports.append(fold)
             base["folds"] = fold_reports
@@ -133,9 +178,8 @@ def _crossfit_calibration(
         ):
             fold["status"] = "insufficient_training_class_support"
             fold_reports.append(fold)
-            base["folds"] = fold_reports
-            base["reason"] = "at least one fold lacks minimum rows or per-class support"
-            return base
+            continue
+
         calibrator = _fit_platt(p[train_idx], y_train)
         clipped_test = np.clip(p[test_idx], 1e-6, 1 - 1e-6)
         test_logits = np.log(clipped_test / (1 - clipped_test)).reshape(-1, 1)
@@ -144,27 +188,44 @@ def _crossfit_calibration(
         fold["status"] = "ok"
         fold["train_positive_rows"] = int(y_train.sum())
         fold["test_positive_rows"] = int(y[test_idx].sum())
+        if temporal:
+            fold["train_through_utc"] = (
+                str(pd.to_datetime(scan_times, utc=True).iloc[train_idx].max())
+                if len(train_idx) else None
+            )
+            fold["test_from_utc"] = str(test_start)
+            if len(train_idx) and not (
+                pd.to_datetime(scan_times, utc=True).iloc[train_idx].max() < test_start
+            ):
+                fold["status"] = "temporal_leakage_detected"
+                fold_reports.append(fold)
+                base["folds"] = fold_reports
+                base["reason"] = "training scan time overlaps or follows the held-out test window"
+                return base
         fold_reports.append(fold)
 
-    if not np.isfinite(calibrated).all() or not np.isfinite(fold_climatology).all():
+    valid = np.isfinite(calibrated) & np.isfinite(fold_climatology)
+    if not valid.any():
         base["folds"] = fold_reports
-        base["reason"] = "cross-fitted probabilities incomplete"
+        base["reason"] = "no fold met minimum training support with leakage-safe evaluation rows"
         return base
 
     base.update({
         "status": "evaluated_research_diagnostic_only",
         "fit_evaluation_group_overlap": False,
-        "raw_oof_probability_metrics": _safe_metrics(y, p, fold_climatology),
-        "cross_fitted_calibrated_probability_metrics": _safe_metrics(y, calibrated, fold_climatology),
+        "evaluated_rows": int(valid.sum()),
+        "evaluated_groups": int(len(np.unique(groups[valid]))),
+        "raw_oof_probability_metrics": _safe_metrics(y[valid], p[valid], fold_climatology[valid]),
+        "cross_fitted_calibrated_probability_metrics": _safe_metrics(y[valid], calibrated[valid], fold_climatology[valid]),
         "folds": fold_reports,
         "caveat": (
-            "Calibration is cross-fitted across split groups, but these are still "
-            "research diagnostics on the available OOF population, not an independent "
-            "forward-time release gate."
+            "When timestamps are available, the calibration diagnostic uses an expanding "
+            "time-ordered fit window and evaluates only later groups whose full time spans "
+            "are separated from training. This is still not a complete independent "
+            "forward-time release gate for the model-plus-calibrator pipeline."
         ),
     })
     return base
-
 
 def fit_calibrators(model_dir: Path, min_rows: int = 30, min_per_class: int = 5):
     metrics_path = model_dir / "metrics.json"
@@ -224,8 +285,14 @@ def fit_calibrators(model_dir: Path, min_rows: int = 30, min_per_class: int = 5)
             report["horizons"][str(horizon)] = item
             continue
 
+        scan_times = (
+            frame.loc[mask, "scan_time_utc"].reset_index(drop=True)
+            if "scan_time_utc" in frame.columns
+            else None
+        )
         item["cross_fitted_evaluation"] = _crossfit_calibration(
-            y, p, groups, min_rows=min_rows, min_per_class=min_per_class
+            y, p, groups, min_rows=min_rows, min_per_class=min_per_class,
+            scan_times=scan_times,
         )
         calibrator = _fit_platt(p, y)
         calibrators[str(horizon)] = calibrator
