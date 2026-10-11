@@ -296,6 +296,38 @@ jobs:
             > /tmp/standalone-radar.tar
           tar -xf /tmp/standalone-radar.tar -C .
 
+      - name: Archive the final published mosaic into radar timeline
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          from scripts.process_live_event import archive_live_radar_frame, parse_time
+
+          root = Path("viewer/data/live")
+          metadata = json.loads((root / "radar_mosaic.json").read_text(encoding="utf-8"))
+          if metadata.get("status") != "ready":
+              raise SystemExit(f"Cannot archive a non-ready mosaic: {metadata.get('status')}")
+          source_times = [
+              parse_time(source["scan_time_utc"])
+              for source in (metadata.get("sources") or [])
+              if source.get("scan_time_utc")
+          ]
+          if not source_times:
+              raise SystemExit("No radar source times available for history archive.")
+          archive_live_radar_frame(root, cycle_time=max(source_times))
+          manifest_path = root / "radar_history" / "manifest.json"
+          manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+          frames = manifest.get("frames") or []
+          if not frames:
+              raise SystemExit("Radar timeline manifest has no frames after archive.")
+          latest = max(frames, key=lambda frame: str(frame.get("timestamp") or ""))
+          print("Radar timeline updated:", latest.get("timestamp"), latest.get("image"), "frame_count=", len(frames))
+          latest_time = parse_time(latest["timestamp"])
+          if latest_time < max(source_times):
+              raise SystemExit("Radar timeline latest frame is older than the mosaic source scan.")
+          PY
+
       - name: Publish isolated live-data branch
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
