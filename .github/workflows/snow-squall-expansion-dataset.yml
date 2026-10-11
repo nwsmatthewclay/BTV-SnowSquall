@@ -897,6 +897,13 @@ jobs:
               --reviewed-negative-manifest data/derived/snow_squall_reviewed_negative_nulls.csv \
               --output-dir data/derived/candidate_ensemble_expansion_${h}m
           done
+      - name: Calibrate candidate model bundles
+        run: |
+          for h in 15 30 45 60; do
+            python scripts/calibrate_model_bundle.py --model-dir data/derived/baseline_expansion_${h}m
+            python scripts/calibrate_model_bundle.py --model-dir data/derived/candidate_ensemble_expansion_${h}m
+          done
+
       - name: Compare expanded research candidate models
         run: |
           python scripts/compare_candidate_models.py \
@@ -909,13 +916,6 @@ jobs:
             --schema data/derived/snow_squall_model_features_expanded.schema.json \
             --model-root data/derived \
             --output data/derived/snow_squall_live_model_compatibility.json
-
-      - name: Calibrate candidate model bundles
-        run: |
-          for h in 15 30 45 60; do
-            python scripts/calibrate_model_bundle.py --model-dir data/derived/baseline_expansion_${h}m
-            python scripts/calibrate_model_bundle.py --model-dir data/derived/candidate_ensemble_expansion_${h}m
-          done
 
       - name: Write expansion summary
         run: |
