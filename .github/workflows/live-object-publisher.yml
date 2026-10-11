@@ -128,7 +128,7 @@ jobs:
           if str(run_id) not in seen:
               seen.append(str(run_id))
           data[workflow] = seen[-30:]
-          p.write_text(json.dumps(data, indent=2) + "\\n", encoding="utf-8")
+          p.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
           PY
               fi
             done
