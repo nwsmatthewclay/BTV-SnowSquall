@@ -97,6 +97,7 @@ def test_calibrator_reports_group_held_out_reliability_diagnostics(tmp_path):
                 "target_value": y,
                 "oof_probability": p,
                 "split_group": f"case-{group_i}",
+                "scan_time_utc": (pd.Timestamp("2020-01-01T00:00:00Z") + pd.Timedelta(days=group_i, minutes=row_i)).isoformat(),
                 "fold": group_i % 5 + 1,
             })
     pd.DataFrame(rows).to_csv(tmp_path / "oof_predictions.csv", index=False)
@@ -108,9 +109,12 @@ def test_calibrator_reports_group_held_out_reliability_diagnostics(tmp_path):
     assert item["status"] == "fit_research_artifact"
     assert evaluation["status"] == "evaluated_research_diagnostic_only"
     assert evaluation["fit_evaluation_group_overlap"] is False
+    assert evaluation["temporal_ordering_enforced"] is True
     assert "brier_score" in evaluation["raw_oof_probability_metrics"]
     assert "expected_calibration_error_equal_frequency" in evaluation["cross_fitted_calibrated_probability_metrics"]
     assert evaluation["cross_fitted_calibrated_probability_metrics"]["reliability_bins"]
     for fold in evaluation["folds"]:
         assert fold["status"] == "ok"
-        assert fold["train_groups"] + fold["test_groups"] == 12
+        assert fold["train_groups"] >= 3
+        assert fold["test_groups"] >= 1
+        assert pd.Timestamp(fold["train_through_utc"]) < pd.Timestamp(fold["test_from_utc"])
