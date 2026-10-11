@@ -248,7 +248,7 @@ function updateRadarTimelineUI(){
   if(!slider)return;
   slider.max=Math.max(0,(radarHistory.frames||[]).length-1);
   slider.value=Math.max(0,radarHistoryIndex<0?slider.max:radarHistoryIndex);
-  var f=radarHistoryFrame(),liveTime=latestMosaicScanTime();
+  var f=radarTimelineUserSelected?radarHistoryFrame():null,liveTime=latestMosaicScanTime();
   setText("radarTimelineLabel",f?fmtTime(f.timestamp):(liveTime?"LIVE • "+fmtTime(liveTime):"Live"));
   if(play)play.textContent=radarAnimationTimer?"❚❚ PAUSE":"▶ PLAY";
 }
