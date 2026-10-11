@@ -80,3 +80,37 @@ def test_calibrator_refuses_insufficient_class_support(tmp_path):
     report = fit_calibrators(tmp_path)
     assert report["horizons"]["15"]["status"] == "insufficient_data"
     assert not (tmp_path / "probability_calibrators_research.joblib").exists()
+
+
+
+def test_calibrator_reports_group_held_out_reliability_diagnostics(tmp_path):
+    (tmp_path / "metrics.json").write_text(json.dumps({"evaluation_status": "case_held_out_exploratory"}))
+    rng = np.random.default_rng(42)
+    rows = []
+    for group_i in range(12):
+        for row_i in range(20):
+            y = int(rng.random() < 0.25)
+            p = float(np.clip(0.08 + 0.55 * y + rng.normal(0, 0.12), 0.01, 0.99))
+            rows.append({
+                "horizon_min": 15,
+                "target": "squall_onset_within_15m",
+                "target_value": y,
+                "oof_probability": p,
+                "split_group": f"case-{group_i}",
+                "fold": group_i % 5 + 1,
+            })
+    pd.DataFrame(rows).to_csv(tmp_path / "oof_predictions.csv", index=False)
+
+    report = fit_calibrators(tmp_path)
+    item = report["horizons"]["15"]
+    evaluation = item["cross_fitted_evaluation"]
+
+    assert item["status"] == "fit_research_artifact"
+    assert evaluation["status"] == "evaluated_research_diagnostic_only"
+    assert evaluation["fit_evaluation_group_overlap"] is False
+    assert "brier_score" in evaluation["raw_oof_probability_metrics"]
+    assert "expected_calibration_error_equal_frequency" in evaluation["cross_fitted_calibrated_probability_metrics"]
+    assert evaluation["cross_fitted_calibrated_probability_metrics"]["reliability_bins"]
+    for fold in evaluation["folds"]:
+        assert fold["status"] == "ok"
+        assert fold["train_groups"] + fold["test_groups"] == 12
