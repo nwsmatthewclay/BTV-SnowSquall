@@ -90,3 +90,15 @@ def test_live_viewer_consumes_radar_health_status():
     assert "Validate KCXX live product" in workflow
 
 # CI trigger: final live viewer contract alignment.
+
+
+
+def test_live_radar_timeline_defaults_to_newest_frame_and_preserves_manual_selection():
+    root = Path(__file__).resolve().parents[1]
+    js = (root / "viewer" / "live.js").read_text(encoding="utf-8")
+
+    assert "radarTimelineUserSelected=false" in js
+    assert "radarHistoryIndex=frames.length-1" in js
+    assert "radarTimelineUserSelected=true;forceCurrentMosaic=false;setRadarHistoryIndex(this.value)" in js
+    assert 'loadRadarHistory().then(function(){return refresh()})' in js
+    assert "object timestamps must not force the" in js
