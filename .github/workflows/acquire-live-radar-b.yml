@@ -1,0 +1,69 @@
+name: Acquire Live Radar Volumes B
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "5,15,25,35,45,55 * * * *"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: acquire-live-radar-volumes-b
+  cancel-in-progress: false
+
+jobs:
+  acquire-radar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out radar acquisition code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: requirements.txt
+
+      - name: Install acquisition dependencies
+        run: python -m pip install -r requirements.txt
+
+      - name: Download newest KCXX and KTYX volumes
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from datetime import datetime, timezone
+          from acquisition.radar_watcher import find_newest_volume, make_s3_client, download_volume
+
+          s3 = make_s3_client()
+          acquired = 0
+          for radar in ("KCXX", "KTYX"):
+              newest = find_newest_volume(s3, radar)
+              if newest is None:
+                  print(f"WARNING: no recent {radar} volume found")
+                  continue
+              key, scan_time = newest
+              path = download_volume(s3, radar, key, scan_time)
+              size = path.stat().st_size
+              if size <= 0:
+                  raise SystemExit(f"{radar}: downloaded volume is empty: {path.name}")
+              print(
+                  f"{radar}: {path.name} | scan={scan_time.isoformat()} "
+                  f"| bytes={size} | acquired={datetime.now(timezone.utc).isoformat()}"
+              )
+              acquired += 1
+          if acquired == 0:
+              raise SystemExit("No KCXX or KTYX radar volumes were acquired.")
+          PY
+
+      - name: Upload acquired radar volumes for the live processor
+        uses: actions/upload-artifact@v4
+        with:
+          name: radar-acquisition-volumes
+          path: |
+            data/raw/KCXX/*
+            data/raw/KTYX/*
+          if-no-files-found: error
+          retention-days: 1
