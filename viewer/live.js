@@ -15,7 +15,7 @@ var alertsEnabled={warnings:false,sps:false};
 var radarLocations={KCXX:[44.511,-73.166],KTYX:[43.756,-75.680],KBTV:[44.472,-73.154]};
 var BTV=[44.472,-73.154];
 var datasets={},allObjects=[],selected=null,objectNumbers=true,refreshTimer=null,cursorGrid=null,cursorBound=false,lastObjectClickAt=0;
-var radarHistory={frames:[]},radarHistoryIndex=-1,radarAnimationTimer=null,radarInitialRender=true;
+var radarHistory={frames:[]},radarHistoryIndex=-1,radarAnimationTimer=null,radarInitialRender=true,radarTimelineUserSelected=false;
 var mapExtentInitialized=false;
 function fitMapToBoundsOnce(bounds){if(mapExtentInitialized||!bounds)return;map.fitBounds(bounds,{padding:[25,25],maxZoom:8});mapExtentInitialized=true;}
 
@@ -538,17 +538,19 @@ function objectReferenceTime(){
   return times.length?Math.max.apply(null,times):null;
 }
 function alignRadarHistoryToObjects(){
-  var ref=objectReferenceTime(),frames=radarHistory&&Array.isArray(radarHistory.frames)?radarHistory.frames:[];
-  if(ref==null||!frames.length){radarHistoryIndex=-1;updateRadarTimelineUI();return}
-  var best=-1,bestDiff=Infinity;
-  frames.forEach(function(f,i){
-    var d=parseUtcDate(f.timestamp);if(!d)return;
-    var diff=Math.abs(d.getTime()-ref);if(diff<bestDiff){bestDiff=diff;best=i;}
-  });
-  // Never let an old archive frame masquerade as the current radar image.
-  // If there is no frame within 12 minutes of the object cycle, show the
-  // current synchronized mosaic instead and label the timeline LIVE.
-  if(best>=0&&bestDiff<=12*60000)radarHistoryIndex=best;else radarHistoryIndex=-1;
+  var frames=radarHistory&&Array.isArray(radarHistory.frames)?radarHistory.frames:[];
+  if(!frames.length){radarHistoryIndex=-1;updateRadarTimelineUI();return}
+  // Default to the newest retained radar image. The object tracker can lag
+  // behind fresh radar imagery, so object timestamps must not force the
+  // initial page load back to an old archived frame.
+  if(!radarTimelineUserSelected){
+    radarHistoryIndex=frames.length-1;
+    updateRadarTimelineUI();
+    return;
+  }
+  // Once the user moves the timeline, preserve that explicit selection across
+  // refreshes instead of snapping the slider to the (possibly stale) object time.
+  radarHistoryIndex=Math.max(0,Math.min(frames.length-1,radarHistoryIndex));
   updateRadarTimelineUI();
 }
 function synchronizedRadarFrame(){
@@ -1086,7 +1088,7 @@ q("scoringMode").onchange=function(){
 document.querySelectorAll("[data-jump]").forEach(function(btn){btn.onclick=function(){var el=q(btn.dataset.jump);if(el)el.scrollIntoView({behavior:"smooth",block:"start"});document.querySelectorAll("[data-jump]").forEach(function(b){b.classList.toggle("active",b===btn)})}});
 q("refreshBtn").onclick=refresh;q("refreshBtn2").onclick=refresh;
 q("radarPlayBtn").onclick=playRadarAnimation;
-q("radarTimelineSlider").oninput=function(){forceCurrentMosaic=false;setRadarHistoryIndex(this.value)};
+q("radarTimelineSlider").oninput=function(){radarTimelineUserSelected=true;forceCurrentMosaic=false;setRadarHistoryIndex(this.value)};
 q("objectNumbersBtn").onclick=function(){objectNumbers=!objectNumbers;q("objectNumbersBtn").classList.toggle("active",objectNumbers);renderMap()};
 q("clutterSuppressionBtn").onclick=function(){
   clutterSuppression=!clutterSuppression;forceCurrentMosaic=true;
@@ -1107,6 +1109,7 @@ document.addEventListener("keydown",function(e){
     if(!frames.length)return;
     e.preventDefault();
     e.stopPropagation();
+    radarTimelineUserSelected=true;
     var step=e.key==="ArrowLeft"?-1:1;
     var next=radarHistoryIndex<0?frames.length-1:radarHistoryIndex+step;
     next=Math.max(0,Math.min(frames.length-1,next));
