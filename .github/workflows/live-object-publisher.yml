@@ -32,6 +32,7 @@ on:
 
 permissions:
   contents: write
+  actions: read
 
 concurrency:
   group: snow-squall-live-object-publisher-v4
@@ -63,6 +64,75 @@ jobs:
             git checkout origin/snow-squall-live-data -- viewer/data/live || true
           fi
           mkdir -p viewer/data/live
+
+      - name: Import new volumes from staggered acquisition workflows
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/staggered-radar data/raw/KCXX data/raw/KTYX
+          ledger="viewer/data/live/radar_acquisition_runs.json"
+          if [ ! -s "$ledger" ]; then
+            printf '{"acquire-live-radar-a.yml":[],"acquire-live-radar-b.yml":[]}\n' > "$ledger"
+          fi
+
+          for workflow in acquire-live-radar-a.yml acquire-live-radar-b.yml; do
+            # Scheduled runs execute from the repository's default branch.
+            # Read several recent successful runs so a delayed publisher can
+            # catch up on every acquisition artifact it has not consumed yet.
+            mapfile -t run_ids < <(
+              gh run list --repo "$GITHUB_REPOSITORY" \
+                --workflow "$workflow" --branch main --status success \
+                --limit 6 --json databaseId --jq '.[].databaseId' 2>/dev/null || true
+            )
+            for run_id in "${run_ids[@]}"; do
+              [ -n "$run_id" ] || continue
+              if python - "$ledger" "$workflow" "$run_id" <<'PY'
+          import json, sys
+          from pathlib import Path
+          path, workflow, run_id = sys.argv[1:]
+          data = json.loads(Path(path).read_text(encoding="utf-8"))
+          raise SystemExit(0 if str(run_id) in data.get(workflow, []) else 1)
+          PY
+              then
+                continue
+              fi
+
+              dest="/tmp/staggered-radar/$run_id"
+              mkdir -p "$dest"
+              if ! gh run download "$run_id" --repo "$GITHUB_REPOSITORY" \
+                  --name radar-acquisition-volumes --dir "$dest"; then
+                echo "Acquisition artifact unavailable for run $run_id; will retry on a later publisher run."
+                continue
+              fi
+
+              found=0
+              while IFS= read -r -d '' file; do
+                name="$(basename "$file")"
+                radar="${name:0:4}"
+                if [[ "$radar" == "KCXX" || "$radar" == "KTYX" ]]; then
+                  cp -n "$file" "data/raw/$radar/$name" || true
+                  echo "Imported $radar volume $name from acquisition run $run_id"
+                  found=1
+                fi
+              done < <(find "$dest" -type f -print0)
+
+              if [ "$found" -eq 1 ]; then
+                python - "$ledger" "$workflow" "$run_id" <<'PY'
+          import json, sys
+          from pathlib import Path
+          path, workflow, run_id = sys.argv[1:]
+          p = Path(path)
+          data = json.loads(p.read_text(encoding="utf-8"))
+          seen = data.setdefault(workflow, [])
+          if str(run_id) not in seen:
+              seen.append(str(run_id))
+          data[workflow] = seen[-30:]
+          p.write_text(json.dumps(data, indent=2) + "\\n", encoding="utf-8")
+          PY
+              fi
+            done
+          done
 
       - name: Set up Python
         uses: actions/setup-python@v5
