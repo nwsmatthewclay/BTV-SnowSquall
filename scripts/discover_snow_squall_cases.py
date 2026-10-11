@@ -41,8 +41,20 @@ NCEI_EVENT_TYPES = {
 }
 SNOW_RE = re.compile(r"\bsnow\s+squall(?:s)?\b", re.I)
 SCREEN_RE = re.compile(
-    r"(?:\bwhite[- ]?out\b|\bnear[- ]?zero\s+visibility\b|"
-    r"\bnear[- ]?zero\s+vis\b|\bblinding\s+snow\b|\bflash\s+freeze\b)",
+    # Expanded impact-language candidates remain review-only until corroborated.
+    r"(?:"
+    r"\bwhite[- ]?out(?:\s+conditions?)?\b|"
+    r"\bnear[- ]?zero\s+(?:visibility|vis)\b|"
+    r"\bblinding\s+snow\b|"
+    r"\bflash\s+freeze\b|"
+    r"\bblowing\s+snow\b|"
+    r"\bsudden\s+(?:onset|burst)\s+of\s+snow\b|"
+    r"\brapidly\s+(?:deteriorating|decreasing|reduced|dropping)\s+visibility\b|"
+    r"\bvisibility\s+(?:rapidly\s+)?(?:dropped|reduced|fell|decreased)\s+"
+    r"(?:to\s+)?(?:zero|near[- ]?zero|a quarter|one quarter|1/4|quarter|less than a quarter)\s+mile\b|"
+    r"\bsnow\s+(?:showers?|bands?)\s+(?:caus(?:e|ing|ed)|with)\s+"
+    r"(?:poor|reduced|near[- ]?zero)\s+visibility\b"
+    r")",
     re.I,
 )
 UNVERIFIED_RE = re.compile(
