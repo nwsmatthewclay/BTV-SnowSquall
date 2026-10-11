@@ -5,6 +5,7 @@ on:
   push:
     paths:
       - ".github/workflows/snow-squall-live-publisher-dispatch.yml"
+      - ".github/workflows/snow-squall-live-publisher.yml"
       - "acquisition/radar_watcher.py"
   schedule:
     - cron: "*/5 * * * *"
