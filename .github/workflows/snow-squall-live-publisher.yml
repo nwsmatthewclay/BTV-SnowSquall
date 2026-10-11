@@ -172,6 +172,40 @@ jobs:
           cp -R /tmp/viewer/data/live/radar_history/. viewer/data/live/radar_history/
           rm -rf /tmp/viewer
 
+      - name: Rebuild viewer radar mosaic from the just-processed Level-II scans
+        run: |
+          set -euo pipefail
+          python scripts/build_live_radar_mosaic.py \
+            --raw-root data/raw \
+            --kcxx-state viewer/data/live/KCXX_state.json \
+            --ktyx-state viewer/data/live/KTYX_state.json \
+            --output-image viewer/data/live/radar_mosaic.png \
+            --output-json viewer/data/live/radar_mosaic.json
+          python - <<'PY'
+          import json
+          from datetime import datetime, timezone
+          from pathlib import Path
+
+          path = Path("viewer/data/live/radar_mosaic.json")
+          payload = json.loads(path.read_text(encoding="utf-8"))
+          sources = payload.get("sources") or []
+          if payload.get("status") != "ready" or not sources:
+              raise SystemExit(f"Fresh radar mosaic unavailable: status={payload.get('status')}, sources={sources}")
+          now = datetime.now(timezone.utc)
+          for source in sources:
+              raw = source.get("scan_time_utc")
+              if not raw:
+                  raise SystemExit(f"Missing scan timestamp for {source.get('radar')}")
+              stamp = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+              if stamp.tzinfo is None:
+                  stamp = stamp.replace(tzinfo=timezone.utc)
+              age_minutes = (now - stamp.astimezone(timezone.utc)).total_seconds() / 60
+              print(f"{source.get('radar')}: {source.get('source_file')} scan={stamp.isoformat()} age={age_minutes:.1f} min")
+              if age_minutes > 35:
+                  raise SystemExit(f"{source.get('radar')} mosaic source is stale ({age_minutes:.1f} min); refusing stale publication")
+          print("Fresh viewer-facing radar mosaic rebuilt from current Level-II scans.")
+          PY
+
       - name: Validate live object products without blocking fresh radar
         run: |
           set +e
