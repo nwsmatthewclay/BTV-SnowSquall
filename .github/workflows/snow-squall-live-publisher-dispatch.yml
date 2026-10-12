@@ -33,6 +33,7 @@ jobs:
           # this guard, each tick queues another 30-minute publisher run behind
           # the active one, amplifying stale-feed delays.
           active_publisher="$(gh run list \
+            --repo "${GITHUB_REPOSITORY}" \
             --workflow "Snow Squall Live Object Publisher" \
             --branch main \
             --limit 20 \
@@ -40,6 +41,7 @@ jobs:
             --jq '[.[] | select(.status == "queued" or .status == "in_progress")] | length')"
 
           active_event_cycle="$(gh run list \
+            --repo "${GITHUB_REPOSITORY}" \
             --workflow "Snow Squall Event-Driven Live Cycle" \
             --branch main \
             --limit 20 \
