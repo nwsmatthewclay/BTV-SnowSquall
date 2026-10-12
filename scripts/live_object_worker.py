@@ -24,6 +24,41 @@ from acquisition.radar_watcher import (
 from scripts.process_live_volume import process_volume
 
 
+def select_volumes(
+    recent: list[tuple[str, datetime]],
+    since: datetime | None,
+    max_volumes_per_run: int,
+    prefer_latest: bool = False,
+) -> list[tuple[str, datetime]]:
+    """Choose a bounded chronological batch without collapsing tracks to one scan.
+
+    When the worker is behind, retain the newest bounded batch in chronological
+    order. This skips an old backlog but still gives the tracker multiple
+    consecutive observations to associate, unlike selecting only the final scan.
+    A fresh state is seeded with the newest bounded batch for the same reason.
+    """
+    recent = list(recent)
+    if not recent:
+        return []
+    limit = max(1, int(max_volumes_per_run))
+    if prefer_latest:
+        return [recent[-1]]
+
+    backlog_minutes = None
+    if since is not None:
+        try:
+            backlog_minutes = max(
+                0.0,
+                (recent[-1][1] - since).total_seconds() / 60.0,
+            )
+        except (AttributeError, TypeError):
+            backlog_minutes = None
+
+    if since is None or (backlog_minutes is not None and backlog_minutes > 15.0):
+        return recent[-limit:]
+    return recent[:limit]
+
+
 def run(
     radar: str,
     poll_seconds: int,
@@ -83,28 +118,16 @@ def run(
                     if key not in persisted_processed and key != last_key:
                         recent = [(key, volume_time)]
 
-            limit = max(1, int(max_volumes_per_run))
-            backlog_minutes = None
-            if since is not None and recent:
-                try:
-                    backlog_minutes = max(
-                        0.0,
-                        (recent[-1][1] - since).total_seconds() / 60.0,
-                    )
-                except (AttributeError, TypeError):
-                    backlog_minutes = None
-
-            # Normal operation stays chronological for track continuity.
-            # Recovery mode prevents the live feed from remaining an hour
-            # behind when a backlog builds up or Actions temporarily stalls:
-            # jump to the newest unprocessed volume once lag exceeds 15 min.
-            if prefer_latest or (backlog_minutes is not None and backlog_minutes > 15.0):
-                recent = [recent[-1]]
-            elif len(recent) > limit:
-                recent = recent[:limit]
-            # A brand-new state always starts from the newest available volume.
-            if since is None and recent:
-                recent = [recent[-1]]
+            # Preserve multiple consecutive observations even during recovery.
+            # When far behind, process the newest bounded batch in chronological
+            # order; the live radar image is published independently, so the
+            # object tracker does not need to discard all but one scan.
+            recent = select_volumes(
+                recent,
+                since,
+                max_volumes_per_run,
+                prefer_latest=prefer_latest,
+            )
 
             if not recent:
                 logging.info("No unprocessed %s volumes; waiting.", radar)
