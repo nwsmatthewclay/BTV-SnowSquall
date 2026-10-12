@@ -262,19 +262,38 @@ jobs:
           print(f"State source: {state_path}")
 
       - name: Select expanded documented and unverified case pool
+        id: selection
         run: |
           set -euo pipefail
           rm -rf data/manifests/snow_squall_expansion
-          python scripts/select_snow_squall_case_pool.py \
-            --input "${{ steps.ledger.outputs.ledger }}" \
-            --radar-manifest "${{ steps.ledger.outputs.radar }}" \
-            --output-dir data/manifests/snow_squall_expansion \
-            --max-official "${{ steps.batch.outputs.max_official }}" \
-            --max-unverified "${{ steps.batch.outputs.max_unverified }}" \
-            --offset-official "${{ steps.batch.outputs.official_offset }}" \
-            --offset-unverified "${{ steps.batch.outputs.unverified_offset }}" \
-            --exclude-modern-validation data/manifests/modern_independent_validation_cases.csv \
-            --exclude-candidate-ids data/manifests/historical_processed_candidate_ids.csv
+          common_args=(
+            --input "${{ steps.ledger.outputs.ledger }}"
+            --radar-manifest "${{ steps.ledger.outputs.radar }}"
+            --output-dir data/manifests/snow_squall_expansion
+            --max-official "${{ steps.batch.outputs.max_official }}"
+            --max-unverified "${{ steps.batch.outputs.max_unverified }}"
+            --offset-official "${{ steps.batch.outputs.official_offset }}"
+            --offset-unverified "${{ steps.batch.outputs.unverified_offset }}"
+            --exclude-modern-validation data/manifests/modern_independent_validation_cases.csv
+          )
+          # Exhausting the unseen discovery pool must not block model retraining.
+          # Reuse previously acquired cases for a cumulative refresh, while keeping
+          # the independent validation cases/windows excluded. Stop automatic
+          # batch dispatch after this fallback to avoid repeating the same batch.
+          if python scripts/select_snow_squall_case_pool.py "${common_args[@]}" \
+            --exclude-candidate-ids data/manifests/historical_processed_candidate_ids.csv \
+            2>&1 | tee /tmp/selection.log; then
+            echo "reuse_prior=false" >> "$GITHUB_OUTPUT"
+          elif grep -q "No discovery candidates have a radar acquisition path" /tmp/selection.log; then
+            echo "No unseen candidates with radar coverage remain; reusing acquired cases for a cumulative model refresh."
+            echo "reuse_prior=true" >> "$GITHUB_OUTPUT"
+            rm -rf data/manifests/snow_squall_expansion
+            python scripts/select_snow_squall_case_pool.py "${common_args[@]}" \
+              2>&1 | tee /tmp/selection-reuse.log
+          else
+            cat /tmp/selection.log
+            exit 1
+          fi
           python - <<'PY'
           import pandas as pd
           from pathlib import Path
@@ -461,7 +480,7 @@ jobs:
           rm -f "$local_ids" "$merged_state"
           echo "ERROR: unable to persist historical acquisition state after 15 attempts."
       - name: Dispatch next historical acquisition batch
-        if: success()
+        if: success() && steps.selection.outputs.reuse_prior != 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
