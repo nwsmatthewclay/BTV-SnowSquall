@@ -97,6 +97,7 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
+      # Use the latest model-foundation scorer, including calibration-artifact diagnostics.
       - name: Score KCXX and KTYX live objects
         if: steps.model.outputs.skip != 'true'
         run: |
