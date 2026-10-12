@@ -23,6 +23,37 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 3
     steps:
+      - name: Avoid queuing duplicate live processing cycles
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          # The dispatcher runs every five minutes, but Level-II decoding,
+          # gridding, RAP retrieval, and object scoring can take longer. Without
+          # this guard, each tick queues another 30-minute publisher run behind
+          # the active one, amplifying stale-feed delays.
+          active_publisher="$(gh run list \
+            --workflow "Snow Squall Live Object Publisher" \
+            --branch main \
+            --limit 20 \
+            --json status \
+            --jq '[.[] | select(.status == "queued" or .status == "in_progress")] | length')"
+
+          active_event_cycle="$(gh run list \
+            --workflow "Snow Squall Event-Driven Live Cycle" \
+            --branch main \
+            --limit 20 \
+            --json status \
+            --jq '[.[] | select(.status == "queued" or .status == "in_progress")] | length')"
+
+          echo "Active/queued publisher runs: $active_publisher"
+          echo "Active/queued event cycles: $active_event_cycle"
+
+          if [ "$active_publisher" -gt 0 ] || [ "$active_event_cycle" -gt 0 ]; then
+            echo "A live processing cycle is already queued or running; skipping duplicate dispatch."
+            exit 0
+          fi
+
       - name: Dispatch canonical foundation publisher
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
