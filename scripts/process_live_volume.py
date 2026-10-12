@@ -22,7 +22,7 @@ from processing.radar_storm_motion import attach_radar_storm_motion
 from processing.radar_features import object_field_summary, velocity_object_summary
 from processing.vertical_structure import summarize_vertical_structure
 from acquisition.rap_environment import acquire_for_radar_time, acquire_forecast_for_radar_time
-from processing.rap_features import close_field_cache, extract_features
+from processing.rap_features import extract_features
 from processing.radar_sites import apply_radar_origin, radar_origin_for_site
 from scripts.live_model_features import build_live_feature_frame
 from scripts.model_runtime import ModelRuntime
@@ -986,11 +986,6 @@ def process_volume(
 
     state["updated_utc"] = datetime.now(timezone.utc).isoformat()
     save_state(state_path, state, tracker)
-
-    # Release cached cfgrib handles after all object features for this scan have
-    # been extracted and serialized. Do not rely on interpreter shutdown to
-    # dispose of multiple filtered views of the same RAP GRIB file.
-    close_field_cache()
 
     print(f"Processed {source_name}: {len(features)} object(s)")
     print(f"Wrote {output_path}")
