@@ -115,6 +115,14 @@ def score_site(site: str, live_root: Path, model_root: Path) -> tuple[dict, list
             "training_contract_status": runtime.metadata.get("training_contract_status") or training_contract_status or None,
             "candidate_mode": runtime.metadata.get("candidate_mode") or candidate_mode or None,
             "predictor_count": len(runtime.feature_columns),
+            # Expose whether this artifact actually loaded a probability calibrator.
+            # Candidate status remains research-only regardless of calibrator presence.
+            "calibrator_present": getattr(runtime, "calibrator", None) is not None,
+            "probability_calibration_status": (
+                "artifact_calibrator_loaded"
+                if getattr(runtime, "calibrator", None) is not None
+                else "no_calibrator_artifact_loaded"
+            ),
             "model_family": runtime.metadata.get("estimator_family") or runtime.metadata.get("model_version"),
             "selected_artifact": directory.name if directory is not None else None,
             "bundle_family": (
