@@ -243,12 +243,12 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p viewer/data/live
-          printf '{}\\n' > /tmp/empty-radar-state.json
-          python scripts/build_live_radar_mosaic.py \\
-            --raw-root data/raw \\
-            --kcxx-state /tmp/empty-radar-state.json \\
-            --ktyx-state /tmp/empty-radar-state.json \\
-            --output-image viewer/data/live/radar_mosaic.png \\
+          printf '{}\n' > /tmp/empty-radar-state.json
+          python scripts/build_live_radar_mosaic.py \
+            --raw-root data/raw \
+            --kcxx-state /tmp/empty-radar-state.json \
+            --ktyx-state /tmp/empty-radar-state.json \
+            --output-image viewer/data/live/radar_mosaic.png \
             --output-json viewer/data/live/radar_mosaic.json
 
           python - <<'PY'
