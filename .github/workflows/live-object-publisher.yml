@@ -236,6 +236,80 @@ jobs:
           find data/raw/KCXX data/raw/KTYX -maxdepth 1 -type f -size +0c -printf '%p %s bytes\n' | tail -20 || true
 
 
+      - name: Publish fresh radar before potentially slow object tracking
+        # Radar freshness is operationally independent of probability scoring.
+        # Publish the latest mosaic immediately after acquisition so a backlog
+        # in the tracker cannot leave the viewer showing hours-old imagery.
+        run: |
+          set -euo pipefail
+          mkdir -p viewer/data/live
+          printf '{}\\n' > /tmp/empty-radar-state.json
+          python scripts/build_live_radar_mosaic.py \\
+            --raw-root data/raw \\
+            --kcxx-state /tmp/empty-radar-state.json \\
+            --ktyx-state /tmp/empty-radar-state.json \\
+            --output-image viewer/data/live/radar_mosaic.png \\
+            --output-json viewer/data/live/radar_mosaic.json
+
+          python - <<'PY'
+          import json
+          from datetime import datetime, timezone
+          from pathlib import Path
+          from scripts.process_live_event import archive_live_radar_frame, parse_time
+
+          root = Path("viewer/data/live")
+          metadata = json.loads((root / "radar_mosaic.json").read_text(encoding="utf-8"))
+          if metadata.get("status") != "ready":
+              raise SystemExit(f"Fresh radar mosaic unavailable: {metadata.get('status')}")
+          source_times = []
+          now = datetime.now(timezone.utc)
+          for source in metadata.get("sources") or []:
+              raw = source.get("scan_time_utc")
+              if not raw:
+                  raise SystemExit(f"Missing scan time for {source.get('radar')}")
+              stamp = parse_time(raw)
+              age = (now - stamp).total_seconds() / 60
+              print(f"{source.get('radar')}: {source.get('source_file')} age={age:.1f} min")
+              if age < -5 or age > 35:
+                  raise SystemExit(f"Refusing stale/future radar source {source.get('radar')}: age={age:.1f} min")
+              source_times.append(stamp)
+          if not source_times:
+              raise SystemExit("No fresh KCXX/KTYX sources; refusing to publish.")
+          archive_live_radar_frame(root, cycle_time=max(source_times))
+          PY
+
+          # Use a separate worktree so the long-running object tracker can
+          # continue on its foundation checkout while fresh radar is published.
+          git fetch --no-tags origin snow-squall-live-data
+          rm -rf /tmp/snow-squall-radar-publish
+          git worktree add --detach /tmp/snow-squall-radar-publish origin/snow-squall-live-data
+          radar_files=(
+            radar_mosaic.json radar_mosaic.png radar_mosaic_clean.png radar_mosaic_raw.png
+            radar_cursor.json
+            KCXX_base_reflectivity_clean.png KCXX_base_reflectivity_raw.png
+            KCXX_base_velocity_clean.png KCXX_base_velocity_raw.png
+            KTYX_base_reflectivity_clean.png KTYX_base_reflectivity_raw.png
+            KTYX_base_velocity_clean.png KTYX_base_velocity_raw.png
+          )
+          for file in "${radar_files[@]}"; do
+            if [ -s "viewer/data/live/$file" ]; then
+              cp "viewer/data/live/$file" "/tmp/snow-squall-radar-publish/$file"
+            fi
+          done
+          mkdir -p /tmp/snow-squall-radar-publish/radar_history
+          cp -R viewer/data/live/radar_history/. /tmp/snow-squall-radar-publish/radar_history/
+          git -C /tmp/snow-squall-radar-publish add "${radar_files[@]/#/}"
+          git -C /tmp/snow-squall-radar-publish add radar_history
+          if git -C /tmp/snow-squall-radar-publish diff --cached --quiet; then
+            echo "Radar products are unchanged; no early radar commit needed."
+          else
+            git -C /tmp/snow-squall-radar-publish config user.name "github-actions[bot]"
+            git -C /tmp/snow-squall-radar-publish config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git -C /tmp/snow-squall-radar-publish commit -m "Publish fresh BTV radar before object tracking"
+            git -C /tmp/snow-squall-radar-publish push origin HEAD:snow-squall-live-data
+          fi
+          git worktree remove --force /tmp/snow-squall-radar-publish
+
       - name: Refresh live objects from every unprocessed KCXX scan
         # Process every newly available KCXX volume in chronological order.
         # Processing only the newest scan skips intermediate detections and
