@@ -281,6 +281,7 @@ jobs:
           # Use a separate worktree so the long-running object tracker can
           # continue on its foundation checkout while fresh radar is published.
           git fetch --no-tags origin snow-squall-live-data
+          git worktree prune
           rm -rf /tmp/snow-squall-radar-publish
           git worktree add --detach /tmp/snow-squall-radar-publish origin/snow-squall-live-data
           radar_files=(
@@ -298,7 +299,11 @@ jobs:
           done
           mkdir -p /tmp/snow-squall-radar-publish/radar_history
           cp -R viewer/data/live/radar_history/. /tmp/snow-squall-radar-publish/radar_history/
-          git -C /tmp/snow-squall-radar-publish add "${radar_files[@]/#/}"
+          for file in "${radar_files[@]}"; do
+            if [ -s "/tmp/snow-squall-radar-publish/$file" ]; then
+              git -C /tmp/snow-squall-radar-publish add -- "$file"
+            fi
+          done
           git -C /tmp/snow-squall-radar-publish add radar_history
           if git -C /tmp/snow-squall-radar-publish diff --cached --quiet; then
             echo "Radar products are unchanged; no early radar commit needed."
