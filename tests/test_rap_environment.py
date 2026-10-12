@@ -49,3 +49,44 @@ def test_ncei_old_rap_archive_is_in_candidate_urls():
     valid = datetime(2013, 7, 23, 23, 0, tzinfo=timezone.utc)
     urls = list(ncei_rap_analysis_urls(valid))
     assert any("/model-rap130anl-old/" in url for url in urls)
+
+def test_find_forecast_stops_at_newest_available_cycle(monkeypatch):
+    from acquisition import rap_environment as rap
+
+    radar_time = datetime(2026, 10, 11, 20, 23, tzinfo=timezone.utc)
+    checked = []
+    monkeypatch.setattr(rap, "_url_exists", lambda url: checked.append(url) or True)
+
+    match = rap.find_forecast(radar_time, target_minutes=30)
+
+    assert match is not None
+    assert match.cycle_time == datetime(2026, 10, 11, 20, 0, tzinfo=timezone.utc)
+    assert match.valid_time == datetime(2026, 10, 11, 21, 0, tzinfo=timezone.utc)
+    assert match.lead_hours == 1
+    assert checked == [rap.rap_forecast_url(match.cycle_time, match.lead_hours)]
+
+
+def test_find_forecast_falls_back_only_when_newest_cycle_missing(monkeypatch):
+    from acquisition import rap_environment as rap
+
+    radar_time = datetime(2026, 10, 11, 20, 23, tzinfo=timezone.utc)
+    checked = []
+    newest_url = rap.rap_forecast_url(
+        datetime(2026, 10, 11, 20, 0, tzinfo=timezone.utc), 1
+    )
+
+    def available(url):
+        checked.append(url)
+        return url != newest_url
+
+    monkeypatch.setattr(rap, "_url_exists", available)
+    match = rap.find_forecast(radar_time, target_minutes=30)
+
+    assert match is not None
+    assert match.cycle_time == datetime(2026, 10, 11, 19, 0, tzinfo=timezone.utc)
+    assert match.valid_time == datetime(2026, 10, 11, 21, 0, tzinfo=timezone.utc)
+    assert checked == [
+        newest_url,
+        rap.rap_forecast_url(match.cycle_time, match.lead_hours),
+    ]
+
