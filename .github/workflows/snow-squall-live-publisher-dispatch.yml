@@ -24,6 +24,7 @@ jobs:
     timeout-minutes: 3
     steps:
       - name: Avoid queuing duplicate live processing cycles
+        id: guard
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -52,11 +53,13 @@ jobs:
           echo "Active/queued event cycles: $active_event_cycle"
 
           if [ "$active_publisher" -gt 0 ] || [ "$active_event_cycle" -gt 0 ]; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
             echo "A live processing cycle is already queued or running; skipping duplicate dispatch."
             exit 0
           fi
 
       - name: Dispatch canonical foundation publisher
+        if: steps.guard.outputs.skip != 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
