@@ -1,0 +1,225 @@
+name: Snow Squall Radar Frame Publisher
+# Publish radar independently of the slower object tracker. This workflow lives
+# on the default branch so its five-minute schedule is actually eligible to run.
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: snow-squall-radar-frame-publisher
+  cancel-in-progress: false
+
+jobs:
+  publish-radar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    env:
+      PYTHONPATH: ${{ github.workspace }}
+      PYTHONUNBUFFERED: "1"
+      GH_TOKEN: ${{ github.token }}
+
+    steps:
+      - name: Check out radar processing code
+        uses: actions/checkout@v4
+        with:
+          ref: snow-squall-model-foundation
+          fetch-depth: 2
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: |
+            requirements.txt
+            requirements-science.txt
+
+      - name: Install radar dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt -r requirements-science.txt
+
+      - name: Acquire newest KCXX and KTYX volumes
+        run: |
+          set -euo pipefail
+          mkdir -p data/raw/KCXX data/raw/KTYX viewer/data/live
+          python - <<'PY'
+          from acquisition.radar_watcher import find_newest_volume, make_s3_client, download_volume
+          s3 = make_s3_client()
+          for radar in ("KCXX", "KTYX"):
+              result = find_newest_volume(s3, radar)
+              if result is None:
+                  raise SystemExit(f"{radar}: no Level-II volume found in the public archive")
+              key, when = result
+              path = download_volume(s3, radar, key, when)
+              print(f"{radar}: {path.name} ({when.isoformat()})")
+          PY
+
+      - name: Restore the durable radar timeline
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin snow-squall-live-data
+          mkdir -p /tmp/prior-live viewer/data/live/radar_history
+          git archive origin/snow-squall-live-data viewer/data/live/radar_history | tar -x -C /tmp/prior-live
+          if [ -d /tmp/prior-live/viewer/data/live/radar_history ]; then
+            cp -R /tmp/prior-live/viewer/data/live/radar_history/. viewer/data/live/radar_history/
+          fi
+          printf '{}\n' > /tmp/empty-radar-state.json
+
+      - name: Build and validate the newest radar mosaic
+        run: |
+          set -euo pipefail
+          python scripts/build_live_radar_mosaic.py \
+            --raw-root data/raw \
+            --kcxx-state /tmp/empty-radar-state.json \
+            --ktyx-state /tmp/empty-radar-state.json \
+            --output-image viewer/data/live/radar_mosaic.png \
+            --output-json viewer/data/live/radar_mosaic.json
+          python - <<'PY'
+          import json
+          from datetime import datetime, timezone
+          from pathlib import Path
+          from scripts.process_live_event import archive_live_radar_frame, parse_time
+
+          root = Path("viewer/data/live")
+          payload = json.loads((root / "radar_mosaic.json").read_text(encoding="utf-8"))
+          if payload.get("status") != "ready":
+              raise SystemExit(f"Radar mosaic not ready: {payload.get('status')}")
+          times = []
+          now = datetime.now(timezone.utc)
+          for source in payload.get("sources") or []:
+              raw = source.get("scan_time_utc")
+              if not raw:
+                  raise SystemExit(f"Missing scan timestamp for {source.get('radar')}")
+              stamp = parse_time(raw)
+              age = (now - stamp).total_seconds() / 60
+              print(f"{source.get('radar')}: {source.get('source_file')} age={age:.1f} min")
+              if age < -5 or age > 20:
+                  raise SystemExit(f"Refusing stale/future {source.get('radar')} volume (age {age:.1f} min)")
+              times.append(stamp)
+          if not times:
+              raise SystemExit("Mosaic has no source timestamps")
+          archive_live_radar_frame(root, cycle_time=max(times))
+          manifest = json.loads((root / "radar_history/manifest.json").read_text(encoding="utf-8"))
+          if not manifest.get("frames"):
+              raise SystemExit("Radar history manifest is empty after archiving")
+          print("Timeline frames prepared:", len(manifest["frames"]))
+          PY
+
+      - name: Publish radar products without overwriting concurrent object updates
+        run: |
+          set -euo pipefail
+          radar_files=(
+            radar_mosaic.json radar_mosaic.png radar_mosaic_clean.png radar_mosaic_raw.png
+            radar_cursor.json
+            KCXX_base_reflectivity_clean.png KCXX_base_reflectivity_raw.png
+            KCXX_base_velocity_clean.png KCXX_base_velocity_raw.png
+            KTYX_base_reflectivity_clean.png KTYX_base_reflectivity_raw.png
+            KTYX_base_velocity_clean.png KTYX_base_velocity_raw.png
+          )
+          mkdir -p /tmp/generated-radar
+          for file in "${radar_files[@]}"; do
+            if [ -s "viewer/data/live/$file" ]; then
+              cp "viewer/data/live/$file" "/tmp/generated-radar/$file"
+            fi
+          done
+          cp viewer/data/live/radar_history/manifest.json /tmp/generated-radar/manifest.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          generated = json.loads(Path("/tmp/generated-radar/manifest.json").read_text())
+          frames = generated.get("frames") or []
+          if not frames:
+              raise SystemExit("No new radar frame in generated manifest")
+          latest = max(frames, key=lambda x: str(x.get("timestamp", "")))
+          source = Path("viewer/data/live") / str(latest.get("image", ""))
+          if not source.is_file():
+              raise SystemExit(f"Missing archived frame image: {source}")
+          Path("/tmp/generated-radar/latest-frame-name.txt").write_text(source.name)
+          Path("/tmp/generated-radar/latest-frame.png").write_bytes(source.read_bytes())
+          print("Prepared newest frame:", latest.get("timestamp"), latest.get("image"))
+          PY
+
+          rm -rf /tmp/radar-live-publish
+          git clone --depth 1 --branch snow-squall-live-data \
+            "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" \
+            /tmp/radar-live-publish
+          cd /tmp/radar-live-publish
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          for attempt in 1 2 3; do
+            git fetch origin snow-squall-live-data
+            git reset --hard origin/snow-squall-live-data
+            target=viewer/data/live
+            mkdir -p "$target/radar_history"
+            for file in "${radar_files[@]}"; do
+              if [ -s "/tmp/generated-radar/$file" ]; then
+                cp "/tmp/generated-radar/$file" "$target/$file"
+              fi
+            done
+            frame_name="$(cat /tmp/generated-radar/latest-frame-name.txt)"
+            cp /tmp/generated-radar/latest-frame.png "$target/radar_history/$frame_name"
+
+            python - <<'PY'
+            import json
+            from datetime import datetime, timedelta, timezone
+            from pathlib import Path
+            target = Path("viewer/data/live/radar_history")
+            remote_path = target / "manifest.json"
+            generated_path = Path("/tmp/generated-radar/manifest.json")
+            try:
+                remote = json.loads(remote_path.read_text(encoding="utf-8"))
+            except Exception:
+                remote = {}
+            generated = json.loads(generated_path.read_text(encoding="utf-8"))
+            frames = {}
+            for item in (remote.get("frames") or []) + (generated.get("frames") or []):
+                if not isinstance(item, dict) or not item.get("timestamp") or not item.get("image"):
+                    continue
+                if item.get("palette") != "BTV_WINTER_REFLECTIVITY_V2":
+                    continue
+                frames[item["image"]] = item
+            now = datetime.now(timezone.utc)
+            kept = []
+            for item in frames.values():
+                try:
+                    stamp = datetime.fromisoformat(str(item["timestamp"]).replace("Z", "+00:00"))
+                    if stamp.tzinfo is None:
+                        stamp = stamp.replace(tzinfo=timezone.utc)
+                    if stamp >= now - timedelta(minutes=100):
+                        kept.append(item)
+                except (TypeError, ValueError):
+                    continue
+            kept.sort(key=lambda item: item["timestamp"])
+            remote.update({
+                "version": 2,
+                "retention_frames": 18,
+                "interval_hint_minutes": 5,
+                "reflectivity_palette": "BTV_WINTER_REFLECTIVITY_V2",
+                "reflectivity_palette_version": "BTV_WINTER_REFLECTIVITY_V2",
+                "frames": kept,
+            })
+            remote_path.write_text(json.dumps(remote, indent=2) + "\n", encoding="utf-8")
+            print("Merged timeline frames:", len(kept))
+            PY
+
+            git add viewer/data/live
+            if git diff --cached --quiet; then
+              echo "Radar products unchanged."
+              exit 0
+            fi
+            git commit -m "Publish newest BTV radar frame"
+            if git push origin HEAD:snow-squall-live-data; then
+              echo "Radar frame published successfully on attempt $attempt."
+              exit 0
+            fi
+            echo "Concurrent live-data update detected; retrying publish (attempt $attempt)."
+          done
+          echo "Could not publish after three attempts because live-data branch kept changing."
+          exit 1
