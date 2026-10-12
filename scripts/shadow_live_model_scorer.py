@@ -102,11 +102,18 @@ def score_site(site: str, live_root: Path, model_root: Path) -> tuple[dict, list
             model_root / f"baseline_refresh_{horizon}m",
             model_root / f"baseline_expansion_{horizon}m",
         ]
-        directory = next(
-            (candidate for candidate in candidates if (candidate / "metrics.json").exists()),
-            None,
-        )
-        runtime = ModelRuntime.load(directory) if directory is not None else ModelRuntime()
+        # Do not stop at a metrics.json file: interrupted/partial refresh
+        # artifacts can have metadata without the serialized estimator. Try each
+        # candidate in priority order and select the first bundle that actually
+        # loads a model, otherwise a valid expansion bundle is silently skipped.
+        directory = None
+        runtime = ModelRuntime()
+        for candidate in candidates:
+            loaded = ModelRuntime.load(candidate)
+            if loaded.model is not None:
+                directory = candidate
+                runtime = loaded
+                break
         runtimes[horizon] = runtime
         model_info[horizon] = {
             "model_present": runtime.model is not None,
