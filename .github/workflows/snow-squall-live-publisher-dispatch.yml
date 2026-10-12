@@ -49,10 +49,19 @@ jobs:
             --json status \
             --jq '[.[] | select(.status == "queued" or .status == "in_progress")] | length')"
 
-          echo "Active/queued publisher runs: $active_publisher"
-          echo "Active/queued event cycles: $active_event_cycle"
+          active_foundation_publisher="$(gh run list \
+            --repo "${GITHUB_REPOSITORY}" \
+            --workflow "Publish Live Snow Squall Objects" \
+            --branch snow-squall-model-foundation \
+            --limit 20 \
+            --json status \
+            --jq '[.[] | select(.status == "queued" or .status == "in_progress")] | length')"
 
-          if [ "$active_publisher" -gt 0 ] || [ "$active_event_cycle" -gt 0 ]; then
+          echo "Active/queued main publisher runs: $active_publisher"
+          echo "Active/queued event cycles: $active_event_cycle"
+          echo "Active/queued model-foundation publisher runs: $active_foundation_publisher"
+
+          if [ "$active_publisher" -gt 0 ] || [ "$active_event_cycle" -gt 0 ] || [ "$active_foundation_publisher" -gt 0 ]; then
             echo "skip=true" >> "$GITHUB_OUTPUT"
             echo "A live processing cycle is already queued or running; skipping duplicate dispatch."
             exit 0
