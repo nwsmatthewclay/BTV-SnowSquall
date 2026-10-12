@@ -89,6 +89,23 @@ def _open_field(path: Path, type_of_level: str, short_name: str, level=None):
     return ds
 
 
+def close_field_cache():
+    """Close cached cfgrib/xarray datasets and release nearest-point indexes.
+
+    Live scoring opens several filtered views of the same GRIB file. Explicitly
+    closing these backend handles at the end of a scan avoids leaving ecCodes
+    resources to interpreter shutdown, where some runner builds have aborted
+    with heap-corruption errors after successful field extraction.
+    """
+    for dataset in list(_FIELD_CACHE.values()):
+        try:
+            dataset.close()
+        except Exception:
+            pass
+    _FIELD_CACHE.clear()
+    _NEAREST_INDEX_CACHE.clear()
+
+
 def _nearest_index(ds, latitude: float, longitude: float):
     key=(id(ds),round(float(latitude),4),round(float(longitude),4))
     cached=_NEAREST_INDEX_CACHE.get(key)
