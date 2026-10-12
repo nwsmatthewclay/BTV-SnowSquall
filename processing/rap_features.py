@@ -79,6 +79,11 @@ def _open_field(path: Path, type_of_level: str, short_name: str, level=None):
         engine="cfgrib",
         backend_kwargs={"filter_by_keys": filters, "indexpath": ""},
     )
+    # Materialize this filtered field and release its ecCodes file handle
+    # immediately. Keeping many lazy cfgrib datasets open against one RAP file
+    # caused native heap corruption/segfaults in the live runner at shutdown.
+    ds.load()
+    ds.close()
     _FIELD_CACHE[key] = ds
     if len(_FIELD_CACHE) > _FIELD_CACHE_MAX:
         _, stale = _FIELD_CACHE.popitem(last=False)
@@ -90,18 +95,12 @@ def _open_field(path: Path, type_of_level: str, short_name: str, level=None):
 
 
 def close_field_cache():
-    """Close cached cfgrib/xarray datasets and release nearest-point indexes.
+    """Release in-memory RAP field arrays and cached nearest-point indexes.
 
-    Live scoring opens several filtered views of the same GRIB file. Explicitly
-    closing these backend handles at the end of a scan avoids leaving ecCodes
-    resources to interpreter shutdown, where some runner builds have aborted
-    with heap-corruption errors after successful field extraction.
+    _open_field materializes and closes each ecCodes-backed dataset as it opens
+    it, so clearing the cache releases memory without closing native handles a
+    second time.
     """
-    for dataset in list(_FIELD_CACHE.values()):
-        try:
-            dataset.close()
-        except Exception:
-            pass
     _FIELD_CACHE.clear()
     _NEAREST_INDEX_CACHE.clear()
 
