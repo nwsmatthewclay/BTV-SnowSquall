@@ -370,3 +370,42 @@ def test_shadow_scoring_uses_current_object_when_history_lags(tmp_path, monkeypa
     assert captured
     assert str(captured[0]["timestamp"]).startswith("2026-01-01T12:05:00")
     assert captured[0]["max_reflectivity_dbz"] == 42.0
+
+def test_shadow_scorer_skips_incomplete_refresh_bundle_and_loads_expansion(tmp_path, monkeypatch):
+    live = tmp_path / "live"
+    models = tmp_path / "models"
+    live.mkdir()
+    models.mkdir()
+    make_model_dirs(models)
+    # Simulate a partial refresh artifact: metrics exists, estimator does not.
+    for horizon in (15, 30, 45, 60):
+        refresh = models / f"candidate_ensemble_refresh_{horizon}m"
+        refresh.mkdir()
+        (refresh / "metrics.json").write_text("{}", encoding="utf-8")
+
+    current = rich_props(timestamp="2026-01-01T12:05:00Z", max_z=31.0)
+    (live / "KCXX_objects.geojson").write_text(json.dumps({
+        "metadata": {"scan_time_utc": current["timestamp"]},
+        "features": [{"type": "Feature", "geometry": None, "properties": current}],
+    }), encoding="utf-8")
+    (live / "KCXX_history.json").write_text(json.dumps([current]), encoding="utf-8")
+    write_empty_site(live, "KTYX")
+
+    class EmptyRuntime:
+        model = None
+        metadata = {}
+        feature_columns = []
+
+    def load_stub(directory):
+        if "refresh" in directory.name:
+            return EmptyRuntime()
+        horizon = int(directory.name.split("_")[-1].replace("m", ""))
+        return FakeRuntime(horizon)
+
+    monkeypatch.setattr("scripts.shadow_live_model_scorer.ModelRuntime.load", load_stub)
+    payload, rows = score_site("KCXX", live, models)
+
+    assert payload["scored_object_count"] == 1
+    assert payload["model_info"]["15"]["selected_artifact"] == "candidate_ensemble_expansion_15m"
+    assert rows[0]["research_probabilities"]
+
