@@ -17,7 +17,18 @@ var BTV=[44.472,-73.154];
 var datasets={},allObjects=[],selected=null,objectNumbers=true,refreshTimer=null,cursorGrid=null,cursorBound=false,lastObjectClickAt=0;
 var radarHistory={frames:[]},radarHistoryIndex=-1,radarAnimationTimer=null,radarInitialRender=true,radarTimelineUserSelected=false;
 var mapExtentInitialized=false;
+// Animated centroid playback follows recorded observations; it is not a forecast.
+var trackPlaybackMarkers=[],trackPlaybackTimer=null,trackPlaybackStarted=Date.now();
 function fitMapToBoundsOnce(bounds){if(mapExtentInitialized||!bounds)return;map.fitBounds(bounds,{padding:[25,25],maxZoom:8});mapExtentInitialized=true;}
+function updateTrackPlayback(){
+  var elapsed=(Date.now()-trackPlaybackStarted)%12000,progress=elapsed/12000;
+  trackPlaybackMarkers.forEach(function(item){
+    if(!item.coords||item.coords.length<2||!item.marker)return;
+    var scaled=progress*(item.coords.length-1),i=Math.min(item.coords.length-2,Math.floor(scaled)),f=scaled-i;
+    var a=item.coords[i],b=item.coords[i+1];
+    item.marker.setLatLng([a[0]+(b[0]-a[0])*f,a[1]+(b[1]-a[1])*f]);
+  });
+}
 
 var LIVE_BASE="https://raw.githubusercontent.com/nwsmatthewclay/BTV-SnowSquall/snow-squall-live-data/viewer/data/live/";
 var SHADOW_BASE="https://raw.githubusercontent.com/nwsmatthewclay/BTV-SnowSquall/snow-squall-shadow-data/viewer/data/shadow/";
@@ -634,6 +645,7 @@ function selectObject(p){
 }
 function renderMap(){
   Object.values(layers).forEach(function(l){l.clearLayers()});
+  trackPlaybackMarkers=[];
   if(!allObjects.length)return;
   allObjects.forEach(function(p){
     var c=objectRisk(p),sel=selected&&selected.radar_site===p.radar_site&&String(selected.track_id)===String(p.track_id);
@@ -679,6 +691,13 @@ function renderMap(){
     }
     if(trackTrail.length>1){
       var trailColor=sel?"#ffffff":(p.radar_site==="KCXX"?"#38d7ff":"#ffb45e");
+      // A moving centroid shows the object progressing through its recorded history.
+      // The radar-derived polygon remains at the latest scan location above.
+      var playbackMarker=L.circleMarker(trackTrail[0],{
+        radius:sel?5.5:4.5,color:trailColor,weight:2,
+        fillColor:"#f7fbff",fillOpacity:1,opacity:1,interactive:false
+      }).addTo(layers.motion);
+      trackPlaybackMarkers.push({coords:trackTrail,marker:playbackMarker});
       L.polyline(trackTrail,{
         color:trailColor,
         weight:sel?3.6:2.8,
@@ -732,6 +751,8 @@ function renderMap(){
       }).addTo(layers.motion);
     }
   });
+  if(!trackPlaybackTimer)trackPlaybackTimer=setInterval(updateTrackPlayback,50);
+  updateTrackPlayback();
 }
 function renderInventory(){
   var box=q("objectPicker");setText("objectCount",allObjects.length+" active");
