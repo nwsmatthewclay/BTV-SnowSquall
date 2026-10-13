@@ -17,17 +17,25 @@ var BTV=[44.472,-73.154];
 var datasets={},allObjects=[],selected=null,objectNumbers=true,refreshTimer=null,cursorGrid=null,cursorBound=false,lastObjectClickAt=0;
 var radarHistory={frames:[]},radarHistoryIndex=-1,radarAnimationTimer=null,radarInitialRender=true,radarTimelineUserSelected=false;
 var mapExtentInitialized=false;
-// Animated centroid playback follows recorded observations; it is not a forecast.
-var trackPlaybackMarkers=[],trackPlaybackTimer=null,trackPlaybackStarted=Date.now();
 function fitMapToBoundsOnce(bounds){if(mapExtentInitialized||!bounds)return;map.fitBounds(bounds,{padding:[25,25],maxZoom:8});mapExtentInitialized=true;}
-function updateTrackPlayback(){
-  var elapsed=(Date.now()-trackPlaybackStarted)%12000,progress=elapsed/12000;
-  trackPlaybackMarkers.forEach(function(item){
-    if(!item.coords||item.coords.length<2||!item.marker)return;
-    var scaled=progress*(item.coords.length-1),i=Math.min(item.coords.length-2,Math.floor(scaled)),f=scaled-i;
-    var a=item.coords[i],b=item.coords[i+1];
-    item.marker.setLatLng([a[0]+(b[0]-a[0])*f,a[1]+(b[1]-a[1])*f]);
-  });
+function selectedObjectTime(){
+  if(radarTimelineUserSelected){var frame=radarHistoryFrame();var d=frame?parseUtcDate(frame.timestamp):null;if(d)return d.getTime();}
+  var t=latestMosaicScanTime();var parsed=parseUtcDate(t);return parsed?parsed.getTime():objectReferenceTime();
+}
+function historicalPositionForObject(p,targetMs){
+  var rows=Array.isArray(p.track_position_history)?p.track_position_history.slice():[];
+  if(rows.length<2)rows=trackHistory(p).map(function(r){return {timestamp:r.timestamp,lat:r.centroid_lat??r.lat,lon:r.centroid_lon??r.lon};});
+  var candidates=rows.map(function(h){var d=parseUtcDate(h&&h.timestamp),lat=Number(h&&h.lat),lon=Number(h&&h.lon);return d&&Number.isFinite(lat)&&Number.isFinite(lon)?{t:d.getTime(),lat:lat,lon:lon}:null;}).filter(Boolean).sort(function(a,b){return a.t-b.t;});
+  if(!candidates.length)return null;
+  var prior=null,next=null;
+  candidates.forEach(function(x){if(x.t<=targetMs)prior=x;else if(!next)next=x;});
+  var chosen=prior&&targetMs-prior.t<=8*60000?prior:null;
+  if(!chosen&&next&&next.t-targetMs<=8*60000)chosen=next;
+  return chosen;
+}
+function shiftFootprint(points,lat0,lon0,lat1,lon1){
+  var dlat=lat1-lat0,dlon=lon1-lon0;
+  return points.map(function(pt){return [pt[0]+dlat,pt[1]+dlon];});
 }
 
 var LIVE_BASE="https://raw.githubusercontent.com/nwsmatthewclay/BTV-SnowSquall/snow-squall-live-data/viewer/data/live/";
@@ -271,6 +279,7 @@ function setRadarHistoryIndex(index){
   stopRadarAnimation();
   updateRadarTimelineUI();
   renderRadarMosaic();
+  renderMap();
 }
 function playRadarAnimation(){
   var frames=radarHistory.frames||[];
@@ -283,6 +292,7 @@ function playRadarAnimation(){
     if(radarHistoryIndex>=frames.length){radarHistoryIndex=0}
     updateRadarTimelineUI();
     renderRadarMosaic();
+    renderMap();
   },900);
 }
 async function loadRadarHistory(){
@@ -645,13 +655,22 @@ function selectObject(p){
 }
 function renderMap(){
   Object.values(layers).forEach(function(l){l.clearLayers()});
-  trackPlaybackMarkers=[];
   if(!allObjects.length)return;
+  var targetMs=selectedObjectTime();
   allObjects.forEach(function(p){
     var c=objectRisk(p),sel=selected&&selected.radar_site===p.radar_site&&String(selected.track_id)===String(p.track_id);
     var feature=p.radar_geometry?{type:"Feature",geometry:p.radar_geometry,properties:{}}:null;
     var pts=cellPoints(p);
     if(!feature&&!pts.length)return;
+    // In timeline mode, reposition the identified polygon to its recorded
+    // location at that radar time and hide it outside its observed lifetime.
+    if(radarTimelineUserSelected&&Number.isFinite(targetMs)){
+      var past=historicalPositionForObject(p,targetMs);
+      if(!past)return;
+      var currentLat=Number(p.centroid_lat),currentLon=Number(p.centroid_lon);
+      if(!Number.isFinite(currentLat)||!Number.isFinite(currentLon))return;
+      pts=shiftFootprint(pts,currentLat,currentLon,past.lat,past.lon);
+    }
     var tooltip="<b>OBJECT "+objectOrdinal(p)+"</b><br>"+p.radar_site+" • Track "+p.track_id+"<br>"+num(p.max_reflectivity_dbz,0)+" dBZ • "+num(p.area_km2,0)+" km²<br>Click for attributes";
 
     // Display the actual radar-derived meteorological footprint, colored by Snow Squall probability.
@@ -676,48 +695,6 @@ function renderMap(){
     visual.bindTooltip(tooltip,{sticky:true});
     visual.on("click",function(e){if(e&&e.originalEvent)L.DomEvent.stopPropagation(e.originalEvent);selectObject(p)});
 
-    // Keep every confirmed object's observed history visible on the map.
-    // These are past radar-derived centroids, never a projected future path.
-    var trackTrail=Array.isArray(p.track_position_history)?p.track_position_history.map(function(h){
-      var tlat=Number(h&&h.lat),tlon=Number(h&&h.lon);
-      return Number.isFinite(tlat)&&Number.isFinite(tlon)?[tlat,tlon]:null;
-    }).filter(Boolean):[];
-    // Older feeds may have the same history only in the persisted track table.
-    if(trackTrail.length<2){
-      trackTrail=trackHistory(p).map(function(h){
-        var tlat=Number(h&&(h.centroid_lat??h.lat)),tlon=Number(h&&(h.centroid_lon??h.lon));
-        return Number.isFinite(tlat)&&Number.isFinite(tlon)?[tlat,tlon]:null;
-      }).filter(Boolean);
-    }
-    if(trackTrail.length>1){
-      var trailColor=sel?"#ffffff":(p.radar_site==="KCXX"?"#38d7ff":"#ffb45e");
-      // A moving centroid shows the object progressing through its recorded history.
-      // The radar-derived polygon remains at the latest scan location above.
-      var playbackMarker=L.circleMarker(trackTrail[0],{
-        radius:sel?5.5:4.5,color:trailColor,weight:2,
-        fillColor:"#f7fbff",fillOpacity:1,opacity:1,interactive:false
-      }).addTo(layers.motion);
-      trackPlaybackMarkers.push({coords:trackTrail,marker:playbackMarker});
-      L.polyline(trackTrail,{
-        color:trailColor,
-        weight:sel?3.6:2.8,
-        opacity:sel?1:.88,
-        dashArray:sel?"":"4 3",
-        interactive:false,
-        lineCap:"round",
-        lineJoin:"round"
-      }).addTo(layers.motion);
-      // Mark the oldest observed position so direction of past evolution is clear.
-      L.circleMarker(trackTrail[0],{
-        radius:2.8,
-        color:trailColor,
-        weight:1.4,
-        fillColor:trailColor,
-        fillOpacity:.9,
-        interactive:false
-      }).addTo(layers.motion);
-    }
-
     var hitLat=Number(p.centroid_lat),hitLon=Number(p.centroid_lon);
     if(Number.isFinite(hitLat)&&Number.isFinite(hitLon)){var hit=L.circleMarker([hitLat,hitLon],{pane:"liveHitPane",radius:18,color:"#fff",weight:1,opacity:0.01,fillColor:"#fff",fillOpacity:0.01,interactive:true}).addTo(layers[p.radar_site]);hit.on("click",function(e){if(e&&e.originalEvent)L.DomEvent.stopPropagation(e.originalEvent);selectObject(p)});}
 
@@ -738,18 +715,6 @@ function renderMap(){
       lab.bindTooltip("OBJECT "+objectOrdinal(p)+" • "+p.radar_site+" • "+num(p.max_reflectivity_dbz,0)+" dBZ",{direction:"top",offset:[0,-8]});
     }
 
-    var speed=Number(p.motion_speed_kt),dir=Number(p.motion_direction_deg??p.motion_dir_deg);
-    if(Number.isFinite(speed)&&Number.isFinite(dir)&&speed<=75){
-      var km=Math.max(5,Math.min(14,4+speed*.18)),br=dir*Math.PI/180;
-      var lat2=lat+km*Math.cos(br)/111;
-      var lon2=lon+km*Math.sin(br)/(111*Math.max(.2,Math.cos(lat*Math.PI/180)));
-      L.polyline([[lat,lon],[lat2,lon2]],{
-        color:sel?"#fff":"#d7e7ef",weight:sel?2.7:1.4,opacity:sel?.95:.72,interactive:false
-      }).addTo(layers.motion);
-      L.circleMarker([lat2,lon2],{
-        radius:sel?4:2.5,color:sel?"#fff":"#d7e7ef",fillColor:"#fff",fillOpacity:.85,weight:0,interactive:false
-      }).addTo(layers.motion);
-    }
   });
   if(!trackPlaybackTimer)trackPlaybackTimer=setInterval(updateTrackPlayback,50);
   updateTrackPlayback();
