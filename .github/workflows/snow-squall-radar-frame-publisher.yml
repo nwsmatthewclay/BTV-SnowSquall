@@ -210,7 +210,7 @@ jobs:
             })
             remote_path.write_text(json.dumps(remote, indent=2) + "\n", encoding="utf-8")
             print("Merged timeline frames:", len(kept))
-            PY
+          PY
 
             git add viewer/data/live
             if git diff --cached --quiet; then
