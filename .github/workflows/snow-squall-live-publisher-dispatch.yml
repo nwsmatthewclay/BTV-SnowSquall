@@ -7,6 +7,14 @@ on:
       - ".github/workflows/snow-squall-live-publisher-dispatch.yml"
       - ".github/workflows/snow-squall-live-publisher.yml"
       - "acquisition/radar_watcher.py"
+  # Kick tracking after a fresh standalone radar frame is published. The guard
+  # below still prevents overlapping object cycles, while this event-driven
+  # trigger avoids depending solely on delayed GitHub cron scheduling.
+  workflow_run:
+    workflows:
+      - "Snow Squall Radar Frame Publisher"
+    types:
+      - completed
   schedule:
     - cron: "*/5 * * * *"
 
@@ -20,6 +28,7 @@ concurrency:
 
 jobs:
   dispatch:
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 3
     steps:
