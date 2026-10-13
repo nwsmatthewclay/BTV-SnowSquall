@@ -662,14 +662,15 @@ function renderMap(){
     var feature=p.radar_geometry?{type:"Feature",geometry:p.radar_geometry,properties:{}}:null;
     var pts=cellPoints(p);
     if(!feature&&!pts.length)return;
-    // In timeline mode, reposition the identified polygon to its recorded
-    // location at that radar time and hide it outside its observed lifetime.
+    // Keep the polygon, its hit target, and its label together as time changes.
+    var displayLat=Number(p.centroid_lat),displayLon=Number(p.centroid_lon);
     if(radarTimelineUserSelected&&Number.isFinite(targetMs)){
       var past=historicalPositionForObject(p,targetMs);
       if(!past)return;
       var currentLat=Number(p.centroid_lat),currentLon=Number(p.centroid_lon);
       if(!Number.isFinite(currentLat)||!Number.isFinite(currentLon))return;
       pts=shiftFootprint(pts,currentLat,currentLon,past.lat,past.lon);
+      displayLat=past.lat;displayLon=past.lon;
     }
     var tooltip="<b>OBJECT "+objectOrdinal(p)+"</b><br>"+p.radar_site+" • Track "+p.track_id+"<br>"+num(p.max_reflectivity_dbz,0)+" dBZ • "+num(p.area_km2,0)+" km²<br>Click for attributes";
 
@@ -695,11 +696,11 @@ function renderMap(){
     visual.bindTooltip(tooltip,{sticky:true});
     visual.on("click",function(e){if(e&&e.originalEvent)L.DomEvent.stopPropagation(e.originalEvent);selectObject(p)});
 
-    var hitLat=Number(p.centroid_lat),hitLon=Number(p.centroid_lon);
+    var hitLat=displayLat,hitLon=displayLon;
     if(Number.isFinite(hitLat)&&Number.isFinite(hitLon)){var hit=L.circleMarker([hitLat,hitLon],{pane:"liveHitPane",radius:18,color:"#fff",weight:1,opacity:0.01,fillColor:"#fff",fillOpacity:0.01,interactive:true}).addTo(layers[p.radar_site]);hit.on("click",function(e){if(e&&e.originalEvent)L.DomEvent.stopPropagation(e.originalEvent);selectObject(p)});}
 
 
-    var lat=Number(p.centroid_lat),lon=Number(p.centroid_lon);
+    var lat=displayLat,lon=displayLon;
     if(objectNumbers&&Number.isFinite(lat)&&Number.isFinite(lon)){
       var lab=L.marker([lat,lon],{
         icon:L.divIcon({
@@ -716,8 +717,6 @@ function renderMap(){
     }
 
   });
-  if(!trackPlaybackTimer)trackPlaybackTimer=setInterval(updateTrackPlayback,50);
-  updateTrackPlayback();
 }
 function renderInventory(){
   var box=q("objectPicker");setText("objectCount",allObjects.length+" active");
