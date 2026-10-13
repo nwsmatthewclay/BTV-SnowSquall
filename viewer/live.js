@@ -664,22 +664,38 @@ function renderMap(){
     visual.bindTooltip(tooltip,{sticky:true});
     visual.on("click",function(e){if(e&&e.originalEvent)L.DomEvent.stopPropagation(e.originalEvent);selectObject(p)});
 
-    // Show the persisted track path for the selected object. This is the
-    // observed path, not a projected future track, and makes stable identity
-    // visible across successive radar scans.
+    // Keep every confirmed object's observed history visible on the map.
+    // These are past radar-derived centroids, never a projected future path.
     var trackTrail=Array.isArray(p.track_position_history)?p.track_position_history.map(function(h){
       var tlat=Number(h&&h.lat),tlon=Number(h&&h.lon);
       return Number.isFinite(tlat)&&Number.isFinite(tlon)?[tlat,tlon]:null;
     }).filter(Boolean):[];
-    if(sel&&trackTrail.length>1){
+    // Older feeds may have the same history only in the persisted track table.
+    if(trackTrail.length<2){
+      trackTrail=trackHistory(p).map(function(h){
+        var tlat=Number(h&&(h.centroid_lat??h.lat)),tlon=Number(h&&(h.centroid_lon??h.lon));
+        return Number.isFinite(tlat)&&Number.isFinite(tlon)?[tlat,tlon]:null;
+      }).filter(Boolean);
+    }
+    if(trackTrail.length>1){
+      var trailColor=sel?"#ffffff":(p.radar_site==="KCXX"?"#38d7ff":"#ffb45e");
       L.polyline(trackTrail,{
-        color:"#fff",
-        weight:2.4,
-        opacity:.9,
-        dashArray:"5 4",
+        color:trailColor,
+        weight:sel?3.6:2.8,
+        opacity:sel?1:.88,
+        dashArray:sel?"":"4 3",
         interactive:false,
         lineCap:"round",
         lineJoin:"round"
+      }).addTo(layers.motion);
+      // Mark the oldest observed position so direction of past evolution is clear.
+      L.circleMarker(trackTrail[0],{
+        radius:2.8,
+        color:trailColor,
+        weight:1.4,
+        fillColor:trailColor,
+        fillOpacity:.9,
+        interactive:false
       }).addTo(layers.motion);
     }
 
