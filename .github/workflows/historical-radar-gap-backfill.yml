@@ -1,0 +1,173 @@
+name: Historical Radar Gap Backfill
+
+on:
+  workflow_dispatch:
+    inputs:
+      start_utc:
+        description: "Inclusive start date/time in UTC (YYYY-MM-DDTHH:MM:SSZ)"
+        required: true
+        default: "2026-10-01T00:00:00Z"
+        type: string
+      end_utc:
+        description: "Inclusive end date/time in UTC (YYYY-MM-DDTHH:MM:SSZ); keep each run to 7 days or less"
+        required: true
+        default: "2026-10-08T00:00:00Z"
+        type: string
+      radars:
+        description: "Radar sites to backfill"
+        required: true
+        default: "KCXX KTYX"
+        type: string
+      workers:
+        description: "Concurrent downloads (hard capped by downloader at 16)"
+        required: true
+        default: "8"
+        type: string
+  schedule:
+    - cron: "13 3 * * *"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: historical-radar-gap-backfill
+  cancel-in-progress: false
+
+jobs:
+  backfill:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    env:
+      PYTHONUNBUFFERED: "1"
+      PYTHONPATH: ${{ github.workspace }}
+    steps:
+      - name: Checkout radar acquisition implementation
+        uses: actions/checkout@v4
+        with:
+          ref: snow-squall-model-foundation
+
+      - name: Set backfill window and validate bounds
+        id: window
+        env:
+          INPUT_START: ${{ inputs.start_utc }}
+          INPUT_END: ${{ inputs.end_utc }}
+          INPUT_RADARS: ${{ inputs.radars }}
+          INPUT_WORKERS: ${{ inputs.workers }}
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import os
+          from datetime import datetime, timedelta, timezone
+          from pathlib import Path
+          import csv
+
+          def parse(value):
+              return datetime.fromisoformat(value.replace("Z", "+00:00")).astimezone(timezone.utc)
+
+          now = datetime.now(timezone.utc)
+          if os.environ["EVENT_NAME"] == "schedule":
+              end = now.replace(minute=0, second=0, microsecond=0)
+              start = end - timedelta(days=2)
+              radars = ["KCXX", "KTYX"]
+              workers = 8
+          else:
+              start = parse(os.environ["INPUT_START"])
+              end = parse(os.environ["INPUT_END"])
+              radars = os.environ["INPUT_RADARS"].replace(",", " ").split()
+              workers = int(os.environ["INPUT_WORKERS"] or "8")
+          allowed = {"KCXX", "KTYX"}
+          if not radars or set(radars) - allowed:
+              raise SystemExit(f"Radars must be selected from {sorted(allowed)}")
+          if end <= start:
+              raise SystemExit("end_utc must be after start_utc")
+          if end - start > timedelta(days=7):
+              raise SystemExit("Limit each backfill run to 7 days; split longer periods into sequential windows")
+          if end > now + timedelta(minutes=10):
+              raise SystemExit("end_utc cannot be more than 10 minutes in the future")
+          workers = max(1, min(workers, 16))
+          Path("data/manifests").mkdir(parents=True, exist_ok=True)
+          path = Path("data/manifests/radar_gap_backfill_manifest.csv")
+          fields = ["window_id", "radar_site", "window_start_utc", "window_end_utc"]
+          rows = []
+          cursor = start
+          # 15-minute windows overlap slightly to tolerate variable scan cadence.
+          while cursor <= end:
+              window_end = min(cursor + timedelta(minutes=15), end)
+              for radar in sorted(set(radars)):
+                  rows.append({
+                      "window_id": f"{radar}_{cursor:%Y%m%dT%H%M%SZ}",
+                      "radar_site": radar,
+                      "window_start_utc": cursor.isoformat().replace("+00:00", "Z"),
+                      "window_end_utc": window_end.isoformat().replace("+00:00", "Z"),
+                  })
+              cursor += timedelta(minutes=15)
+          with path.open("w", newline="", encoding="utf-8") as f:
+              writer = csv.DictWriter(f, fieldnames=fields)
+              writer.writeheader()
+              writer.writerows(rows)
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as f:
+              f.write(f"workers={workers}\n")
+              f.write(f"start={start.isoformat()}\n")
+              f.write(f"end={end.isoformat()}\n")
+          print(f"Backfill interval: {start.isoformat()} through {end.isoformat()}")
+          print(f"Radars: {sorted(set(radars))}; manifest windows: {len(rows)}; workers: {workers}")
+          PY
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: requirements.txt
+
+      - name: Install acquisition dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Inventory archive and download missing Level-II volumes
+        run: |
+          set -euo pipefail
+          python acquisition/historical_level2.py \
+            --manifest data/manifests/radar_gap_backfill_manifest.csv \
+            --output data/raw/radar_gap_backfill \
+            --workers "${{ steps.window.outputs.workers }}" \
+            --max-failure-rate 0.10
+
+      - name: Audit downloaded volume inventory and coverage
+        run: |
+          python - <<'PY'
+          import csv, json
+          from pathlib import Path
+          from collections import Counter
+          root = Path("data/raw/radar_gap_backfill")
+          files = sorted(p for p in root.rglob("*") if p.is_file() and not p.name.endswith(".part"))
+          by_radar = Counter(p.parts[-3] for p in files if len(p.parts) >= 3)
+          summary = {
+              "file_count": len(files),
+              "bytes": sum(p.stat().st_size for p in files),
+              "by_radar": dict(by_radar),
+              "empty_files": [str(p) for p in files if p.stat().st_size == 0],
+              "start_utc": "${{ steps.window.outputs.start }}",
+              "end_utc": "${{ steps.window.outputs.end }}",
+          }
+          Path("data/derived").mkdir(parents=True, exist_ok=True)
+          Path("data/derived/radar_gap_backfill_summary.json").write_text(json.dumps(summary, indent=2) + "\n")
+          print(json.dumps(summary, indent=2))
+          if not files:
+              raise SystemExit("No historical Level-II volumes were downloaded or found in the requested interval")
+          if summary["empty_files"]:
+              raise SystemExit("Empty radar volume files detected")
+          PY
+
+      - name: Upload backfilled radar volumes and manifest
+        uses: actions/upload-artifact@v4
+        with:
+          name: historical-radar-gap-backfill-${{ github.run_id }}
+          retention-days: 30
+          if-no-files-found: error
+          path: |
+            data/manifests/radar_gap_backfill_manifest.csv
+            data/raw/radar_gap_backfill
+            data/derived/radar_gap_backfill_summary.json
