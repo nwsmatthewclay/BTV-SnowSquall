@@ -285,6 +285,7 @@ function playRadarAnimation(){
   var frames=radarHistory.frames||[];
   if(frames.length<2)return;
   if(radarAnimationTimer){stopRadarAnimation();return}
+  radarTimelineUserSelected=true;
   if(radarHistoryIndex<0||radarHistoryIndex>=frames.length-1)radarHistoryIndex=0;
   updateRadarTimelineUI();
   radarAnimationTimer=setInterval(function(){
