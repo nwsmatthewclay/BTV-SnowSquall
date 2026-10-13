@@ -30,34 +30,23 @@ def select_volumes(
     max_volumes_per_run: int,
     prefer_latest: bool = False,
 ) -> list[tuple[str, datetime]]:
-    """Choose a bounded chronological batch without collapsing tracks to one scan.
+    """Select a bounded batch without deliberately skipping scans mid-track.
 
-    When the worker is behind, retain the newest bounded batch in chronological
-    order. This skips an old backlog but still gives the tracker multiple
-    consecutive observations to associate, unlike selecting only the final scan.
-    A fresh state is seeded with the newest bounded batch for the same reason.
+    If there is no persisted scan time, seed a new tracker with the newest
+    bounded batch available. Once tracking has started, consume the oldest
+    unprocessed volumes first in chronological order. Skipping to the newest
+    batch when behind creates artificial gaps and causes track IDs to reset;
+    continuity takes priority over catching the display up in one run.
     """
-    recent = list(recent)
+    recent = sorted(list(recent), key=lambda item: item[1])
     if not recent:
         return []
     limit = max(1, int(max_volumes_per_run))
     if prefer_latest:
         return [recent[-1]]
-
-    backlog_minutes = None
-    if since is not None:
-        try:
-            backlog_minutes = max(
-                0.0,
-                (recent[-1][1] - since).total_seconds() / 60.0,
-            )
-        except (AttributeError, TypeError):
-            backlog_minutes = None
-
-    if since is None or (backlog_minutes is not None and backlog_minutes > 15.0):
+    if since is None:
         return recent[-limit:]
     return recent[:limit]
-
 
 def run(
     radar: str,
