@@ -170,46 +170,46 @@ jobs:
             cp /tmp/generated-radar/latest-frame.png "$target/radar_history/$frame_name"
 
             python - <<'PY'
-            import json
-            from datetime import datetime, timedelta, timezone
-            from pathlib import Path
-            target = Path("viewer/data/live/radar_history")
-            remote_path = target / "manifest.json"
-            generated_path = Path("/tmp/generated-radar/manifest.json")
-            try:
-                remote = json.loads(remote_path.read_text(encoding="utf-8"))
-            except Exception:
-                remote = {}
-            generated = json.loads(generated_path.read_text(encoding="utf-8"))
-            frames = {}
-            for item in (remote.get("frames") or []) + (generated.get("frames") or []):
-                if not isinstance(item, dict) or not item.get("timestamp") or not item.get("image"):
-                    continue
-                if item.get("palette") != "BTV_WINTER_REFLECTIVITY_V2":
-                    continue
-                frames[item["image"]] = item
-            now = datetime.now(timezone.utc)
-            kept = []
-            for item in frames.values():
-                try:
-                    stamp = datetime.fromisoformat(str(item["timestamp"]).replace("Z", "+00:00"))
-                    if stamp.tzinfo is None:
-                        stamp = stamp.replace(tzinfo=timezone.utc)
-                    if stamp >= now - timedelta(minutes=100):
-                        kept.append(item)
-                except (TypeError, ValueError):
-                    continue
-            kept.sort(key=lambda item: item["timestamp"])
-            remote.update({
-                "version": 2,
-                "retention_frames": 18,
-                "interval_hint_minutes": 5,
-                "reflectivity_palette": "BTV_WINTER_REFLECTIVITY_V2",
-                "reflectivity_palette_version": "BTV_WINTER_REFLECTIVITY_V2",
-                "frames": kept,
-            })
-            remote_path.write_text(json.dumps(remote, indent=2) + "\n", encoding="utf-8")
-            print("Merged timeline frames:", len(kept))
+          import json
+          from datetime import datetime, timedelta, timezone
+          from pathlib import Path
+          target = Path("viewer/data/live/radar_history")
+          remote_path = target / "manifest.json"
+          generated_path = Path("/tmp/generated-radar/manifest.json")
+          try:
+              remote = json.loads(remote_path.read_text(encoding="utf-8"))
+          except Exception:
+              remote = {}
+          generated = json.loads(generated_path.read_text(encoding="utf-8"))
+          frames = {}
+          for item in (remote.get("frames") or []) + (generated.get("frames") or []):
+              if not isinstance(item, dict) or not item.get("timestamp") or not item.get("image"):
+                  continue
+              if item.get("palette") != "BTV_WINTER_REFLECTIVITY_V2":
+                  continue
+              frames[item["image"]] = item
+          now = datetime.now(timezone.utc)
+          kept = []
+          for item in frames.values():
+              try:
+                  stamp = datetime.fromisoformat(str(item["timestamp"]).replace("Z", "+00:00"))
+                  if stamp.tzinfo is None:
+                      stamp = stamp.replace(tzinfo=timezone.utc)
+                  if stamp >= now - timedelta(minutes=100):
+                      kept.append(item)
+              except (TypeError, ValueError):
+                  continue
+          kept.sort(key=lambda item: item["timestamp"])
+          remote.update({
+              "version": 2,
+              "retention_frames": 18,
+              "interval_hint_minutes": 5,
+              "reflectivity_palette": "BTV_WINTER_REFLECTIVITY_V2",
+              "reflectivity_palette_version": "BTV_WINTER_REFLECTIVITY_V2",
+              "frames": kept,
+          })
+          remote_path.write_text(json.dumps(remote, indent=2) + "\n", encoding="utf-8")
+          print("Merged timeline frames:", len(kept))
           PY
 
             git add viewer/data/live
