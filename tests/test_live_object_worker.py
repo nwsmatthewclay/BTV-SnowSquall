@@ -11,13 +11,13 @@ def _scans(count=6):
     ]
 
 
-def test_recovery_selects_newest_bounded_batch_in_chronological_order():
+def test_recovery_selects_oldest_unprocessed_batch_to_preserve_track_continuity():
     scans = _scans(6)
     since = scans[0][1] - timedelta(minutes=5)
 
     selected = select_volumes(scans, since, max_volumes_per_run=2)
 
-    assert selected == scans[-2:]
+    assert selected == scans[:2]
     assert selected[0][1] < selected[1][1]
 
 
