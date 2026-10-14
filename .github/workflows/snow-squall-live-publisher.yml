@@ -227,138 +227,86 @@ jobs:
           echo "KTYX object validation rc=$ktyx_rc"
           echo "Object freshness is advisory here; radar freshness is validated separately below."
 
-      - name: Confirm standalone radar metadata is present
-        run: |
-          set -euo pipefail
-          python - <<'PY'
-          import json
-          from pathlib import Path
-          payload=json.loads(Path("viewer/data/live/radar_mosaic.json").read_text(encoding="utf-8"))
-          sources=payload.get("sources") or []
-          if not sources:
-              raise SystemExit("No standalone radar metadata available.")
-          print("Standalone radar retained:", [(s.get("radar"),s.get("scan_time_utc")) for s in sources])
-          PY
-
-      - name: Preserve newer standalone radar publication
-        run: |
-          set -euo pipefail
-          if ! git ls-remote --exit-code --heads origin snow-squall-live-data >/dev/null 2>&1; then
-            exit 0
-          fi
-
-          git fetch --no-tags origin snow-squall-live-data
-          use_remote="$(python - <<'PY'
-          import json
-          from datetime import datetime, timezone
-          from pathlib import Path
-
-          def newest(path):
-              try:
-                  payload=json.loads(Path(path).read_text(encoding="utf-8"))
-                  values=[]
-                  for item in payload.get("sources",[]):
-                      raw=item.get("scan_time_utc")
-                      if raw:
-                          values.append(datetime.fromisoformat(str(raw).replace("Z","+00:00")).astimezone(timezone.utc))
-                  return max(values) if values else None
-              except Exception:
-                  return None
-
-          local=newest("viewer/data/live/radar_mosaic.json")
-          remote_raw=__import__("subprocess").check_output([
-              "git","show","origin/snow-squall-live-data:viewer/data/live/radar_mosaic.json"
-          ],text=True)
-          remote_path=Path("/tmp/remote_radar_mosaic.json")
-          remote_path.write_text(remote_raw,encoding="utf-8")
-          remote=newest(remote_path)
-          print("yes" if remote and (not local or remote > local) else "no")
-          if local:
-              print("local radar:",local.isoformat())
-          if remote:
-              print("remote radar:",remote.isoformat())
-          PY
-          )"
-
-          if [ "$use_remote" != "yes" ]; then
-            echo "Local radar is at least as new as the standalone publication."
-            exit 0
-          fi
-
-          echo "Standalone radar publication is newer; restoring its radar products before final object publish."
-          git archive origin/snow-squall-live-data \\
-            viewer/data/live/radar_history \\
-            viewer/data/live/radar_mosaic.json \\
-            viewer/data/live/radar_mosaic.png \\
-            viewer/data/live/radar_mosaic_clean.png \\
-            viewer/data/live/radar_mosaic_raw.png \\
-            viewer/data/live/radar_cursor.json \\
-            viewer/data/live/KCXX_base_reflectivity_clean.png \\
-            viewer/data/live/KCXX_base_reflectivity_raw.png \\
-            viewer/data/live/KCXX_base_velocity_clean.png \\
-            viewer/data/live/KCXX_base_velocity_raw.png \\
-            viewer/data/live/KTYX_base_reflectivity_clean.png \\
-            viewer/data/live/KTYX_base_reflectivity_raw.png \\
-            viewer/data/live/KTYX_base_velocity_clean.png \\
-            viewer/data/live/KTYX_base_velocity_raw.png \\
-            > /tmp/standalone-radar.tar
-          tar -xf /tmp/standalone-radar.tar -C .
-
-      - name: Archive the final published mosaic into radar timeline
-        run: |
-          set -euo pipefail
-          python - <<'PY'
-          import json
-          from pathlib import Path
-          from scripts.process_live_event import archive_live_radar_frame, parse_time
-
-          root = Path("viewer/data/live")
-          metadata = json.loads((root / "radar_mosaic.json").read_text(encoding="utf-8"))
-          if metadata.get("status") != "ready":
-              raise SystemExit(f"Cannot archive a non-ready mosaic: {metadata.get('status')}")
-          source_times = [
-              parse_time(source["scan_time_utc"])
-              for source in (metadata.get("sources") or [])
-              if source.get("scan_time_utc")
-          ]
-          if not source_times:
-              raise SystemExit("No radar source times available for history archive.")
-          archive_live_radar_frame(root, cycle_time=max(source_times))
-          manifest_path = root / "radar_history" / "manifest.json"
-          manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-          frames = manifest.get("frames") or []
-          if not frames:
-              raise SystemExit("Radar timeline manifest has no frames after archive.")
-          latest = max(frames, key=lambda frame: str(frame.get("timestamp") or ""))
-          print("Radar timeline updated:", latest.get("timestamp"), latest.get("image"), "frame_count=", len(frames))
-          latest_time = parse_time(latest["timestamp"])
-          if latest_time < max(source_times):
-              raise SystemExit("Radar timeline latest frame is older than the mosaic source scan.")
-          PY
-
-      - name: Publish isolated live-data branch
+      - name: Publish object products without overwriting radar frames
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
-          mkdir -p /tmp/snow-squall-live-payload
-          cp -R viewer/data/live/. /tmp/snow-squall-live-payload/
+          source_root="$GITHUB_WORKSPACE/viewer/data/live"
+          payload_root="/tmp/snow-squall-object-payload"
+          target_root="/tmp/snow-squall-object-publish"
+          rm -rf "$payload_root" "$target_root"
+          mkdir -p "$payload_root"
 
-          git checkout --orphan snow-squall-live-data
-          git rm -rf . >/dev/null 2>&1 || true
-          mkdir -p viewer/data/live
-          cp -R /tmp/snow-squall-live-payload/. viewer/data/live/
-          git add viewer/data/live
+          # Object tracking owns only these files. Radar images, mosaic
+          # metadata, base moments, cursor data, and radar_history are owned
+          # by the independent radar-frame publisher and must never be
+          # force-pushed by this workflow.
+          for site in KCXX KTYX; do
+            for suffix in state.json objects.geojson history.jsonl history.json health.json state.previous_reflectivity.npz; do
+              name="${site}_${suffix}"
+              if [ -s "$source_root/$name" ]; then
+                cp "$source_root/$name" "$payload_root/$name"
+              else
+                echo "::warning::Object output missing or empty: $source_root/$name"
+              fi
+            done
+          done
 
-          if git diff --cached --quiet; then
-            echo "No live data changes; nothing to publish."
-            exit 0
-          fi
+          test -s "$payload_root/KCXX_objects.geojson"
+          test -s "$payload_root/KTYX_objects.geojson"
 
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git commit -m "Update live snow squall object feeds"
-          git push --force origin HEAD:snow-squall-live-data
+          git clone --no-tags --single-branch --branch snow-squall-live-data \
+            "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" \
+            "$target_root"
+          git -C "$target_root" config user.name "github-actions[bot]"
+          git -C "$target_root" config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          for attempt in 1 2 3; do
+            # Always start each attempt from the current remote head. If the
+            # radar publisher wins a concurrent push, retry on its new head.
+            git -C "$target_root" fetch --no-tags origin snow-squall-live-data
+            git -C "$target_root" reset --hard origin/snow-squall-live-data
+
+            for site in KCXX KTYX; do
+              for suffix in state.json objects.geojson history.jsonl history.json health.json state.previous_reflectivity.npz; do
+                name="${site}_${suffix}"
+                if [ -s "$payload_root/$name" ]; then
+                  cp "$payload_root/$name" "$target_root/viewer/data/live/$name"
+                fi
+              done
+            done
+
+            git -C "$target_root" add -- \
+              viewer/data/live/KCXX_state.json \
+              viewer/data/live/KCXX_objects.geojson \
+              viewer/data/live/KCXX_history.jsonl \
+              viewer/data/live/KCXX_history.json \
+              viewer/data/live/KCXX_health.json \
+              viewer/data/live/KCXX_state.previous_reflectivity.npz \
+              viewer/data/live/KTYX_state.json \
+              viewer/data/live/KTYX_objects.geojson \
+              viewer/data/live/KTYX_history.jsonl \
+              viewer/data/live/KTYX_history.json \
+              viewer/data/live/KTYX_health.json \
+              viewer/data/live/KTYX_state.previous_reflectivity.npz
+
+            if git -C "$target_root" diff --cached --quiet; then
+              echo "Object products are unchanged; nothing to publish."
+              exit 0
+            fi
+
+            git -C "$target_root" commit -m "Publish fresh snow squall object feeds"
+            if git -C "$target_root" push origin HEAD:snow-squall-live-data; then
+              echo "Object feeds published without replacing radar-owned products (attempt $attempt)."
+              exit 0
+            fi
+            echo "Live-data branch advanced during object publish; refreshing and retrying (attempt $attempt)."
+            sleep 2
+          done
+
+          echo "Could not publish object feeds after three concurrent-update retries."
+          exit 1
 
 # Live publisher follows the model-foundation branch.\n# Scheduled at minutes 2,7,12,... to reduce top-of-hour Actions scheduling contention.
 # Live refresh heartbeat: 2026-10-05T18:15Z — chronological multi-scan tracking enabled
