@@ -6,6 +6,14 @@ on:
   schedule:
     - cron: "*/5 * * * *"
   workflow_dispatch:
+  # Publish again immediately after an acquisition lane completes successfully.
+  workflow_run:
+    workflows:
+      - "Acquire Live Radar Volumes A"
+      - "Acquire Live Radar Volumes B"
+      - "Acquire Live Radar Volumes C"
+    types:
+      - completed
   push:
     paths:
       - ".github/workflows/snow-squall-radar-frame-publisher.yml"
@@ -19,6 +27,7 @@ concurrency:
 
 jobs:
   publish-radar:
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 12
     env:
