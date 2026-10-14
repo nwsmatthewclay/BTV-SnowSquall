@@ -32,7 +32,7 @@ jobs:
           ref: main
           fetch-depth: 1
 
-      - name: Inspect live radar freshness
+      - name: Inspect independent radar and object freshness
         id: health
         run: |
           set -euo pipefail
@@ -47,75 +47,124 @@ jobs:
           from pathlib import Path
 
           now = datetime.now(timezone.utc)
-          rows = []
-          for site in ("KCXX", "KTYX"):
-              path = Path("live_data/viewer/data/live") / f"{site}_objects.geojson"
-              scan = None
-              if path.exists():
-                  try:
-                      data = json.loads(path.read_text(encoding="utf-8"))
-                      raw = (data.get("metadata") or {}).get("scan_time_utc")
-                      if raw:
-                          scan = datetime.fromisoformat(
-                              str(raw).replace("Z", "+00:00")
-                          ).astimezone(timezone.utc)
-                  except (OSError, TypeError, ValueError, json.JSONDecodeError):
-                      scan = None
-              age = ((now - scan).total_seconds() / 60.0) if scan else float("inf")
-              rows.append((site, scan, age))
-              print(f"{site}: {scan.isoformat() if scan else 'MISSING'} age={age:.1f} min")
+          live = Path("live_data/viewer/data/live")
+          radar_stale = True
+          radar_age = None
+          radar_path = live / "radar_mosaic.json"
+          try:
+              radar = json.loads(radar_path.read_text(encoding="utf-8"))
+              ages = []
+              for source in radar.get("sources") or []:
+                  raw = source.get("scan_time_utc")
+                  if not raw:
+                      continue
+                  stamp = datetime.fromisoformat(str(raw).replace("Z", "+00:00"))
+                  if stamp.tzinfo is None:
+                      stamp = stamp.replace(tzinfo=timezone.utc)
+                  age = (now - stamp.astimezone(timezone.utc)).total_seconds() / 60
+                  ages.append(age)
+                  print(f"RADAR {source.get('radar')}: age={age:.1f} min")
+              if ages:
+                  radar_age = max(ages)
+                  radar_stale = radar.get("status") != "ready" or radar_age > 12.0
+          except (OSError, TypeError, ValueError, json.JSONDecodeError) as exc:
+              print(f"RADAR metadata missing/invalid: {exc}")
 
-          stale = [site for site, _, age in rows if age > 12.0]
-          print("STALE_SITES=" + ",".join(stale))
-          with open("watchdog_state.json", "w", encoding="utf-8") as handle:
-              json.dump({
-                  "checked_utc": now.isoformat(),
-                  "stale_sites": stale,
-                  "ages_minutes": {site: None if age == float("inf") else round(age, 2) for site, _, age in rows},
-              }, handle)
+          stale_sites = []
+          object_ages = {}
+          for site in ("KCXX", "KTYX"):
+              path = live / f"{site}_objects.geojson"
+              scan = None
+              try:
+                  payload = json.loads(path.read_text(encoding="utf-8"))
+                  raw = (payload.get("metadata") or {}).get("scan_time_utc")
+                  if raw:
+                      scan = datetime.fromisoformat(str(raw).replace("Z", "+00:00"))
+                      if scan.tzinfo is None:
+                          scan = scan.replace(tzinfo=timezone.utc)
+                      scan = scan.astimezone(timezone.utc)
+              except (OSError, TypeError, ValueError, json.JSONDecodeError):
+                  scan = None
+              age = ((now - scan).total_seconds() / 60.0) if scan else float("inf")
+              object_ages[site] = None if age == float("inf") else round(age, 2)
+              print(f"OBJECTS {site}: {scan.isoformat() if scan else 'MISSING'} age={age:.1f} min")
+              if age > 22.0:
+                  stale_sites.append(site)
+
+          state = {
+              "checked_utc": now.isoformat(),
+              "radar_stale": radar_stale,
+              "radar_age_minutes": None if radar_age is None else round(radar_age, 2),
+              "stale_sites": stale_sites,
+              "object_ages_minutes": object_ages,
+          }
+          Path("watchdog_state.json").write_text(json.dumps(state, indent=2), encoding="utf-8")
+          print(json.dumps(state, indent=2))
           PY
 
-      - name: Re-arm primary live object/environment publisher when feeds are stale
+      - name: Recover stale radar independently and re-arm stale object feed
         run: |
           set -euo pipefail
+          radar_stale="$(python - <<'PY'
+          import json
+          print("yes" if json.load(open("watchdog_state.json"))["radar_stale"] else "no")
+          PY
+          )"
+
+          if [ "$radar_stale" = "yes" ]; then
+            active_radar="$(gh run list \
+              --workflow "Snow Squall Radar Frame Publisher" \
+              --branch main --limit 20 --json status \
+              --jq '[.[] | select(.status == "queued" or .status == "in_progress")] | length')"
+            if [ "$active_radar" -eq 0 ]; then
+              echo "Radar mosaic missing or older than 12 minutes; dispatching independent radar publisher."
+              gh workflow run "Snow Squall Radar Frame Publisher" --ref main
+            else
+              echo "Radar publisher already active ($active_radar run); avoiding duplicate dispatch."
+            fi
+          else
+            echo "Radar mosaic is fresh."
+          fi
+
           stale_sites="$(python - <<'PY'
           import json
           print(",".join(json.load(open("watchdog_state.json"))["stale_sites"]))
           PY
           )"
           if [ -z "$stale_sites" ]; then
-            echo "Live radar is fresh; no action required."
+            echo "Object products are fresh."
             exit 0
           fi
 
-          active="$(gh run list             --workflow "Snow Squall Live Publisher Dispatch"             --branch main             --limit 20             --json databaseId,status             --jq '[.[] | select(.status == "queued" or .status == "in_progress")] | length')"
-
-          if [ "$active" -gt 0 ]; then
-            echo "Publisher already active ($active run); no duplicate dispatch."
+          active_dispatch="$(gh run list \
+            --workflow "Snow Squall Live Publisher Dispatch" \
+            --branch main --limit 20 --json status \
+            --jq '[.[] | select(.status == "queued" or .status == "in_progress")] | length')"
+          if [ "$active_dispatch" -gt 0 ]; then
+            echo "Object publisher dispatcher already active ($active_dispatch run); no duplicate dispatch."
             exit 0
           fi
 
-          last_start="$(gh run list             --workflow "Snow Squall Live Publisher Dispatch"             --branch main             --limit 1             --json startedAt             --jq '.[0].startedAt // ""')"
-
+          last_start="$(gh run list \
+            --workflow "Snow Squall Live Publisher Dispatch" \
+            --branch main --limit 1 --json startedAt \
+            --jq '.[0].startedAt // ""')"
           if [ -n "$last_start" ]; then
             retry_allowed="$(python - "$last_start" <<'PY'
           import sys
           from datetime import datetime, timezone
-          raw=sys.argv[1]
-          started=datetime.fromisoformat(raw.replace("Z","+00:00")).astimezone(timezone.utc)
-          age=(datetime.now(timezone.utc)-started).total_seconds()/60.0
+          started = datetime.fromisoformat(sys.argv[1].replace("Z", "+00:00")).astimezone(timezone.utc)
+          age = (datetime.now(timezone.utc) - started).total_seconds() / 60.0
           print("yes" if age >= 10 else "no")
-          if age < 10:
-              print(f"Last publisher started {age:.1f} min ago; allowing the current publisher time to settle.", file=sys.stderr)
           PY
             )"
             if [ "$retry_allowed" != "yes" ]; then
+              echo "Recent object dispatcher run; allowing it to settle."
               exit 0
             fi
           fi
 
-          echo "Stale live radar detected: $stale_sites"
-          echo "Dispatching the canonical live radar/object/environment publisher."
+          echo "Stale object products detected: $stale_sites"
           gh workflow run "Snow Squall Live Publisher Dispatch" --ref main
 
       - name: Write watchdog summary
