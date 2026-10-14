@@ -1,0 +1,28 @@
+{
+  "status": "healthy",
+  "checked_utc": "2026-10-14T01:29:21.567540+00:00",
+  "last_scan_time_utc": "2026-10-14T01:05:41.850000+00:00",
+  "output_scan_time_utc": "2026-10-14T01:05:41.850000+00:00",
+  "age_minutes": 23.66,
+  "source_file": "KTYX20261014_010541_V06",
+  "object_count": 56,
+  "probability_status": "research_scored",
+  "checks": {
+    "state_present": true,
+    "scan_timestamp_present": true,
+    "geojson_contract": true,
+    "object_count_matches": true,
+    "probability_disabled": true,
+    "scan_timestamp_coherent": true,
+    "object_timestamps_coherent": true,
+    "fresh_within_threshold": true
+  },
+  "environment": {
+    "ready_objects": 0,
+    "not_ready_objects": 56,
+    "reasons": {
+      "environment_stale": 56
+    },
+    "max_age_minutes": 90.0
+  }
+}
