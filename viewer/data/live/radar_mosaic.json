@@ -1,7 +1,7 @@
 {
   "product": "BTV live radar mosaic",
   "status": "ready",
-  "updated_utc": "2026-10-14T05:20:09.731216+00:00",
+  "updated_utc": "2026-10-14T05:34:57.062140+00:00",
   "grid": {
     "center_lat": 44.15,
     "center_lon": -73.65,
@@ -40,8 +40,8 @@
           ]
         ],
         "field": "base_reflectivity_dbz",
-        "source_file": "KCXX20261014_051330_V06",
-        "scan_time_utc": "2026-10-14T05:13:30.297000",
+        "source_file": "KCXX20261014_051926_V06",
+        "scan_time_utc": "2026-10-14T05:19:26.760000",
         "sweep": 0,
         "native_gates": true,
         "composite": false
@@ -60,8 +60,8 @@
           ]
         ],
         "field": "base_reflectivity_dbz",
-        "source_file": "KTYX20261014_051257_V06",
-        "scan_time_utc": "2026-10-14T05:12:57.679000",
+        "source_file": "KTYX20261014_052641_V06",
+        "scan_time_utc": "2026-10-14T05:26:41.258000",
         "sweep": 0,
         "native_gates": true,
         "composite": false
@@ -71,23 +71,6 @@
     "raw_description": "Unfiltered gridded KCXX/KTYX reflectivity mosaic.",
     "base_reflectivity_description": "Native-gate lowest-valid-sweep base reflectivity from the downloaded KCXX and KTYX Level-II volumes; not a multi-sweep composite.",
     "base_velocity": {
-      "KCXX": {
-        "clean_image": "KCXX_base_velocity_clean.png",
-        "raw_image": "KCXX_base_velocity_raw.png",
-        "bounds": [
-          [
-            41.86099794018779,
-            -76.90750006603258
-          ],
-          [
-            46.398305073487016,
-            -70.39249993396744
-          ]
-        ],
-        "field": "base_velocity_kt",
-        "native_units": "m/s",
-        "display_units": "kt"
-      },
       "KTYX": {
         "clean_image": "KTYX_base_velocity_clean.png",
         "raw_image": "KTYX_base_velocity_raw.png",
@@ -110,13 +93,13 @@
   "sources": [
     {
       "radar": "KCXX",
-      "source_file": "KCXX20261014_051330_V06",
-      "scan_time_utc": "2026-10-14T05:13:30.297000"
+      "source_file": "KCXX20261014_051926_V06",
+      "scan_time_utc": "2026-10-14T05:19:26.760000"
     },
     {
       "radar": "KTYX",
-      "source_file": "KTYX20261014_051257_V06",
-      "scan_time_utc": "2026-10-14T05:12:57.679000"
+      "source_file": "KTYX20261014_052641_V06",
+      "scan_time_utc": "2026-10-14T05:26:41.258000"
     }
   ],
   "image": "radar_mosaic_clean.png",
@@ -135,7 +118,6 @@
     "velocity_display_units": "kt",
     "velocity_rendering": "signed_radial_velocity",
     "velocity_sources": [
-      "KCXX",
       "KTYX"
     ]
   },
@@ -147,7 +129,6 @@
       501
     ],
     "velocity_sources": [
-      "KCXX",
       "KTYX"
     ],
     "status": "ready"
