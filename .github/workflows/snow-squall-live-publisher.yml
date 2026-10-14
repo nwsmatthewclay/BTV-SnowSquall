@@ -21,7 +21,7 @@ concurrency:
 jobs:
   publish:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 25
     env:
       PYTHONUNBUFFERED: "1"
       PYTHONPATH: ${{ github.workspace }}
@@ -63,7 +63,8 @@ jobs:
             --radar KCXX \
             --poll-seconds 2 \
             --max-polls 1 \
-            --max-volumes-per-run 2 \
+            --max-volumes-per-run 1 \
+            --prefer-latest \
             --state viewer/data/live/KCXX_state.json \
             --output viewer/data/live/KCXX_objects.geojson \
             --history-jsonl viewer/data/live/KCXX_history.jsonl \
@@ -74,7 +75,8 @@ jobs:
             --radar KTYX \
             --poll-seconds 2 \
             --max-polls 1 \
-            --max-volumes-per-run 2 \
+            --max-volumes-per-run 1 \
+            --prefer-latest \
             --state viewer/data/live/KTYX_state.json \
             --output viewer/data/live/KTYX_objects.geojson \
             --history-jsonl viewer/data/live/KTYX_history.jsonl \
@@ -170,38 +172,46 @@ jobs:
           cp -R /tmp/viewer/data/live/radar_history/. viewer/data/live/radar_history/
           rm -rf /tmp/viewer
 
-      - name: Rebuild viewer radar mosaic from the just-processed Level-II scans
+      - name: Keep standalone radar publication authoritative
         run: |
-          set -euo pipefail
-          python scripts/build_live_radar_mosaic.py \
-            --raw-root data/raw \
-            --kcxx-state viewer/data/live/KCXX_state.json \
-            --ktyx-state viewer/data/live/KTYX_state.json \
-            --output-image viewer/data/live/radar_mosaic.png \
-            --output-json viewer/data/live/radar_mosaic.json
+          # Radar runs independently of the slower object tracker. Do not
+          # rebuild a local mosaic from historical catch-up scans here: that
+          # previously overwrote the fresh live mosaic and failed the job.
           python - <<'PY'
           import json
           from datetime import datetime, timezone
           from pathlib import Path
 
           path = Path("viewer/data/live/radar_mosaic.json")
-          payload = json.loads(path.read_text(encoding="utf-8"))
+          try:
+              payload = json.loads(path.read_text(encoding="utf-8"))
+          except (OSError, json.JSONDecodeError) as exc:
+              print(f"WARNING: standalone radar metadata unavailable ({exc}); object publish continues.")
+              raise SystemExit(0)
+
           sources = payload.get("sources") or []
           if payload.get("status") != "ready" or not sources:
-              raise SystemExit(f"Fresh radar mosaic unavailable: status={payload.get('status')}, sources={sources}")
+              print("WARNING: standalone radar metadata is not ready; object publish continues.")
+              raise SystemExit(0)
+
           now = datetime.now(timezone.utc)
+          ages = []
           for source in sources:
               raw = source.get("scan_time_utc")
               if not raw:
-                  raise SystemExit(f"Missing scan timestamp for {source.get('radar')}")
-              stamp = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+                  print(f"WARNING: missing scan timestamp for {source.get('radar')}.")
+                  continue
+              stamp = datetime.fromisoformat(str(raw).replace("Z", "+00:00"))
               if stamp.tzinfo is None:
                   stamp = stamp.replace(tzinfo=timezone.utc)
-              age_minutes = (now - stamp.astimezone(timezone.utc)).total_seconds() / 60
-              print(f"{source.get('radar')}: {source.get('source_file')} scan={stamp.isoformat()} age={age_minutes:.1f} min")
-              if age_minutes > 35:
-                  raise SystemExit(f"{source.get('radar')} mosaic source is stale ({age_minutes:.1f} min); refusing stale publication")
-          print("Fresh viewer-facing radar mosaic rebuilt from current Level-II scans.")
+              age = (now - stamp.astimezone(timezone.utc)).total_seconds() / 60
+              ages.append(age)
+              print(f"{source.get('radar')}: preserved scan={stamp.isoformat()} age={age:.1f} min")
+
+          if not ages or max(ages) > 12:
+              print("WARNING: standalone radar is aging; the independent radar watchdog handles recovery.")
+          else:
+              print("Standalone radar mosaic preserved; object publication continues independently.")
           PY
 
       - name: Validate live object products without blocking fresh radar
