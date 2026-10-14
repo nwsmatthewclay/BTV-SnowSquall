@@ -1,10 +1,10 @@
 {
   "status": "healthy",
-  "checked_utc": "2026-10-14T09:39:03.854225+00:00",
-  "last_scan_time_utc": "2026-10-14T09:24:28.555000+00:00",
-  "output_scan_time_utc": "2026-10-14T09:24:28.555000+00:00",
-  "age_minutes": 14.59,
-  "source_file": "KTYX20261014_092428_V06",
+  "checked_utc": "2026-10-14T09:42:33.937615+00:00",
+  "last_scan_time_utc": "2026-10-14T09:31:28.232000+00:00",
+  "output_scan_time_utc": "2026-10-14T09:31:28.232000+00:00",
+  "age_minutes": 11.1,
+  "source_file": "KTYX20261014_093128_V06",
   "object_count": 2,
   "probability_status": "research_scored",
   "checks": {
@@ -18,9 +18,11 @@
     "fresh_within_threshold": true
   },
   "environment": {
-    "ready_objects": 2,
-    "not_ready_objects": 0,
-    "reasons": {},
+    "ready_objects": 0,
+    "not_ready_objects": 2,
+    "reasons": {
+      "environment_stale": 2
+    },
     "max_age_minutes": 90.0
   }
 }
