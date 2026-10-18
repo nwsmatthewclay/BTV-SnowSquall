@@ -8,8 +8,8 @@
         "coordinates": [
           [
             [
-              -73.63525590755224,
-              44.838295427069454
+              -73.64801329878196,
+              44.84723600203824
             ],
             [
               -73.62887869003086,
@@ -44,38 +44,34 @@
               44.83366504852921
             ],
             [
-              -73.66062048476265,
-              44.83818916010094
-            ],
-            [
-              -73.63525590755224,
-              44.838295427069454
+              -73.64801329878196,
+              44.84723600203824
             ]
           ]
         ]
       },
       "properties": {
         "track_id": "1732",
-        "timestamp": "2026-10-18T05:40:37.967000Z",
+        "timestamp": "2026-10-18T05:47:40.534000Z",
         "radar_site": "KCXX",
-        "centroid_lat": 44.81898723260728,
-        "centroid_lon": -73.64415509844822,
-        "pixel_count": 14,
-        "area_km2": 14.0,
-        "length_km": 4.919186682950758,
-        "width_km": 3.908213127607986,
-        "orientation_deg": 144.4852039042433,
-        "aspect_ratio": 1.2586792281621388,
-        "bbox_aspect_ratio": 1.0,
+        "centroid_lat": 44.82057071745604,
+        "centroid_lon": -73.64440970924464,
+        "pixel_count": 15,
+        "area_km2": 15.0,
+        "length_km": 5.384661470590942,
+        "width_km": 3.898191508585691,
+        "orientation_deg": 158.39495530412304,
+        "aspect_ratio": 1.3813229695696914,
+        "bbox_aspect_ratio": 1.25,
         "object_mode": "cell_cluster",
         "is_band": 0,
-        "reflectivity_gradient_p90_dbkm": 14.435394743013367,
-        "gradient_fraction_above_5dbkm": 0.9285714285714286,
-        "background_reflectivity_dbz": 0.9641979336738586,
-        "reflectivity_contrast_db": 31.51784247159958,
-        "velocity_gradient_p90_ktkm": 6.1485851930930275,
-        "velocity_background_kt": -11.338872579978892,
-        "velocity_contrast_kt": 6.842352736328831,
+        "reflectivity_gradient_p90_dbkm": 14.632951053325769,
+        "gradient_fraction_above_5dbkm": 0.8666666666666667,
+        "background_reflectivity_dbz": 1.7721997499465942,
+        "reflectivity_contrast_db": 28.75407588481903,
+        "velocity_gradient_p90_ktkm": 10.585081172649959,
+        "velocity_background_kt": -11.568870091280212,
+        "velocity_contrast_kt": 7.800211865235244,
         "velocity_rescue": false,
         "detection_evidence": [
           "reflectivity_gradient",
@@ -83,20 +79,20 @@
           "reflectivity_core",
           "velocity_structure"
         ],
-        "candidate_rank_score": 85.13929861852472,
+        "candidate_rank_score": 89.29851359935934,
         "candidate_rank_tier": "priority",
-        "max_reflectivity_dbz": 46.14352035522461,
-        "mean_reflectivity_dbz": 30.33866092136928,
-        "core_pixel_count": 8,
+        "max_reflectivity_dbz": 48.031959533691406,
+        "mean_reflectivity_dbz": 30.270693588256837,
+        "core_pixel_count": 9,
         "touches_grid_edge": false,
-        "core_fraction": 0.5714285714285714,
+        "core_fraction": 0.6,
         "track_association_status": "matched",
         "track_association_distance_px": 0.17721708634216699,
-        "track_association_gate_px": 32.62471625,
-        "track_association_cost": 0.05543589468016938,
-        "track_age_scans": 4,
+        "track_association_gate_px": 16.304043416666666,
+        "track_association_cost": 0.05581597674420155,
+        "track_age_scans": 5,
         "track_first_scan_utc": "2026-10-18T04:44:13.282000Z",
-        "track_age_min": 56.41141666666667,
+        "track_age_min": 63.4542,
         "track_status": "active",
         "track_missed_scans": 0,
         "track_position_history": [
@@ -123,51 +119,57 @@
             "lat": 44.81898723260728,
             "lon": -73.64415509844822,
             "age_scans": 4
+          },
+          {
+            "timestamp": "2026-10-18T05:47:40.534000Z",
+            "lat": 44.82057071745604,
+            "lon": -73.64440970924464,
+            "age_scans": 5
           }
         ],
         "track_competing_track_count": 1,
         "track_competing_object_count": 1,
         "track_merge_candidate": false,
         "track_split_candidate": false,
-        "echo_top_km": 1.3826175972782075,
-        "top_minus_base_km": 0.7159001688528805,
-        "vertical_reflectivity_gradient": -26.705441011418447,
-        "vertical_valid_points": 62,
-        "zdr_mean_db": -1.250798192939588,
-        "zdr_p90_db": 0.12925716266036041,
-        "zdr_gradient_dbkm": 1.1551923951947682,
-        "rhohv_mean": 0.5114300400018692,
-        "rhohv_max": 0.6365370154380798,
-        "rhohv_p90": 0.6133628964424134,
-        "rhohv_min": 0.4480005204677582,
+        "echo_top_km": 1.079704954687506,
+        "top_minus_base_km": 0.40958405774645507,
+        "vertical_reflectivity_gradient": -24.261439644795647,
+        "vertical_valid_points": 60,
+        "zdr_mean_db": -0.9827765256166459,
+        "zdr_p90_db": 0.22288900017738317,
+        "zdr_gradient_dbkm": 0.8471296213742225,
+        "rhohv_mean": 0.45966267784436543,
+        "rhohv_max": 0.5483899712562561,
+        "rhohv_p90": 0.5261443853378296,
+        "rhohv_min": 0.3883206844329834,
         "kdp_mean_degkm": null,
         "kdp_p90_degkm": null,
-        "velocity_mean_kt": -4.467597940118627,
-        "velocity_std_kt": 3.1888948350983966,
-        "velocity_p90_abs_kt": 8.224736753341721,
-        "velocity_gradient_ktkm": 4.226927967366655,
-        "motion_speed_kt": 0.40739950707763767,
-        "motion_dir_deg": 173.49322659288657,
-        "motion_direction_deg": 173.49322659288657,
+        "velocity_mean_kt": -3.308166727326087,
+        "velocity_std_kt": 4.120698001365943,
+        "velocity_p90_abs_kt": 8.287949572369033,
+        "velocity_gradient_ktkm": 5.86570559602095,
+        "motion_speed_kt": 0.8152145439707852,
+        "motion_dir_deg": 353.49340606271215,
+        "motion_direction_deg": 353.49340606271215,
         "radar_motion_speed_kt": 0.0,
         "radar_motion_direction_deg": 180.0,
         "radar_motion_u_kt": null,
         "radar_motion_v_kt": null,
         "radar_motion_confidence": 0.0,
-        "age_scans": 4,
-        "reflectivity_trend_dbz_per_hr": -6.433897601589802,
-        "area_growth_fraction": -0.06666666666666667,
-        "probability_15min": 0.4029,
-        "probability_30min": 0.3898,
-        "probability_45min": 0.3791,
-        "probability_60min": 0.3689,
+        "age_scans": 5,
+        "reflectivity_trend_dbz_per_hr": 16.088291424745588,
+        "area_growth_fraction": 0.07142857142857142,
+        "probability_15min": 0.49560000000000004,
+        "probability_30min": 0.5162,
+        "probability_45min": 0.5392,
+        "probability_60min": 0.5456,
         "probability_trend": "scored",
         "drivers": [],
         "environment_status": "complete",
         "environment": {
           "source": "RAP",
           "source_valid_time_utc": "2026-10-18T05:00:00Z",
-          "age_minutes": 40.632783333333336,
+          "age_minutes": 47.67556666666667,
           "fields": {
             "visibility_m": 26400.0,
             "gust_ms": 10.591608047485352,
@@ -248,11 +250,11 @@
         },
         "environment_model_ready": true,
         "environment_missing_fields": [],
-        "environment_age_minutes": 40.63,
+        "environment_age_minutes": 47.68,
         "environment_forecast_30min": {
           "source": "RAP",
           "source_valid_time_utc": "2026-10-18T06:00:00Z",
-          "age_minutes": -19.367216666666664,
+          "age_minutes": -12.324433333333333,
           "fields": {
             "visibility_m": 28800.0,
             "gust_ms": 7.7367777824401855,
@@ -334,7 +336,7 @@
           "forecast_valid_time_utc": "2026-10-18T06:00:00Z",
           "forecast_lead_hours": 1,
           "target_minutes": 30,
-          "actual_valid_offset_minutes": 19.4
+          "actual_valid_offset_minutes": 12.3
         },
         "environment_forecast_30min_model_ready": true,
         "environment_forecast_30min_missing_fields": [],
@@ -446,7 +448,7 @@
         "expected_30min_snow_temperature_pass": false,
         "data_quality": "good",
         "model_version": "live-object-foundation-v2",
-        "radar_component_score": 71.4,
+        "radar_component_score": 83.19,
         "environment_component_score": 10.88,
         "probability_component_weights": {
           "radar": 0.5,
@@ -454,7 +456,7 @@
         },
         "probability_components": {
           "15": {
-            "radar": 69.71,
+            "radar": 88.25,
             "environment": 10.88,
             "weights": {
               "radar": 0.5,
@@ -462,7 +464,7 @@
             }
           },
           "30": {
-            "radar": 68.03,
+            "radar": 93.31,
             "environment": 9.94,
             "weights": {
               "radar": 0.5,
@@ -470,7 +472,7 @@
             }
           },
           "45": {
-            "radar": 66.34,
+            "radar": 98.38,
             "environment": 9.47,
             "weights": {
               "radar": 0.5,
@@ -478,7 +480,7 @@
             }
           },
           "60": {
-            "radar": 64.65,
+            "radar": 100.0,
             "environment": 9.12,
             "weights": {
               "radar": 0.5,
@@ -491,10 +493,10 @@
             "reflectivity": 1.0,
             "reflectivity_contrast": 1.0,
             "leading_edge_gradient": 1.0,
-            "velocity_contrast": 0.09211763681644154,
+            "velocity_contrast": 0.1400105932617622,
             "core_fraction": 1.0,
-            "reflectivity_growth": 0.0,
-            "organization": 0.4181132046936898
+            "reflectivity_growth": 1.0,
+            "organization": 0.5635538282616153
           },
           "environment": {
             "current": 10.88,
@@ -503,20 +505,20 @@
           }
         },
         "research_probabilities_raw": {
-          "15min": 0.4029,
-          "30min": 0.3898,
-          "45min": 0.3791,
-          "60min": 0.3689
+          "15min": 0.49560000000000004,
+          "30min": 0.5162,
+          "45min": 0.5392,
+          "60min": 0.5456
         },
         "research_probabilities": {
-          "15min": 0.4029,
-          "30min": 0.3898,
-          "45min": 0.3791,
-          "60min": 0.3689,
-          "now": 0.4114
+          "15min": 0.49560000000000004,
+          "30min": 0.5162,
+          "45min": 0.5392,
+          "60min": 0.5456,
+          "now": 0.4703
         },
-        "research_probability_now": 0.4114,
-        "probability_now": 0.4114,
+        "research_probability_now": 0.4703,
+        "probability_now": 0.4703,
         "research_interval_probabilities": {},
         "probability_projection": "now_plus15_plus30_plus45_plus60",
         "learned_model_probabilities": {}
@@ -524,8 +526,8 @@
     }
   ],
   "metadata": {
-    "scan_time_utc": "2026-10-18T05:40:37.967000Z",
-    "source_file": "KCXX20261018_054037_V06",
+    "scan_time_utc": "2026-10-18T05:47:40.534000Z",
+    "source_file": "KCXX20261018_054740_V06",
     "fields": {
       "reflectivity": "reflectivity",
       "velocity": "velocity",
