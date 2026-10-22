@@ -4,7 +4,7 @@ name: Snow Squall Radar Frame Publisher
 
 on:
   schedule:
-    - cron: "*/5 * * * *"
+    - cron: "4-59/5 * * * *"
   workflow_dispatch:
   # Publish again immediately after an acquisition lane completes successfully.
   workflow_run:
