@@ -3,7 +3,7 @@ name: Acquire Live Radar Volumes A
 on:
   workflow_dispatch:
   schedule:
-    - cron: "8,18,28,38,48,58 * * * *"
+    - cron: "9,19,29,39,49,59 * * * *"
 
 permissions:
   contents: read
