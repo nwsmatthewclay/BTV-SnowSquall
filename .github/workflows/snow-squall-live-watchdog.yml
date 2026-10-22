@@ -3,7 +3,7 @@ name: Snow Squall Live Radar Watchdog
 
 on:
   schedule:
-    - cron: "2-59/5 * * * *"
+    - cron: "1-59/5 * * * *"
   workflow_dispatch:
   push:
     paths:
@@ -70,6 +70,35 @@ jobs:
           except (OSError, TypeError, ValueError, json.JSONDecodeError) as exc:
               print(f"RADAR metadata missing/invalid: {exc}")
 
+          # Check the actual archived image timeline as well as the mosaic
+          # metadata. This catches cases where metadata exists but the viewer's
+          # latest published PNG/manifest stopped advancing.
+          latest_frame_age = None
+          manifest_path = live / "radar_history" / "manifest.json"
+          try:
+              manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+              frames = [
+                  item for item in (manifest.get("frames") or [])
+                  if isinstance(item, dict) and item.get("timestamp") and item.get("image")
+              ]
+              if frames:
+                  latest = max(frames, key=lambda item: str(item.get("timestamp", "")))
+                  stamp = datetime.fromisoformat(
+                      str(latest["timestamp"]).replace("Z", "+00:00")
+                  )
+                  if stamp.tzinfo is None:
+                      stamp = stamp.replace(tzinfo=timezone.utc)
+                  latest_frame_age = (now - stamp.astimezone(timezone.utc)).total_seconds() / 60.0
+                  print(f"RADAR LATEST ARCHIVED FRAME: {latest.get('image')} age={latest_frame_age:.1f} min")
+                  if latest_frame_age > 12.0 or latest_frame_age < -5.0:
+                      radar_stale = True
+              else:
+                  print("RADAR timeline manifest contains no usable frames")
+                  radar_stale = True
+          except (OSError, TypeError, ValueError, json.JSONDecodeError) as exc:
+              print(f"RADAR timeline manifest missing/invalid: {exc}")
+              radar_stale = True
+
           stale_sites = []
           object_ages = {}
           for site in ("KCXX", "KTYX"):
@@ -95,6 +124,7 @@ jobs:
               "checked_utc": now.isoformat(),
               "radar_stale": radar_stale,
               "radar_age_minutes": None if radar_age is None else round(radar_age, 2),
+              "latest_frame_age_minutes": None if latest_frame_age is None else round(latest_frame_age, 2),
               "stale_sites": stale_sites,
               "object_ages_minutes": object_ages,
           }
