@@ -60,7 +60,7 @@ jobs:
           set -euo pipefail
           mkdir -p viewer/data/live
           if git ls-remote --exit-code --heads origin snow-squall-live-data >/dev/null 2>&1; then
-            git fetch --no-tags origin snow-squall-live-data
+            git fetch --no-tags --depth=1 origin snow-squall-live-data
             git checkout origin/snow-squall-live-data -- viewer/data/live || true
           fi
           mkdir -p viewer/data/live
@@ -280,7 +280,7 @@ jobs:
 
           # Use a separate worktree so the long-running object tracker can
           # continue on its foundation checkout while fresh radar is published.
-          git fetch --no-tags origin snow-squall-live-data
+          git fetch --no-tags --depth=1 origin snow-squall-live-data
           git worktree prune
           rm -rf /tmp/snow-squall-radar-publish
           git worktree add --detach /tmp/snow-squall-radar-publish origin/snow-squall-live-data
@@ -364,12 +364,13 @@ jobs:
                   candidates.setdefault(scan_time, (None, scan_time))
 
           ordered = sorted(candidates.items(), key=lambda item: item[0])
-          # Keep each processing batch small enough to finish before the
-          # tracker step timeout. A smaller successful batch advances the
-          # durable watermark; oversized batches time out and replay forever.
-          if len(ordered) > 6:
-              print(f"Found {len(ordered)} unprocessed scans; processing the oldest 6 chronologically so later runs can continue catch-up.")
-              ordered = ordered[:6]
+          # Process a bounded chronological batch large enough to make useful
+          # catch-up progress while remaining below the 20-minute step timeout.
+          # Stale intermediate batches must still publish so the durable watermark
+          # can advance toward current radar; freshness is diagnosed separately.
+          if len(ordered) > 16:
+              print(f"Found {len(ordered)} unprocessed scans; processing the oldest 16 chronologically so later runs can continue catch-up.")
+              ordered = ordered[:16]
 
           print(
               "KCXX tracking watermark:",
@@ -398,6 +399,7 @@ jobs:
                   "--ktyx-max-age-minutes", "8",
                   "--archive-attempts", "1",
                   "--archive-delay-seconds", "5",
+                  "--objects-only",
               ], check=True)
           PY
 
