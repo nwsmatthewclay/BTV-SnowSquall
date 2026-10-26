@@ -74,3 +74,32 @@ def test_low_confidence_radar_motion_does_not_overwrite_object_motion():
     assert row["track_motion_source"]=="object_only"
     assert row["track_motion_radar_weight"]==0.0
     assert row["track_velocity_column_per_min"] > 0
+
+
+def test_duplicate_or_out_of_order_scan_is_rejected_without_state_change():
+    import pytest
+
+    t = CentroidTracker()
+    first = t.update("2026-01-01T12:00:00Z", [obj(10, 10)])[0]["object_id"]
+    with pytest.raises(ValueError, match="Duplicate or out-of-order"):
+        t.update("2026-01-01T11:55:00Z", [obj(10, 11)])
+    second = t.update("2026-01-01T12:05:00Z", [obj(10, 11)])[0]["object_id"]
+    assert second == first
+
+
+def test_multiple_empty_scans_expire_track_after_missed_scan_limit():
+    t = CentroidTracker()
+    first = t.update("2026-01-01T12:00:00Z", [obj(10, 10)])[0]["object_id"]
+    assert t.update("2026-01-01T12:05:00Z", []) == []
+    assert t.update("2026-01-01T12:10:00Z", []) == []
+    new = t.update("2026-01-01T12:15:00Z", [obj(10, 12)])[0]["object_id"]
+    assert new != first
+
+
+def test_tracker_scan_clock_survives_state_restore():
+    t = CentroidTracker()
+    t.update("2026-01-01T12:00:00Z", [obj(10, 10)])
+    restored = CentroidTracker.from_state(t.to_state())
+    import pytest
+    with pytest.raises(ValueError, match="Duplicate or out-of-order"):
+        restored.update("2026-01-01T12:00:00Z", [obj(10, 11)])
