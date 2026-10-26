@@ -102,3 +102,17 @@ def test_live_radar_timeline_defaults_to_newest_frame_and_preserves_manual_selec
     assert "radarTimelineUserSelected=true;forceCurrentMosaic=false;setRadarHistoryIndex(this.value)" in js
     assert 'loadRadarHistory().then(function(){return refresh()})' in js
     assert "object timestamps must not force the" in js
+
+def test_live_object_overlay_is_reconstructed_from_selected_radar_frame():
+    root = Path(__file__).resolve().parents[1]
+    js = (root / "viewer" / "live.js").read_text(encoding="utf-8")
+
+    # Scrubbing must use per-scan detections, not only the latest live object.
+    assert "function objectsForRadarFrame(targetMs)" in js
+    assert "datasets[site].history" in js
+    assert "_historicalFrameRecord:true" in js
+    # Full history must be merged with the compact position trail embedded in
+    # the latest GeoJSON so a short embedded trail does not hide older positions.
+    assert "Merge the full retained per-scan history" in js
+    assert "trackHistory(p).map(function(r)" in js
+    assert "!p._historicalFrameRecord" in js
