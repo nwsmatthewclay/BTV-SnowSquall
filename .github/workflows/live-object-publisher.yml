@@ -527,12 +527,17 @@ jobs:
               print(site, "history rows:", len(rows))
           PY
 
-      - name: Validate KCXX live product and environmental features
-        # KCXX is the reference tracker. Do not publish a stale or environment-
-        # empty product as if it were current. Fresh radar imagery is published
-        # earlier by its independent path.
+      - name: Validate KCXX object freshness and contract
+        # A failed tracker run or stale object product must stop publication.
+        # Fresh radar imagery has already been published independently.
         run: |
           python scripts/audit_operational_readiness.py             --state viewer/data/live/KCXX_state.json             --geojson viewer/data/live/KCXX_objects.geojson             --max-age-minutes 60
+
+      - name: Diagnose KCXX environmental completeness
+        # Publish fresh radar objects even if RAP is temporarily unavailable,
+        # but record the missing fields and mark the health report degraded.
+        continue-on-error: true
+        run: |
           python scripts/live_healthcheck.py             --state viewer/data/live/KCXX_state.json             --geojson viewer/data/live/KCXX_objects.geojson             --max-age-minutes 60             --require-environment
 
       - name: Validate KTYX live product
