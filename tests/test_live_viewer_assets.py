@@ -87,7 +87,7 @@ def test_live_viewer_consumes_radar_health_status():
     assert 'fetchOptional(base+site+"_health.json?cb="+Date.now(),null)' in js
     assert "Restore prior live feed history" in workflow
     assert "Build bounded browser history payloads" in workflow
-    assert "Validate KCXX live product" in workflow
+    assert "Validate KCXX object contract and timestamp coherence" in workflow
 
 # CI trigger: final live viewer contract alignment.
 
