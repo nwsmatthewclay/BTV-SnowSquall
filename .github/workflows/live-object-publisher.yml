@@ -400,6 +400,7 @@ jobs:
                   "--ktyx-max-age-minutes", "8",
                   "--archive-attempts", "1",
                   "--archive-delay-seconds", "5",
+                  "--objects-only",
               ], check=True)
           PY
 
