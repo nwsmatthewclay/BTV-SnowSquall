@@ -256,6 +256,7 @@ def main() -> int:
     parser.add_argument("--archive-attempts", type=int, default=6)
     parser.add_argument("--archive-delay-seconds", type=int, default=20)
     parser.add_argument("--archive-only", action="store_true", help="Rebuild radar imagery/history without rerunning object or RAP processing.")
+    parser.add_argument("--objects-only", action="store_true", help="Update object tracking/environment only; defer expensive mosaic and timeline work until after backlog catch-up.")
     args = parser.parse_args()
 
     requested = parse_time(args.scan_time)
@@ -297,6 +298,10 @@ def main() -> int:
             )
     else:
         print("Archive-only replay: preserving live tracker state and object feeds.")
+
+    if args.objects_only:
+        print("Objects-only cycle complete; deferring mosaic, timeline archive, and event metadata until backlog processing finishes.")
+        return 0
 
     # Force the existing mosaic builder to use these exact source files by
     # supplying temporary state files with last_source set to the selected
