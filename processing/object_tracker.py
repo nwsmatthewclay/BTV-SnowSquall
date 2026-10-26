@@ -67,6 +67,7 @@ class CentroidTracker:
         self.config = config
         self.tracks: dict[int, Track] = {}
         self.next_id = 1
+        self.last_update_time = None
 
     @staticmethod
     def _as_datetime(value):
@@ -78,12 +79,10 @@ class CentroidTracker:
 
     def _minutes_since(self, timestamp, previous):
         try:
-            return abs(
-                (
-                    self._as_datetime(timestamp)
-                    - self._as_datetime(previous)
-                ).total_seconds()
-            ) / 60.0
+            return (
+                self._as_datetime(timestamp)
+                - self._as_datetime(previous)
+            ).total_seconds() / 60.0
         except (AttributeError, TypeError, ValueError):
             return float("inf")
 
@@ -351,9 +350,27 @@ class CentroidTracker:
         return confidence, margin
 
     def update(self, timestamp, objects, radar_motion=None):
+        # Never let an old/replayed volume rewind track state or generate a
+        # false near-zero time interval that makes distant objects look matched.
+        current_time = self._as_datetime(timestamp)
+        if self.last_update_time is not None:
+            elapsed = (
+                current_time - self._as_datetime(self.last_update_time)
+            ).total_seconds()
+            if elapsed <= 0:
+                raise ValueError(
+                    "Duplicate or out-of-order radar scan; tracker state unchanged"
+                )
         self._prune_stale(timestamp)
         objects = list(objects)
         if not objects:
+            # Empty scans are real observations too: advance the clock and
+            # count missed scans so stale tracks cannot survive indefinitely.
+            for tid, track in list(self.tracks.items()):
+                track.missed_scans += 1
+                if track.missed_scans > self.config.max_missed_scans:
+                    del self.tracks[tid]
+            self.last_update_time = current_time
             return []
 
         track_ids = sorted(self.tracks)
@@ -617,6 +634,7 @@ class CentroidTracker:
         # Detector object IDs are frame-local labels. They must never override
         # the persistent IDs assigned by this tracker, or the live history can
         # associate unrelated objects across scans and create absurd motion.
+        self.last_update_time = current_time
         return [
             {**obj, "object_id": assignments[i]}
             for i, obj in enumerate(objects)
@@ -625,6 +643,10 @@ class CentroidTracker:
     def to_state(self):
         return {
             "next_id": self.next_id,
+            "last_update_time": (
+                self._as_datetime(self.last_update_time).isoformat()
+                if self.last_update_time is not None else None
+            ),
             "tracks": {
                 str(tid): {
                     "object_id": track.object_id,
@@ -651,6 +673,7 @@ class CentroidTracker:
             return tracker
 
         tracker.next_id = int(state.get("next_id", 1))
+        tracker.last_update_time = state.get("last_update_time")
         for tid_text, raw in state.get("tracks", {}).items():
             tid = int(tid_text)
             tracker.tracks[tid] = Track(
