@@ -688,4 +688,11 @@ class CentroidTracker:
                 max_reflectivity_dbz=raw.get("max_reflectivity_dbz"),
                 missed_scans=int(raw.get("missed_scans", 0)),
             )
+        # Backward compatibility for state files written before the scan clock
+        # was persisted: infer it from the newest surviving track timestamp.
+        if tracker.last_update_time is None and tracker.tracks:
+            tracker.last_update_time = max(
+                (track.last_time for track in tracker.tracks.values()),
+                key=lambda value: cls._as_datetime(value),
+            )
         return tracker
