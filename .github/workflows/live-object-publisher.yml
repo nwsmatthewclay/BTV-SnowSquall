@@ -365,13 +365,12 @@ jobs:
                   candidates.setdefault(scan_time, (None, scan_time))
 
           ordered = sorted(candidates.items(), key=lambda item: item[0])
-          # Process a bounded chronological batch large enough to make useful
-          # catch-up progress while remaining below the 20-minute step timeout.
-          # Stale intermediate batches must still publish so the durable watermark
-          # can advance toward current radar; freshness is diagnosed separately.
-          if len(ordered) > 16:
-              print(f"Found {len(ordered)} unprocessed scans; processing the oldest 16 chronologically so later runs can continue catch-up.")
-              ordered = ordered[:16]
+          # Keep enough headroom for slow RAP/Level-II processing and the
+          # final publish steps. Smaller successful batches advance the durable
+          # watermark more reliably than a near-timeout batch.
+          if len(ordered) > 8:
+              print(f"Found {len(ordered)} unprocessed scans; processing the oldest 8 chronologically so later runs can continue catch-up.")
+              ordered = ordered[:8]
 
           print(
               "KCXX tracking watermark:",
