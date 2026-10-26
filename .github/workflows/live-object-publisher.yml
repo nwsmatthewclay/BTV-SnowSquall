@@ -14,6 +14,7 @@ on:
   push:
     branches:
       - snow-squall-model-foundation
+      - main
     paths:
       - scripts/backfill_live_radar.py
       - scripts/process_live_event.py
