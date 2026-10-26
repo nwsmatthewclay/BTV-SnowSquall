@@ -126,6 +126,10 @@ def healthcheck(state_path: Path, geojson_path: Path, max_age_minutes: float = 1
             for reason in readiness["reasons"]:
                 environment_reasons[reason] = environment_reasons.get(reason, 0) + 1
 
+    # Environment readiness is a separate, visible health dimension. Radar
+    # objects should still be publishable when RAP is temporarily unavailable,
+    # but the feed must not be reported as fully healthy in that state.
+    checks["environment_complete"] = environment_not_ready_count == 0
     healthy = all(checks.values())
 
     return {
