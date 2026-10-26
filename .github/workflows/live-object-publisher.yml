@@ -369,9 +369,9 @@ jobs:
           # catch-up progress while remaining below the 20-minute step timeout.
           # Stale intermediate batches must still publish so the durable watermark
           # can advance toward current radar; freshness is diagnosed separately.
-          if len(ordered) > 12:
-              print(f"Found {len(ordered)} unprocessed scans; processing the oldest 12 chronologically so later runs can continue catch-up.")
-              ordered = ordered[:12]
+          if len(ordered) > 16:
+              print(f"Found {len(ordered)} unprocessed scans; processing the oldest 16 chronologically so later runs can continue catch-up.")
+              ordered = ordered[:16]
 
           print(
               "KCXX tracking watermark:",
