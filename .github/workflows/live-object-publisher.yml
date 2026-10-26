@@ -530,11 +530,13 @@ jobs:
               print(site, "history rows:", len(rows))
           PY
 
-      - name: Validate KCXX object freshness and contract
-        # A failed tracker run or stale object product must stop publication.
-        # Fresh radar imagery has already been published independently.
+      - name: Validate KCXX object contract and timestamp coherence
+        # During chronological catch-up, the object feed can legitimately lag
+        # the live mosaic. Persist each successful batch even while degraded;
+        # otherwise the stale-age gate prevents the watermark ever advancing.
+        # Freshness is reported by the following non-blocking health diagnostic.
         run: |
-          python scripts/audit_operational_readiness.py             --state viewer/data/live/KCXX_state.json             --geojson viewer/data/live/KCXX_objects.geojson             --max-age-minutes 60
+          python scripts/audit_operational_readiness.py             --state viewer/data/live/KCXX_state.json             --geojson viewer/data/live/KCXX_objects.geojson
 
       - name: Diagnose KCXX environmental completeness
         # Publish fresh radar objects even if RAP is temporarily unavailable,
