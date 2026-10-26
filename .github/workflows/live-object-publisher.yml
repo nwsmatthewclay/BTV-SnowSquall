@@ -316,10 +316,10 @@ jobs:
           git worktree remove --force /tmp/snow-squall-radar-publish
 
       - name: Refresh live objects from every unprocessed KCXX scan
+        id: refresh_live_objects
+        # Do not silently publish old object/environment feeds when processing
+        # fails. Fresh radar imagery has already been published independently.
         # Process every newly available KCXX volume in chronological order.
-        # Processing only the newest scan skips intermediate detections and
-        # breaks object identity/history when a publisher run is delayed.
-        continue-on-error: true
         timeout-minutes: 20
         run: |
           set -euo pipefail
@@ -527,13 +527,13 @@ jobs:
               print(site, "history rows:", len(rows))
           PY
 
-      - name: Validate KCXX live product
-        # Object health must be visible, but stale object state must not prevent
-        # independent fresh radar reflectivity/velocity from reaching the viewer.
-        continue-on-error: true
+      - name: Validate KCXX live product and environmental features
+        # KCXX is the reference tracker. Do not publish a stale or environment-
+        # empty product as if it were current. Fresh radar imagery is published
+        # earlier by its independent path.
         run: |
           python scripts/audit_operational_readiness.py             --state viewer/data/live/KCXX_state.json             --geojson viewer/data/live/KCXX_objects.geojson             --max-age-minutes 60
-          python scripts/live_healthcheck.py             --state viewer/data/live/KCXX_state.json             --geojson viewer/data/live/KCXX_objects.geojson             --max-age-minutes 60
+          python scripts/live_healthcheck.py             --state viewer/data/live/KCXX_state.json             --geojson viewer/data/live/KCXX_objects.geojson             --max-age-minutes 60             --require-environment
 
       - name: Validate KTYX live product
         continue-on-error: true
