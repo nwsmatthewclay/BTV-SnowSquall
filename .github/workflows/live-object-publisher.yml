@@ -61,7 +61,7 @@ jobs:
           set -euo pipefail
           mkdir -p viewer/data/live
           if git ls-remote --exit-code --heads origin snow-squall-live-data >/dev/null 2>&1; then
-            git fetch --no-tags origin snow-squall-live-data
+            git fetch --no-tags --depth=1 origin snow-squall-live-data
             git checkout origin/snow-squall-live-data -- viewer/data/live || true
           fi
           mkdir -p viewer/data/live
@@ -281,7 +281,7 @@ jobs:
 
           # Use a separate worktree so the long-running object tracker can
           # continue on its foundation checkout while fresh radar is published.
-          git fetch --no-tags origin snow-squall-live-data
+          git fetch --no-tags --depth=1 origin snow-squall-live-data
           git worktree prune
           rm -rf /tmp/snow-squall-radar-publish
           git worktree add --detach /tmp/snow-squall-radar-publish origin/snow-squall-live-data
