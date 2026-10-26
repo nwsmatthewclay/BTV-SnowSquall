@@ -183,6 +183,33 @@ def object_shape_metrics(rows, cols, lat, lon, spacing_km=1.0):
     return major, minor, angle_deg
 
 
+def prior_position_from_track_history(track_history, lat, lon):
+    """Recover the previous geographic position after a briefly missed echo.
+
+    The compact object_positions cache contains only objects detected in the
+    immediately previous scan. When an echo is missed and later recovered,
+    the tracker's persisted history still contains its last observed position.
+    The penultimate point is the previous observation; the final point is the
+    current detection appended by CentroidTracker.update().
+    """
+    if not isinstance(track_history, list) or len(track_history) < 2:
+        return None
+    previous = track_history[-2]
+    try:
+        previous_lat, previous_lon = grid_point_to_geo(
+            previous["row"], previous["column"], lat, lon
+        )
+    except (KeyError, TypeError, ValueError, OverflowError):
+        return None
+    if previous_lat is None or previous_lon is None or not previous.get("timestamp"):
+        return None
+    return {
+        "timestamp": previous["timestamp"],
+        "lat": previous_lat,
+        "lon": previous_lon,
+    }
+
+
 def motion_from_positions(previous, current_lat, current_lon, current_time):
     if not previous or current_lat is None or current_lon is None:
         return None, None
@@ -519,14 +546,18 @@ def process_volume(
             obj["row_centroid"], obj["column_centroid"], lat, lon
         )
 
+        track_key = str(obj["object_id"])
+        prior_position = previous_positions.get(track_key)
+        if prior_position is None:
+            prior_position = prior_position_from_track_history(
+                obj.get("track_position_history"), lat, lon
+            )
         speed_kt, direction_deg = motion_from_positions(
-            previous_positions.get(str(obj["object_id"])),
+            prior_position,
             centroid_lat,
             centroid_lon,
             timestamp,
         )
-
-        track_key = str(obj["object_id"])
         previous = previous_metrics.get(track_key, {})
         max_z = float(obj["max_reflectivity_dbz"])
         mean_z = float(obj["mean_reflectivity_dbz"])
