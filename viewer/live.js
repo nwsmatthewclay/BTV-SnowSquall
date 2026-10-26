@@ -23,9 +23,14 @@ function selectedObjectTime(){
   var t=latestMosaicScanTime();var parsed=parseUtcDate(t);return parsed?parsed.getTime():objectReferenceTime();
 }
 function historicalPositionForObject(p,targetMs){
-  var rows=Array.isArray(p.track_position_history)?p.track_position_history.slice():[];
-  if(rows.length<2)rows=trackHistory(p).map(function(r){return {timestamp:r.timestamp,lat:r.centroid_lat??r.lat,lon:r.centroid_lon??r.lon};});
-  var candidates=rows.map(function(h){var d=parseUtcDate(h&&h.timestamp),lat=Number(h&&h.lat),lon=Number(h&&h.lon);return d&&Number.isFinite(lat)&&Number.isFinite(lon)?{t:d.getTime(),lat:lat,lon:lon}:null;}).filter(Boolean).sort(function(a,b){return a.t-b.t;});
+  // Merge the full retained per-scan history with the compact position trail
+  // embedded in the latest GeoJSON. The embedded trail alone is often only
+  // two to four scans long and must not mask a longer persisted history.
+  var rows=trackHistory(p).map(function(r){return {timestamp:r.timestamp,lat:r.centroid_lat??r.lat,lon:r.centroid_lon??r.lon};});
+  (Array.isArray(p.track_position_history)?p.track_position_history:[]).forEach(function(r){rows.push(r)});
+  var unique=new Map();
+  rows.forEach(function(r){if(r&&r.timestamp)unique.set(String(r.timestamp),r)});
+  var candidates=Array.from(unique.values()).map(function(h){var d=parseUtcDate(h&&h.timestamp),lat=Number(h&&h.lat),lon=Number(h&&h.lon);return d&&Number.isFinite(lat)&&Number.isFinite(lon)?{t:d.getTime(),lat:lat,lon:lon}:null;}).filter(Boolean).sort(function(a,b){return a.t-b.t;});
   if(!candidates.length)return null;
   var prior=null,next=null;
   candidates.forEach(function(x){if(x.t<=targetMs)prior=x;else if(!next)next=x;});
@@ -654,18 +659,58 @@ function selectObject(p){
   renderHistory();
   renderModelStatus();
 }
+function objectsForRadarFrame(targetMs){
+  // Historical radar frames need the detections observed near that frame,
+  // not just the latest live GeoJSON objects. The browser history is the
+  // per-scan object catalog used to reconstruct the overlay while scrubbing.
+  var byTrack=new Map(),windowMs=8*60000;
+  Object.keys(datasets||{}).forEach(function(site){
+    var rows=Array.isArray(datasets[site]?.history)?datasets[site].history:[];
+    rows.forEach(function(row){
+      if(!row||row.track_id==null)return;
+      var d=parseUtcDate(row.timestamp);
+      if(!d)return;
+      var delta=Math.abs(d.getTime()-targetMs);
+      if(delta>windowMs)return;
+      var lat=Number(row.centroid_lat),lon=Number(row.centroid_lon),area=Number(row.area_km2);
+      if(!Number.isFinite(lat)||!Number.isFinite(lon)||!Number.isFinite(area)||area<=0)return;
+      var key=String(site)+"|"+String(row.track_id),prior=byTrack.get(key);
+      if(!prior||delta<prior._frameDeltaMs){
+        byTrack.set(key,Object.assign({},row,{
+          radar_site:site,
+          radar_geometry:null,
+          _historicalFrameRecord:true,
+          _frameDeltaMs:delta
+        }));
+      }
+    });
+  });
+  return Array.from(byTrack.values()).sort(function(a,b){
+    return Number(b.max_reflectivity_dbz||0)-Number(a.max_reflectivity_dbz||0);
+  });
+}
 function renderMap(){
   Object.values(layers).forEach(function(l){l.clearLayers()});
-  if(!allObjects.length)return;
   var targetMs=selectedObjectTime();
-  allObjects.forEach(function(p){
+  var displayObjects=allObjects;
+  if(radarTimelineUserSelected&&Number.isFinite(targetMs)){
+    // Prefer actual detections archived at the selected frame time. If no
+    // matching history row exists yet, use a live object's recorded position
+    // only when its track history is genuinely close to this frame.
+    displayObjects=objectsForRadarFrame(targetMs);
+    if(!displayObjects.length){
+      displayObjects=allObjects.filter(function(p){return !!historicalPositionForObject(p,targetMs)});
+    }
+  }
+  if(!displayObjects.length)return;
+  displayObjects.forEach(function(p){
     var c=objectRisk(p),sel=selected&&selected.radar_site===p.radar_site&&String(selected.track_id)===String(p.track_id);
     var feature=p.radar_geometry?{type:"Feature",geometry:p.radar_geometry,properties:{}}:null;
     var pts=cellPoints(p);
     if(!feature&&!pts.length)return;
     // Keep the polygon, its hit target, and its label together as time changes.
     var displayLat=Number(p.centroid_lat),displayLon=Number(p.centroid_lon);
-    if(radarTimelineUserSelected&&Number.isFinite(targetMs)){
+    if(radarTimelineUserSelected&&Number.isFinite(targetMs)&&!p._historicalFrameRecord){
       var past=historicalPositionForObject(p,targetMs);
       if(!past)return;
       var currentLat=Number(p.centroid_lat),currentLon=Number(p.centroid_lon);
