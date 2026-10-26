@@ -364,9 +364,12 @@ jobs:
                   candidates.setdefault(scan_time, (None, scan_time))
 
           ordered = sorted(candidates.items(), key=lambda item: item[0])
-          if len(ordered) > 18:
-              print(f"Found {len(ordered)} unprocessed scans; processing the oldest 18 chronologically so later runs can continue catch-up.")
-              ordered = ordered[:18]
+          # Keep each processing batch small enough to finish before the
+          # tracker step timeout. A smaller successful batch advances the
+          # durable watermark; oversized batches time out and replay forever.
+          if len(ordered) > 6:
+              print(f"Found {len(ordered)} unprocessed scans; processing the oldest 6 chronologically so later runs can continue catch-up.")
+              ordered = ordered[:6]
 
           print(
               "KCXX tracking watermark:",
