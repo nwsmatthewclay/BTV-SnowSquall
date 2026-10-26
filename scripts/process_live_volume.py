@@ -461,10 +461,14 @@ def process_volume(
         return False
 
     rap_result = None
+    rap_acquisition_error = None
     try:
         rap_result = acquire_for_radar_time(radar_dt)
+        if rap_result is None:
+            rap_acquisition_error = "No time-valid RAP analysis found within the configured age window."
     except Exception as exc:
-        print(f"RAP acquisition warning: {type(exc).__name__}: {exc}")
+        rap_acquisition_error = f"{type(exc).__name__}: {exc}"
+        print(f"RAP acquisition warning: {rap_acquisition_error}")
 
     rap_forecast_30_result = None
     try:
@@ -656,7 +660,13 @@ def process_volume(
                 )
             except Exception as exc:
                 print(f"Vertical radar diagnostic warning: {type(exc).__name__}: {exc}")
-        environment = {"status": "unavailable", "source": "RAP", "fields": {}}
+        environment = {
+            "status": "error" if rap_acquisition_error and rap_result is None else "unavailable",
+            "source": "RAP",
+            "fields": {},
+        }
+        if rap_acquisition_error:
+            environment["error"] = rap_acquisition_error
         if rap_result is not None and centroid_lat is not None and centroid_lon is not None:
             rap_match, rap_path = rap_result
             try:
@@ -674,6 +684,13 @@ def process_volume(
                     "error": f"{type(exc).__name__}: {exc}",
                     "fields": {},
                 }
+        elif rap_result is not None and (centroid_lat is None or centroid_lon is None):
+            environment = {
+                "source": "RAP",
+                "status": "error",
+                "error": "Object centroid could not be geolocated; RAP sampling was skipped.",
+                "fields": {},
+            }
 
         environment_forecast_30 = {"status": "unavailable", "source": "RAP", "fields": {}}
         forecast_30_valid_time = None
@@ -947,8 +964,20 @@ def process_volume(
             "probability_status": ("research_scored" if features else ("model_error" if model_errors else "not_scored")),
             "probability_mode": probability_mode,
             "environment_status": (
-                "attached" if rap_result is not None else "unavailable"
+                "attached" if any(
+                    f.get("environment_status") in ("complete", "partial")
+                    for f in features
+                ) else (
+                    "error" if any(f.get("environment_status") == "error" for f in features)
+                    else "unavailable"
+                )
             ),
+            "environment_status_counts": {
+                status: sum(1 for f in features if f.get("environment_status", "unavailable") == status)
+                for status in sorted({f.get("environment_status", "unavailable") for f in features})
+            },
+            "environment_ready_count": sum(1 for f in features if f.get("environment_model_ready")),
+            "environment_missing_count": sum(1 for f in features if not f.get("environment_model_ready")),
             "environment_source": "RAP",
             "radar_origin": list(radar_origin) if radar_origin is not None else None,
             "model_versions": model_versions,
