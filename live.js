@@ -19,7 +19,11 @@ var radarHistory={frames:[]},radarHistoryIndex=-1,radarAnimationTimer=null,radar
 var mapExtentInitialized=false;
 function fitMapToBoundsOnce(bounds){if(mapExtentInitialized||!bounds)return;map.fitBounds(bounds,{padding:[25,25],maxZoom:8});mapExtentInitialized=true;}
 function selectedObjectTime(){
-  if(radarTimelineUserSelected){var frame=radarHistoryFrame();var d=frame?parseUtcDate(frame.timestamp):null;if(d)return d.getTime();}
+  // The live map is anchored to the radar frame synchronized with the object
+  // cycle, not the newest image when the tracker is a few minutes behind.
+  var frame=radarHistoryFrame();
+  var d=frame?parseUtcDate(frame.timestamp):null;
+  if(d)return d.getTime();
   var t=latestMosaicScanTime();var parsed=parseUtcDate(t);return parsed?parsed.getTime():objectReferenceTime();
 }
 function historicalPositionForObject(p,targetMs){
@@ -460,7 +464,7 @@ async function renderRadarMosaic(){
     var frame=radarHistoryFrame();
     // Never let lagging object timestamps pull the default display backwards.
     // Archived frames are used only after explicit timeline interaction.
-    var selectedFrame=radarTimelineUserSelected&&radarHistoryIndex>=0&&frame?frame:null;
+    var selectedFrame=radarHistoryIndex>=0&&frame?frame:null;
     var useStoredFrame=!!(
       !forceCurrentMosaic && selectedFrame &&
       (!selectedFrame.palette || selectedFrame.palette==="NWSRef" || selectedFrame.palette==="BTV_WINTER_REFLECTIVITY_V1" || selectedFrame.palette==="BTV_WINTER_REFLECTIVITY_V2") &&
@@ -479,7 +483,7 @@ async function renderRadarMosaic(){
     // Only do this for a frame synchronized to the current object cycle.
     var objectRef=objectReferenceTime();
     var selectedMs=parseUtcDate(selectedFrame?.timestamp)?.getTime();
-    var nearCurrent=objectRef!=null&&Number.isFinite(selectedMs)&&Math.abs(objectRef-selectedMs)<=10*60000;
+    var nearCurrent=objectRef!=null&&Number.isFinite(selectedMs)&&Math.abs(objectRef-selectedMs)<=5*60000;
     if(nearCurrent){
       var compositeSources=radarMosaic.sources||[];
       var perRadar=radarMosaic.display_products?.base_reflectivity||{};
@@ -566,17 +570,16 @@ function objectReferenceTime(){
 function alignRadarHistoryToObjects(){
   var frames=radarHistory&&Array.isArray(radarHistory.frames)?radarHistory.frames:[];
   if(!frames.length){radarHistoryIndex=-1;updateRadarTimelineUI();return}
-  // Default to the newest retained radar image. The object tracker can lag
-  // behind fresh radar imagery, so object timestamps must not force the
-  // initial page load back to an old archived frame.
   if(!radarTimelineUserSelected){
-    radarHistoryIndex=frames.length-1;
-    updateRadarTimelineUI();
-    return;
+    var sync=synchronizedRadarFrame();
+    if(sync){
+      radarHistoryIndex=frames.indexOf(sync);
+    }else{
+      radarHistoryIndex=frames.length-1;
+    }
+  }else{
+    radarHistoryIndex=Math.max(0,Math.min(frames.length-1,radarHistoryIndex));
   }
-  // Once the user moves the timeline, preserve that explicit selection across
-  // refreshes instead of snapping the slider to the (possibly stale) object time.
-  radarHistoryIndex=Math.max(0,Math.min(frames.length-1,radarHistoryIndex));
   updateRadarTimelineUI();
 }
 function synchronizedRadarFrame(){
@@ -1072,21 +1075,27 @@ async function refresh(){
         // Object timestamps must themselves be recent and agree with the scan
         // advertised by state/metadata, otherwise discard the stale feature.
         var aligned=Number.isFinite(scanMs)&&Number.isFinite(objectMs)&&Math.abs(scanMs-objectMs)<=15*60000;
-        var site=String(p.radar_site||"").toUpperCase();
-        // Prefer the scan time for the actual per-radar raster displayed above this object.
-        // The composite grid may omit a radar whose Cartesian gridding failed even when
-        // its native-gate image was successfully produced; top-level sources can then lag.
-        var siteProduct=radarMosaic?.display_products?.base_reflectivity?.[site];
-        var sourceEntry=(radarMosaic?.sources||[]).find(function(s){return String(s.radar||"").toUpperCase()===site});
-        var sourceTime=siteProduct?.scan_time_utc||sourceEntry?.scan_time_utc;
-        var sourceMs=parseUtcDate(sourceTime)?.getTime();
-        var radarCycleAligned=!Number.isFinite(sourceMs)||Math.abs(sourceMs-objectMs)<=2*60000;
+        // Compare the detection with the archived radar frame selected for
+        // display. Allow a five-minute mosaic cadence window, but never compare
+        // against a newer native image that is not the displayed frame.
+        var radarCycleAligned=Number.isFinite(radarDisplayMs)&&Math.abs(radarDisplayMs-objectMs)<=5*60000;
         return objectFresh&&aligned&&radarCycleAligned;
       });
     });
-    // Keep every valid detected radar object visible. Detection/tracking and
-    // hazard ranking are separate concepts: a cell can be trackable before it
-    // reaches the research probability/rank threshold.
+    // Anchor the live display to the latest archived radar frame at or before
+    // the newest object scan. This prevents a newer native radar image from
+    // making every otherwise-valid object disappear during tracker lag.
+    if(!radarTimelineUserSelected&&detectedObjects.length){
+      var newestDetectedMs=Math.max.apply(null,detectedObjects.map(function(p){return parseUtcDate(p.timestamp)?.getTime()||-Infinity}));
+      var candidateFrames=(radarHistory&&radarHistory.frames)||[];
+      var priorFrames=candidateFrames.map(function(frame){return {frame:frame,time:parseUtcDate(frame.timestamp)?.getTime()}}).filter(function(x){return Number.isFinite(x.time)&&x.time<=newestDetectedMs}).sort(function(a,b){return b.time-a.time});
+      if(priorFrames.length&&newestDetectedMs-priorFrames[0].time<=12*60000)radarHistoryIndex=candidateFrames.indexOf(priorFrames[0].frame);
+      else radarHistoryIndex=candidateFrames.length?candidateFrames.length-1:-1;
+    }
+    var radarDisplayMs=parseUtcDate(radarHistoryFrame()?.timestamp)?.getTime();
+    // Keep valid detections visible only when a nearby archived radar frame can
+    // represent their scan. The latest native product timestamp is not used as
+    // a proxy for the raster actually displayed.
     var rb=radarMosaic?.bounds||[[41.86,-76.91],[46.40,-70.39]];
     allObjects=detectedObjects.filter(function(p){
       var lat=Number(p.centroid_lat),lon=Number(p.centroid_lon),area=Number(p.area_km2);
