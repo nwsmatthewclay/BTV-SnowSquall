@@ -285,7 +285,7 @@ function updateRadarTimelineUI(){
   if(!slider)return;
   slider.max=Math.max(0,(radarHistory.frames||[]).length-1);
   slider.value=Math.max(0,radarHistoryIndex<0?slider.max:radarHistoryIndex);
-  var f=radarTimelineUserSelected?radarHistoryFrame():null,liveTime=latestMosaicScanTime();
+  var f=radarHistoryFrame(),liveTime=latestMosaicScanTime();
   setText("radarTimelineLabel",f?fmtTime(f.timestamp):(liveTime?fmtTime(liveTime):"—"));
   if(play)play.textContent=radarAnimationTimer?"❚❚ PAUSE":"▶ PLAY";
 }
@@ -396,7 +396,7 @@ async function renderRadarMosaic(){
   // after the user explicitly selects a historical frame; an old manifest must
   // never replace fresh Level-II imagery on initial page load or refresh.
   var selectedHistoryFrame=radarHistoryFrame();
-  if(radarMode==="reflectivity" && radarTimelineUserSelected && selectedHistoryFrame && selectedHistoryFrame.image &&
+  if(radarMode==="reflectivity" && selectedHistoryFrame && selectedHistoryFrame.image &&
       (!selectedHistoryFrame.palette || ["NWSRef","BTV_WINTER_REFLECTIVITY_V1","BTV_WINTER_REFLECTIVITY_V2"].includes(selectedHistoryFrame.palette))){
     var selectedImageName=String(selectedHistoryFrame.image).split("/").pop();
     var selectedBounds=selectedHistoryFrame.bounds||radarMosaic?.bounds||[[41.90,-76.78],[46.40,-70.52]];
@@ -1068,9 +1068,7 @@ async function refresh(){
     datasets=Object.fromEntries(got.map(function(x){return [x.site,x]}));
     cursorGrid=await fetchOptional(LIVE_BASE+"radar_cursor.json?cb="+Date.now(),null);
     await loadRadarHistory();
-    // This viewer is an archived-frame + object overlay, not a live-mosaic view.
-    // Start on a timestamped retained frame so the first render is synchronized.
-    radarTimelineUserSelected=true;
+    // Keep timeline in automatic synchronization mode until the user scrubs.
     // Read the same published manifest used by the raster renderer before accepting objects.
     // Object outlines are suppressed when their source scan does not match the displayed radar cycle.
     radarMosaic=await fetchOptional(mosaicMetaUrl(),null);
