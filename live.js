@@ -228,7 +228,16 @@ function modeProbabilityNow(p){
 }
 function riskScore(p){return modeProbabilityAt(p,15)}
 function scoreForSort(p){var v=riskScore(p);return v==null?-1:v}
-function objectRisk(p){var s=riskScore(p);if(s==null)return "#74838d";return s>=.70?"#ff4d3d":s>=.45?"#ff9a3c":s>=.25?"#efcd48":"#54b6ee"}
+function objectRisk(p){
+  // Probability-based display bins tuned for the low-frequency snow-squall
+  // target. These are visual emphasis bands, not warning or release thresholds.
+  var s=riskScore(p);
+  if(s==null)return "#74838d";
+  if(s<.01)return "#55b9ed";
+  if(s<.05)return "#e8d34d";
+  if(s<.10)return "#ff9b3d";
+  return "#f04445";
+}
 function objectOrdinal(p){var site=String(p?.radar_site||"RADAR").toUpperCase();var track=String(p?.track_id??p?.object_id??"—");return site+"-"+track}
 function latestForSelected(){
   if(!selected)return null;
@@ -720,7 +729,8 @@ function renderMap(){
       pts=shiftFootprint(pts,currentLat,currentLon,past.lat,past.lon);
       displayLat=past.lat;displayLon=past.lon;
     }
-    var tooltip="<b>OBJECT "+objectOrdinal(p)+"</b><br>"+p.radar_site+" • Track "+p.track_id+"<br>"+num(p.max_reflectivity_dbz,0)+" dBZ • "+num(p.area_km2,0)+" km²<br>Click for attributes";
+    var probability15=riskScore(p);
+    var tooltip="<b>OBJECT "+objectOrdinal(p)+"</b><br>"+p.radar_site+" • Track "+p.track_id+"<br>"+(probability15==null?"Candidate probability unavailable":("15-min research probability: "+(probability15*100).toFixed(1)+"%"))+"<br>"+num(p.max_reflectivity_dbz,0)+" dBZ • "+num(p.area_km2,0)+" km²<br>Click for attributes";
 
     // Display the actual radar-derived meteorological footprint, colored by Snow Squall probability.
     // Only fall back to a dimension-based shape when no usable footprint was published.
