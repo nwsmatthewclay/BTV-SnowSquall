@@ -637,14 +637,9 @@ function geometryPoints(p){
   return ring;
 }
 function cellPoints(p){
-  var footprint=geometryPoints(p);
-  if(footprint.length>=3)return footprint;
-  var lat=Number(p.centroid_lat),lon=Number(p.centroid_lon);if(!Number.isFinite(lat)||!Number.isFinite(lon))return [];
-  var major=Number(p.length_km);if(!Number.isFinite(major)||major<=0)major=2;
-  var minor=Number(p.width_km);if(!Number.isFinite(minor)||minor<=0)minor=Math.max(1,major*.45);
-  var angle=(Number(p.orientation_deg)||0)*Math.PI/180,pts=[],n=16;
-  for(var i=0;i<n;i++){var t=i/n*Math.PI*2,x=Math.min(35,Math.max(1.5,major))/2*Math.cos(t),y=Math.min(20,Math.max(.8,minor))/2*Math.sin(t),east=x*Math.cos(angle)-y*Math.sin(angle),north=x*Math.sin(angle)+y*Math.cos(angle);pts.push([lat+north/111,lon+east/(111*Math.max(.2,Math.cos(lat*Math.PI/180)))])}
-  return pts;
+  // Never substitute a circle/ellipse for a missing radar footprint.
+  // The published contour is the object; without it, do not draw a proxy.
+  return geometryPoints(p);
 }
 function selectObject(p){
   lastObjectClickAt=Date.now();
