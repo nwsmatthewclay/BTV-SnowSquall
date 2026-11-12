@@ -29,8 +29,20 @@ def main():
         if not metrics_path.exists() or not model_path.exists() or not calibrator_path.exists():
             raise SystemExit(f"FAIL: incomplete bundle for {h}m: {bundle}")
         metrics = json.loads(metrics_path.read_text(encoding="utf-8"))
-        if metrics.get("calibration_status") != "fit_on_oof_research_data":
-            raise SystemExit(f"FAIL: {h}m bundle missing OOF calibration status")
+        calibration_report_path = bundle / "calibration_report.json"
+        if not calibration_report_path.exists():
+            raise SystemExit(f"FAIL: {h}m bundle missing calibration_report.json")
+        calibration_report = json.loads(calibration_report_path.read_text(encoding="utf-8"))
+        horizon_report = (calibration_report.get("horizons") or {}).get(str(h), {})
+        if (
+            calibration_report.get("source") != "case_grouped_out_of_fold_predictions"
+            or calibration_report.get("independent_test_used_for_fit") is not False
+            or horizon_report.get("status") != "fit_research_artifact"
+        ):
+            raise SystemExit(
+                f"FAIL: {h}m bundle lacks a fitted case-grouped OOF research calibrator "
+                f"(report status={horizon_report.get('status')!r})"
+            )
         if metrics.get("operational_release_status") not in {"candidate_only", "candidate_only_not_operational"}:
             raise SystemExit(f"FAIL: {h}m bundle has unexpected release status {metrics.get("operational_release_status")!r}")
         row = audit_bundle(args.model_root, schema, args.prefix.replace("_refresh_", "_refresh_"), h)
