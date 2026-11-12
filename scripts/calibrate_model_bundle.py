@@ -294,7 +294,7 @@ def fit_calibrators(model_dir: Path, min_rows: int = 30, min_per_class: int = 5)
             "positive_rows": positives,
             "negative_rows": negatives,
             "groups": int(len(np.unique(groups))) if len(groups) else 0,
-            "base_oof_folds": int(metrics.get("training_groups", frame.loc[mask, "fold"].nunique())),
+            "base_oof_folds": int(len(metrics.get("folds", [])) or frame.loc[mask, "fold"].nunique()),
             "method": "Platt logistic regression on OOF probability logits",
         }
         if (
