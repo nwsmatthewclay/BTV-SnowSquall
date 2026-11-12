@@ -14,7 +14,7 @@ import math
 from pathlib import Path
 
 CSV_FIELDS = [
-    "timestamp", "radar_site", "source_file", "track_id",
+    "timestamp", "radar_site", "source_file", "track_id", "radar_geometry",
     "track_first_scan_utc", "track_age_min", "track_age_scans",
     "track_missed_scans", "track_association_status", "track_status",
     "research_probability_now", "probability_now", "research_probabilities",
@@ -84,6 +84,11 @@ def flatten(feature, source_file):
     row["research_probabilities"] = _clean(props.get("research_probabilities"))
     if isinstance(row["research_probabilities"], dict):
         row["research_probabilities"] = json.dumps(row["research_probabilities"], separators=(",", ":"), allow_nan=False)
+    geometry = feature.get("geometry")
+    row["radar_geometry"] = (
+        json.dumps(geometry, separators=(",", ":"), allow_nan=False)
+        if isinstance(geometry, dict) else None
+    )
     row["source_file"] = source_file
     row["environment_source"] = env.get("source")
     row["environment_valid_time_utc"] = env.get("source_valid_time_utc")
