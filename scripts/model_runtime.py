@@ -66,6 +66,8 @@ class ModelRuntime:
         model = joblib.load(model_path)
         features = metadata.get("predictor_columns") or []
         calibrator_path = root / "probability_calibrator.joblib"
+        if not calibrator_path.exists():
+            calibrator_path = root / "probability_calibrators_research.joblib"
         calibrator = joblib.load(calibrator_path) if calibrator_path.exists() else None
         return cls(model=model, feature_columns=features, metadata=metadata, calibrator=calibrator)
 
