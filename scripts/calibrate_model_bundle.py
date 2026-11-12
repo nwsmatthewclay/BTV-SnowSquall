@@ -25,9 +25,7 @@ from sklearn.metrics import (
 from sklearn.model_selection import GroupKFold
 
 
-REQUIRED_COLUMNS = {
-    "horizon_min", "target", "target_value", "oof_probability", "split_group", "fold"
-}
+REQUIRED_COLUMNS = {"oof_probability", "split_group"}
 
 
 def _safe_metrics(y: np.ndarray, p: np.ndarray, climatology: np.ndarray | None = None) -> dict:
@@ -238,6 +236,33 @@ def fit_calibrators(model_dir: Path, min_rows: int = 30, min_per_class: int = 5)
     if missing:
         raise ValueError(f"OOF predictions missing required fields: {missing}")
 
+    # The refresh workflow trains one horizon per model directory. Its OOF
+    # export therefore carries the horizon target as a named column rather
+    # than the older combined-table fields (horizon_min/target_value/fold).
+    target_name = str(metrics.get("target") or "")
+    if not target_name or target_name not in predictions.columns:
+        raise ValueError(
+            "OOF predictions must contain the target named in metrics.json; "
+            f"metrics target={target_name!r}"
+        )
+    target_values = pd.to_numeric(predictions[target_name], errors="coerce")
+    if "target_value" not in predictions.columns:
+        predictions["target_value"] = target_values
+    else:
+        predictions["target_value"] = pd.to_numeric(
+            predictions["target_value"], errors="coerce"
+        )
+    if "fold" not in predictions.columns:
+        # Leave-One-Group-Out evaluation holds out one split_group per fold.
+        # This count is diagnostic only; calibration fitting uses split_group
+        # directly and never relies on a fabricated row-level fold assignment.
+        predictions["fold"] = predictions["split_group"].astype(str)
+
+    horizon_match = __import__("re").search(r"_(15|30|45|60)m$", target_name)
+    if not horizon_match:
+        raise ValueError(f"Could not infer supported forecast horizon from target: {target_name}")
+    horizon = int(horizon_match.group(1))
+
     calibrators = {}
     report = {
         "status": "research_only_not_independently_validated",
@@ -248,9 +273,7 @@ def fit_calibrators(model_dir: Path, min_rows: int = 30, min_per_class: int = 5)
         "horizons": {},
     }
     for horizon in (15, 30, 45, 60):
-        frame = predictions[
-            pd.to_numeric(predictions["horizon_min"], errors="coerce").eq(horizon)
-        ].copy()
+        if horizon != int(horizon_match.group(1)):\n            continue\n        frame = predictions.copy()
         y_all = pd.to_numeric(frame["target_value"], errors="coerce")
         p_all = pd.to_numeric(frame["oof_probability"], errors="coerce")
         group_all = frame["split_group"].fillna("").astype(str).str.strip()
@@ -271,7 +294,7 @@ def fit_calibrators(model_dir: Path, min_rows: int = 30, min_per_class: int = 5)
             "positive_rows": positives,
             "negative_rows": negatives,
             "groups": int(len(np.unique(groups))) if len(groups) else 0,
-            "base_oof_folds": int(frame.loc[mask, "fold"].nunique()),
+            "base_oof_folds": int(metrics.get("training_groups", frame.loc[mask, "fold"].nunique())),
             "method": "Platt logistic regression on OOF probability logits",
         }
         if (
