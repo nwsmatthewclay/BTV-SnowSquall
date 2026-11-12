@@ -42,29 +42,47 @@ jobs:
           # gridding, RAP retrieval, and object scoring can take longer. Without
           # this guard, each tick queues another 30-minute publisher run behind
           # the active one, amplifying stale-feed delays.
-          active_publisher="$(gh run list \
-            --repo "${GITHUB_REPOSITORY}" \
-            --workflow "Snow Squall Live Object Publisher" \
-            --branch main \
-            --limit 20 \
-            --json status \
-            --jq '[.[] | select(.status == "queued" or .status == "in_progress")] | length')"
+          # Ignore abandoned queued runs. GitHub can leave a workflow_dispatch
+          # run queued indefinitely (for example after runner/capacity issues).
+          # Counting every queued run here permanently blocks all future cycles.
+          # A real in-progress run is still respected; queued runs count only
+          # while they are recent enough to be a legitimate pending dispatch.
+          count_recent_active_runs() {
+            local workflow="$1"
+            local branch="$2"
+            gh run list \
+              --repo "${GITHUB_REPOSITORY}" \
+              --workflow "$workflow" \
+              --branch "$branch" \
+              --limit 100 \
+              --json status,createdAt | python -c '
+          import json, sys
+          from datetime import datetime, timezone
+          runs = json.load(sys.stdin)
+          now = datetime.now(timezone.utc)
+          count = 0
+          for run in runs:
+              status = run.get("status")
+              if status == "in_progress":
+                  count += 1
+                  continue
+              if status != "queued":
+                  continue
+              raw = run.get("createdAt")
+              try:
+                  created = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+                  age_minutes = (now - created.astimezone(timezone.utc)).total_seconds() / 60
+              except (AttributeError, TypeError, ValueError):
+                  continue
+              if 0 <= age_minutes <= 35:
+                  count += 1
+          print(count)
+          '
+          }
 
-          active_event_cycle="$(gh run list \
-            --repo "${GITHUB_REPOSITORY}" \
-            --workflow "Snow Squall Event-Driven Live Cycle" \
-            --branch main \
-            --limit 20 \
-            --json status \
-            --jq '[.[] | select(.status == "queued" or .status == "in_progress")] | length')"
-
-          active_foundation_publisher="$(gh run list \
-            --repo "${GITHUB_REPOSITORY}" \
-            --workflow "Publish Live Snow Squall Objects" \
-            --branch snow-squall-model-foundation \
-            --limit 20 \
-            --json status \
-            --jq '[.[] | select(.status == "queued" or .status == "in_progress")] | length')"
+          active_publisher="$(count_recent_active_runs "Snow Squall Live Object Publisher" main)"
+          active_event_cycle="$(count_recent_active_runs "Snow Squall Event-Driven Live Cycle" main)"
+          active_foundation_publisher="$(count_recent_active_runs "Publish Live Snow Squall Objects" snow-squall-model-foundation)"
 
           echo "Active/queued main publisher runs: $active_publisher"
           echo "Active/queued event cycles: $active_event_cycle"
