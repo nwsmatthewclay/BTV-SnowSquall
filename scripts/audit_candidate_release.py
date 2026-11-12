@@ -24,6 +24,8 @@ def main():
         metrics_path = bundle / "metrics.json"
         model_path = bundle / "baseline_model.joblib"
         calibrator_path = bundle / "probability_calibrator.joblib"
+        if not calibrator_path.exists():
+            calibrator_path = bundle / "probability_calibrators_research.joblib"
         if not metrics_path.exists() or not model_path.exists() or not calibrator_path.exists():
             raise SystemExit(f"FAIL: incomplete bundle for {h}m: {bundle}")
         metrics = json.loads(metrics_path.read_text(encoding="utf-8"))
