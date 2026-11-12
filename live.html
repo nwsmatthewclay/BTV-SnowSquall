@@ -51,6 +51,14 @@
       <div class="map-legend-title" id="legendTitle">NWS REFLECTIVITY • dBZ</div>
       <div class="map-legend-bar"><span>-5</span><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><span>40+</span></div>
       <div class="map-legend-note" id="legendNote">Clean KCXX/KTYX reflectivity mosaic. Object outlines remain clickable above the radar.</div>
+      <div class="object-probability-key" aria-label="15-minute research probability color scale" style="display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;margin-top:9px;padding-top:8px;border-top:1px solid rgba(190,210,220,.22);font:10px/1.2 monospace;color:#dbe8ef">
+        <strong style="letter-spacing:.08em;color:#fff">OBJECT PROBABILITY • 15 MIN</strong>
+        <span><i style="display:inline-block;width:9px;height:9px;border-radius:50%;background:#55b9ed;margin-right:4px"></i>&lt;1%</span>
+        <span><i style="display:inline-block;width:9px;height:9px;border-radius:50%;background:#e8d34d;margin-right:4px"></i>1–5%</span>
+        <span><i style="display:inline-block;width:9px;height:9px;border-radius:50%;background:#ff9b3d;margin-right:4px"></i>5–10%</span>
+        <span><i style="display:inline-block;width:9px;height:9px;border-radius:50%;background:#f04445;margin-right:4px"></i>≥10%</span>
+        <span><i style="display:inline-block;width:9px;height:9px;border-radius:50%;background:#74838d;margin-right:4px"></i>No score</span>
+      </div>
     </div>
   </section>
 
@@ -148,6 +156,6 @@
 </main>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<script src="live.js?v=20261112-synchronized-object-frame-1"></script>
+<script src="live.js?v=20261112-calibrated-probability-colors-1"></script>
 </body>
 </html>
