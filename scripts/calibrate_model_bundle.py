@@ -273,7 +273,9 @@ def fit_calibrators(model_dir: Path, min_rows: int = 30, min_per_class: int = 5)
         "horizons": {},
     }
     for horizon in (15, 30, 45, 60):
-        if horizon != int(horizon_match.group(1)):\n            continue\n        frame = predictions.copy()
+        if horizon != int(horizon_match.group(1)):
+            continue
+        frame = predictions.copy()
         y_all = pd.to_numeric(frame["target_value"], errors="coerce")
         p_all = pd.to_numeric(frame["oof_probability"], errors="coerce")
         group_all = frame["split_group"].fillna("").astype(str).str.strip()
