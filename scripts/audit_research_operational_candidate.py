@@ -39,7 +39,15 @@ def evaluate(model_root: Path, audit_path: Path, gate_path: Path, summary_path: 
             continue
 
         metrics = load_json(metrics_path)
-        calibrated = metrics.get("calibration_status") == "fit_on_oof_research_data"
+        calibration_path = bundle / "calibration_report.json"
+        calibration = load_json(calibration_path) if calibration_path.exists() else {}
+        horizon_calibration = (calibration.get("horizons") or {}).get(str(h), {})
+        calibrated = (
+            calibration.get("source") == "case_grouped_out_of_fold_predictions"
+            and calibration.get("independent_test_used_for_fit") is False
+            and horizon_calibration.get("status") == "fit_research_artifact"
+            and (bundle / "probability_calibrators_research.joblib").exists()
+        )
         positive_groups = int(metrics.get("positive_case_group_count") or 0)
         eval_status = str(metrics.get("evaluation_status") or "")
         nested = metrics.get("metrics") or {}
