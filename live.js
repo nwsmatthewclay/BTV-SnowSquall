@@ -286,7 +286,7 @@ function updateRadarTimelineUI(){
   slider.max=Math.max(0,(radarHistory.frames||[]).length-1);
   slider.value=Math.max(0,radarHistoryIndex<0?slider.max:radarHistoryIndex);
   var f=radarTimelineUserSelected?radarHistoryFrame():null,liveTime=latestMosaicScanTime();
-  setText("radarTimelineLabel",f?fmtTime(f.timestamp):(liveTime?"LIVE • "+fmtTime(liveTime):"Live"));
+  setText("radarTimelineLabel",f?fmtTime(f.timestamp):(liveTime?fmtTime(liveTime):"—"));
   if(play)play.textContent=radarAnimationTimer?"❚❚ PAUSE":"▶ PLAY";
 }
 function stopRadarAnimation(){if(radarAnimationTimer){clearInterval(radarAnimationTimer);radarAnimationTimer=null}updateRadarTimelineUI()}
@@ -1068,6 +1068,9 @@ async function refresh(){
     datasets=Object.fromEntries(got.map(function(x){return [x.site,x]}));
     cursorGrid=await fetchOptional(LIVE_BASE+"radar_cursor.json?cb="+Date.now(),null);
     await loadRadarHistory();
+    // This viewer is an archived-frame + object overlay, not a live-mosaic view.
+    // Start on a timestamped retained frame so the first render is synchronized.
+    radarTimelineUserSelected=true;
     // Read the same published manifest used by the raster renderer before accepting objects.
     // Object outlines are suppressed when their source scan does not match the displayed radar cycle.
     radarMosaic=await fetchOptional(mosaicMetaUrl(),null);
@@ -1085,11 +1088,10 @@ async function refresh(){
         // Object timestamps must themselves be recent and agree with the scan
         // advertised by state/metadata, otherwise discard the stale feature.
         var aligned=Number.isFinite(scanMs)&&Number.isFinite(objectMs)&&Math.abs(scanMs-objectMs)<=15*60000;
-        // Compare the detection with the archived radar frame selected for
-        // display. Allow a five-minute mosaic cadence window, but never compare
-        // against a newer native image that is not the displayed frame.
-        var radarCycleAligned=Number.isFinite(radarDisplayMs)&&Math.abs(radarDisplayMs-objectMs)<=5*60000;
-        return objectFresh&&aligned&&radarCycleAligned;
+        // Radar-frame alignment is applied after choosing the archived frame
+        // nearest this refreshed object cycle. Do not read radarDisplayMs here:
+        // it is not known until the newest detection timestamp is available.
+        return objectFresh&&aligned;
       });
     });
     // Anchor the live display to the latest archived radar frame at or before
@@ -1104,13 +1106,14 @@ async function refresh(){
     }
     var radarDisplayMs=parseUtcDate(radarHistoryFrame()?.timestamp)?.getTime();
     // Keep valid detections visible only when a nearby archived radar frame can
-    // represent their scan. The latest native product timestamp is not used as
-    // a proxy for the raster actually displayed.
+    // represent their scan. This must happen after the frame has been selected.
     var rb=radarMosaic?.bounds||[[41.86,-76.91],[46.40,-70.39]];
     allObjects=detectedObjects.filter(function(p){
       var lat=Number(p.centroid_lat),lon=Number(p.centroid_lon),area=Number(p.area_km2);
       var inside=Number.isFinite(lat)&&Number.isFinite(lon)&&lat>=Number(rb[0]?.[0])&&lat<=Number(rb[1]?.[0])&&lon>=Number(rb[0]?.[1])&&lon<=Number(rb[1]?.[1]);
-      return inside&&Number.isFinite(area)&&area>0;
+      var objectMs=parseUtcDate(p.timestamp)?.getTime();
+      var radarCycleAligned=Number.isFinite(radarDisplayMs)&&Number.isFinite(objectMs)&&Math.abs(radarDisplayMs-objectMs)<=5*60000;
+      return inside&&Number.isFinite(area)&&area>0&&radarCycleAligned;
     });
     // Never restore objects rejected by scan alignment. A stale footprint over a newer
     // radar image is misleading; wait for the matching object scan instead.
