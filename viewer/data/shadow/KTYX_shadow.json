@@ -1,0 +1,79 @@
+{
+  "site": "KTYX",
+  "updated_utc": "2026-11-21T16:27:28.025317+00:00",
+  "mode": "live_shadow_research",
+  "operational_release_status": "candidate_only_not_operational",
+  "model_info": {
+    "15": {
+      "model_present": true,
+      "model_version": "candidate_soft_vote_ensemble_v1",
+      "operational_release_status": "candidate_only",
+      "training_contract_status": null,
+      "candidate_mode": null,
+      "predictor_count": 72,
+      "calibrator_present": true,
+      "probability_calibration_status": "artifact_calibrator_loaded",
+      "model_family": [
+        "HistGradientBoostingClassifier",
+        "RandomForestClassifier",
+        "ExtraTreesClassifier"
+      ],
+      "selected_artifact": "candidate_ensemble_expansion_15m",
+      "bundle_family": "candidate_soft_vote_ensemble"
+    },
+    "30": {
+      "model_present": true,
+      "model_version": "candidate_soft_vote_ensemble_v1",
+      "operational_release_status": "candidate_only",
+      "training_contract_status": null,
+      "candidate_mode": null,
+      "predictor_count": 72,
+      "calibrator_present": true,
+      "probability_calibration_status": "artifact_calibrator_loaded",
+      "model_family": [
+        "HistGradientBoostingClassifier",
+        "RandomForestClassifier",
+        "ExtraTreesClassifier"
+      ],
+      "selected_artifact": "candidate_ensemble_expansion_30m",
+      "bundle_family": "candidate_soft_vote_ensemble"
+    },
+    "45": {
+      "model_present": true,
+      "model_version": "candidate_soft_vote_ensemble_v1",
+      "operational_release_status": "candidate_only",
+      "training_contract_status": null,
+      "candidate_mode": null,
+      "predictor_count": 72,
+      "calibrator_present": true,
+      "probability_calibration_status": "artifact_calibrator_loaded",
+      "model_family": [
+        "HistGradientBoostingClassifier",
+        "RandomForestClassifier",
+        "ExtraTreesClassifier"
+      ],
+      "selected_artifact": "candidate_ensemble_expansion_45m",
+      "bundle_family": "candidate_soft_vote_ensemble"
+    },
+    "60": {
+      "model_present": true,
+      "model_version": "candidate_soft_vote_ensemble_v1",
+      "operational_release_status": "candidate_only",
+      "training_contract_status": null,
+      "candidate_mode": null,
+      "predictor_count": 72,
+      "calibrator_present": true,
+      "probability_calibration_status": "artifact_calibrator_loaded",
+      "model_family": [
+        "HistGradientBoostingClassifier",
+        "RandomForestClassifier",
+        "ExtraTreesClassifier"
+      ],
+      "selected_artifact": "candidate_ensemble_expansion_60m",
+      "bundle_family": "candidate_soft_vote_ensemble"
+    }
+  },
+  "current_object_count": 0,
+  "scored_object_count": 0,
+  "records": []
+}
