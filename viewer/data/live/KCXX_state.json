@@ -43488,21 +43488,21 @@
       "area_km2": 20.0
     },
     "2900": {
-      "timestamp": "2026-11-28T17:47:15.347000Z",
-      "max_reflectivity_dbz": 41.944427490234375,
-      "mean_reflectivity_dbz": 30.702778657277424,
-      "base_reflectivity_mean_dbz": -1.8271917385604624,
-      "base_reflectivity_max_dbz": 41.944427490234375,
-      "base_reflectivity_p90_dbz": 6.461806869506837,
-      "base_reflectivity_valid_fraction": 0.1280990784294166,
-      "base_velocity_mean_kt": -2.362330512957414,
-      "base_velocity_std_kt": 7.091637039714179,
-      "base_velocity_p90_abs_kt": 11.83871259956733,
-      "base_velocity_valid_fraction": 0.09427490580950115,
+      "timestamp": "2026-11-28T17:51:47.051000Z",
+      "max_reflectivity_dbz": 43.65061950683594,
+      "mean_reflectivity_dbz": 28.485974848270416,
+      "base_reflectivity_mean_dbz": -1.502925903580528,
+      "base_reflectivity_max_dbz": 43.65061950683594,
+      "base_reflectivity_p90_dbz": 7.02055826187134,
+      "base_reflectivity_valid_fraction": 0.12989464476178053,
+      "base_velocity_mean_kt": -2.285936268607909,
+      "base_velocity_std_kt": 7.307105289593509,
+      "base_velocity_p90_abs_kt": 11.967520919779602,
+      "base_velocity_valid_fraction": 0.09531848282318275,
       "scan_has_reflectivity": true,
       "scan_has_base_velocity": true,
       "detected_object_count": 1,
-      "area_km2": 12.0
+      "area_km2": 16.0
     },
     "2901": {
       "timestamp": "2026-11-28T13:55:59.919000Z",
@@ -44526,7 +44526,6 @@
     }
   },
   "processed_sources": [
-    "KCXX20261125_110915_V06",
     "KCXX20261125_112300_V06",
     "KCXX20261125_112953_V06",
     "KCXX20261125_113642_V06",
@@ -45025,42 +45024,37 @@
     "KCXX20261128_173410_V06",
     "KCXX20261128_173828_V06",
     "KCXX20261128_174256_V06",
-    "KCXX20261128_174715_V06"
+    "KCXX20261128_174715_V06",
+    "KCXX20261128_175147_V06"
   ],
   "radar_site": "KCXX",
-  "last_scan_time_utc": "2026-11-28T17:47:15.347000Z",
-  "last_source": "KCXX20261128_174715_V06",
+  "last_scan_time_utc": "2026-11-28T17:51:47.051000Z",
+  "last_source": "KCXX20261128_175147_V06",
   "last_object_count": 1,
   "object_positions": {
     "2900": {
-      "timestamp": "2026-11-28T17:47:15.347000Z",
-      "lat": 44.818762506336036,
-      "lon": -73.64671911602365
+      "timestamp": "2026-11-28T17:51:47.051000Z",
+      "lat": 44.819149225989136,
+      "lon": -73.64381683581111
     }
   },
-  "updated_utc": "2026-11-28T17:54:09.581745Z",
+  "updated_utc": "2026-11-28T17:56:49.523475Z",
   "tracker": {
     "next_id": 2961,
     "tracks": {
       "2900": {
         "object_id": 2900,
         "first_time": "2026-11-28T13:27:55.097000+00:00",
-        "last_time": "2026-11-28T17:47:15.347000+00:00",
-        "row": 214.33333333333334,
-        "column": 142.08333333333334,
-        "age_scans": 37,
-        "velocity_row": -0.013620867354640243,
-        "velocity_column": 0.0017730354328091514,
-        "area_km2": 12.0,
-        "max_reflectivity_dbz": 41.944427490234375,
+        "last_time": "2026-11-28T17:51:47.051000+00:00",
+        "row": 214.375,
+        "column": 142.3125,
+        "age_scans": 38,
+        "velocity_row": -0.005633147445093047,
+        "velocity_column": 0.018864762876156353,
+        "area_km2": 16.0,
+        "max_reflectivity_dbz": 43.65061950683594,
         "missed_scans": 0,
         "history": [
-          {
-            "timestamp": "2026-11-28T15:12:59.638000Z",
-            "row": 214.5,
-            "column": 142.0,
-            "age_scans": 14
-          },
           {
             "timestamp": "2026-11-28T15:17:37.424000Z",
             "row": 214.0,
@@ -45198,12 +45192,18 @@
             "row": 214.33333333333334,
             "column": 142.08333333333334,
             "age_scans": 37
+          },
+          {
+            "timestamp": "2026-11-28T17:51:47.051000Z",
+            "row": 214.375,
+            "column": 142.3125,
+            "age_scans": 38
           }
         ],
         "bbox": [
-          213.0,
+          212.0,
           141.0,
-          216.0,
+          217.0,
           144.0
         ]
       }
@@ -472180,61 +472180,6 @@
     ],
     "2900": [
       {
-        "timestamp": "2026-11-28T15:12:59.638000Z",
-        "track_id": "2900",
-        "environment": {
-          "source": "RAP",
-          "source_valid_time_utc": "2026-11-28T14:00:00Z",
-          "age_minutes": 72.99396666666667,
-          "fields": {
-            "visibility_m": 16900.0,
-            "gust_ms": 10.311345100402832,
-            "surface_temperature_k": 280.7304992675781,
-            "cape_jkg": 60.0,
-            "cin_jkg": 0.4978179931640625,
-            "pwat_mm": 14.056743621826172,
-            "mlcape_jkg": 20.0,
-            "mlcin_jkg": -1.83050537109375,
-            "mucape_jkg": 50.0,
-            "mucin_jkg": 3.413543701171875,
-            "srh01_m2s2": 21.245059967041016,
-            "srh03_m2s2": -13.501777648925781,
-            "shear_u_0_6km_ms": 14.22742420490028,
-            "shear_v_0_6km_ms": 4.376239072322763,
-            "u10_ms": 5.989914894104004,
-            "v10_ms": 6.588316917419434,
-            "temperature_2m_k": 280.7304992675781,
-            "dewpoint_2m_k": 278.189208984375,
-            "rh_2m_pct": 84.6922607421875,
-            "surface_pressure_pa": 101686.640625,
-            "snsq": 0.0,
-            "snsq_status": "profile_missing",
-            "lcl_m": 318.34394329191025,
-            "lfc_m": 318.34394329191025,
-            "el_m": 2826.9220999071945,
-            "dcape_jkg": -73.69267325680038,
-            "shear_0_1km_kt": 5.438069696461574,
-            "shear_0_3km_kt": 12.959535930187352,
-            "shear_0_6km_kt": 28.934637365882292,
-            "shear_0_6km_ms": 14.885263448266771,
-            "wind_0_1km_kt": 19.71783592806309,
-            "wind_0_3km_kt": 15.910854154428492,
-            "mean_rh_0_2km_pct": 91.08883384511951,
-            "mean_wind_0_2km_ms": 9.060476134881403,
-            "lapse_rate_0_3km_c_km": 6.787133243615017,
-            "lapse_rate_0_7_5km_c_km": 5.795944288790876,
-            "thetae_delta_0_2km_k": -2.273307222499227,
-            "wet_bulb_0_3km_c": -4.125575800808394,
-            "wetbulb_2m_c": 6.320736014339104,
-            "freezing_level_m": 892.3669877745849,
-            "moisture_factor": 2.0725889230079675,
-            "instability_factor": 1.5683268056248068,
-            "wind_factor": 1.0067195705423782,
-            "snow_temperature_pass": false
-          }
-        }
-      },
-      {
         "timestamp": "2026-11-28T15:17:37.424000Z",
         "track_id": "2900",
         "environment": {
@@ -473451,6 +473396,61 @@
           "source": "RAP",
           "source_valid_time_utc": "2026-11-28T17:00:00Z",
           "age_minutes": 47.25578333333333,
+          "fields": {
+            "visibility_m": 15500.0,
+            "gust_ms": 10.733128547668457,
+            "surface_temperature_k": 280.97705078125,
+            "cape_jkg": 80.0,
+            "cin_jkg": 1.860504150390625,
+            "pwat_mm": 14.313295364379883,
+            "mlcape_jkg": 30.0,
+            "mlcin_jkg": -1.18450927734375,
+            "mucape_jkg": 70.0,
+            "mucin_jkg": 3.4769439697265625,
+            "srh01_m2s2": 24.425582885742188,
+            "srh03_m2s2": 0.6693649291992188,
+            "shear_u_0_6km_ms": 13.688087882028423,
+            "shear_v_0_6km_ms": 0.30417754967838473,
+            "u10_ms": 6.585187911987305,
+            "v10_ms": 5.7269182205200195,
+            "temperature_2m_k": 280.97705078125,
+            "dewpoint_2m_k": 278.7113037109375,
+            "rh_2m_pct": 86.57740020751953,
+            "surface_pressure_pa": 101654.3203125,
+            "snsq": 0.0,
+            "snsq_status": "profile_missing",
+            "lcl_m": 286.63371327832306,
+            "lfc_m": 286.63371327832306,
+            "el_m": 3211.3765959701386,
+            "dcape_jkg": 1.61507248207599,
+            "shear_0_1km_kt": 4.609835107671199,
+            "shear_0_3km_kt": 10.443846530825645,
+            "shear_0_6km_kt": 26.614083087023882,
+            "shear_0_6km_ms": 13.691467191205685,
+            "wind_0_1km_kt": 20.67749664789532,
+            "wind_0_3km_kt": 16.64622216893387,
+            "mean_rh_0_2km_pct": 96.2180201470218,
+            "mean_wind_0_2km_ms": 9.564304268600367,
+            "lapse_rate_0_3km_c_km": 7.000967538726987,
+            "lapse_rate_0_7_5km_c_km": 6.032986720726327,
+            "thetae_delta_0_2km_k": -1.3318777904243007,
+            "wet_bulb_0_3km_c": -3.583818166883241,
+            "wetbulb_2m_c": 6.68817265940794,
+            "freezing_level_m": 923.0440738270681,
+            "moisture_factor": 2.4145346764681204,
+            "instability_factor": 1.3329694476060752,
+            "wind_factor": 1.0627004742889297,
+            "snow_temperature_pass": false
+          }
+        }
+      },
+      {
+        "timestamp": "2026-11-28T17:51:47.051000Z",
+        "track_id": "2900",
+        "environment": {
+          "source": "RAP",
+          "source_valid_time_utc": "2026-11-28T17:00:00Z",
+          "age_minutes": 51.78418333333333,
           "fields": {
             "visibility_m": 15500.0,
             "gust_ms": 10.733128547668457,
