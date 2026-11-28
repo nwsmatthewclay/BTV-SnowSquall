@@ -1,11 +1,11 @@
 {
-  "status": "healthy",
-  "checked_utc": "2026-11-28T12:32:53.915901+00:00",
-  "last_scan_time_utc": "2026-11-28T12:23:06.527000+00:00",
-  "output_scan_time_utc": "2026-11-28T12:23:06.527000+00:00",
-  "age_minutes": 9.79,
-  "source_file": "KCXX20261128_122306_V06",
-  "object_count": 3,
+  "status": "degraded",
+  "checked_utc": "2026-11-28T12:38:50.175844+00:00",
+  "last_scan_time_utc": "2026-11-28T12:32:25.078000+00:00",
+  "output_scan_time_utc": "2026-11-28T12:32:25.078000+00:00",
+  "age_minutes": 6.42,
+  "source_file": "KCXX20261128_123225_V06",
+  "object_count": 4,
   "probability_status": "research_scored",
   "checks": {
     "state_present": true,
@@ -16,12 +16,14 @@
     "scan_timestamp_coherent": true,
     "object_timestamps_coherent": true,
     "fresh_within_threshold": true,
-    "environment_complete": true
+    "environment_complete": false
   },
   "environment": {
-    "ready_objects": 3,
-    "not_ready_objects": 0,
-    "reasons": {},
+    "ready_objects": 0,
+    "not_ready_objects": 4,
+    "reasons": {
+      "environment_stale": 4
+    },
     "max_age_minutes": 90.0
   }
 }
